@@ -1,0 +1,15 @@
+[workspace]
+members = [
+    "crates/cosmic-bwarden-core",
+    "crates/cosmic-bwarden-agent",
+    "crates/cosmic-bwarden-ui",
+    "crates/cosmic-bwarden-cli",
+    "crates/cosmic-bwarden-tests",
+]
+resolver = "2"
+
+[profile.release]
+opt-level = "z"     # Optimize for size
+lto = false         # Disable LTO to support dynamic linking
+codegen-units = 1   # Maximize optimization potential
+strip = true        # Automatically strip symbols from the binary

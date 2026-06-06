@@ -1,0 +1,13 @@
+prefix := "/usr"
+bin_dir := prefix + "/bin"
+res_dir := prefix + "/share"
+
+build:
+    cargo build --release
+
+install: build
+    install -Dm755 ../../target/release/cosmic-bwarden-ui {{bin_dir}}/cosmic-bwarden-ui
+    install -Dm644 resources/com.system76.CosmicBWarden.desktop {{res_dir}}/applications/com.system76.CosmicBWarden.desktop
+
+check:
+    cargo check

@@ -3,6 +3,7 @@
  
 # Cargo lock file — keep for binaries, exclude for libraries
 # Cargo.lock
+.cargo/
  
 # Backup files from editors
 *.orig

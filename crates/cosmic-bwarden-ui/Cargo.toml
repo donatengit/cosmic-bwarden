@@ -1,0 +1,24 @@
+[package]
+name = "cosmic-bwarden-ui"
+version = "0.1.0"
+edition = "2021"
+description = "CosmicBWarden UI"
+
+[dependencies]
+cosmic-bwarden-core = { path = "../cosmic-bwarden-core" }
+anyhow = "1.0"
+libcosmic = { git = "https://github.com/pop-os/libcosmic", branch = "master", features = ["applet", "process", "single-instance"] }
+cosmic-config = { git = "https://github.com/pop-os/libcosmic", branch = "master", default-features = false, features = ["macro"] }
+tokio = { version = "1.0", features = ["full"] }
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+env_logger = "0.11"
+chrono = "0.4"
+tracing = "0.1"
+async-stream = "0.3"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+tracing-journald = "0.3"
+i18n-embed = { version = "0.16.0", features = ["fluent-system", "desktop-requester"] }
+i18n-embed-fl = "0.10"
+rust-embed = "8.11.0"

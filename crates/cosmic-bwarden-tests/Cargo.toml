@@ -1,0 +1,15 @@
+[package]
+name = "cosmic-bwarden-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cosmic-bwarden-core = { path = "../cosmic-bwarden-core" }
+testcontainers = { version = "0.23", features = ["http_wait"] }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1.0"
+reqwest = { version = "0.12", features = ["json"] }
+tempfile = "3.10"
+serde_json = "1.0"
+tokio-util = "0.7"
+uuid = { version = "1.0", features = ["v4"] }
