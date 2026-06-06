@@ -1,0 +1,51 @@
+# Generated build artifacts
+/target/
+ 
+# Cargo lock file — keep for binaries, exclude for libraries
+# Cargo.lock
+ 
+# Backup files from editors
+*.orig
+*.bk
+*.swp
+*~
+ 
+# IDE and editor directories
+.idea/
+.vscode/
+*.iml
+ 
+# Environment files
+.env
+.env.*
+!.env.example
+ 
+# Profiling and coverage artifacts
+perf.data
+perf.data.old
+callgrind.out.*
+*.profraw
+*.profdata
+tarpaulin-report.html
+lcov.info
+ 
+# Benchmarking artifacts
+criterion/
+ 
+# cargo-fuzz
+fuzz/target/
+ 
+# cargo-expand output
+*.expanded.rs
+ 
+# Temporary files
+*.tmp
+*.log
+*.db
+*.temp
+ 
+# OS-specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
