@@ -42,6 +42,15 @@ These must never regress. Treat violations as build-blocking bugs.
 - **Target file size: 150–250 lines.** This is the range where edits are reliable and context fits cleanly.
 - **Hard limit: 500 lines.** If a file exceeds this, split it before adding more code. No exceptions.
 - **One module = one responsibility.** If you find yourself writing "and also" when describing what a file does, it needs splitting.
+
+### Modular Patterns (Mandatory)
+When a crate's main logic grows, decompose using these established patterns:
+- **`cosmic-bwarden-agent`**: Split into `handler.rs` (request routing), `server.rs` (API interaction), and `logind.rs` (DBus events).
+- **`cosmic-bwarden-core`**: 
+    - `api/`: Split into `models.rs` (DTOs) and `client.rs` (Network logic).
+    - `db/`: Split into `models.rs` (Data structs) and `persistence.rs` (File I/O).
+- **`cosmic-bwarden-ui`**: Split into `app/state.rs` (State), `app/update.rs` (MVU logic), and `app/tasks.rs` (Async tasks).
+
 - **When splitting**: prefer extracting into a sibling module (`mod foo;` in the parent) rather than a new crate unless the boundary is a genuine abstraction layer.
 - **Before adding to a file**: check its current line count. If it's above 200, consider whether the new code belongs in an existing or new sibling module instead.
 

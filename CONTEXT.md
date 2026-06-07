@@ -4,13 +4,22 @@ A secure, native COSMIC Bitwarden client featuring a background agent, tray appl
 
 ## Core Architecture
 
-The project follows a modular Rust-based architecture split into specialized crates:
+The project follows a modular Rust-based architecture split into specialized crates, each further decomposed for maintainability:
 
-- **`cosmic-bwarden-core`**: The foundational library. Contains API clients, database models, IPC protocols, and cryptographic primitives.
-- **`cosmic-bwarden-agent`**: A secure background service. Manages memory-locked sensitive data, handles vault synchronization, and serves as the IPC coordinator. Implements decryption caching for high performance.
-- **`cosmic-bwarden-cli`**: A feature-rich command-line interface with flexible keyword support and advanced filtering.
-- **`cosmic-bwarden-ui`**: The main COSMIC-native graphical interface and tray applet. Supports multi-window authentication and full CRUD operations.
-- **`cosmic-bwarden-tests`**: End-to-end integration tests using Docker and Vaultwarden.
+- **`cosmic-bwarden-core`**: The foundational library.
+    - `api/`: API clients (`client.rs`) and data transfer models (`models.rs`).
+    - `db/`: Persistence logic (`persistence.rs`) and vault models (`models.rs`).
+    - `crypto/`: Cryptographic primitives and cipherstrings.
+- **`cosmic-bwarden-agent`**: A secure background service.
+    - `handler.rs`: Central IPC request dispatcher.
+    - `server.rs`: High-level server-side synchronization logic.
+    - `logind.rs`: Integration with systemd-logind for auto-locking.
+    - `ssh_agent.rs`: SSH agent protocol implementation.
+- **`cosmic-bwarden-cli`**: A feature-rich command-line interface.
+- **`cosmic-bwarden-ui`**: The main graphical interface.
+    - `app/`: MVU decomposition into `state.rs`, `update.rs`, and `tasks.rs`.
+    - `view/`: Modular view components (Auth, Vault, Settings).
+- **`cosmic-bwarden-tests`**: End-to-end integration tests using Docker.
 
 ## Technical Stack
 

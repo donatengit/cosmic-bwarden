@@ -18,8 +18,8 @@
 
 ## Architecture Overview
 
-The project is structured as a Rust workspace with four main components:
+The project is structured as a Rust workspace with four main components, each following a strict modular decomposition (targeting <250 lines per file) to ensure high maintainability and security auditing:
 - `cosmic-bwarden-core`: The internal library for cryptography, Bitwarden API communication, and data modeling.
 - `cosmic-bwarden-agent`: The background service managing the unlocked vault and SSH agent.
-- `cosmic-bwarden-ui`: The main application for searching and managing vault entries.
-- `cosmic-bwarden-ui`: The COSMIC panel applet for quick access to frequent entries.
+- `cosmic-bwarden-ui`: The main application for searching and managing vault entries, following the MVU pattern.
+- `cosmic-bwarden-tests`: A comprehensive E2E suite using Docker to verify the full stack.
