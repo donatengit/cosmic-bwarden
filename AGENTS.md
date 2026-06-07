@@ -1,47 +1,58 @@
-# cosmic-bwarden: Agent Guidelines & Roles
+# cosmic-bwarden: Agent Guidelines
 
-This file defines the personas and protocols for AI agents working on the `cosmic-bwarden` codebase.
+## Golden Rules
+- **Never ask for confirmation.** Apply fixes, run validation, iterate until passing. Report only on final outcome or exhausted options.
+- **Never circle back to a failed approach.** If a fix didn't work, note why and move forward.
+- **One responsibility per file.** If a file exceeds ~250 lines, it needs splitting.
+- **cargo check before cargo test.** Don't run expensive tests against code that won't compile.
 
-## Agent Personas
+## Workspace Structure
 
-### 1. The Core Architect
-- **Focus**: `cosmic-bwarden-core`, security primitives, IPC protocols.
-- **Goal**: Maintain system integrity and security. 
-- **Guideline**: Ensure all cryptographic operations are idiomatic and use memory-locked storage for sensitive data.
-- **Hardening Mandates**:
-    - **Process Protection**: The agent MUST disable core dumps via `libc::prctl(libc::PR_SET_DUMPABLE, 0)` on startup.
-    - **IPC Verification**: Every Unix socket connection MUST be verified via `SO_PEERCRED`. Reject connections from UIDs not matching the agent's.
-    - **Socket Security**: Unix sockets MUST be created with `0600` permissions.
-    - **IPC Protocol**: For non-subscription requests, the agent MUST call `socket.shutdown()` after the response to signal EOF. For events, use the `Action::Subscribe` protocol.
+| Crate | Responsibility |
+|---|---|
+| `cosmic-bwarden-core` | Daemon, IPC server, crypto, vault state |
+| `cosmic-bwarden-cli` | Argument parsing, IPC client, output formatting |
+| `cosmic-bwarden-ui` | libcosmic applet, MVU model/view/update |
+| `cosmic-bwarden-tests` | E2E tests against Vaultwarden in Docker |
 
-### 2. The CLI Specialist
-- **Focus**: `cosmic-bwarden-cli`, user ergonomics, command parsing.
-- **Goal**: Maintain the flexible, natural-language feel of the CLI.
-- **Guideline**: Always update `preprocess_args` and `--help` (via `after_help` with EXAMPLES) when adding new features.
+## Security Invariants (core)
+These must never regress. Treat violations as build-blocking bugs.
 
-### 3. The COSMIC UI Developer
-- **Focus**: `cosmic-bwarden-ui`, `libcosmic` widgets.
-- **Goal**: Create a visually stunning, native COSMIC experience.
-- **Guideline**: Follow the MVU (Model-View-Update) pattern strictly and align with COSMIC HIG.
+- **Core dumps**: `libc::prctl(PR_SET_DUMPABLE, 0)` on daemon startup.
+- **IPC auth**: Verify every connection via `SO_PEERCRED`. Reject mismatched UIDs.
+- **Socket perms**: Create Unix sockets with mode `0600`.
+- **EOF signaling**: Call `socket.shutdown()` after non-subscription responses. Subscriptions use `Action::Subscribe` protocol.
+- **Sensitive memory**: Use memory-locked storage for all key material and plaintext secrets.
 
-### 4. The Verification Expert
-- **Focus**: `cosmic-bwarden-tests`, CI integration, Docker/Vaultwarden environments.
-- **Goal**: Ensure zero regressions.
-- **Guideline**: Every bug fix or feature must have a corresponding test case in `crates/cosmic-bwarden-tests/src/lib.rs`.
+## Workflow
 
-## Communication Protocols
+### Fixing failing tests
+1. Run `cargo test -p cosmic-bwarden-tests -- --test-threads=1`, capture full output.
+2. Identify root cause from panic/error line — do not guess from test name alone.
+3. `cargo check` after each edit before re-running tests.
+4. If a fix attempt fails, document why before trying the next approach.
+5. Every bug fix requires a corresponding test case.
 
-- **Self-Correction**: If an implementation fails (e.g., "Broken pipe" in IPC), analyze the protocol limits before applying patches.
-- **Context Efficiency**: Use `grep_search` to find symbols before reading full files. Use `update_topic` to track high-level strategic pivots.
-- **Documentation**: Keep `CONTEXT.md` updated with significant architectural shifts. Use `MEMO.md` (private) for local machine-specific notes.
+### Adding features
+1. Update `preprocess_args` and `--help` (`after_help` with `EXAMPLES:` block) for any CLI change.
+2. Follow MVU strictly for UI changes — no logic in view functions.
+3. Update `CONTEXT.md` for architectural changes.
 
-## Preferred Tool Patterns
+## Code Organization
+- **Target file size: 150–250 lines.** This is the range where edits are reliable and context fits cleanly.
+- **Hard limit: 500 lines.** If a file exceeds this, split it before adding more code. No exceptions.
+- **One module = one responsibility.** If you find yourself writing "and also" when describing what a file does, it needs splitting.
+- **When splitting**: prefer extracting into a sibling module (`mod foo;` in the parent) rather than a new crate unless the boundary is a genuine abstraction layer.
+- **Before adding to a file**: check its current line count. If it's above 200, consider whether the new code belongs in an existing or new sibling module instead.
 
-- **Rust Development**: 
-  - Use `cargo check` frequently to validate types.
-  - Use `cargo test -p cosmic-bwarden-tests -- --test-threads=1` for E2E validation.
-- **File Editing**: 
-  - Prefer `replace` with ample context to ensure uniqueness.
-  - Avoid multiple `replace` calls on the same file in a single turn.
-- **Help Documentation**: 
-  - Use `after_help` with `EXAMPLES:` and `ENTRY TYPE DETAILS:` headers for a native look.
+## Tool Discipline
+
+- **Symbol lookup**: `grep_search` first, read full file only if needed.
+- **File edits**: `replace` with enough surrounding context for uniqueness. One `replace` per file per turn maximum.
+- **State tracking**: `update_topic` on strategic pivots. `MEMO.md` for local/machine-specific notes only.
+
+## Validation Commands
+```
+cargo check -p <crate>
+cargo test -p cosmic-bwarden-tests -- --test-threads=1
+```
