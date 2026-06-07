@@ -584,7 +584,7 @@ async fn run_command(
                     fields.push(cosmic_bwarden_core::db::Field {
                         name: Some(name.to_string()),
                         value: Some(value.into()),
-                        ty: Some(cosmic_bwarden_core::api::FieldType::String),
+                        ty: Some(cosmic_bwarden_core::api::FieldType::Text),
                         linked_id: None,
                     });
                 }
@@ -722,8 +722,8 @@ async fn run_command(
                             {
                                 f.value = Some(v.into());
                             } else {
-                                // Default to adding as string field if not found and not a built-in
-                                entry.set_field(k, v, cosmic_bwarden_core::api::FieldType::String);
+                                // Default to adding as text field if not found and not a built-in
+                                entry.set_field(k, v, cosmic_bwarden_core::api::FieldType::Text);
                             }
                         }
                     }
@@ -732,7 +732,7 @@ async fn run_command(
 
             for f in field {
                 if let Some((name, value)) = f.split_once('=') {
-                    entry.set_field(name, value, cosmic_bwarden_core::api::FieldType::String);
+                    entry.set_field(name, value, cosmic_bwarden_core::api::FieldType::Text);
                 }
             }
             for f in secret_field {

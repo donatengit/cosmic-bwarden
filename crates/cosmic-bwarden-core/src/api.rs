@@ -4,18 +4,10 @@
 
 use crate::error::{Error, Result};
 
-use crate::json::{
-    DeserializeJsonWithPath as _, DeserializeJsonWithPathAsync as _,
-};
+use crate::json::{DeserializeJsonWithPath as _, DeserializeJsonWithPathAsync as _};
 
 #[derive(
-    serde_repr::Serialize_repr,
-    serde_repr::Deserialize_repr,
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
+    serde_repr::Serialize_repr, serde_repr::Deserialize_repr, Debug, Copy, Clone, PartialEq, Eq,
 )]
 #[repr(u8)]
 pub enum UriMatchType {
@@ -58,10 +50,12 @@ pub enum TwoFactorProviderType {
 impl TwoFactorProviderType {
     pub fn message(&self) -> &str {
         match *self {
-            Self::Authenticator => "Enter the 6 digit verification code from your authenticator app.",
+            Self::Authenticator => {
+                "Enter the 6 digit verification code from your authenticator app."
+            }
             Self::Yubikey => "Insert your Yubikey and push the button.",
             Self::Email => "Enter the PIN you received via email.",
-            _ => "Enter the code."
+            _ => "Enter the code.",
         }
     }
 
@@ -88,32 +82,22 @@ impl<'de> serde::Deserialize<'de> for TwoFactorProviderType {
         impl serde::de::Visitor<'_> for TwoFactorProviderTypeVisitor {
             type Value = TwoFactorProviderType;
 
-            fn expecting(
-                &self,
-                formatter: &mut std::fmt::Formatter,
-            ) -> std::fmt::Result {
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("two factor provider id")
             }
 
-            fn visit_str<E>(
-                self,
-                value: &str,
-            ) -> std::result::Result<Self::Value, E>
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
                 value.parse().map_err(serde::de::Error::custom)
             }
 
-            fn visit_u64<E>(
-                self,
-                value: u64,
-            ) -> std::result::Result<Self::Value, E>
+            fn visit_u64<E>(self, value: u64) -> std::result::Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                std::convert::TryFrom::try_from(value)
-                    .map_err(serde::de::Error::custom)
+                std::convert::TryFrom::try_from(value).map_err(serde::de::Error::custom)
             }
         }
 
@@ -174,32 +158,22 @@ impl<'de> serde::Deserialize<'de> for KdfType {
         impl serde::de::Visitor<'_> for KdfTypeVisitor {
             type Value = KdfType;
 
-            fn expecting(
-                &self,
-                formatter: &mut std::fmt::Formatter,
-            ) -> std::fmt::Result {
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("kdf id")
             }
 
-            fn visit_str<E>(
-                self,
-                value: &str,
-            ) -> std::result::Result<Self::Value, E>
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
                 value.parse().map_err(serde::de::Error::custom)
             }
 
-            fn visit_u64<E>(
-                self,
-                value: u64,
-            ) -> std::result::Result<Self::Value, E>
+            fn visit_u64<E>(self, value: u64) -> std::result::Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                std::convert::TryFrom::try_from(value)
-                    .map_err(serde::de::Error::custom)
+                std::convert::TryFrom::try_from(value).map_err(serde::de::Error::custom)
             }
         }
 
@@ -234,10 +208,7 @@ impl std::str::FromStr for KdfType {
 }
 
 impl serde::Serialize for KdfType {
-    fn serialize<S>(
-        &self,
-        serializer: S,
-    ) -> std::result::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -250,13 +221,7 @@ impl serde::Serialize for KdfType {
 }
 
 #[derive(
-    serde_repr::Serialize_repr,
-    serde_repr::Deserialize_repr,
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
+    serde_repr::Serialize_repr, serde_repr::Deserialize_repr, Debug, Copy, Clone, PartialEq, Eq,
 )]
 #[repr(u8)]
 pub enum CipherRepromptType {
@@ -298,10 +263,7 @@ struct ConnectTokenReq {
     two_factor_token: Option<String>,
     #[serde(rename = "twoFactorProvider")]
     two_factor_provider: Option<u32>,
-    #[serde(
-        rename = "newDeviceOtp",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "newDeviceOtp", skip_serializing_if = "Option::is_none")]
     device_verification_code: Option<String>,
     #[serde(flatten)]
     auth: ConnectTokenAuth,
@@ -350,10 +312,7 @@ struct ConnectErrorRes {
     error_model: Option<ConnectErrorResErrorModel>,
     #[serde(rename = "TwoFactorProviders", alias = "twoFactorProviders")]
     two_factor_providers: Option<Vec<TwoFactorProviderType>>,
-    #[serde(
-        rename = "SsoEmail2faSessionToken",
-        alias = "ssoEmail2faSessionToken"
-    )]
+    #[serde(rename = "SsoEmail2faSessionToken", alias = "ssoEmail2faSessionToken")]
     sso_email_2fa_session_token: Option<String>,
 }
 
@@ -415,62 +374,51 @@ pub struct SyncResCipher {
 }
 
 impl SyncResCipher {
-    fn to_entry(
-        &self,
-        folders: &[SyncResFolder],
-    ) -> Option<crate::db::Entry> {
+    fn to_entry(&self, folders: &[SyncResFolder]) -> Option<crate::db::Entry> {
         if self.deleted_date.is_some() {
             return None;
         }
-        let history =
-            self.password_history
-                .as_ref()
-                .map_or_else(Vec::new, |history| {
-                    history
-                        .iter()
-                        .filter_map(|entry| {
-                            // Gets rid of entries with a non-existent
-                            // password
-                            entry.password.clone().map(|p| {
-                                crate::db::HistoryEntry {
-                                    last_used_date: entry
-                                        .last_used_date
-                                        .clone(),
-                                    password: p.into(),
-                                }
-                            })
+        let history = self
+            .password_history
+            .as_ref()
+            .map_or_else(Vec::new, |history| {
+                history
+                    .iter()
+                    .filter_map(|entry| {
+                        // Gets rid of entries with a non-existent
+                        // password
+                        entry.password.clone().map(|p| crate::db::HistoryEntry {
+                            last_used_date: entry.last_used_date.clone(),
+                            password: p.into(),
                         })
-                        .collect()
-                });
-
-        let (folder, folder_id) =
-            self.folder_id.as_ref().map_or((None, None), |folder_id| {
-                let mut folder_name = None;
-                for folder in folders {
-                    if &folder.id == folder_id {
-                        folder_name = Some(folder.name.clone());
-                    }
-                }
-                (folder_name, Some(folder_id))
+                    })
+                    .collect()
             });
+
+        let (folder, folder_id) = self.folder_id.as_ref().map_or((None, None), |folder_id| {
+            let mut folder_name = None;
+            for folder in folders {
+                if &folder.id == folder_id {
+                    folder_name = Some(folder.name.clone());
+                }
+            }
+            (folder_name, Some(folder_id))
+        });
         let data = if let Some(login) = &self.login {
             crate::db::EntryData::Login {
                 username: login.username.clone(),
                 password: login.password.clone().map(Into::into),
                 totp: login.totp.clone().map(Into::into),
-                uris: login.uris.as_ref().map_or_else(
-                    std::vec::Vec::new,
-                    |uris| {
-                        uris.iter()
-                            .filter_map(|uri| {
-                                uri.uri.clone().map(|s| crate::db::Uri {
-                                    uri: s,
-                                    match_type: uri.match_type,
-                                })
+                uris: login.uris.as_ref().map_or_else(std::vec::Vec::new, |uris| {
+                    uris.iter()
+                        .filter_map(|uri| {
+                            uri.uri.clone().map(|s| crate::db::Uri {
+                                uri: s,
+                                match_type: uri.match_type,
                             })
-                            .collect()
-                    },
-                ),
+                        })
+                        .collect()
+                }),
             }
         } else if let Some(card) = &self.card {
             crate::db::EntryData::Card {
@@ -624,13 +572,7 @@ pub struct CipherSshKey {
 }
 
 #[derive(
-    serde_repr::Serialize_repr,
-    serde_repr::Deserialize_repr,
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
+    serde_repr::Serialize_repr, serde_repr::Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq,
 )]
 #[repr(u16)]
 pub enum FieldType {
@@ -638,19 +580,12 @@ pub enum FieldType {
     Hidden = 1,
     Boolean = 2,
     Linked = 3,
-    String = 4,
 }
 
 pub type ApiFieldType = FieldType;
 
 #[derive(
-    serde_repr::Serialize_repr,
-    serde_repr::Deserialize_repr,
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
+    serde_repr::Serialize_repr, serde_repr::Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq,
 )]
 #[repr(u16)]
 pub enum LinkedIdType {
@@ -812,10 +747,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(
-        base_url: &str,
-        identity_url: &str,
-    ) -> Self {
+    pub fn new(base_url: &str, identity_url: &str) -> Self {
         Self {
             base_url: base_url.to_string(),
             identity_url: identity_url.to_string(),
@@ -834,14 +766,9 @@ impl Client {
         );
         default_headers.append(
             "Device-Type",
-            reqwest::header::HeaderValue::from_str(&DEVICE_TYPE.to_string())
-                .unwrap(),
+            reqwest::header::HeaderValue::from_str(&DEVICE_TYPE.to_string()).unwrap(),
         );
-        let user_agent = format!(
-            "{}/{}",
-            env!("CARGO_PKG_NAME"),
-            env!("CARGO_PKG_VERSION")
-        );
+        let user_agent = format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
         Ok(reqwest::Client::builder()
             .user_agent(user_agent)
             .default_headers(default_headers)
@@ -849,10 +776,7 @@ impl Client {
             .map_err(|e| Error::CreateReqwestClient { source: e })?)
     }
 
-    pub async fn prelogin(
-        &self,
-        email: &str,
-    ) -> Result<(KdfType, u32, Option<u32>, Option<u32>)> {
+    pub async fn prelogin(&self, email: &str) -> Result<(KdfType, u32, Option<u32>, Option<u32>)> {
         let prelogin = PreloginReq {
             email: email.to_string(),
         };
@@ -895,7 +819,9 @@ impl Client {
             .send()
             .await
             .map_err(|source| Error::Reqwest { source })?;
-        if res.status() == reqwest::StatusCode::OK || res.status() == reqwest::StatusCode::NO_CONTENT {
+        if res.status() == reqwest::StatusCode::OK
+            || res.status() == reqwest::StatusCode::NO_CONTENT
+        {
             Ok(())
         } else {
             Err(Error::RequestFailed {
@@ -940,10 +866,7 @@ impl Client {
         let res = client
             .post(self.identity_url("/connect/token"))
             .form(&connect_req)
-            .header(
-                "auth-email",
-                crate::base64::encode_url_safe_no_pad(email),
-            )
+            .header("auth-email", crate::base64::encode_url_safe_no_pad(email))
             .send()
             .await
             .map_err(|source| Error::Reqwest { source })?;
@@ -1012,9 +935,7 @@ impl Client {
                     ciphers,
                 ))
             }
-            reqwest::StatusCode::UNAUTHORIZED => {
-                Err(Error::RequestUnauthorized)
-            }
+            reqwest::StatusCode::UNAUTHORIZED => Err(Error::RequestUnauthorized),
             _ => Err(Error::RequestFailed {
                 status: res.status().as_u16(),
             }),
@@ -1051,7 +972,11 @@ impl Client {
             login,
             card: None,
             identity: None,
-            secure_note: if ty == 2 { Some(CipherSecureNote {}) } else { None },
+            secure_note: if ty == 2 {
+                Some(CipherSecureNote {})
+            } else {
+                None
+            },
             ssh_key: None,
             fields: fields.unwrap_or_default(),
             reprompt: CipherRepromptType::None,
@@ -1262,7 +1187,11 @@ impl Client {
             card: None,
             identity: None,
             fields: fields.unwrap_or_default(),
-            secure_note: if ty == 2 { Some(CipherSecureNote {}) } else { None },
+            secure_note: if ty == 2 {
+                Some(CipherSecureNote {})
+            } else {
+                None
+            },
             ssh_key,
             password_history: Vec::new(),
             reprompt: reprompt.unwrap_or(CipherRepromptType::None),
@@ -1302,10 +1231,7 @@ impl Client {
         }
     }
 
-    pub async fn folders(
-        &self,
-        access_token: &str,
-    ) -> Result<Vec<(String, String)>> {
+    pub async fn folders(&self, access_token: &str) -> Result<Vec<(String, String)>> {
         let client = self.reqwest_client().await?;
         let res = client
             .get(self.api_url("/folders"))
@@ -1322,20 +1248,14 @@ impl Client {
                     .map(|folder| (folder.id.clone(), folder.name.clone()))
                     .collect())
             }
-            reqwest::StatusCode::UNAUTHORIZED => {
-                Err(Error::RequestUnauthorized)
-            }
+            reqwest::StatusCode::UNAUTHORIZED => Err(Error::RequestUnauthorized),
             _ => Err(Error::RequestFailed {
                 status: res.status().as_u16(),
             }),
         }
     }
 
-    pub async fn create_folder(
-        &self,
-        access_token: &str,
-        name: &str,
-    ) -> Result<String> {
+    pub async fn create_folder(&self, access_token: &str, name: &str) -> Result<String> {
         let req = FoldersPostReq {
             name: name.to_string(),
         };
@@ -1352,9 +1272,7 @@ impl Client {
                 let folders_res: FoldersResData = res.json_with_path().await?;
                 Ok(folders_res.id)
             }
-            reqwest::StatusCode::UNAUTHORIZED => {
-                Err(Error::RequestUnauthorized)
-            }
+            reqwest::StatusCode::UNAUTHORIZED => Err(Error::RequestUnauthorized),
             _ => Err(Error::RequestFailed {
                 status: res.status().as_u16(),
             }),
@@ -1378,7 +1296,11 @@ impl Client {
             .await
             .map_err(|source| Error::Reqwest { source })?;
         let connect_res: ConnectRefreshTokenRes = res.json_with_path().await?;
-        Ok((connect_res.access_token, connect_res.refresh_token, connect_res.key))
+        Ok((
+            connect_res.access_token,
+            connect_res.refresh_token,
+            connect_res.key,
+        ))
     }
 
     fn api_url(&self, path: &str) -> String {
