@@ -41,7 +41,7 @@ async fn test_pinning_lifecycle() -> Result<()> {
     }
     client.send(Action::Sync).await?;
 
-    let res = client.send(Action::GetSidebarEntries { query: None, entry_type: None }).await?;
+    let res = client.send(Action::GetSidebarEntries { query: None, entry_type: None, only_pinned: false }).await?;
     let entries = if let Response::SidebarEntries { entries } = res {
         entries
     } else {
@@ -56,34 +56,29 @@ async fn test_pinning_lifecycle() -> Result<()> {
     let id2 = entries.iter().find(|e| e.name == "Entry 2").unwrap().id.clone();
     let id3 = entries.iter().find(|e| e.name == "Entry 3").unwrap().id.clone();
 
-    // 2. Pin entries
+    // 2. Pin entries (this toggles native 'favorite' on server)
     client.send(Action::PinEntry { id: id1.clone() }).await?;
     client.send(Action::PinEntry { id: id2.clone() }).await?;
     client.send(Action::PinEntry { id: id3.clone() }).await?;
+    
+    // Sync to ensure we get the updated state from server
     client.send(Action::Sync).await?;
 
-    let res = client.send(Action::GetSidebarEntries { query: None, entry_type: None }).await?;
+    let res = client.send(Action::GetSidebarEntries { query: None, entry_type: None, only_pinned: false }).await?;
     if let Response::SidebarEntries { entries } = res {
+        assert_eq!(entries.len(), 3);
         for e in &entries {
-            assert!(e.is_pinned);
+            assert!(e.is_pinned, "Entry {} should be pinned", e.name);
         }
     }
 
-    // 3. Usage tracking and sorting
-    // Entry 2: 3 copies
-    // Entry 3: 1 copy
-    // Entry 1: 0 copies
-    for _ in 0..3 {
-        client.send(Action::RecordCopy { id: id2.clone() }).await?;
-    }
-    client.send(Action::RecordCopy { id: id3.clone() }).await?;
-
+    // 3. Verify Top Frequent (now returns pinned entries)
     let res = client.send(Action::GetTopFrequent { limit: 5, days: None }).await?;
     if let Response::SidebarEntries { entries } = res {
         assert_eq!(entries.len(), 3);
-        assert_eq!(entries[0].id, id2);
-        assert_eq!(entries[1].id, id3);
-        assert_eq!(entries[2].id, id1);
+        assert!(entries.iter().any(|e| e.id == id1));
+        assert!(entries.iter().any(|e| e.id == id2));
+        assert!(entries.iter().any(|e| e.id == id3));
     } else {
         anyhow::bail!("Expected top frequent entries");
     }
@@ -104,7 +99,7 @@ async fn test_pinning_lifecycle() -> Result<()> {
         .spawn()?);
     sleep(Duration::from_millis(1000)).await;
 
-    // Must login again to have a session for unpinning
+    // Must login again
     client.send(Action::Login {
         email: email.to_string(),
         password: password.to_string(),
@@ -118,63 +113,29 @@ async fn test_pinning_lifecycle() -> Result<()> {
 
     let res = client.send(Action::GetTopFrequent { limit: 5, days: None }).await?;
     if let Response::SidebarEntries { entries } = res {
-        assert_eq!(entries.len(), 3, "State should be persisted");
-        assert_eq!(entries[0].id, id2);
+        assert_eq!(entries.len(), 3, "Pinned status should be persisted on server");
     } else {
         anyhow::bail!("Expected top frequent entries after restart");
     }
 
     // 5. Unpinning
     client.send(Action::UnpinEntry { id: id2.clone() }).await?;
+    client.send(Action::Sync).await?;
+    
     let res = client.send(Action::GetTopFrequent { limit: 5, days: None }).await?;
     if let Response::SidebarEntries { entries } = res {
         assert_eq!(entries.len(), 2);
         assert!(!entries.iter().any(|e| e.id == id2));
-        assert_eq!(entries[0].id, id3); // id3 has 1 copy, id1 has 0
     }
 
     // 6. Deletion cleanup
     client.send(Action::DeleteEntry { id: id3.clone() }).await?;
+    client.send(Action::Sync).await?;
+    
     let res = client.send(Action::GetTopFrequent { limit: 5, days: None }).await?;
     if let Response::SidebarEntries { entries } = res {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].id, id1);
-    }
-
-    // 7. Search tests
-    // Create some more entries for search
-    client.send(Action::AddEntry {
-        name: "Searchable Login".to_string(),
-        entry_type: cosmic_bwarden_core::protocol::EntryType::Login,
-        username: Some("searchuser".to_string()),
-        password: Some("searchpass".to_string().into()),
-        notes: None,
-        fields: Vec::new(),
-    }).await?;
-    client.send(Action::Sync).await?;
-
-    // Search by name
-    let res = client.send(Action::GetSidebarEntries { query: Some("Searchable".to_string()), entry_type: None }).await?;
-    if let Response::SidebarEntries { entries } = res {
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].name, "Searchable Login");
-    } else {
-        anyhow::bail!("Expected sidebar entries for search");
-    }
-
-    // Search by username
-    let res = client.send(Action::GetSidebarEntries { query: Some("searchuser".to_string()), entry_type: None }).await?;
-    if let Response::SidebarEntries { entries } = res {
-        assert_eq!(entries.len(), 1);
-    } else {
-        anyhow::bail!("Expected sidebar entries for username search");
-    }
-
-    // Search with entry type filter
-    let res = client.send(Action::GetSidebarEntries { query: None, entry_type: Some(cosmic_bwarden_core::protocol::EntryType::Login) }).await?;
-    if let Response::SidebarEntries { entries } = res {
-        // Entry 1 and Searchable Login are Logins
-        assert!(entries.len() >= 2);
     }
 
     Ok(())

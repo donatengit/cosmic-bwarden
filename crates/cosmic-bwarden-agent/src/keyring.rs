@@ -34,7 +34,7 @@ pub async fn store_tokens(server: &str, email: &str, access_token: &str, refresh
     #[cfg(not(feature = "keyring"))]
     {
         let _ = (server, email, access_token, refresh_token);
-        Err(anyhow::anyhow!("keyring feature not enabled"))
+        Ok(())
     }
 }
 

@@ -50,6 +50,7 @@ async fn test_custom_fields_ui_simulation() -> Result<()> {
         .send(Action::GetEntries {
             query: Some("UIEntry".to_string()),
             entry_type: None,
+            only_pinned: false,
         })
         .await?;
     let id = if let Response::Entries { entries } = res {

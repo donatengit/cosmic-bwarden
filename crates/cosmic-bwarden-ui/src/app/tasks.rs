@@ -4,7 +4,7 @@ use cosmic_bwarden_core::protocol::{Action as AgentAction, Response, EntryType};
 use cosmic_bwarden_core::agent_client::AgentClient;
 use crate::message::Message;
 
-pub fn fetch_sidebar_entries(id: u32, query: Option<String>, entry_type: Option<String>) -> Task<Message> {
+pub fn fetch_sidebar_entries(id: u32, query: Option<String>, entry_type: Option<String>, only_pinned: bool) -> Task<Message> {
     Task::perform(async move {
         let agent = AgentClient::new();
         let et = match entry_type.as_deref() {
@@ -13,7 +13,7 @@ pub fn fetch_sidebar_entries(id: u32, query: Option<String>, entry_type: Option<
             Some("ssh") => Some(EntryType::SshKey),
             _ => None,
         };
-        match agent.send(AgentAction::GetSidebarEntries { query, entry_type: et }).await {
+        match agent.send(AgentAction::GetSidebarEntries { query, entry_type: et, only_pinned }).await {
             Ok(Response::SidebarEntries { entries }) => Ok(entries),
             Ok(Response::Error { message }) => Err(message),
             _ => Err("unexpected response".to_string()),

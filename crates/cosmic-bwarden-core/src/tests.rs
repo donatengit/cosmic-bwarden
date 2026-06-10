@@ -47,6 +47,7 @@ mod tests {
                 history: vec![],
                 key: None,
                 master_password_reprompt: crate::api::CipherRepromptType::None,
+                favorite: false,
             },
             Entry {
                 id: "2".to_string(),
@@ -60,6 +61,7 @@ mod tests {
                 history: vec![],
                 key: None,
                 master_password_reprompt: crate::api::CipherRepromptType::None,
+                favorite: false,
             },
             Entry {
                 id: "3".to_string(),
@@ -77,6 +79,7 @@ mod tests {
                 history: vec![],
                 key: None,
                 master_password_reprompt: crate::api::CipherRepromptType::None,
+                favorite: false,
             },
             Entry {
                 id: "4".to_string(),
@@ -95,6 +98,7 @@ mod tests {
                 history: vec![],
                 key: None,
                 master_password_reprompt: crate::api::CipherRepromptType::Password,
+                favorite: false,
             },
         ];
 

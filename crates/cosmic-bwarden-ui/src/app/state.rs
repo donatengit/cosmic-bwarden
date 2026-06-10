@@ -3,7 +3,7 @@ use cosmic::app::Core;
 use cosmic::iced::window;
 use cosmic::widget;
 use cosmic_bwarden_core::protocol::SidebarEntry;
-use cosmic_bwarden_core::db::{Entry, Secret};
+use cosmic_bwarden_core::db::Entry;
 use cosmic_bwarden_core::config::CosmicBWardenConfig;
 
 use crate::message::{View, WindowState};

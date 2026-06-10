@@ -8,6 +8,8 @@ pub struct Entry {
     pub folder: Option<String>,
     pub folder_id: Option<String>,
     pub name: String,
+    #[serde(default)]
+    pub favorite: bool,
     pub data: EntryData,
     pub fields: Vec<Field>,
     pub notes: Option<Secret>,
@@ -255,6 +257,32 @@ impl Entry {
                 if let Ok(dec) = crate::vault::decrypt(value.expose(), keys, self.key.as_deref()) {
                     field.value = Some(Secret::from(dec));
                 }
+            }
+        }
+
+        let mut pk_fallback = None;
+        let mut pubk_fallback = None;
+        for f in &decrypted.fields {
+            if f.name.as_deref() == Some("private_key") {
+                pk_fallback = f.value.clone();
+            }
+            if f.name.as_deref() == Some("public_key") {
+                pubk_fallback = f.value.as_ref().map(|v| v.expose().to_string());
+            }
+        }
+
+        // SSH Key Fallback
+        if let EntryData::SshKey {
+            private_key,
+            public_key,
+            ..
+        } = &mut decrypted.data
+        {
+            if private_key.is_none() {
+                *private_key = pk_fallback;
+            }
+            if public_key.is_none() {
+                *public_key = pubk_fallback;
             }
         }
 

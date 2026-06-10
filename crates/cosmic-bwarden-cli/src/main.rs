@@ -380,6 +380,7 @@ async fn run_command(
                 .send(Action::GetEntries {
                     query: query.clone(),
                     entry_type,
+                    only_pinned: false,
                 })
                 .await?;
             match res {
@@ -429,6 +430,7 @@ async fn run_command(
                     .send(Action::GetEntries {
                         query: Some(q.clone()),
                         entry_type,
+                        only_pinned: false,
                     })
                     .await?;
                 if let Response::Entries { entries } = search_res {
@@ -462,6 +464,7 @@ async fn run_command(
                     .send(Action::GetEntries {
                         query: None,
                         entry_type,
+                        only_pinned: false,
                     })
                     .await?;
                 if let Response::Entries { entries } = res {
@@ -814,6 +817,7 @@ async fn resolve_id(
         .send(Action::GetEntries {
             query: Some(id_or_name.to_string()),
             entry_type,
+            only_pinned: false,
         })
         .await?;
     let entries = if let Response::Entries { entries } = search_res {

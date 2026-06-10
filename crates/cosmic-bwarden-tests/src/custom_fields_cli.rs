@@ -59,6 +59,7 @@ async fn test_custom_fields_cli() -> Result<()> {
         .send(Action::GetEntries {
             query: Some("FieldEntry".to_string()),
             entry_type: None,
+            only_pinned: false,
         })
         .await?;
     let entry = if let Response::Entries { entries } = res {

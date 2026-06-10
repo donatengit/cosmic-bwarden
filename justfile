@@ -101,17 +101,17 @@ test-unit:
 # 2. Agent & Protocol E2E Tests
 test-agent:
     @echo "--- 2. Agent & Protocol E2E Tests ---"
-    sg docker -c "cargo test -p cosmic-bwarden-tests --lib agent security vault_ops pinned_ops -- --test-threads=1"
+    sg docker -c "cargo test -p cosmic-bwarden-tests --lib -- agent security vault pinned_ops --test-threads=1"
 
 # 3. CLI E2E Tests
 test-cli:
     @echo "--- 3. CLI E2E Tests ---"
-    sg docker -c "cargo test -p cosmic-bwarden-tests --lib cli_lifecycle cli_secret_mask_test custom_fields_cli -- --test-threads=1"
+    sg docker -c "cargo test -p cosmic-bwarden-tests --lib -- cli_lifecycle cli_secret_mask_test custom_fields_cli --test-threads=1"
 
 # 4. UI E2E Tests
 test-ui:
     @echo "--- 4. UI E2E Tests ---"
-    sg docker -c "cargo test -p cosmic-bwarden-tests --lib window_flow custom_fields_ui -- --test-threads=1"
+    sg docker -c "cargo test -p cosmic-bwarden-tests --lib -- window_flow custom_fields_ui --test-threads=1"
 
 # Run the agent and UI for testing
 run: build

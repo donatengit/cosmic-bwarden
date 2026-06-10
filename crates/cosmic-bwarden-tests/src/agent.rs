@@ -44,7 +44,7 @@ async fn test_agent_login_lifecycle() -> Result<()> {
     client.send(Action::Sync).await?;
 
     // 3. Verify
-    let res = client.send(Action::GetEntries { query: None, entry_type: None }).await?;
+    let res = client.send(Action::GetEntries { query: None, entry_type: None, only_pinned: false }).await?;
     if let Response::Entries { entries } = res {
         assert!(entries.iter().any(|e| e.name == "AgentSite"));
     } else {

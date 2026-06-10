@@ -27,7 +27,7 @@ async fn test_lock_unlock() -> Result<()> {
 
     client.send(Action::Lock).await?;
 
-    let res = client.send(Action::GetEntries { query: None, entry_type: None }).await?;
+    let res = client.send(Action::GetEntries { query: None, entry_type: None, only_pinned: false }).await?;
     if let Response::Error { message } = res {
         assert!(message.contains("locked"));
     } else {
@@ -35,7 +35,7 @@ async fn test_lock_unlock() -> Result<()> {
     }
 
     client.send(Action::Unlock { password: password.to_string() }).await?;
-    let res = client.send(Action::GetEntries { query: None, entry_type: None }).await?;
+    let res = client.send(Action::GetEntries { query: None, entry_type: None, only_pinned: false }).await?;
     assert!(matches!(res, Response::Entries { .. }));
 
     Ok(())
@@ -73,7 +73,7 @@ async fn test_reprompt() -> Result<()> {
     }).await?;
     client.send(Action::Sync).await?;
 
-    let res = client.send(Action::GetEntries { query: None, entry_type: None }).await?;
+    let res = client.send(Action::GetEntries { query: None, entry_type: None, only_pinned: false }).await?;
     let id = if let Response::Entries { entries } = res {
         entries[0].id.clone()
     } else {

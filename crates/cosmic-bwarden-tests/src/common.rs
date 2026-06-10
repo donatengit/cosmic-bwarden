@@ -22,6 +22,7 @@ pub struct TestEnv {
     pub profile: String,
     pub _log_file: tempfile::NamedTempFile,
     pub log_path: PathBuf,
+    pub _temp_dir: tempfile::TempDir,
 }
 
 impl Drop for TestEnv {
@@ -53,6 +54,21 @@ pub async fn setup_env() -> Result<TestEnv> {
     let vault_url = format!("http://localhost:{}", host_port);
 
     let profile = format!("test-{}", uuid::Uuid::new_v4());
+    let temp_dir = tempfile::tempdir()?;
+    let temp_path = temp_dir.path();
+
+    let config_home = temp_path.join("config");
+    let cache_home = temp_path.join("cache");
+    let data_home = temp_path.join("data");
+
+    std::fs::create_dir_all(&config_home)?;
+    std::fs::create_dir_all(&cache_home)?;
+    std::fs::create_dir_all(&data_home)?;
+
+    // Set for current process too
+    std::env::set_var("XDG_CONFIG_HOME", &config_home);
+    std::env::set_var("XDG_CACHE_HOME", &cache_home);
+    std::env::set_var("XDG_DATA_HOME", &data_home);
 
     let mut agent_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     agent_path.pop();
@@ -67,6 +83,9 @@ pub async fn setup_env() -> Result<TestEnv> {
 
     let agent_process = Command::new(&agent_path)
         .env("COSMIC_BWARDEN_PROFILE", &profile)
+        .env("XDG_CONFIG_HOME", &config_home)
+        .env("XDG_CACHE_HOME", &cache_home)
+        .env("XDG_DATA_HOME", &data_home)
         .env("RUST_LOG", "debug")
         .stdout(log_file.try_clone()?)
         .stderr(log_file.try_clone()?)
@@ -82,6 +101,7 @@ pub async fn setup_env() -> Result<TestEnv> {
         profile,
         _log_file: tempfile::NamedTempFile::new()?, // unused but keep for compat
         log_path,
+        _temp_dir: temp_dir,
     })
 }
 

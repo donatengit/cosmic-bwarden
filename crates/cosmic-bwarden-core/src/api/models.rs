@@ -3,7 +3,6 @@
 #![allow(clippy::as_conversions)]
 
 use crate::error::{Error, Result};
-use crate::json::{DeserializeJsonWithPath as _};
 
 #[derive(
     serde_repr::Serialize_repr, serde_repr::Deserialize_repr, Debug, Copy, Clone, PartialEq, Eq,
@@ -35,6 +34,7 @@ impl std::fmt::Display for UriMatchType {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(u32)]
 pub enum TwoFactorProviderType {
     Authenticator = 0,
     Email = 1,
@@ -230,27 +230,12 @@ pub(crate) struct ConnectTokenReq {
 #[serde(untagged)]
 pub(crate) enum ConnectTokenAuth {
     Password(ConnectTokenPassword),
-    AuthCode(ConnectTokenAuthCode),
-    ClientCredentials(ConnectTokenClientCredentials),
 }
 
 #[derive(serde::Serialize, Debug)]
 pub(crate) struct ConnectTokenPassword {
     pub(crate) username: String,
     pub(crate) password: String,
-}
-
-#[derive(serde::Serialize, Debug)]
-pub(crate) struct ConnectTokenAuthCode {
-    pub(crate) code: String,
-    pub(crate) code_verifier: String,
-    pub(crate) redirect_uri: String,
-}
-
-#[derive(serde::Serialize, Debug)]
-pub(crate) struct ConnectTokenClientCredentials {
-    pub(crate) username: String,
-    pub(crate) client_secret: String,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -305,28 +290,40 @@ pub(crate) struct SyncRes {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct SyncResCipher {
+    #[serde(rename = "Id", alias = "id")]
     pub id: String,
+    #[serde(rename = "Type", alias = "type")]
+    pub ty: u32,
+    #[serde(rename = "FolderId", alias = "folderId")]
     pub folder_id: Option<String>,
+    #[serde(rename = "OrganizationId", alias = "organizationId")]
     pub organization_id: Option<String>,
+    #[serde(rename = "Favorite", alias = "favorite")]
+    pub favorite: bool,
+    #[serde(rename = "Name", alias = "name")]
     pub name: String,
-    #[serde(alias = "Login")]
+    #[serde(rename = "Login", alias = "login")]
     pub login: Option<CipherLogin>,
-    #[serde(alias = "Card")]
+    #[serde(rename = "Card", alias = "card")]
     pub card: Option<CipherCard>,
-    #[serde(alias = "Identity")]
+    #[serde(rename = "Identity", alias = "identity")]
     pub identity: Option<CipherIdentity>,
-    #[serde(alias = "SecureNote")]
+    #[serde(rename = "SecureNote", alias = "secureNote")]
     pub secure_note: Option<CipherSecureNote>,
-    #[serde(alias = "SshKey")]
+    #[serde(rename = "SshKey", alias = "sshKey")]
     pub ssh_key: Option<CipherSshKey>,
+    #[serde(rename = "Notes", alias = "notes")]
     pub notes: Option<String>,
+    #[serde(rename = "PasswordHistory", alias = "passwordHistory")]
     pub password_history: Option<Vec<SyncResPasswordHistory>>,
+    #[serde(rename = "Fields", alias = "fields")]
     pub fields: Option<Vec<CipherField>>,
+    #[serde(rename = "DeletedDate", alias = "deletedDate")]
     pub deleted_date: Option<String>,
-    #[serde(alias = "Key")]
+    #[serde(rename = "Key", alias = "key")]
     pub key: Option<String>,
+    #[serde(rename = "Reprompt", alias = "reprompt")]
     pub reprompt: CipherRepromptType,
 }
 
@@ -359,78 +356,77 @@ impl SyncResCipher {
             }
             (folder_name, Some(folder_id))
         });
-        let data = if let Some(login) = &self.login {
-            crate::db::EntryData::Login {
-                username: login.username.clone(),
-                password: login.password.clone().map(Into::into),
-                totp: login.totp.clone().map(Into::into),
-                uris: login.uris.as_ref().map_or_else(std::vec::Vec::new, |uris| {
-                    uris.iter()
-                        .filter_map(|uri| {
-                            uri.uri.clone().map(|s| crate::db::Uri {
-                                uri: s,
-                                match_type: Some(uri.match_type),
+        let data = match self.ty {
+            1 => {
+                let login = self.login.as_ref();
+                crate::db::EntryData::Login {
+                    username: login.and_then(|l| l.username.clone()),
+                    password: login.and_then(|l| l.password.clone().map(Into::into)),
+                    totp: login.and_then(|l| l.totp.clone().map(Into::into)),
+                    uris: login.and_then(|l| l.uris.as_ref()).map_or_else(std::vec::Vec::new, |uris| {
+                        uris.iter()
+                            .filter_map(|uri| {
+                                uri.uri.clone().map(|s| crate::db::Uri {
+                                    uri: s,
+                                    match_type: uri.match_type,
+                                })
                             })
-                        })
-                        .collect()
-                }),
+                            .collect()
+                    }),
+                }
             }
-        } else if let Some(card) = &self.card {
-            crate::db::EntryData::Card {
-                cardholder_name: card.cardholder_name.clone(),
-                number: card.number.clone().map(Into::into),
-                brand: card.brand.clone(),
-                exp_month: card.exp_month.clone(),
-                exp_year: card.exp_year.clone(),
-                code: card.code.clone().map(Into::into),
+            2 => crate::db::EntryData::SecureNote,
+            3 => {
+                let card = self.card.as_ref();
+                crate::db::EntryData::Card {
+                    cardholder_name: card.and_then(|c| c.cardholder_name.clone()),
+                    number: card.and_then(|c| c.number.clone().map(Into::into)),
+                    brand: card.and_then(|c| c.brand.clone()),
+                    exp_month: card.and_then(|c| c.exp_month.clone()),
+                    exp_year: card.and_then(|c| c.exp_year.clone()),
+                    code: card.and_then(|c| c.code.clone().map(Into::into)),
+                }
             }
-        } else if let Some(identity) = &self.identity {
-            crate::db::EntryData::Identity {
-                title: identity.title.clone(),
-                first_name: identity.first_name.clone(),
-                middle_name: identity.middle_name.clone(),
-                last_name: identity.last_name.clone(),
-                address1: identity.address1.clone(),
-                address2: identity.address2.clone(),
-                address3: identity.address3.clone(),
-                city: identity.city.clone(),
-                state: identity.state.clone(),
-                postal_code: identity.postal_code.clone(),
-                country: identity.country.clone(),
-                phone: identity.phone.clone(),
-                email: identity.email.clone(),
-                ssn: identity.ssn.clone(),
-                license_number: identity.license_number.clone(),
-                passport_number: identity.passport_number.clone(),
-                username: identity.username.clone(),
+            4 => {
+                let identity = self.identity.as_ref();
+                crate::db::EntryData::Identity {
+                    title: identity.and_then(|i| i.title.clone()),
+                    first_name: identity.and_then(|i| i.first_name.clone()),
+                    middle_name: identity.and_then(|i| i.middle_name.clone()),
+                    last_name: identity.and_then(|i| i.last_name.clone()),
+                    address1: identity.and_then(|i| i.address1.clone()),
+                    address2: identity.and_then(|i| i.address2.clone()),
+                    address3: identity.and_then(|i| i.address3.clone()),
+                    city: identity.and_then(|i| i.city.clone()),
+                    state: identity.and_then(|i| i.state.clone()),
+                    postal_code: identity.and_then(|i| i.postal_code.clone()),
+                    country: identity.and_then(|i| i.country.clone()),
+                    phone: identity.and_then(|i| i.phone.clone()),
+                    email: identity.and_then(|i| i.email.clone()),
+                    ssn: identity.and_then(|i| i.ssn.clone()),
+                    license_number: identity.and_then(|i| i.license_number.clone()),
+                    passport_number: identity.and_then(|i| i.passport_number.clone()),
+                    username: identity.and_then(|i| i.username.clone()),
+                }
             }
-        } else if let Some(_secure_note) = &self.secure_note {
-            crate::db::EntryData::SecureNote
-        } else if let Some(ssh_key) = &self.ssh_key {
-            crate::db::EntryData::SshKey {
-                private_key: ssh_key.private_key.clone().map(Into::into),
-                public_key: ssh_key.public_key.clone(),
-                fingerprint: ssh_key.fingerprint.clone(),
+            5 => {
+                let ssh_key = self.ssh_key.as_ref();
+                crate::db::EntryData::SshKey {
+                    private_key: ssh_key.and_then(|s| s.private_key.clone().map(Into::into)),
+                    public_key: ssh_key.and_then(|s| s.public_key.clone()),
+                    fingerprint: ssh_key.and_then(|s| s.fingerprint.clone()),
+                }
             }
-        } else {
-            return None;
+            _ => return None,
         };
         let fields = self.fields.as_ref().map_or_else(Vec::new, |fields| {
             fields
                 .iter()
                 .map(|field| crate::db::Field {
-                    ty: field.ty.map(|t| match t {
-                        ApiFieldType::Text => FieldType::Text,
-                        ApiFieldType::Hidden => FieldType::Hidden,
-                        ApiFieldType::Boolean => FieldType::Boolean,
-                        ApiFieldType::Linked => FieldType::Linked,
-                    }),
+                    ty: field.ty,
                     name: field.name.clone(),
                     value: field.value.clone().map(Into::into),
-                    linked_id: field.linked_id.map(|l| match l {
-                        ApiLinkedIdType::LoginUsername => LinkedIdType::Username,
-                        ApiLinkedIdType::LoginPassword => LinkedIdType::Password,
-                    }),
+                    linked_id: field.linked_id,
                 })
                 .collect()
         });
@@ -440,6 +436,7 @@ impl SyncResCipher {
             folder,
             folder_id: folder_id.map(std::string::ToString::to_string),
             name: self.name.clone(),
+            favorite: self.favorite,
             data,
             fields,
             notes: self.notes.clone().map(Into::into),
@@ -487,7 +484,12 @@ pub struct CipherLogin {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct CipherUri {
     pub uri: Option<String>,
-    pub match_type: UriMatchType,
+    #[serde(default = "default_uri_match_type")]
+    pub match_type: Option<UriMatchType>,
+}
+
+fn default_uri_match_type() -> Option<UriMatchType> {
+    Some(UriMatchType::Domain)
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -527,10 +529,12 @@ pub struct CipherIdentity {
 pub struct CipherSecureNote {}
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct CipherSshKey {
+    #[serde(rename = "PrivateKey", alias = "privateKey")]
     pub private_key: Option<String>,
+    #[serde(rename = "PublicKey", alias = "publicKey")]
     pub public_key: Option<String>,
+    #[serde(rename = "Fingerprint", alias = "keyFingerprint")]
     pub fingerprint: Option<String>,
 }
 
@@ -546,50 +550,17 @@ pub struct CipherField {
     pub name: Option<String>,
     pub value: Option<String>,
     #[serde(rename = "type")]
-    pub ty: Option<ApiFieldType>,
-    pub linked_id: Option<ApiLinkedIdType>,
+    pub ty: Option<FieldType>,
+    pub linked_id: Option<LinkedIdType>,
 }
 
-#[derive(
-    serde_repr::Serialize_repr, serde_repr::Deserialize_repr, Debug, Copy, Clone, PartialEq, Eq,
-)]
-#[repr(u8)]
-pub enum ApiFieldType {
-    Text = 0,
-    Hidden = 1,
-    Boolean = 2,
-    Linked = 3,
-}
-
-#[derive(
-    serde_repr::Serialize_repr, serde_repr::Deserialize_repr, Debug, Copy, Clone, PartialEq, Eq,
-)]
-#[repr(u8)]
-pub enum ApiLinkedIdType {
-    LoginUsername = 0,
-    LoginPassword = 1,
-}
-
-#[derive(serde::Serialize, Debug)]
-pub(crate) struct RegisterReq {
-    pub(crate) email: String,
-    pub(crate) name: String,
-    #[serde(rename = "masterPasswordHash")]
-    pub(crate) master_password_hash: String,
-    #[serde(rename = "masterPasswordHint")]
-    pub(crate) master_password_hint: String,
-    pub(crate) key: String,
-    pub(crate) kdf: KdfType,
-    #[serde(rename = "kdfIterations")]
-    pub(crate) kdf_iterations: u32,
-}
 
 #[derive(serde::Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CiphersPostReq {
     #[serde(rename = "type")]
     pub(crate) ty: u32,
-    pub(crate) folder_id: serde_json::Value,
+    pub(crate) folder_id: Option<String>,
     pub(crate) favorite: bool,
     pub(crate) name: String,
     pub(crate) notes: Option<String>,
@@ -597,7 +568,7 @@ pub(crate) struct CiphersPostReq {
     pub(crate) card: Option<CipherCard>,
     pub(crate) identity: Option<CipherIdentity>,
     pub(crate) secure_note: Option<CipherSecureNote>,
-    pub(crate) ssh_key: Option<serde_json::Value>,
+    pub(crate) ssh_key: Option<CipherSshKey>,
     pub(crate) fields: Vec<CipherField>,
     pub(crate) reprompt: CipherRepromptType,
 }
@@ -607,7 +578,7 @@ pub(crate) struct CiphersPostReq {
 pub(crate) struct CiphersPutReq {
     #[serde(rename = "type")]
     pub(crate) ty: u32,
-    pub(crate) folder_id: serde_json::Value,
+    pub(crate) folder_id: Option<String>,
     pub(crate) organization_id: Option<String>,
     pub(crate) favorite: bool,
     pub(crate) name: String,
@@ -617,7 +588,7 @@ pub(crate) struct CiphersPutReq {
     pub(crate) identity: Option<CipherIdentity>,
     pub(crate) fields: Vec<CipherField>,
     pub(crate) secure_note: Option<CipherSecureNote>,
-    pub(crate) ssh_key: Option<serde_json::Value>,
+    pub(crate) ssh_key: Option<CipherSshKey>,
     pub(crate) password_history: Vec<serde_json::Value>,
     pub(crate) reprompt: CipherRepromptType,
 }

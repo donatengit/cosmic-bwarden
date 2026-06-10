@@ -42,10 +42,14 @@ pub enum Action {
     GetEntries {
         query: Option<String>,
         entry_type: Option<EntryType>,
+        #[serde(default)]
+        only_pinned: bool,
     },
     GetSidebarEntries {
         query: Option<String>,
         entry_type: Option<EntryType>,
+        #[serde(default)]
+        only_pinned: bool,
     },
     GetEntry {
         id: String,
@@ -56,9 +60,6 @@ pub enum Action {
         password: Option<String>,
     },
     CopyToClipboard {
-        id: String,
-    },
-    RecordCopy {
         id: String,
     },
     GetTopFrequent {

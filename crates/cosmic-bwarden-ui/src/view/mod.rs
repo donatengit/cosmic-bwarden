@@ -12,7 +12,7 @@ use crate::message::{Message, View, WindowState};
 use crate::fl;
 
 impl CosmicBWardenApp {
-    pub fn view_window(&self, id: window::Id) -> Element<'_, Message> {
+    pub fn view_instance(&self, id: window::Id) -> Element<'_, Message> {
         let state = self.windows.get(&id);
         
         match state {
@@ -129,7 +129,8 @@ impl CosmicBWardenApp {
             View::Setup | View::Unlock => {
                 self.view_auth()
             }
-            View::Vault | View::Settings => self.view_vault(),
+            View::Vault => self.view_vault(),
+            View::Settings => self.view_settings(),
         }
     }
 }

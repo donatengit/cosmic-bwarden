@@ -1,5 +1,7 @@
 pub mod state;
-pub mod update;
 pub mod tasks;
+pub mod update;
+#[cfg(test)]
+pub mod tests;
 
-pub use state::{CosmicBWardenApp, AppFlags, APP_ID};
+pub use state::{AppFlags, CosmicBWardenApp, APP_ID};

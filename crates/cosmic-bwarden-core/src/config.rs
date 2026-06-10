@@ -12,9 +12,13 @@ pub struct CosmicBWardenConfig {
     pub identity_url: Option<String>,
     pub ui_url: Option<String>,
     pub device_id: Option<String>,
+    #[serde(default = "default_lock_timeout")]
     pub lock_timeout: u64,
+    #[serde(default = "default_top_popular_count")]
     pub top_popular_count: u32,
+    #[serde(default = "default_top_popular_days")]
     pub top_popular_days: u32,
+    #[serde(default)]
     pub persist_session: bool,
 }
 

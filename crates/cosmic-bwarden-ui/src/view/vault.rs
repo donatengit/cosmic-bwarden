@@ -194,9 +194,17 @@ impl CosmicBWardenApp {
         let mut sidebar = column::with_capacity(5).spacing(10).height(Length::Fill);
 
         // Search Bar
-        sidebar = sidebar.push(text_input::text_input(fl!("search"), &self.search_query)
+        let search_input = text_input::text_input(fl!("search"), &self.search_query)
             .on_input(Message::SearchChanged)
-            .on_submit(Message::SearchSubmitted));
+            .on_submit(Message::SearchSubmitted);
+        
+        let star_icon = if self.search_only_pinned { "starred-symbolic" } else { "non-starred-symbolic" };
+        let star_btn = button::icon(icon::from_name(star_icon))
+            .on_press(Message::ToggleSearchPinned);
+
+        sidebar = sidebar.push(cosmic::widget::row::with_capacity(2).spacing(5).align_y(Alignment::Center)
+            .push(search_input)
+            .push(star_btn));
 
         // Filter Type
         let filter_options = vec!["All", "Logins", "Notes", "SSH Keys"];

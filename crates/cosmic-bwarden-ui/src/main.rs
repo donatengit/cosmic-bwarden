@@ -3,9 +3,6 @@ mod app;
 mod message;
 mod view;
 
-#[cfg(test)]
-mod tests;
-
 use cosmic::app::{Application, Task};
 use cosmic::iced::{window, Subscription};
 
@@ -189,7 +186,7 @@ impl Application for CosmicBWardenApp {
     }
 
     fn view_window(&self, id: window::Id) -> cosmic::Element<'_, Self::Message> {
-        self.view_window(id)
+        self.view_instance(id)
     }
 
     fn subscription(&self) -> Subscription<Self::Message> {

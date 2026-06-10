@@ -21,6 +21,7 @@ pub enum WindowState {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum Message {
     ConfigReceived(Result<(CosmicBWardenConfig, bool, bool), String>),
 
