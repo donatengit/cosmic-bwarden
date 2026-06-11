@@ -123,6 +123,7 @@ pub async fn handle_get_sidebar_entries(query: Option<String>, entry_type: Optio
                 SidebarEntry {
                     id: entry.id.clone(),
                     name: decrypted_name,
+                    username: username_dec.clone(),
                     entry_type: match &entry.data {
                         cosmic_bwarden_core::db::EntryData::Login { .. } => EntryType::Login,
                         cosmic_bwarden_core::db::EntryData::Card { .. } => EntryType::Card,
@@ -261,9 +262,11 @@ pub async fn handle_get_top_frequent(limit: usize, state: &Arc<Mutex<State>>) ->
                     .get(&entry.id)
                     .cloned()
                     .unwrap_or_else(|| entry.name.clone());
+                let username = state_guard.username_cache.get(&entry.id).cloned();
                 entries.push(SidebarEntry {
                     id: entry.id.clone(),
                     name,
+                    username,
                     entry_type: match &entry.data {
                         cosmic_bwarden_core::db::EntryData::Login { .. } => EntryType::Login,
                         cosmic_bwarden_core::db::EntryData::Card { .. } => EntryType::Card,

@@ -290,76 +290,10 @@ impl Entry {
     }
 }
 
-#[derive(serde::Serialize, Debug, Clone, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct Uri {
     pub uri: String,
     pub match_type: Option<api::UriMatchType>,
-}
-
-impl<'de> serde::Deserialize<'de> for Uri {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct StringOrUri;
-        impl<'de> serde::de::Visitor<'de> for StringOrUri {
-            type Value = Uri;
-
-            fn expecting(
-                &self,
-                formatter: &mut std::fmt::Formatter,
-            ) -> std::fmt::Result {
-                formatter.write_str("uri")
-            }
-
-            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                Ok(Uri {
-                    uri: value.to_string(),
-                    match_type: None,
-                })
-            }
-
-            fn visit_map<M>(self, mut map: M) -> std::result::Result<Self::Value, M::Error>
-            where
-                M: serde::de::MapAccess<'de>,
-            {
-                let mut uri = None;
-                let mut match_type = None;
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        "uri" => {
-                            if uri.is_some() {
-                                return Err(serde::de::Error::duplicate_field("uri"));
-                            }
-                            uri = Some(map.next_value()?);
-                        }
-                        "match_type" => {
-                            if match_type.is_some() {
-                                return Err(serde::de::Error::duplicate_field("match_type"));
-                            }
-                            match_type = map.next_value()?;
-                        }
-                        _ => {
-                            return Err(serde::de::Error::unknown_field(
-                                key,
-                                &["uri", "match_type"],
-                            ))
-                        }
-                    }
-                }
-
-                uri.map_or_else(
-                    || Err(serde::de::Error::missing_field("uri")),
-                    |uri| Ok(Self::Value { uri, match_type }),
-                )
-            }
-        }
-
-        deserializer.deserialize_any(StringOrUri)
-    }
 }
 
 #[derive(Clone, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]

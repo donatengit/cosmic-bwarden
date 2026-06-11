@@ -2,7 +2,52 @@
 mod tests {
     use crate::cipherstring::CipherString;
     use crate::locked;
-    use crate::db::{Entry, EntryData};
+    use crate::db::{Entry, EntryData, Uri};
+    use crate::protocol::Action;
+    use crate::api;
+
+    #[test]
+    fn test_postcard_action() {
+        let action = Action::Login {
+            email: "test@example.com".to_string(),
+            password: "password".to_string(),
+            server_url: Some("http://localhost".to_string()),
+            remember_me: true,
+            two_factor_token: None,
+            two_factor_provider: None,
+            two_factor_code: None,
+            device_verification_code: None,
+        };
+        let serialized = postcard::to_allocvec(&action).unwrap();
+        println!("Serialized length: {}", serialized.len());
+        let _deserialized: Action = postcard::from_bytes(&serialized).unwrap();
+    }
+
+    #[test]
+    fn test_postcard_entry() {
+        let entry = Entry {
+            id: "id".to_string(),
+            org_id: None,
+            folder: None,
+            folder_id: None,
+            name: "name".to_string(),
+            favorite: false,
+            data: EntryData::Login {
+                username: Some("user".to_string()),
+                password: Some("pass".into()),
+                totp: None,
+                uris: vec![Uri { uri: "http://test".to_string(), match_type: None }],
+            },
+            fields: vec![],
+            notes: None,
+            history: vec![],
+            key: None,
+            master_password_reprompt: api::CipherRepromptType::None,
+        };
+        let serialized = postcard::to_allocvec(&entry).unwrap();
+        let deserialized: Entry = postcard::from_bytes(&serialized).unwrap();
+        assert_eq!(entry, deserialized);
+    }
 
     #[test]
     fn test_text_processing_utf8_emojis() {

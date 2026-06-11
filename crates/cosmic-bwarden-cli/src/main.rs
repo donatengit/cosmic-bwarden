@@ -113,9 +113,6 @@ enum Commands {
 
         /// Entry ID or Name
         id_or_name: Option<String>,
-        /// Show full entry details as JSON
-        #[arg(short, long)]
-        json: bool,
         /// Show all matching entries
         #[arg(short, long)]
         all: bool,
@@ -274,62 +271,53 @@ async fn run_command(
                 .await
                 .context("failed to talk to agent")?;
 
-            if let Response::Error { message } = &res {
-                if message == "new_device_verification_required" {
-                    println!("A verification code has been sent to your email.");
-                    let code = rpassword::prompt_password("Verification code: ")
-                        .context("failed to read verification code")?;
+            if let Response::NewDeviceVerificationRequired = &res {
+                println!("A verification code has been sent to your email.");
+                let code = rpassword::prompt_password("Verification code: ")
+                    .context("failed to read verification code")?;
 
-                    res = client
-                        .send(Action::Login {
-                            email: email.clone(),
-                            password: password.clone(),
-                            server_url: server.clone(),
-                            remember_me: true,
-                            two_factor_token: None,
-                            two_factor_provider: None,
-                            two_factor_code: None,
-                            device_verification_code: Some(code),
-                        })
-                        .await
-                        .context("failed to talk to agent")?;
-                }
+                res = client
+                    .send(Action::Login {
+                        email: email.clone(),
+                        password: password.clone(),
+                        server_url: server.clone(),
+                        remember_me: true,
+                        two_factor_token: None,
+                        two_factor_provider: None,
+                        two_factor_code: None,
+                        device_verification_code: Some(code),
+                    })
+                    .await
+                    .context("failed to talk to agent")?;
             }
 
-            if let Response::Error { message } = &res {
-                if message.starts_with("two_factor_required:") {
-                    let parts: Vec<&str> = message.split(':').collect();
-                    let token = parts[1].to_string();
-                    let providers_json = parts[2];
-                    let providers: Vec<u32> = serde_json::from_str(providers_json)?;
-
-                    println!("Two-factor authentication required.");
-                    if providers.contains(&1) {
-                        println!("1. Email");
-                    }
-                    let provider = if providers.contains(&1) {
-                        1
-                    } else {
-                        providers[0]
-                    };
-
-                    let code = rpassword::prompt_password("Two-factor code: ")
-                        .context("failed to read code")?;
-
-                    res = client
-                        .send(Action::Login {
-                            email: email.clone(),
-                            password: password.clone(),
-                            server_url: server.clone(),
-                            remember_me: true,
-                            two_factor_token: Some(token),
-                            two_factor_provider: Some(provider),
-                            two_factor_code: Some(code),
-                            device_verification_code: None,
-                        })
-                        .await
-                        .context("failed to talk to agent")?;
+            if let Response::TwoFactorRequired { token, providers } = &res {
+                println!("Two-factor authentication required.");
+                if providers.contains(&1) {
+                    println!("1. Email");
                 }
+                let provider = if providers.contains(&1) {
+                    1
+                } else {
+                    providers[0]
+                };
+
+                let code = rpassword::prompt_password("Two-factor code: ")
+                    .context("failed to read code")?;
+
+                res = client
+                    .send(Action::Login {
+                        email: email.clone(),
+                        password: password.clone(),
+                        server_url: server.clone(),
+                        remember_me: true,
+                        two_factor_token: Some(token.clone()),
+                        two_factor_provider: Some(provider),
+                        two_factor_code: Some(code),
+                        device_verification_code: None,
+                    })
+                    .await
+                    .context("failed to talk to agent")?;
             }
 
             handle_response(res)?;
@@ -420,7 +408,6 @@ async fn run_command(
         Commands::Get {
             show_secrets,
             id_or_name,
-            json,
             all,
             fields,
         } => {
@@ -556,11 +543,7 @@ async fn run_command(
 
                 match entry_res {
                     Response::Entry { entry } => {
-                        if *json {
-                            println!("{}", serde_json::to_string_pretty(&entry)?);
-                        } else {
-                            output_entry(&entry, fields, *show_secrets)?;
-                        }
+                        output_entry(&entry, fields, *show_secrets)?;
                     }
                     _ => handle_response(entry_res)?,
                 }

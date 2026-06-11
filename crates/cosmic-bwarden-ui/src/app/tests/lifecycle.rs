@@ -89,6 +89,7 @@ async fn test_lock_logout_clears_state() {
     app.entries = vec![SidebarEntry {
         id: "1".to_string(),
         name: "Entry 1".to_string(),
+        username: None,
         entry_type: EntryType::Login,
         is_pinned: false,
     }];
@@ -108,6 +109,7 @@ async fn test_lock_logout_clears_state() {
     app.entries = vec![SidebarEntry {
         id: "1".to_string(),
         name: "Entry 1".to_string(),
+        username: None,
         entry_type: EntryType::Login,
         is_pinned: false,
     }];

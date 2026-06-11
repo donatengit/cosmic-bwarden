@@ -48,15 +48,12 @@ pub async fn handle_update_entry(entry: Entry, state: &Arc<Mutex<State>>) -> Res
         state_guard.keys.clone()
     };
     if let Some(keys) = keys {
-        let state = state.clone();
-        tokio::spawn(async move {
-            if let Err(e) = update_entry_on_server(&state, &entry, &config, &keys).await {
-                log::error!("failed to update entry on server: {}", e);
-            } else {
-                let _ = crate::handler::vault::sync::handle_sync(&state).await;
-            }
-        });
-        Response::Ack
+        match update_entry_on_server(state, &entry, &config, &keys).await {
+            Ok(()) => crate::handler::vault::sync::handle_sync(state).await,
+            Err(e) => Response::Error {
+                message: format!("failed to update entry on server: {}", e),
+            },
+        }
     } else {
         Response::Error {
             message: "agent is locked".to_string(),
@@ -86,15 +83,12 @@ pub async fn handle_pin_entry(id: String, state: &Arc<Mutex<State>>) -> Response
                 };
             }
         };
-        let state = state.clone();
-        tokio::spawn(async move {
-            if let Err(e) = update_entry_on_server(&state, &entry, &config, &keys).await {
-                log::error!("failed to pin entry on server: {}", e);
-            } else {
-                let _ = crate::handler::vault::sync::handle_sync(&state).await;
-            }
-        });
-        Response::Ack
+        match update_entry_on_server(state, &entry, &config, &keys).await {
+            Ok(()) => crate::handler::vault::sync::handle_sync(state).await,
+            Err(e) => Response::Error {
+                message: format!("failed to pin entry on server: {}", e),
+            },
+        }
     } else {
         Response::Error {
             message: if keys_is_some {
@@ -129,15 +123,12 @@ pub async fn handle_unpin_entry(id: String, state: &Arc<Mutex<State>>) -> Respon
                 };
             }
         };
-        let state = state.clone();
-        tokio::spawn(async move {
-            if let Err(e) = update_entry_on_server(&state, &entry, &config, &keys).await {
-                log::error!("failed to unpin entry on server: {}", e);
-            } else {
-                let _ = crate::handler::vault::sync::handle_sync(&state).await;
-            }
-        });
-        Response::Ack
+        match update_entry_on_server(state, &entry, &config, &keys).await {
+            Ok(()) => crate::handler::vault::sync::handle_sync(state).await,
+            Err(e) => Response::Error {
+                message: format!("failed to unpin entry on server: {}", e),
+            },
+        }
     } else {
         Response::Error {
             message: if keys_is_some {

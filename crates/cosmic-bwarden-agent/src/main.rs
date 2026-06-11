@@ -90,36 +90,53 @@ async fn main() -> anyhow::Result<()> {
 
             tokio::spawn(async move {
                 loop {
-                    let mut buf = vec![0u8; 4096];
-                    let n = match socket.read(&mut buf).await {
-                        Ok(0) => return,
-                        Ok(n) => n,
-                        Err(e) => {
-                            log::error!("failed to read from socket: {}", e);
-                            return;
+                    let mut len_buf = [0u8; 4];
+                    if let Err(e) = socket.read_exact(&mut len_buf).await {
+                        if e.kind() != std::io::ErrorKind::UnexpectedEof {
+                            log::error!("failed to read length from socket: {}", e);
                         }
-                    };
+                        return;
+                    }
+                    let len = u32::from_le_bytes(len_buf) as usize;
+                    log::debug!("Read request length: {}", len);
+                    let mut buf = vec![0u8; len];
+                    if let Err(e) = socket.read_exact(&mut buf).await {
+                        log::error!("failed to read from socket: {}", e);
+                        return;
+                    }
 
-                    let request: Action = match serde_json::from_slice(&buf[..n]) {
-                        Ok(req) => req,
+                    let request: Action = match postcard::from_bytes(&buf) {
+                        Ok(req) => {
+                            log::debug!("Parsed request: {:?}", req);
+                            req
+                        },
                         Err(e) => {
+                            log::error!("failed to deserialize request: {}", e);
                             let response = Response::Error {
                                 message: format!("invalid request: {}", e),
                             };
-                            let _ = socket
-                                .write_all(&serde_json::to_vec(&response).unwrap())
-                                .await;
+                            let response_bytes = postcard::to_allocvec(&response).unwrap();
+                            let len = response_bytes.len() as u32;
+                            let _ = socket.write_all(&len.to_le_bytes()).await;
+                            let _ = socket.write_all(&response_bytes).await;
                             return;
                         }
                     };
 
                     let is_subscribe = matches!(request, Action::Subscribe);
                     let response = handle_request(request, &state).await;
+                    log::debug!("Response: {:?}", response);
 
                     if let Response::Error { message } = &response {
                         log::error!("request failed: {}", message);
                     }
-                    let response_bytes = serde_json::to_vec(&response).unwrap();
+                    let response_bytes = postcard::to_allocvec(&response).unwrap();
+                    let len = response_bytes.len() as u32;
+                    log::debug!("Writing response length: {}", len);
+                    if let Err(e) = socket.write_all(&len.to_le_bytes()).await {
+                        log::error!("failed to write length to socket: {}", e);
+                        return;
+                    }
                     if let Err(e) = socket.write_all(&response_bytes).await {
                         log::error!("failed to write to socket: {}", e);
                         return;
@@ -135,16 +152,21 @@ async fn main() -> anyhow::Result<()> {
 
                         while let Some(event) = rx.recv().await {
                             let response = Response::Event { event };
-                            let response_bytes = serde_json::to_vec(&response).unwrap();
+                            let response_bytes = postcard::to_allocvec(&response).unwrap();
+                            let len = response_bytes.len() as u32;
+                            if let Err(e) = socket.write_all(&len.to_le_bytes()).await {
+                                log::debug!("subscriber disconnected (length): {}", e);
+                                break;
+                            }
                             if let Err(e) = socket.write_all(&response_bytes).await {
-                                log::debug!("subscriber disconnected: {}", e);
+                                log::debug!("subscriber disconnected (body): {}", e);
                                 break;
                             }
                         }
                         return;
                     } else {
                         // For non-subscription requests, close the connection after one response
-                        // to match the expectation of AgentClient::send (which uses read_to_end)
+                        // to match the expectation of AgentClient::send
                         let _ = socket.shutdown().await;
                         return;
                     }

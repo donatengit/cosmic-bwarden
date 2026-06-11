@@ -83,18 +83,13 @@ pub async fn handle_login(
     {
         Ok(res) => res,
         Err(cosmic_bwarden_core::error::Error::TwoFactorRequired { providers, token }) => {
-            return Response::Error {
-                message: format!(
-                    "two_factor_required:{}:{}",
-                    token,
-                    serde_json::to_string(&providers).unwrap()
-                ),
+            return Response::TwoFactorRequired {
+                token,
+                providers,
             };
         }
         Err(cosmic_bwarden_core::error::Error::NewDeviceVerificationRequired) => {
-            return Response::Error {
-                message: "new_device_verification_required".to_string(),
-            };
+            return Response::NewDeviceVerificationRequired;
         }
         Err(e) => {
             return Response::Error {

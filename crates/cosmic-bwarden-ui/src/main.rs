@@ -213,33 +213,36 @@ impl Application for CosmicBWardenApp {
             async_stream::try_stream! {
                 let mut socket = tokio::net::UnixStream::connect(cosmic_bwarden_core::dirs::socket_file()).await
                     .map_err(|e| anyhow::anyhow!(e))?;
-                
+
                 // Send Subscribe action
                 let request = Action::Subscribe;
-                let request_bytes = serde_json::to_vec(&request)
+                let request_bytes = postcard::to_allocvec(&request)
                     .map_err(|e| anyhow::anyhow!(e))?;
                 use tokio::io::AsyncWriteExt;
+                let len = request_bytes.len() as u32;
+                socket.write_all(&len.to_le_bytes()).await
+                    .map_err(|e| anyhow::anyhow!(e))?;
                 socket.write_all(&request_bytes).await
                     .map_err(|e| anyhow::anyhow!(e))?;
-                
-                // Read Response::Ack
-                let mut buf = vec![0u8; 4096];
+
+                // Read Response
                 use tokio::io::AsyncReadExt;
-                let n = socket.read(&mut buf).await
-                    .map_err(|e| anyhow::anyhow!(e))?;
-                let response: Response = serde_json::from_slice(&buf[..n])
-                    .map_err(|e| anyhow::anyhow!(e))?;
-                
-                if matches!(response, Response::Ack) {
-                    loop {
-                        let n = socket.read(&mut buf).await
-                            .map_err(|e| anyhow::anyhow!(e))?;
-                        if n == 0 { break; }
-                        let response: Response = serde_json::from_slice(&buf[..n])
-                            .map_err(|e| anyhow::anyhow!(e))?;
-                        if let Response::Event { event } = response {
-                            yield event;
-                        }
+                loop {
+                    let mut len_buf = [0u8; 4];
+                    socket.read_exact(&mut len_buf).await
+                        .map_err(|e| anyhow::anyhow!(e))?;
+                    let len = u32::from_le_bytes(len_buf) as usize;
+                    let mut buf = vec![0u8; len];
+                    socket.read_exact(&mut buf).await
+                        .map_err(|e| anyhow::anyhow!(e))?;
+
+                    let response: Response = postcard::from_bytes(&buf)
+                        .map_err(|e| anyhow::anyhow!(e))?;
+
+                    match response {
+                        Response::Ack => continue,
+                        Response::Event { event } => yield event,
+                        _ => {}
                     }
                 }
             }

@@ -1,4 +1,4 @@
-use crate::common::{register_user, setup_env};
+use crate::common::{register_user, setup_env, lock_unlock_cycle, logout_login_cycle};
 use anyhow::Result;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action, Response};
@@ -59,6 +59,8 @@ async fn test_note_crud_lifecycle() -> Result<()> {
         anyhow::bail!("Expected entries");
     };
 
+    lock_unlock_cycle(&client, password).await?;
+
     let res = client
         .send(Action::GetEntry {
             id: id.clone(),
@@ -85,6 +87,7 @@ async fn test_note_crud_lifecycle() -> Result<()> {
     }
     assert!(matches!(res, Response::Ack));
 
+    logout_login_cycle(&client, email, password, &env.vault_url).await?;
     client.send(Action::Sync).await?;
 
     // 4. Verify Update
@@ -208,6 +211,8 @@ async fn test_login_crud_lifecycle() -> Result<()> {
     let res = client.send(Action::UpdateEntry { entry }).await?;
     assert!(matches!(res, Response::Ack));
 
+    lock_unlock_cycle(&client, password).await?;
+    logout_login_cycle(&client, email, password, &env.vault_url).await?;
     client.send(Action::Sync).await?;
 
     // 4. Verify Update

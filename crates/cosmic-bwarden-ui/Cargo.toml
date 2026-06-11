@@ -12,7 +12,7 @@ cosmic-config = { git = "https://github.com/pop-os/libcosmic", branch = "master"
 tokio = { version = "1.0", features = ["full"] }
 log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+postcard = { version = "1.0", features = ["alloc"] }
 env_logger = "0.11"
 chrono = "0.4"
 tracing = "0.1"

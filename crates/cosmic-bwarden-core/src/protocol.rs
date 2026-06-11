@@ -7,16 +7,16 @@ pub enum EntryType {
     SshKey,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SidebarEntry {
     pub id: String,
     pub name: String,
+    pub username: Option<String>,
     pub entry_type: EntryType,
     pub is_pinned: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
-#[serde(tag = "type")]
 pub enum Action {
     Register {
         email: String,
@@ -42,13 +42,11 @@ pub enum Action {
     GetEntries {
         query: Option<String>,
         entry_type: Option<EntryType>,
-        #[serde(default)]
         only_pinned: bool,
     },
     GetSidebarEntries {
         query: Option<String>,
         entry_type: Option<EntryType>,
-        #[serde(default)]
         only_pinned: bool,
     },
     GetEntry {
@@ -131,7 +129,6 @@ pub enum Action {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-#[serde(tag = "type")]
 pub enum Event {
     Locked,
     Unlocked,
@@ -139,10 +136,11 @@ pub enum Event {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
-#[serde(tag = "type")]
 pub enum Response {
     Ack,
     Error { message: String },
+    TwoFactorRequired { token: String, providers: Vec<u32> },
+    NewDeviceVerificationRequired,
     Config { config: crate::config::CosmicBWardenConfig, needs_login: bool, is_locked: bool },
     Entries { entries: Vec<crate::db::Entry> },
     SidebarEntries { entries: Vec<SidebarEntry> },

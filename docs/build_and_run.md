@@ -62,11 +62,8 @@ The `cosmic-bwarden-cli` provides a powerful interface for scripting and advance
 # Get password (interactive reprompt if needed)
 ./target/release/cosmic-bwarden-cli get "My Secret"
 
-# Get full item details as JSON
-./target/release/cosmic-bwarden-cli get "My Secret" --json
-
-# Get a specific field (e.g. Note or SSH Private Key)
-./target/release/cosmic-bwarden-cli get "My Private Key" --json | jq -r '.notes'
+# Get a specific field (e.g. Note or SSH Private Key), revealing secrets
+./target/release/cosmic-bwarden-cli get "My Private Key" --fields notes --show-secrets
 ```
 
 ### 4. Launch the Applet

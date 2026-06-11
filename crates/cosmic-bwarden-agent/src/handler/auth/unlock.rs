@@ -94,6 +94,16 @@ pub async fn handle_unlock(
                     state_guard.pinned_ids.insert(entry.id.clone());
                 }
             }
+
+            // access_token/refresh_token are `#[serde(skip)]` and thus lost on
+            // reload from disk; carry over the in-memory tokens from the
+            // pre-lock state if the keyring didn't already restore them.
+            if db.access_token.is_none() {
+                if let Some(prev_db) = &state_guard.db {
+                    db.access_token = prev_db.access_token.clone();
+                    db.refresh_token = prev_db.refresh_token.clone();
+                }
+            }
             state_guard.db = Some(db);
 
             state_guard.broadcast(Event::Unlocked);

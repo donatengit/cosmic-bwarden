@@ -1,4 +1,6 @@
 use anyhow::Result;
+use cosmic_bwarden_core::agent_client::AgentClient;
+use cosmic_bwarden_core::protocol::{Action, Response};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -162,5 +164,67 @@ pub async fn register_user(url: &str, email: &str, password: &str) -> Result<()>
         }
     }
 
+    Ok(())
+}
+
+pub async fn lock_unlock_cycle(client: &AgentClient, password: &str) -> Result<()> {
+    client.send(Action::Lock).await?;
+    let res = client
+        .send(Action::GetEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: false,
+        })
+        .await?;
+    if let Response::Error { message } = res {
+        if !message.contains("locked") {
+            anyhow::bail!("Expected locked error, got: {}", message);
+        }
+    } else {
+        anyhow::bail!("Expected error response when locked, got: {:?}", res);
+    }
+
+    client
+        .send(Action::Unlock {
+            password: password.to_string(),
+        })
+        .await?;
+    Ok(())
+}
+
+pub async fn logout_login_cycle(
+    client: &AgentClient,
+    email: &str,
+    password: &str,
+    server_url: &str,
+) -> Result<()> {
+    client.send(Action::Logout).await?;
+    let res = client
+        .send(Action::GetEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: false,
+        })
+        .await?;
+    if let Response::Error { message } = res {
+        if !message.contains("not logged in") && !message.contains("locked") {
+            anyhow::bail!("Expected not logged in error, got: {}", message);
+        }
+    } else {
+        anyhow::bail!("Expected error response when logged out, got: {:?}", res);
+    }
+
+    client
+        .send(Action::Login {
+            email: email.to_string(),
+            password: password.to_string(),
+            server_url: Some(server_url.to_string()),
+            remember_me: true,
+            two_factor_token: None,
+            two_factor_provider: None,
+            two_factor_code: None,
+            device_verification_code: None,
+        })
+        .await?;
     Ok(())
 }

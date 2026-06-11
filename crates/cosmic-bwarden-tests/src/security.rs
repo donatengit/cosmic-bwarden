@@ -133,18 +133,27 @@ async fn test_agent_events() -> Result<()> {
 
     let mut stream = UnixStream::connect(cosmic_bwarden_core::dirs::socket_file()).await?;
     let subscribe_req = Action::Subscribe;
-    stream.write_all(&serde_json::to_vec(&subscribe_req)?).await?;
+    let req_bytes = postcard::to_allocvec(&subscribe_req)?;
+    let len = req_bytes.len() as u32;
+    stream.write_all(&len.to_le_bytes()).await?;
+    stream.write_all(&req_bytes).await?;
     
-    let mut buf = vec![0u8; 4096];
-    let n = stream.read(&mut buf).await?;
-    let resp: Response = serde_json::from_slice(&buf[..n])?;
+    let mut len_buf = [0u8; 4];
+    stream.read_exact(&mut len_buf).await?;
+    let len = u32::from_le_bytes(len_buf) as usize;
+    let mut buf = vec![0u8; len];
+    stream.read_exact(&mut buf).await?;
+    let resp: Response = postcard::from_bytes(&buf)?;
     assert!(matches!(resp, Response::Ack));
 
     // Trigger an event (VaultChanged)
     client.send(Action::Sync).await?;
 
-    let n = stream.read(&mut buf).await?;
-    let resp: Response = serde_json::from_slice(&buf[..n])?;
+    stream.read_exact(&mut len_buf).await?;
+    let len = u32::from_le_bytes(len_buf) as usize;
+    let mut buf = vec![0u8; len];
+    stream.read_exact(&mut buf).await?;
+    let resp: Response = postcard::from_bytes(&buf)?;
     if let Response::Event { event } = resp {
         assert!(matches!(event, Event::VaultChanged));
     } else {
@@ -153,8 +162,11 @@ async fn test_agent_events() -> Result<()> {
 
     // Trigger Locked event
     client.send(Action::Lock).await?;
-    let n = stream.read(&mut buf).await?;
-    let resp: Response = serde_json::from_slice(&buf[..n])?;
+    stream.read_exact(&mut len_buf).await?;
+    let len = u32::from_le_bytes(len_buf) as usize;
+    let mut buf = vec![0u8; len];
+    stream.read_exact(&mut buf).await?;
+    let resp: Response = postcard::from_bytes(&buf)?;
     if let Response::Event { event } = resp {
         assert!(matches!(event, Event::Locked));
     } else {
