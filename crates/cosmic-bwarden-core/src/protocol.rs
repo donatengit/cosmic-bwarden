@@ -12,6 +12,7 @@ pub struct SidebarEntry {
     pub id: String,
     pub name: String,
     pub username: Option<String>,
+    pub public_key: Option<String>,
     pub entry_type: EntryType,
     pub is_pinned: bool,
 }
@@ -141,7 +142,7 @@ pub enum Response {
     Error { message: String },
     TwoFactorRequired { token: String, providers: Vec<u32> },
     NewDeviceVerificationRequired,
-    Config { config: crate::config::CosmicBWardenConfig, needs_login: bool, is_locked: bool },
+    Config { config: crate::config::CosmicBWardenConfig, needs_login: bool, has_account: bool, is_locked: bool },
     Entries { entries: Vec<crate::db::Entry> },
     SidebarEntries { entries: Vec<SidebarEntry> },
     Entry { entry: crate::db::Entry },

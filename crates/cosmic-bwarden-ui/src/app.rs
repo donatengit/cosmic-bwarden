@@ -1,3 +1,4 @@
+pub mod applet_search;
 pub mod state;
 pub mod tasks;
 pub mod update;

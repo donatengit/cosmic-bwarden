@@ -1,11 +1,11 @@
 pub mod lifecycle;
 pub mod auth;
 pub mod vault;
+pub mod applet;
 
 use cosmic::app::Task;
 use crate::message::Message;
 use crate::app::state::CosmicBWardenApp;
-use crate::app::tasks::fetch_top_entries;
 
 impl CosmicBWardenApp {
     pub fn update_app(&mut self, message: Message) -> Task<Message> {
@@ -21,9 +21,13 @@ impl CosmicBWardenApp {
             return task;
         }
 
+        if let Some(task) = self.update_applet(message.clone()) {
+            return task;
+        }
+
         // Handle remaining messages
         match message {
-            Message::EmailChanged(_) | Message::PasswordChanged(_) | Message::ServerChanged(_) | 
+            Message::EmailChanged(_) | Message::PasswordChanged(_) | Message::ServerChanged(_) |
             Message::RememberChanged(_) | Message::VerificationCodeChanged(_) | Message::LoginSubmitted |
             Message::UnlockPasswordChanged(_) | Message::UnlockSubmitted | Message::AuthResult(_) |
             Message::LockClicked | Message::LockResult | Message::LogoutClicked | Message::LogoutResult |
@@ -33,96 +37,21 @@ impl CosmicBWardenApp {
             Message::EditFieldChanged(_, _) | Message::EditNameChanged(_) | Message::NotesAction(_) |
             Message::DeleteEntry(_) | Message::ConfirmDelete | Message::CancelDelete | Message::DeleteEntryResult(_) |
             Message::EntriesReceived(_, _) | Message::TopEntriesReceived(_) | Message::SyncClicked | Message::SyncResult(_) |
-            Message::TogglePin(_) | Message::ToggleSearchPinned | Message::RepromptPasswordChanged(_) | 
+            Message::TogglePin(_) | Message::ToggleSearchPinned | Message::RepromptPasswordChanged(_) |
             Message::SubmitReprompt | Message::CancelReprompt | Message::NewEntryTypeChanged(_) |
-            Message::ConfigReceived(_) | Message::EventReceived(_) | Message::WindowOpened(_) | 
-            Message::WindowClosed(_) | Message::OpenMainWindow | Message::RefreshStateInternal => Task::none(),
+            Message::ConfigReceived(_) | Message::EventReceived(_) | Message::WindowOpened(_) |
+            Message::WindowClosed(_) | Message::OpenMainWindow | Message::RefreshStateInternal |
+            Message::SpawnApplication | Message::AppletIconClicked(_, _) | Message::CopyPassword(_) |
+            Message::PopupClosed(_) | Message::Surface(_) | Message::Exit |
+            Message::AppletUnlockPasswordChanged(_) | Message::AppletUnlockSubmitted | Message::AppletUnlockResult(_) |
+            Message::AppletSearchChanged(_) | Message::AppletToggleFavouritesFilter | Message::AppletSearchResultsReceived(_, _) |
+            Message::AppletCopyPrimary(_) | Message::AppletCopySecret(_) | Message::AppletSecretReceived(_) |
+            Message::AppletRepromptPasswordChanged(_) | Message::AppletRepromptSubmitted | Message::AppletRepromptCancelled |
+            Message::AppletToggleUnlockPasswordReveal | Message::AppletToggleRepromptPasswordReveal |
+            Message::CloseToast(_) | Message::LockAndQuit | Message::LogoutAndQuit => Task::none(),
 
-            Message::SpawnApplication => {
-                if let Some(exe) = std::env::current_exe().ok() {
-                    let mut cmd = std::process::Command::new(exe);
-                    cmd.env("COSMIC_BWARDEN_MODE", "application");
-                    cmd.env_remove("COSMIC_PANEL_NAME");
-                    tokio::spawn(cosmic::process::spawn(cmd));
-                }
-                Task::none()
-            }
-            Message::AppletIconClicked(offset, bounds) => {
-                use cosmic::iced::window;
-                use cosmic_bwarden_core::protocol::Action as AgentAction;
-                use cosmic_bwarden_core::protocol::Response;
-                use cosmic_bwarden_core::agent_client::AgentClient;
-
-                if let Some(id) = self.applet_popup {
-                    return Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(cosmic::surface::action::destroy_popup(id))));
-                }
-
-                let mut tasks = Vec::new();
-                tasks.push(Task::perform(async {
-                    let agent = AgentClient::new();
-                    match agent.send(AgentAction::GetConfig).await {
-                        Ok(Response::Config { config, needs_login, is_locked }) => Ok((config, needs_login, is_locked)),
-                        Ok(Response::Error { message }) => Err(message),
-                        _ => Err("unexpected response".to_string()),
-                    }
-                }, |res| cosmic::Action::App(Message::ConfigReceived(res))));
-
-                tasks.push(fetch_top_entries(self.config.top_popular_count as usize, Some(self.config.top_popular_days)));
-
-                let popup_task = Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(cosmic::surface::action::app_popup::<CosmicBWardenApp>(
-                    move |state: &mut CosmicBWardenApp| {
-                        let new_id = window::Id::unique();
-                        state.applet_popup = Some(new_id);
-                        state.windows.insert(new_id, crate::message::WindowState::Popup);
-                        let mut popup_settings = state.core.applet.get_popup_settings(
-                            state.core.main_window_id().unwrap_or(window::Id::RESERVED),
-                            new_id,
-                            None,
-                            None,
-                            None,
-                        );
-                        popup_settings.positioner.anchor_rect = cosmic::iced::Rectangle {
-                            x: (bounds.x - offset.x) as i32,
-                            y: (bounds.y - offset.y) as i32,
-                            width: bounds.width as i32,
-                            height: bounds.height as i32,
-                        };
-                        popup_settings
-                    },
-                    None,
-                ))));
-                tasks.push(popup_task);
-                Task::batch(tasks)
-            }
-            Message::CopyPassword(id) => {
-                use cosmic_bwarden_core::protocol::Action as AgentAction;
-                use cosmic_bwarden_core::protocol::Response;
-                use cosmic_bwarden_core::agent_client::AgentClient;
-
-                Task::perform(async move {
-                    let agent = AgentClient::new();
-                    match agent.send(AgentAction::GetPassword { id, password: None }).await {
-                        Ok(Response::Password { password }) => Ok(password),
-                        _ => Err("failed to get password".to_string()),
-                    }
-                }, |res| cosmic::Action::App(res)).then(|res| match res {
-                    cosmic::Action::App(Ok(p)) => cosmic::iced::clipboard::write(p).map(|_: ()| cosmic::Action::None),
-                    _ => Task::done(cosmic::Action::None),
-                })
-            }
             Message::CopyToClipboard(text) => {
                 cosmic::iced::clipboard::write(text).map(|_: ()| cosmic::Action::None)
-            }
-            Message::PopupClosed(id) => {
-                if self.applet_popup == Some(id) {
-                    self.applet_popup = None;
-                }
-                self.windows.remove(&id);
-                Task::none()
-            }
-            Message::Surface(action) => Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(action))),
-            Message::Exit => {
-                std::process::exit(0)
             }
             Message::ConfigChanged(config) => {
                 self.config = config;

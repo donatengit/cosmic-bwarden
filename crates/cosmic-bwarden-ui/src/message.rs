@@ -3,6 +3,7 @@ use cosmic_bwarden_core::db::Entry;
 use cosmic_bwarden_core::config::CosmicBWardenConfig;
 use cosmic::iced::window;
 use cosmic::widget;
+use cosmic::widget::ToastId;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum View {
@@ -23,7 +24,7 @@ pub enum WindowState {
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum Message {
-    ConfigReceived(Result<(CosmicBWardenConfig, bool, bool), String>),
+    ConfigReceived(Result<(CosmicBWardenConfig, bool, bool, bool), String>),
 
     // Window management
     WindowOpened(window::Id),
@@ -76,6 +77,37 @@ pub enum Message {
     // Applet actions
     PopupClosed(window::Id),
     Surface(cosmic::surface::Action),
+
+    // Applet popup: inline unlock
+    AppletUnlockPasswordChanged(String),
+    AppletUnlockSubmitted,
+    AppletUnlockResult(Result<(), String>),
+
+    // Applet popup: search
+    AppletSearchChanged(String),
+    AppletToggleFavouritesFilter,
+    AppletSearchResultsReceived(u32, Result<Vec<SidebarEntry>, String>),
+
+    // Applet popup: copy actions
+    AppletCopyPrimary(String),
+    AppletCopySecret(String),
+    AppletSecretReceived(Result<String, (String, String)>),
+
+    // Applet popup: inline reprompt for AppletCopySecret
+    AppletRepromptPasswordChanged(String),
+    AppletRepromptSubmitted,
+    AppletRepromptCancelled,
+
+    // Applet popup: password reveal toggles
+    AppletToggleUnlockPasswordReveal,
+    AppletToggleRepromptPasswordReveal,
+
+    // Toast dismissal
+    CloseToast(ToastId),
+
+    // Menu: combined agent-action + quit
+    LockAndQuit,
+    LogoutAndQuit,
 
     // Config actions
     ConfigChanged(CosmicBWardenConfig),

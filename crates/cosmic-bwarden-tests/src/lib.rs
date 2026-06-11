@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod agent;
 #[cfg(test)]
+mod applet_flow;
+#[cfg(test)]
 mod cli_lifecycle;
 #[cfg(test)]
 mod common;

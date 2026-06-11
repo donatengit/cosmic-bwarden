@@ -31,6 +31,16 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
                         cosmic_bwarden_core::db::EntryData::Card {
                             number: Some(n), ..
                         } => n.expose().to_string(),
+                        cosmic_bwarden_core::db::EntryData::SecureNote => {
+                            match &entry.notes {
+                                Some(n) => n.expose().to_string(),
+                                None => {
+                                    return Response::Error {
+                                        message: "entry has no notes".to_string(),
+                                    }
+                                }
+                            }
+                        }
                         _ => {
                             return Response::Error {
                                 message: "entry has no password".to_string(),

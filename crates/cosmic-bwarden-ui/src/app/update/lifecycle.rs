@@ -14,9 +14,9 @@ impl CosmicBWardenApp {
         match message {
             Message::ConfigReceived(res) => {
                 match res {
-                    Ok((config, needs_login, is_locked)) => {
+                    Ok((config, _needs_login, has_account, is_locked)) => {
                         self.config = config;
-                        if needs_login {
+                        if !has_account {
                             self.view = View::Setup;
                         } else if is_locked {
                             self.view = View::Unlock;
@@ -116,7 +116,7 @@ impl CosmicBWardenApp {
                 tasks.push(Task::perform(async {
                     let agent = AgentClient::new();
                     match agent.send(AgentAction::GetConfig).await {
-                        Ok(Response::Config { config, needs_login, is_locked }) => Ok((config, needs_login, is_locked)),
+                        Ok(Response::Config { config, needs_login, has_account, is_locked }) => Ok((config, needs_login, has_account, is_locked)),
                         Ok(Response::Error { message }) => Err(message),
                         _ => Err("unexpected response".to_string()),
                     }

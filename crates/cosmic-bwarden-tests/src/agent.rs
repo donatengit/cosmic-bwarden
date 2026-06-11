@@ -106,3 +106,73 @@ async fn test_remember_email() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_unlock_after_restart_is_not_routed_back_to_login() -> Result<()> {
+    let mut env = setup_env().await?;
+    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+
+    let email = "restart-unlock@example.com";
+    let password = "restartpassword123";
+
+    register_user(&env.vault_url, email, password).await?;
+
+    let client = AgentClient::new();
+    client.send(Action::Login {
+        email: email.to_string(),
+        password: password.to_string(),
+        server_url: Some(env.vault_url.clone()),
+        remember_me: true,
+        two_factor_token: None,
+        two_factor_provider: None,
+        two_factor_code: None,
+        device_verification_code: None,
+    }).await?;
+
+    // Kill and restart the agent, simulating a fresh process with no in-memory
+    // access/refresh tokens (the default build has no keyring backend, so tokens
+    // are never persisted across restarts).
+    if let Some(mut proc) = env.agent_process.take() {
+        proc.kill()?;
+    }
+
+    let mut agent_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    agent_path.pop();
+    agent_path.pop();
+    agent_path.push("target/debug/cosmic-bwarden-agent");
+
+    let agent_process = Command::new(&agent_path)
+        .env("COSMIC_BWARDEN_PROFILE", &env.profile)
+        .env("RUST_LOG", "debug")
+        .spawn()?;
+
+    sleep(Duration::from_millis(1000)).await;
+    env.agent_process = Some(agent_process);
+
+    let client = AgentClient::new();
+
+    // Fresh process: locked, but the account/vault data is on disk.
+    let res = client.send(Action::GetConfig).await?;
+    if let Response::Config { has_account, is_locked, .. } = res {
+        assert!(has_account, "expected has_account to be true after restart");
+        assert!(is_locked, "expected is_locked to be true after restart");
+    } else {
+        anyhow::bail!("Expected Config response, got {:?}", res);
+    }
+
+    // Unlocking with the correct password must succeed...
+    let res = client.send(Action::Unlock { password: password.to_string() }).await?;
+    assert!(matches!(res, Response::Ack), "Expected Ack, got {:?}", res);
+
+    // ...and the resulting config must report unlocked + has_account, even though
+    // needs_login may still be true (no access/refresh tokens in this build).
+    let res = client.send(Action::GetConfig).await?;
+    if let Response::Config { has_account, is_locked, .. } = res {
+        assert!(has_account, "expected has_account to remain true after unlock");
+        assert!(!is_locked, "expected is_locked to be false after a successful unlock");
+    } else {
+        anyhow::bail!("Expected Config response, got {:?}", res);
+    }
+
+    Ok(())
+}

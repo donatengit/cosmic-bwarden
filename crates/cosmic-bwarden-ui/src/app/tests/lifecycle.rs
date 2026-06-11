@@ -90,6 +90,7 @@ async fn test_lock_logout_clears_state() {
         id: "1".to_string(),
         name: "Entry 1".to_string(),
         username: None,
+        public_key: None,
         entry_type: EntryType::Login,
         is_pinned: false,
     }];
@@ -110,6 +111,7 @@ async fn test_lock_logout_clears_state() {
         id: "1".to_string(),
         name: "Entry 1".to_string(),
         username: None,
+        public_key: None,
         entry_type: EntryType::Login,
         is_pinned: false,
     }];
@@ -131,6 +133,27 @@ fn test_error_handling() {
     // Entry Error
     let _ = app.update(Message::EntryReceived(Err("Failed to decrypt".to_string())));
     assert_eq!(app.error, Some("Failed to decrypt".to_string()));
+}
+
+#[tokio::test]
+async fn test_config_received_routes_by_has_account_not_needs_login() {
+    let mut app = CosmicBWardenApp::default();
+    let config = CosmicBWardenConfig::default();
+
+    // After an agent restart with persist_session disabled, access/refresh tokens
+    // are lost (they're #[serde(skip)]), so needs_login stays true even once the
+    // vault is unlocked. has_account (protected_key on disk) is what should drive
+    // routing, not needs_login.
+    let _ = app.update(Message::ConfigReceived(Ok((config.clone(), true, true, false))));
+    assert_eq!(app.view, View::Vault);
+
+    // Locked but with an account on disk -> Unlock, not Setup.
+    let _ = app.update(Message::ConfigReceived(Ok((config.clone(), true, true, true))));
+    assert_eq!(app.view, View::Unlock);
+
+    // No account on disk at all -> Setup, regardless of is_locked.
+    let _ = app.update(Message::ConfigReceived(Ok((config, true, false, false))));
+    assert_eq!(app.view, View::Setup);
 }
 
 #[tokio::test]

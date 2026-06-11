@@ -95,9 +95,9 @@ impl Application for CosmicBWardenApp {
                 tracing::debug!("Connecting to agent...");
                 let agent = AgentClient::new();
                 match agent.send(AgentAction::GetConfig).await {
-                    Ok(Response::Config { config, needs_login, is_locked }) => {
-                        tracing::info!(needs_login, is_locked, "Agent config received");
-                        Ok((config, needs_login, is_locked))
+                    Ok(Response::Config { config, needs_login, has_account, is_locked }) => {
+                        tracing::info!(needs_login, has_account, is_locked, "Agent config received");
+                        Ok((config, needs_login, has_account, is_locked))
                     },
                     Ok(Response::Error { message }) => {
                         tracing::error!("Agent error: {}", message);

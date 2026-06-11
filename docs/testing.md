@@ -25,7 +25,7 @@ cargo test -p cosmic-bwarden-ui --lib
 
 ### 2. Agent & Protocol E2E
 ```bash
-sg docker -c "cargo test -p cosmic-bwarden-tests agent security vault_ops pinned_ops -- --test-threads=1"
+sg docker -c "cargo test -p cosmic-bwarden-tests agent security vault_ops pinned_ops applet_flow -- --test-threads=1"
 ```
 
 ### 3. CLI E2E

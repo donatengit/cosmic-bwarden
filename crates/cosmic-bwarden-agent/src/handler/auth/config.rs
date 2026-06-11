@@ -30,6 +30,7 @@ pub async fn handle_get_config(state: &Arc<Mutex<State>>) -> Response {
     }
 
     let is_locked = state_guard.keys.is_none();
+    let has_account = state_guard.db.as_ref().map_or(false, |db| db.has_account());
     let needs_login = state_guard.db.as_ref().map_or(true, |db| db.needs_login());
 
     match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
@@ -37,6 +38,7 @@ pub async fn handle_get_config(state: &Arc<Mutex<State>>) -> Response {
             Response::Config {
                 config,
                 needs_login,
+                has_account,
                 is_locked,
             }
         }

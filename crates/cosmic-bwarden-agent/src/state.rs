@@ -10,6 +10,7 @@ pub struct State {
     pub pinned_ids: std::collections::HashSet<String>,
     pub name_cache: HashMap<String, String>, // id -> decrypted name
     pub username_cache: HashMap<String, String>, // id -> decrypted username
+    pub pubkey_cache: HashMap<String, String>, // id -> decrypted SSH public key
     pub subscribers: Vec<mpsc::UnboundedSender<cosmic_bwarden_core::protocol::Event>>,
 }
 
@@ -23,6 +24,7 @@ impl State {
             pinned_ids: std::collections::HashSet::new(),
             name_cache: HashMap::new(),
             username_cache: HashMap::new(),
+            pubkey_cache: HashMap::new(),
             subscribers: Vec::new(),
         }
     }
@@ -40,6 +42,7 @@ impl State {
         self.pinned_ids.clear();
         self.name_cache.clear();
         self.username_cache.clear();
+        self.pubkey_cache.clear();
         self.broadcast(cosmic_bwarden_core::protocol::Event::Locked);
     }
 }

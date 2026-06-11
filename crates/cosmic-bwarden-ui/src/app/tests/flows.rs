@@ -17,7 +17,7 @@ async fn test_e2e_user_flow_login_and_add_note() {
 
     // 2. Receive config (needs login)
     let config = CosmicBWardenConfig::default();
-    let _ = app.update(Message::ConfigReceived(Ok((config, true, true))));
+    let _ = app.update(Message::ConfigReceived(Ok((config, true, false, true))));
     assert_eq!(app.view, View::Setup);
 
     // 3. User enters credentials
@@ -111,6 +111,7 @@ fn test_remember_and_auth_failure() {
     let _ = app.update(Message::ConfigReceived(Ok((
         app.config.clone(),
         false,
+        true,
         true,
     ))));
     assert_eq!(app.view, View::Unlock);

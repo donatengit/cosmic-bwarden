@@ -17,8 +17,8 @@ The project follows a modular Rust-based architecture split into specialized cra
     - `ssh_agent.rs`: SSH agent protocol implementation.
 - **`cosmic-bwarden-cli`**: A feature-rich command-line interface.
 - **`cosmic-bwarden-ui`**: The main graphical interface.
-    - `app/`: MVU decomposition into `state.rs`, `update.rs`, and `tasks.rs`.
-    - `view/`: Modular view components (Auth, Vault, Settings).
+    - `app/`: MVU decomposition into `state.rs`, `update/` (chained `lifecycle`/`auth`/`vault`/`applet` handlers), and `tasks.rs`.
+    - `view/`: Modular view components (Auth, Vault, Settings, `applet/`).
 - **`cosmic-bwarden-tests`**: End-to-end integration tests using Docker.
 
 ## Technical Stack
@@ -57,3 +57,10 @@ The project follows a modular Rust-based architecture split into specialized cra
 ### CLI Interactions
 - **Modern Syntax**: Uses `KEY=VALUE` pairs for adding and editing entries.
 - **Flexible Keywords**: Entry types can be placed anywhere in the command.
+
+### COSMIC Panel Applet
+The applet popup (`view/applet/`) is self-sufficient for everyday use without opening the full vault window:
+- **Inline Unlock**: A master-password `secure_input` (with eye-icon reveal toggle) showing "Locked: need password" while locked, with an unlock-icon submit button and Enter-to-submit (`view/applet/unlock.rs`); a successful `AppletUnlockResult` immediately switches the popup to the search view and refreshes results, with `Event::Unlocked` as a secondary sync path.
+- **Quick Search**: A `search_input` plus a favourites star toggle (`view/applet/search.rs`). An empty query always shows favourites only, regardless of the toggle. Results are capped at 10 and rendered as two buttons per entry — a truncated primary label (username/note title/"Public key") and a secret label ("Password"/"Note"/"Private key") — both copying to the clipboard with a toast confirmation. Sensitive copies that require reprompt show an inline master-password row with a reveal toggle and Enter-to-submit.
+- **Menu Actions**: "Open Vault Window" (was "CosmicBWarden"), "Lock", "Logout and Quit", and "Lock and Quit" (was "Exit") — no dividers or "Pinned" label.
+- Pure popup logic (row building, truncation, favourites/query rules) lives in `app/applet_search.rs`, unit-tested without any widget dependencies.

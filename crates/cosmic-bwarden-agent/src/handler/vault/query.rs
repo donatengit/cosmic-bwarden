@@ -62,6 +62,7 @@ pub async fn handle_get_sidebar_entries(query: Option<String>, entry_type: Optio
         let mut entries = Vec::new();
         let mut new_names = Vec::new();
         let mut new_usernames = Vec::new();
+        let mut new_pubkeys = Vec::new();
 
         for entry in &db.entries {
             if only_pinned && !entry.favorite {
@@ -119,11 +120,29 @@ pub async fn handle_get_sidebar_entries(query: Option<String>, entry_type: Optio
                 u_dec
             };
 
+            let pubkey_dec = if let Some(pk) = state_guard.pubkey_cache.get(&entry.id) {
+                Some(pk.clone())
+            } else {
+                let mut pk_dec = None;
+                if matches!(&entry.data, cosmic_bwarden_core::db::EntryData::SshKey { .. }) {
+                    if let cosmic_bwarden_core::db::EntryData::SshKey { public_key, .. } =
+                        &entry.decrypt(keys).data
+                    {
+                        pk_dec = public_key.clone();
+                    }
+                }
+                if let Some(pk) = &pk_dec {
+                    new_pubkeys.push((entry.id.clone(), pk.clone()));
+                }
+                pk_dec
+            };
+
             entries.push((
                 SidebarEntry {
                     id: entry.id.clone(),
                     name: decrypted_name,
                     username: username_dec.clone(),
+                    public_key: pubkey_dec,
                     entry_type: match &entry.data {
                         cosmic_bwarden_core::db::EntryData::Login { .. } => EntryType::Login,
                         cosmic_bwarden_core::db::EntryData::Card { .. } => EntryType::Card,
@@ -142,6 +161,9 @@ pub async fn handle_get_sidebar_entries(query: Option<String>, entry_type: Optio
         }
         for (id, username) in new_usernames {
             state_guard.username_cache.insert(id, username);
+        }
+        for (id, pubkey) in new_pubkeys {
+            state_guard.pubkey_cache.insert(id, pubkey);
         }
 
         let entries = if let Some(q) = query {
@@ -263,10 +285,12 @@ pub async fn handle_get_top_frequent(limit: usize, state: &Arc<Mutex<State>>) ->
                     .cloned()
                     .unwrap_or_else(|| entry.name.clone());
                 let username = state_guard.username_cache.get(&entry.id).cloned();
+                let public_key = state_guard.pubkey_cache.get(&entry.id).cloned();
                 entries.push(SidebarEntry {
                     id: entry.id.clone(),
                     name,
                     username,
+                    public_key,
                     entry_type: match &entry.data {
                         cosmic_bwarden_core::db::EntryData::Login { .. } => EntryType::Login,
                         cosmic_bwarden_core::db::EntryData::Card { .. } => EntryType::Card,
