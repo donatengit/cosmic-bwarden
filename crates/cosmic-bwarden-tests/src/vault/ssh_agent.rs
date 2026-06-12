@@ -1,5 +1,5 @@
 use crate::common::{register_user, setup_env};
-use crate::ssh_test_utils::{assert_ssh_access, generate_ssh_keypair, start_sshd_container, wait_for_socket};
+use crate::ssh_test_utils::{assert_permissions, assert_ssh_access, generate_ssh_keypair, start_sshd_container, wait_for_socket};
 use anyhow::Result;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action, Response};
@@ -55,6 +55,11 @@ async fn run_signing_test(key_type: &str, bits: Option<u32>, email: &str, passwo
 
     let sock = cosmic_bwarden_core::dirs::ssh_agent_socket_file();
     wait_for_socket(&sock, Duration::from_secs(5)).await?;
+
+    // The agent must enforce 0600 on the socket and 0700 on its parent
+    // runtime dir, mirroring the main IPC socket and a real ssh-agent.
+    assert_permissions(&sock, 0o600)?;
+    assert_permissions(sock.parent().unwrap(), 0o700)?;
 
     assert_ssh_access(&sock, ssh_port, "testuser", true)?;
 

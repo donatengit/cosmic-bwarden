@@ -27,6 +27,10 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    // Ensure XDG cache/runtime/data dirs exist with restrictive (0700)
+    // permissions before binding any sockets inside them.
+    cosmic_bwarden_core::dirs::make_all()?;
+
     let socket_path = cosmic_bwarden_core::dirs::socket_file();
 
     if socket_path.exists() {

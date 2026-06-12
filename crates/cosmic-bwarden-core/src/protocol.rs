@@ -134,6 +134,11 @@ pub enum Event {
     Locked,
     Unlocked,
     VaultChanged,
+    /// Something needed the vault unlocked but it is locked (e.g. an
+    /// ssh-agent request). Broadcast at most once per lock period so
+    /// subscribers can prompt the user to unlock without being spammed by
+    /// repeated requests.
+    UnlockRequested,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

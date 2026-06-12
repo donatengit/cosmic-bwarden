@@ -81,6 +81,22 @@ pub async fn wait_for_socket(path: &Path, timeout: Duration) -> Result<()> {
     Ok(())
 }
 
+/// Asserts that `path` has exactly the given permission bits (e.g. `0o600`
+/// for the ssh-agent socket, `0o700` for its parent runtime directory).
+pub fn assert_permissions(path: &Path, expected_mode: u32) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = std::fs::metadata(path)?.permissions().mode() & 0o777;
+    if mode != expected_mode {
+        anyhow::bail!(
+            "expected {} to have mode {:o}, got {:o}",
+            path.display(),
+            expected_mode,
+            mode
+        );
+    }
+    Ok(())
+}
+
 /// Runs `ssh-add -l` against the given agent socket.
 pub fn run_ssh_add_list(sock: &Path) -> Result<Output> {
     Ok(Command::new("ssh-add")

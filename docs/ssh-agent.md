@@ -12,6 +12,8 @@ separate `ssh-agent`, `ssh-add`, or on-disk private key files needed.
   ```
   (or `$XDG_RUNTIME_DIR/cosmic-bwarden-<PROFILE>/ssh-agent-socket` if
   `COSMIC_BWARDEN_PROFILE` is set — used for test isolation, not normal use).
+  If `XDG_RUNTIME_DIR` isn't set (rare — non-systemd sessions), it falls back
+  to `/tmp/cosmic-bwarden-<uid>/ssh-agent-socket`.
 - Every vault item of type **SSH Key** with a public key becomes an identity
   returned by `ssh-add -l` / `SSH2_AGENTC_REQUEST_IDENTITIES`.
 - Signing (`SSH2_AGENTC_SIGN_REQUEST`) decrypts the matching private key
@@ -20,6 +22,17 @@ separate `ssh-agent`, `ssh-add`, or on-disk private key files needed.
 - Both identity listing and signing require the vault to be **unlocked**
   (`state.keys` populated). While locked, the agent reports zero identities
   and refuses to sign.
+
+### Socket permissions
+
+On startup the agent creates its runtime directory with mode `0700` and the
+`ssh-agent-socket` file with mode `0600` — the same model a real `ssh-agent`
+uses, so only your user (and root) can connect. Unlike the main IPC socket
+(`socket`, used by cosmic-bwarden's own UI/CLI), the ssh-agent socket does
+*not* enforce a peer-UID check: `SSH_AUTH_SOCK` is conventionally shared with
+`sudo`-elevated processes and containers/sandboxes that bind-mount it, and a
+strict UID match would break those workflows. Filesystem permissions are the
+intended security boundary here, matching upstream OpenSSH `ssh-agent`.
 
 ### Supported key types
 
@@ -90,6 +103,12 @@ ssh -o IdentitiesOnly=no user@host
 - **Lock**: identities disappear immediately; in-flight `sign` requests fail
   with "agent is locked". Unlocking restores access to the same keys without
   any re-import.
+- **SSH request while locked**: the first `ssh-add -l`/`sign` request after a
+  lock broadcasts an `UnlockRequested` event (logged at `warn` level, visible
+  via `RUST_LOG=warn`) to any subscriber — the COSMIC applet reacts by
+  opening its popup with the unlock dialog. The request itself still fails
+  immediately; re-run it after unlocking. Further requests during the same
+  lock period don't repeat the notification.
 - **Logout**: same as lock — no identities until you log back in and sync.
   After re-login + sync, previously stored SSH keys are available again
   (they're fetched from the server, not just the local cache).

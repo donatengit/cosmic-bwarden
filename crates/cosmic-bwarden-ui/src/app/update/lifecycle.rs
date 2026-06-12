@@ -40,6 +40,15 @@ impl CosmicBWardenApp {
                         self.editing_entry = None;
                         self.selected_entry_id = None;
                     }
+                    cosmic_bwarden_core::protocol::Event::UnlockRequested => {
+                        self.view = View::Unlock;
+                        self.selected_entry = None;
+                        self.editing_entry = None;
+                        self.selected_entry_id = None;
+                        if crate::detect_run_mode() == crate::RunMode::Applet && self.applet_popup.is_none() {
+                            return Some(self.open_applet_popup_task(None));
+                        }
+                    }
                     cosmic_bwarden_core::protocol::Event::Unlocked => {
                         self.view = View::Vault;
                         return Some(Task::perform(async {}, |_| Action::App(Message::RefreshStateInternal)));

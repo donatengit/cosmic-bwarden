@@ -59,3 +59,16 @@ async fn test_reactive_events() {
     ));
     assert_eq!(app.view, View::Vault);
 }
+
+#[tokio::test]
+async fn test_unlock_requested_event_shows_unlock_view() {
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+    app.selected_entry_id = Some("1".to_string());
+
+    let _ = app.update(Message::EventReceived(
+        cosmic_bwarden_core::protocol::Event::UnlockRequested,
+    ));
+    assert_eq!(app.view, View::Unlock);
+    assert!(app.selected_entry_id.is_none());
+}

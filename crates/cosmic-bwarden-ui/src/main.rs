@@ -19,7 +19,7 @@ pub enum RunMode {
     Application,
 }
 
-fn detect_run_mode() -> RunMode {
+pub(crate) fn detect_run_mode() -> RunMode {
     // 1. Check if we are being run by the COSMIC panel (most reliable for Applets)
     if std::env::var("COSMIC_PANEL_NAME").is_ok() {
         return RunMode::Applet;

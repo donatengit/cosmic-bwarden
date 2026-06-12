@@ -173,6 +173,34 @@ async fn test_agent_events() -> Result<()> {
         anyhow::bail!("Expected Locked event, got {:?}", resp);
     }
 
+    // An ssh-agent request while locked should broadcast UnlockRequested.
+    use crate::ssh_test_utils::{run_ssh_add_list, wait_for_socket};
+    use std::time::Duration;
+
+    let ssh_sock = cosmic_bwarden_core::dirs::ssh_agent_socket_file();
+    wait_for_socket(&ssh_sock, Duration::from_secs(5)).await?;
+
+    let _ = run_ssh_add_list(&ssh_sock)?;
+
+    stream.read_exact(&mut len_buf).await?;
+    let len = u32::from_le_bytes(len_buf) as usize;
+    let mut buf = vec![0u8; len];
+    stream.read_exact(&mut buf).await?;
+    let resp: Response = postcard::from_bytes(&buf)?;
+    if let Response::Event { event } = resp {
+        assert!(matches!(event, Event::UnlockRequested));
+    } else {
+        anyhow::bail!("Expected UnlockRequested event, got {:?}", resp);
+    }
+
+    // A second ssh-agent request while still locked should be debounced:
+    // no second UnlockRequested for this lock period.
+    let _ = run_ssh_add_list(&ssh_sock)?;
+
+    let mut len_buf2 = [0u8; 4];
+    let res = tokio::time::timeout(Duration::from_secs(2), stream.read_exact(&mut len_buf2)).await;
+    assert!(res.is_err(), "expected no second UnlockRequested event (debounce)");
+
     Ok(())
 }
 

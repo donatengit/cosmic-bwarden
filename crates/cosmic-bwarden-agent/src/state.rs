@@ -12,6 +12,10 @@ pub struct State {
     pub username_cache: HashMap<String, String>, // id -> decrypted username
     pub pubkey_cache: HashMap<String, String>, // id -> decrypted SSH public key
     pub subscribers: Vec<mpsc::UnboundedSender<cosmic_bwarden_core::protocol::Event>>,
+    /// Set once an `Event::UnlockRequested` has been broadcast for the
+    /// current lock period, so repeated requests don't spam subscribers.
+    /// Cleared on the next `lock()`.
+    pub unlock_requested_notified: bool,
 }
 
 impl State {
@@ -26,6 +30,7 @@ impl State {
             username_cache: HashMap::new(),
             pubkey_cache: HashMap::new(),
             subscribers: Vec::new(),
+            unlock_requested_notified: false,
         }
     }
 
@@ -43,6 +48,18 @@ impl State {
         self.name_cache.clear();
         self.username_cache.clear();
         self.pubkey_cache.clear();
+        self.unlock_requested_notified = false;
         self.broadcast(cosmic_bwarden_core::protocol::Event::Locked);
+    }
+
+    /// Notify subscribers that something needs the vault unlocked while
+    /// it's locked (e.g. an ssh-agent request). Broadcast at most once per
+    /// lock period.
+    pub fn request_unlock(&mut self) {
+        if !self.unlock_requested_notified {
+            log::warn!("vault is locked but an operation requires it to be unlocked");
+            self.broadcast(cosmic_bwarden_core::protocol::Event::UnlockRequested);
+            self.unlock_requested_notified = true;
+        }
     }
 }

@@ -21,54 +21,7 @@ impl CosmicBWardenApp {
                     return Some(Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(cosmic::surface::action::destroy_popup(id)))));
                 }
 
-                // Reset transient popup state for a fresh open.
-                self.applet_search_query.clear();
-                self.applet_search_only_favourites = false;
-                self.applet_unlock_password.zeroize();
-                self.applet_unlock_password_revealed = false;
-                self.applet_reprompt_id = None;
-                self.applet_reprompt_password.zeroize();
-                self.applet_reprompt_password_revealed = false;
-                self.applet_error = None;
-                self.applet_search_id += 1;
-
-                let mut tasks = Vec::new();
-                tasks.push(text_input::focus(unlock::password_input_id()));
-                tasks.push(Task::perform(async {
-                    let agent = AgentClient::new();
-                    match agent.send(AgentAction::GetConfig).await {
-                        Ok(Response::Config { config, needs_login, has_account, is_locked }) => Ok((config, needs_login, has_account, is_locked)),
-                        Ok(Response::Error { message }) => Err(message),
-                        _ => Err("unexpected response".to_string()),
-                    }
-                }, |res| cosmic::Action::App(Message::ConfigReceived(res))));
-
-                tasks.push(fetch_applet_search(self.applet_search_id, None, true));
-
-                let popup_task = Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(cosmic::surface::action::app_popup::<CosmicBWardenApp>(
-                    move |state: &mut CosmicBWardenApp| {
-                        let new_id = window::Id::unique();
-                        state.applet_popup = Some(new_id);
-                        state.windows.insert(new_id, crate::message::WindowState::Popup);
-                        let mut popup_settings = state.core.applet.get_popup_settings(
-                            state.core.main_window_id().unwrap_or(window::Id::RESERVED),
-                            new_id,
-                            None,
-                            None,
-                            None,
-                        );
-                        popup_settings.positioner.anchor_rect = cosmic::iced::Rectangle {
-                            x: (bounds.x - offset.x) as i32,
-                            y: (bounds.y - offset.y) as i32,
-                            width: bounds.width as i32,
-                            height: bounds.height as i32,
-                        };
-                        popup_settings
-                    },
-                    None,
-                ))));
-                tasks.push(popup_task);
-                Some(Task::batch(tasks))
+                Some(self.open_applet_popup_task(Some((offset, bounds))))
             }
             Message::CopyPassword(id) => {
                 Some(Task::perform(async move {
@@ -267,6 +220,67 @@ impl CosmicBWardenApp {
 
             _ => None,
         }
+    }
+
+    /// Resets transient popup state and builds the task that opens the
+    /// applet popup, focused on the unlock password field.
+    ///
+    /// `anchor`, when `Some((offset, bounds))`, positions the popup next to
+    /// the clicked applet icon (as `AppletIconClicked` does). When `None`
+    /// (e.g. opened in response to `Event::UnlockRequested`),
+    /// `get_popup_settings`'s default `anchor_rect` is used, which anchors
+    /// next to the applet's own panel icon.
+    pub(crate) fn open_applet_popup_task(&mut self, anchor: Option<(cosmic::iced::Vector, cosmic::iced::Rectangle)>) -> Task<Message> {
+        // Reset transient popup state for a fresh open.
+        self.applet_search_query.clear();
+        self.applet_search_only_favourites = false;
+        self.applet_unlock_password.zeroize();
+        self.applet_unlock_password_revealed = false;
+        self.applet_reprompt_id = None;
+        self.applet_reprompt_password.zeroize();
+        self.applet_reprompt_password_revealed = false;
+        self.applet_error = None;
+        self.applet_search_id += 1;
+
+        let mut tasks = Vec::new();
+        tasks.push(text_input::focus(unlock::password_input_id()));
+        tasks.push(Task::perform(async {
+            let agent = AgentClient::new();
+            match agent.send(AgentAction::GetConfig).await {
+                Ok(Response::Config { config, needs_login, has_account, is_locked }) => Ok((config, needs_login, has_account, is_locked)),
+                Ok(Response::Error { message }) => Err(message),
+                _ => Err("unexpected response".to_string()),
+            }
+        }, |res| cosmic::Action::App(Message::ConfigReceived(res))));
+
+        tasks.push(fetch_applet_search(self.applet_search_id, None, true));
+
+        let popup_task = Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(cosmic::surface::action::app_popup::<CosmicBWardenApp>(
+            move |state: &mut CosmicBWardenApp| {
+                let new_id = window::Id::unique();
+                state.applet_popup = Some(new_id);
+                state.windows.insert(new_id, crate::message::WindowState::Popup);
+                let mut popup_settings = state.core.applet.get_popup_settings(
+                    state.core.main_window_id().unwrap_or(window::Id::RESERVED),
+                    new_id,
+                    None,
+                    None,
+                    None,
+                );
+                if let Some((offset, bounds)) = anchor {
+                    popup_settings.positioner.anchor_rect = cosmic::iced::Rectangle {
+                        x: (bounds.x - offset.x) as i32,
+                        y: (bounds.y - offset.y) as i32,
+                        width: bounds.width as i32,
+                        height: bounds.height as i32,
+                    };
+                }
+                popup_settings
+            },
+            None,
+        ))));
+        tasks.push(popup_task);
+        Task::batch(tasks)
     }
 
     fn applet_copy_to_clipboard(&mut self, value: String) -> Task<Message> {

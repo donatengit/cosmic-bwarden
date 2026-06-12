@@ -25,7 +25,13 @@ impl SshAgent {
             let _ = std::fs::create_dir_all(parent);
         }
 
-        let listener = tokio::net::UnixListener::bind(socket)?;
+        let listener = tokio::net::UnixListener::bind(&socket)?;
+
+        // Enforce 0600 permissions on the socket, matching the main IPC
+        // socket (main.rs) and the security model of a real ssh-agent.
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&socket, std::fs::Permissions::from_mode(0o600))?;
+
         ssh_agent_lib::agent::listen(listener, self).await?;
         Ok(())
     }
@@ -36,11 +42,13 @@ impl ssh_agent_lib::agent::Session for SshAgent {
     async fn request_identities(
         &mut self,
     ) -> Result<Vec<Identity>, ssh_agent_lib::error::AgentError> {
-        let state = self.state.lock().await;
+        let mut state = self.state.lock().await;
         let Some(db) = &state.db else {
+            state.request_unlock();
             return Ok(Vec::new());
         };
         let Some(keys) = &state.keys else {
+            state.request_unlock();
             return Ok(Vec::new());
         };
 
@@ -70,11 +78,13 @@ impl ssh_agent_lib::agent::Session for SshAgent {
         &mut self,
         request: ssh_agent_lib::proto::SignRequest,
     ) -> Result<Signature, ssh_agent_lib::error::AgentError> {
-        let state = self.state.lock().await;
+        let mut state = self.state.lock().await;
         let Some(db) = &state.db else {
+            state.request_unlock();
             return Err(ssh_agent_lib::error::AgentError::other(cosmic_bwarden_core::error::Error::Other("agent is locked".to_string())));
         };
         let Some(keys) = &state.keys else {
+            state.request_unlock();
             return Err(ssh_agent_lib::error::AgentError::other(cosmic_bwarden_core::error::Error::Other("agent is locked".to_string())));
         };
 
