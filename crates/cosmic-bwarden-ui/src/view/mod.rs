@@ -2,6 +2,7 @@ pub mod auth;
 pub mod vault;
 pub mod settings;
 pub mod applet;
+pub mod style;
 
 use cosmic::Element;
 use cosmic::iced::window;
@@ -38,7 +39,7 @@ impl CosmicBWardenApp {
     }
 
     pub fn view_dialogs(&self) -> Option<Element<'_, Message>> {
-        use cosmic::widget::button;
+        use cosmic::widget::{button, secure_input};
         if let Some(_id) = &self.show_delete_confirm {
             Some(cosmic::widget::dialog()
                 .title("Delete Entry?")
@@ -49,14 +50,16 @@ impl CosmicBWardenApp {
                 .into())
         } else if let Some(_) = &self.show_reprompt {
             let mut col = cosmic::widget::column::with_capacity(2).spacing(10);
-            
-            let mut password_input = cosmic::widget::text_input::text_input("Master Password", &self.reprompt_password)
+
+            let password_input = secure_input(
+                "Master Password",
+                &self.reprompt_password,
+                Some(Message::ToggleRepromptPasswordReveal),
+                !self.reprompt_password_revealed,
+            )
                 .on_input(Message::RepromptPasswordChanged)
                 .on_submit(|_| Message::SubmitReprompt)
                 .width(Length::Fill);
-            if !self.master_password_revealed {
-                password_input = password_input.password();
-            }
             col = col.push(password_input);
 
             Some(cosmic::widget::dialog()
@@ -78,8 +81,7 @@ impl CosmicBWardenApp {
             View::Setup | View::Unlock => {
                 self.view_auth()
             }
-            View::Vault => self.view_vault(),
-            View::Settings => self.view_settings(),
+            View::Vault | View::Settings => self.view_vault(),
         }
     }
 }

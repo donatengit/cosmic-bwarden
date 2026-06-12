@@ -42,8 +42,8 @@ fn test_vault_filtering_and_searching() {
     assert_eq!(app.search_id, 1);
 
     // 2. Filter Type
-    let _ = app.update(Message::FilterTypeChanged(Some("ssh".to_string())));
-    assert_eq!(app.filter_type, Some("ssh".to_string()));
+    let _ = app.update(Message::FilterTypeChanged(Some(EntryType::SshKey)));
+    assert_eq!(app.filter_type, Some(EntryType::SshKey));
     assert_eq!(app.search_id, 2);
 
     // 3. Search Submitted
@@ -102,6 +102,79 @@ fn test_entry_field_editing() {
         assert_eq!(private_key.as_deref(), Some("PRIVATE"));
         assert_eq!(public_key.as_deref(), Some("PUBLIC"));
     }
+}
+
+#[test]
+fn test_filter_type_changed_maps_to_entry_type() {
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+
+    let _ = app.update(Message::FilterTypeChanged(Some(EntryType::Login)));
+    assert_eq!(app.filter_type, Some(EntryType::Login));
+
+    let _ = app.update(Message::FilterTypeChanged(Some(EntryType::SecureNote)));
+    assert_eq!(app.filter_type, Some(EntryType::SecureNote));
+
+    let _ = app.update(Message::FilterTypeChanged(Some(EntryType::SshKey)));
+    assert_eq!(app.filter_type, Some(EntryType::SshKey));
+
+    let _ = app.update(Message::FilterTypeChanged(None));
+    assert_eq!(app.filter_type, None);
+}
+
+#[test]
+fn test_filter_idx_roundtrip() {
+    use crate::view::vault::sidebar::{filter_to_idx, idx_to_filter};
+
+    for idx in 0..4 {
+        let filter = idx_to_filter(idx);
+        assert_eq!(filter_to_idx(&filter), idx);
+    }
+}
+
+#[test]
+fn test_cancel_edit_restores_notes() {
+    let mut app = CosmicBWardenApp::default();
+    let entry = create_test_entry("1", "Login");
+    app.selected_entry_id = Some("1".to_string());
+    app.selected_entry = Some(entry.clone());
+    app.notes_content = widget::text_editor::Content::with_text("old-notes");
+
+    let _ = app.update(Message::EditEntry);
+    assert!(app.editing_entry.is_some());
+
+    // Simulate the user scratching out the note before hitting Cancel.
+    app.notes_content = widget::text_editor::Content::with_text("scratched-out");
+
+    let _ = app.update(Message::CancelEdit);
+    assert!(app.editing_entry.is_none());
+    assert_eq!(app.notes_content.text().trim(), "old-notes");
+}
+
+#[test]
+fn test_reprompt_password_reveal_toggle() {
+    let mut app = CosmicBWardenApp::default();
+    assert!(!app.reprompt_password_revealed);
+
+    let _ = app.update(Message::ToggleRepromptPasswordReveal);
+    assert!(app.reprompt_password_revealed);
+
+    let _ = app.update(Message::ToggleRepromptPasswordReveal);
+    assert!(!app.reprompt_password_revealed);
+}
+
+#[test]
+fn test_cancel_reprompt_resets_reveal() {
+    let mut app = CosmicBWardenApp::default();
+    app.show_reprompt = Some("1".to_string());
+    app.reprompt_password = "secret".to_string();
+    app.reprompt_password_revealed = true;
+
+    let _ = app.update(Message::CancelReprompt);
+
+    assert!(app.show_reprompt.is_none());
+    assert!(app.reprompt_password.is_empty());
+    assert!(!app.reprompt_password_revealed);
 }
 
 #[test]

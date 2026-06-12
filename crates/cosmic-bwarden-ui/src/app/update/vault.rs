@@ -46,6 +46,7 @@ impl CosmicBWardenApp {
                         self.selected_entry = Some(entry);
                         self.show_reprompt = None;
                         self.reprompt_password.zeroize();
+                        self.reprompt_password_revealed = false;
                     }
                     Err(e) if e == "reprompt_required" => {
                         self.show_reprompt = self.selected_entry_id.clone();
@@ -93,7 +94,9 @@ impl CosmicBWardenApp {
             }
             Message::CancelEdit => {
                 self.editing_entry = None;
-                self.notes_content = cosmic::widget::text_editor::Content::new();
+                self.notes_content = cosmic::widget::text_editor::Content::with_text(
+                    self.selected_entry.as_ref().and_then(|e| e.notes.as_deref()).unwrap_or("")
+                );
                 Some(Task::none())
             }
             Message::SaveEdit => {
@@ -339,6 +342,7 @@ impl CosmicBWardenApp {
             Message::CancelReprompt => {
                 self.show_reprompt = None;
                 self.reprompt_password.zeroize();
+                self.reprompt_password_revealed = false;
                 Some(Task::none())
             }
             Message::NewEntryTypeChanged(ty) => {

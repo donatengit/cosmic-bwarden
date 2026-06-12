@@ -45,7 +45,7 @@ pub enum Message {
     // Vault actions
     SearchChanged(String),
     SearchSubmitted(String),
-    FilterTypeChanged(Option<String>),
+    FilterTypeChanged(Option<EntryType>),
     SelectEntry(String),
     EntryReceived(Result<Entry, String>),
     AddEntryRequested,
@@ -124,6 +124,7 @@ pub enum Message {
     TogglePin(String),
     ToggleSearchPinned,
     ToggleEditPasswordReveal,
+    ToggleRepromptPasswordReveal,
 
     // Settings editing
     SettingsEditClicked,

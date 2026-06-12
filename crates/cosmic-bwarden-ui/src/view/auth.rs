@@ -1,5 +1,5 @@
 use cosmic::Element;
-use cosmic::iced::Length;
+use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{button, text, secure_input};
 use crate::app::CosmicBWardenApp;
 use crate::message::{Message, View};
@@ -63,8 +63,6 @@ impl CosmicBWardenApp {
         } else {
             let mut unlock_col = cosmic::widget::column::with_capacity(5).spacing(10);
 
-            unlock_col = unlock_col.push(text::body(format!("Logged in as {}", self.login_email)));
-
             let password_input = secure_input("Master Password", &self.unlock_password, Some(Message::ToggleMasterPasswordReveal), !self.master_password_revealed)
                 .on_input(Message::UnlockPasswordChanged)
                 .on_submit(|_| Message::UnlockSubmitted)
@@ -82,15 +80,18 @@ impl CosmicBWardenApp {
                 unlock_btn = unlock_btn.on_press(Message::UnlockSubmitted);
             }
 
-            let logout_btn = button::standard("Log Out")
-                .on_press(Message::LogoutClicked);
+            let secondary_row = cosmic::widget::row::with_capacity(2)
+                .spacing(10)
+                .align_y(Alignment::Center)
+                .push(text::body(&self.login_email).width(Length::Fill))
+                .push(button::standard("Log Out").on_press(Message::LogoutClicked));
 
             cosmic::widget::dialog()
                 .title("Vault Locked")
                 .body("Enter your master password to unlock.")
                 .control(unlock_col)
                 .primary_action(unlock_btn)
-                .secondary_action(logout_btn)
+                .secondary_action(secondary_row)
                 .width(Length::Fixed(400.0))
                 .into()
         }

@@ -75,6 +75,10 @@ impl CosmicBWardenApp {
                 self.edit_password_revealed = !self.edit_password_revealed;
                 Task::none()
             }
+            Message::ToggleRepromptPasswordReveal => {
+                self.reprompt_password_revealed = !self.reprompt_password_revealed;
+                Task::none()
+            }
             Message::SettingsViewClicked => {
                 self.view = crate::message::View::Settings;
                 self.selected_entry_id = None;

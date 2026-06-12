@@ -142,11 +142,23 @@ impl Application for CosmicBWardenApp {
             use cosmic::widget::{column, header_bar, container};
             use cosmic::iced::Length;
             let content = self.view_content();
+            let is_auth = matches!(self.view, View::Setup | View::Unlock);
 
-            let view = container(content)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .padding(20);
+            let view: cosmic::Element<Message> = if is_auth {
+                container(content)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .padding(20)
+                    .center_x(Length::Fill)
+                    .center_y(Length::Fill)
+                    .into()
+            } else {
+                container(content)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .padding(20)
+                    .into()
+            };
 
             let window_content: cosmic::Element<Message> = if let Some(dialog) = self.view_dialogs() {
                 let modal = container(dialog)
@@ -155,25 +167,14 @@ impl Application for CosmicBWardenApp {
                     .center_x(Length::Fill)
                     .center_y(Length::Fill)
                     .class(cosmic::theme::Container::Dialog);
-                
+
                 cosmic::iced::widget::stack![view, modal].into()
             } else {
-                // Ensure auth view is centered when in standalone mode
-                let is_auth = matches!(self.view, View::Setup | View::Unlock);
-                if is_auth {
-                    container(view)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .center_x(Length::Fill)
-                        .center_y(Length::Fill)
-                        .into()
-                } else {
-                    view.into()
-                }
+                view
             };
 
             container(column![
-                header_bar().title(fl!("app-title")),
+                header_bar().title(""),
                 window_content
             ]
             .width(Length::Fill)

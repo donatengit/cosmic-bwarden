@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use cosmic::app::Core;
 use cosmic::iced::window;
 use cosmic::widget;
-use cosmic_bwarden_core::protocol::SidebarEntry;
+use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
 use cosmic_bwarden_core::db::Entry;
 use cosmic_bwarden_core::config::CosmicBWardenConfig;
 
@@ -24,7 +24,7 @@ pub struct CosmicBWardenApp {
     pub selected_entry_id: Option<String>,
     pub selected_entry: Option<Entry>,
     pub editing_entry: Option<Entry>,
-    pub filter_type: Option<String>,
+    pub filter_type: Option<EntryType>,
     pub search_only_pinned: bool,
     pub revealed_fields: HashSet<(String, String)>,
 
@@ -67,6 +67,7 @@ pub struct CosmicBWardenApp {
     pub show_reprompt: Option<String>,
     pub reprompt_password: String,
     pub edit_password_revealed: bool,
+    pub reprompt_password_revealed: bool,
 }
 
 impl Default for CosmicBWardenApp {
@@ -118,6 +119,7 @@ impl Default for CosmicBWardenApp {
             show_reprompt: None,
             reprompt_password: String::new(),
             edit_password_revealed: false,
+            reprompt_password_revealed: false,
         }
     }
 }

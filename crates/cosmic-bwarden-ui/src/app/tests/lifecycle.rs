@@ -146,6 +146,30 @@ async fn test_config_received_routes_by_has_account_not_needs_login() {
     assert_eq!(app.view, View::Setup);
 }
 
+#[test]
+fn test_settings_view_keeps_sidebar_entries() {
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+    app.entries = vec![SidebarEntry {
+        id: "1".to_string(),
+        name: "Entry 1".to_string(),
+        username: None,
+        public_key: None,
+        entry_type: EntryType::Login,
+        is_pinned: false,
+    }];
+
+    let _ = app.update(Message::SettingsViewClicked);
+    assert_eq!(app.view, View::Settings);
+    assert!(!app.entries.is_empty());
+
+    // Settings is rendered as the right panel alongside the sidebar.
+    let _ = app.view_window(window::Id::RESERVED);
+
+    let _ = app.update(Message::VaultViewClicked);
+    assert_eq!(app.view, View::Vault);
+}
+
 #[tokio::test]
 async fn test_applet_messages() {
     let mut app = CosmicBWardenApp::default();

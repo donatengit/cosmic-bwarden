@@ -21,14 +21,6 @@ const VISIBLE_RESULT_ROWS: f32 = 3.0;
 /// additional results are reachable by scrolling.
 const RESULTS_MAX_HEIGHT: f32 = RESULT_ROW_HEIGHT * VISIBLE_RESULT_ROWS + RESULTS_SPACING * (VISIBLE_RESULT_ROWS - 1.0);
 
-/// Muted/secondary text color, used for the "| 🗅" hint on secure note rows.
-fn muted_text() -> cosmic::theme::Text {
-    cosmic::theme::Text::Custom(|theme| cosmic::iced::widget::text::Style {
-        color: Some(cosmic::iced::Color::from(theme.cosmic().background.component.on_disabled)),
-        ..Default::default()
-    })
-}
-
 pub fn view(app: &CosmicBWardenApp) -> Element<'_, Message> {
     let star_icon = if app.applet_search_only_favourites { "starred-symbolic" } else { "non-starred-symbolic" };
 
@@ -92,7 +84,7 @@ fn note_row_view(result_row: AppletRow) -> Element<'static, Message> {
         .spacing(5)
         .align_y(Alignment::Center)
         .push(text::caption(result_row.primary_label).width(Length::Fill))
-        .push(text::caption("🗅").class(muted_text()));
+        .push(text::caption("🗅").class(crate::view::style::muted_text()));
 
     button::custom(content)
         .on_press(Message::AppletCopySecret(secret_id))
