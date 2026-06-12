@@ -1,12 +1,10 @@
 use cosmic::app::Task;
-use cosmic::iced::window;
 use cosmic::Action;
 use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
 use cosmic_bwarden_core::agent_client::AgentClient;
-use crate::message::{Message, View, WindowState};
+use crate::message::{Message, View};
 use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::{fetch_sidebar_entries, fetch_top_entries};
-use crate::fl;
 use tracing::{debug};
 
 impl CosmicBWardenApp {
@@ -63,53 +61,6 @@ impl CosmicBWardenApp {
                 }
                 self.windows.remove(&id);
                 Some(Task::none())
-            }
-            Message::OpenMainWindow => {
-                let mut tasks = Vec::new();
-                
-                // In standalone mode, the primary window is already the main window
-                if std::env::var("COSMIC_PANEL_NAME").is_err() {
-                    if let Some(id) = self.core.main_window_id() {
-                        tasks.push(window::gain_focus(id).map(move |_: ()| Action::App(Message::WindowOpened(id))));
-                    }
-                    return Some(Task::batch(tasks));
-                }
-
-                let is_auth_view = matches!(self.view, View::Loading | View::Setup | View::Unlock);
-
-                if is_auth_view {
-                    if let Some((&id, _)) = self.windows.iter().find(|(_, w)| matches!(w, WindowState::Auth)) {
-                        tasks.push(window::gain_focus(id).map(move |_: ()| Action::App(Message::WindowOpened(id))));
-                    } else {
-                        let settings = window::Settings {
-                            size: cosmic::iced::Size::new(400.0, 600.0),
-                            decorations: true,
-                            resizable: true,
-                            ..window::Settings::default()
-                        };
-                        let (id, spawn) = window::open(settings);
-                        self.windows.insert(id, WindowState::Auth);
-                        let title = if self.view == View::Setup { "Login" } else { "Unlock Vault" };
-                        tasks.push(self.core.set_title(Some(id), title.to_string()));
-                        tasks.push(spawn.map(move |_| Action::App(Message::WindowOpened(id))));
-                    }
-                } else {
-                    if let Some((&id, _)) = self.windows.iter().find(|(_, w)| matches!(w, WindowState::Main)) {
-                        tasks.push(window::gain_focus(id).map(move |_: ()| Action::App(Message::WindowOpened(id))));
-                    } else {
-                        let settings = window::Settings {
-                            size: cosmic::iced::Size::new(1280.0, 800.0),
-                            decorations: true,
-                            resizable: true,
-                            ..window::Settings::default()
-                        };
-                        let (id, spawn) = window::open(settings);
-                        self.windows.insert(id, WindowState::Main);
-                        tasks.push(self.core.set_title(Some(id), fl!("app-title").to_string()));
-                        tasks.push(spawn.map(move |_: window::Id| Action::App(Message::WindowOpened(id))));
-                    }
-                }
-                Some(Task::batch(tasks))
             }
             Message::RefreshStateInternal => {
                 let mut tasks = Vec::new();

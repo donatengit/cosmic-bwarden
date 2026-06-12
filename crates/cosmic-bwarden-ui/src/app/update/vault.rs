@@ -6,6 +6,7 @@ use cosmic_bwarden_core::db::{Entry, EntryData, Secret};
 use crate::message::{Message, View};
 use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::{fetch_sidebar_entries, fetch_top_entries};
+use zeroize::Zeroize;
 
 impl CosmicBWardenApp {
     pub fn update_vault(&mut self, message: Message) -> Option<Task<Message>> {
@@ -44,7 +45,7 @@ impl CosmicBWardenApp {
                         self.notes_content = cosmic::widget::text_editor::Content::with_text(entry.notes.as_deref().unwrap_or(""));
                         self.selected_entry = Some(entry);
                         self.show_reprompt = None;
-                        self.reprompt_password = String::new();
+                        self.reprompt_password.zeroize();
                     }
                     Err(e) if e == "reprompt_required" => {
                         self.show_reprompt = self.selected_entry_id.clone();
@@ -337,7 +338,7 @@ impl CosmicBWardenApp {
             }
             Message::CancelReprompt => {
                 self.show_reprompt = None;
-                self.reprompt_password = String::new();
+                self.reprompt_password.zeroize();
                 Some(Task::none())
             }
             Message::NewEntryTypeChanged(ty) => {

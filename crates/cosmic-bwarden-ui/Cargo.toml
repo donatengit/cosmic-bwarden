@@ -7,7 +7,7 @@ description = "CosmicBWarden UI"
 [dependencies]
 cosmic-bwarden-core = { path = "../cosmic-bwarden-core" }
 anyhow = "1.0"
-libcosmic = { git = "https://github.com/pop-os/libcosmic", branch = "master", features = ["applet", "process", "single-instance"] }
+libcosmic = { git = "https://github.com/pop-os/libcosmic", branch = "master", features = ["applet", "applet-token", "process", "single-instance"] }
 cosmic-config = { git = "https://github.com/pop-os/libcosmic", branch = "master", default-features = false, features = ["macro"] }
 tokio = { version = "1.0", features = ["full"] }
 log = "0.4"
@@ -22,3 +22,4 @@ tracing-journald = "0.3"
 i18n-embed = { version = "0.16.0", features = ["fluent-system", "desktop-requester"] }
 i18n-embed-fl = "0.10"
 rust-embed = "8.11.0"
+zeroize = "1.8"

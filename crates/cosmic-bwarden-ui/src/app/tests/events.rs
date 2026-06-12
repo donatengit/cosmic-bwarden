@@ -1,9 +1,7 @@
-use crate::message::WindowState;
 use crate::app::CosmicBWardenApp;
 use crate::message::Message;
 use crate::message::View;
 use cosmic::Application;
-use cosmic::iced::window;
 use cosmic::widget;
 use cosmic_bwarden_core::config::CosmicBWardenConfig;
 use cosmic_bwarden_core::db::{Entry, EntryData};
@@ -34,16 +32,11 @@ fn create_test_entry(id: &str, name: &str) -> Entry {
 #[tokio::test]
 async fn test_auth_window_transition() {
     let mut app = CosmicBWardenApp::default();
-    let id_auth = window::Id::unique();
-    app.windows.insert(id_auth, WindowState::Auth);
     app.view = View::Unlock;
 
     // Successful auth
     let _ = app.update(Message::AuthResult(Ok(())));
 
-    // In unit test, update doesn't execute Tasks, but it returns them.
-    // We can't easily verify the window::close task here without more machinery,
-    // but we verified the logic in app.rs.
     assert_eq!(app.view, View::Vault);
 }
 

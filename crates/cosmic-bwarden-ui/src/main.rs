@@ -192,6 +192,7 @@ impl Application for CosmicBWardenApp {
     fn subscription(&self) -> Subscription<Self::Message> {
         use cosmic::iced::Subscription;
         use cosmic::cosmic_config::Update;
+        use cosmic::applet::token::subscription::activation_token_subscription;
         use cosmic_bwarden_core::config::CosmicBWardenConfig;
 
         let config_watch = self.core
@@ -256,9 +257,16 @@ impl Application for CosmicBWardenApp {
             }
         });
 
+        let token_subscription = if detect_run_mode() == RunMode::Applet {
+            activation_token_subscription(0).map(Message::Token)
+        } else {
+            Subscription::none()
+        };
+
         Subscription::batch(vec![
             config_watch,
             agent_subscription,
+            token_subscription,
         ])
     }
 

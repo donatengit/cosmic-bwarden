@@ -16,8 +16,6 @@ pub enum View {
 
 #[derive(Debug, Clone)]
 pub enum WindowState {
-    Main,
-    Auth,
     Popup,
 }
 
@@ -29,8 +27,6 @@ pub enum Message {
     // Window management
     WindowOpened(window::Id),
     WindowClosed(window::Id),
-    OpenMainWindow,
-    SpawnApplication,
     RefreshStateInternal,
     AppletIconClicked(cosmic::iced::Vector, cosmic::iced::Rectangle),
     Exit,
@@ -77,6 +73,8 @@ pub enum Message {
     // Applet actions
     PopupClosed(window::Id),
     Surface(cosmic::surface::Action),
+    OpenVaultRequested,
+    Token(cosmic::applet::token::subscription::TokenUpdate),
 
     // Applet popup: inline unlock
     AppletUnlockPasswordChanged(String),
@@ -104,10 +102,6 @@ pub enum Message {
 
     // Toast dismissal
     CloseToast(ToastId),
-
-    // Menu: combined agent-action + quit
-    LockAndQuit,
-    LogoutAndQuit,
 
     // Config actions
     ConfigChanged(CosmicBWardenConfig),

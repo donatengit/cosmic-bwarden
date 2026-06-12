@@ -200,15 +200,3 @@ async fn test_applet_popup_render_with_reprompt_active() {
 
     let _ = app.view_window(id);
 }
-
-#[tokio::test]
-async fn test_lock_and_quit_does_not_panic() {
-    let mut app = CosmicBWardenApp::default();
-    let _ = app.update(Message::LockAndQuit);
-}
-
-#[tokio::test]
-async fn test_logout_and_quit_does_not_panic() {
-    let mut app = CosmicBWardenApp::default();
-    let _ = app.update(Message::LogoutAndQuit);
-}

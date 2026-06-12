@@ -40,6 +40,7 @@ pub struct CosmicBWardenApp {
     pub unlock_password: String,
 
     // Applet State
+    pub token_tx: Option<cosmic::cctk::sctk::reexports::calloop::channel::Sender<cosmic::applet::token::subscription::TokenRequest>>,
     pub applet_popup: Option<window::Id>,
     pub applet_unlock_password: String,
     pub applet_error: Option<String>,
@@ -92,6 +93,7 @@ impl Default for CosmicBWardenApp {
             login_verification_code: String::new(),
             show_verification_input: false,
             unlock_password: String::new(),
+            token_tx: None,
             applet_popup: None,
             applet_unlock_password: String::new(),
             applet_error: None,

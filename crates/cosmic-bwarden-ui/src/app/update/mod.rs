@@ -40,15 +40,16 @@ impl CosmicBWardenApp {
             Message::TogglePin(_) | Message::ToggleSearchPinned | Message::RepromptPasswordChanged(_) |
             Message::SubmitReprompt | Message::CancelReprompt | Message::NewEntryTypeChanged(_) |
             Message::ConfigReceived(_) | Message::EventReceived(_) | Message::WindowOpened(_) |
-            Message::WindowClosed(_) | Message::OpenMainWindow | Message::RefreshStateInternal |
-            Message::SpawnApplication | Message::AppletIconClicked(_, _) | Message::CopyPassword(_) |
+            Message::WindowClosed(_) | Message::RefreshStateInternal |
+            Message::AppletIconClicked(_, _) | Message::CopyPassword(_) |
             Message::PopupClosed(_) | Message::Surface(_) | Message::Exit |
+            Message::OpenVaultRequested | Message::Token(_) |
             Message::AppletUnlockPasswordChanged(_) | Message::AppletUnlockSubmitted | Message::AppletUnlockResult(_) |
             Message::AppletSearchChanged(_) | Message::AppletToggleFavouritesFilter | Message::AppletSearchResultsReceived(_, _) |
             Message::AppletCopyPrimary(_) | Message::AppletCopySecret(_) | Message::AppletSecretReceived(_) |
             Message::AppletRepromptPasswordChanged(_) | Message::AppletRepromptSubmitted | Message::AppletRepromptCancelled |
             Message::AppletToggleUnlockPasswordReveal | Message::AppletToggleRepromptPasswordReveal |
-            Message::CloseToast(_) | Message::LockAndQuit | Message::LogoutAndQuit => Task::none(),
+            Message::CloseToast(_) => Task::none(),
 
             Message::CopyToClipboard(text) => {
                 cosmic::iced::clipboard::write(text).map(|_: ()| cosmic::Action::None)

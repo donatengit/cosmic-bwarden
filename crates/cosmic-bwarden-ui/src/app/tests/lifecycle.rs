@@ -50,21 +50,11 @@ async fn test_applet_surface_isolation() {
 async fn test_window_differentiation() {
     let mut app = CosmicBWardenApp::default();
     let id_popup = window::Id::unique();
-    let id_auth = window::Id::unique();
-    let id_main = window::Id::unique();
 
     app.windows.insert(id_popup, WindowState::Popup);
-    app.windows.insert(id_auth, WindowState::Auth);
-    app.windows.insert(id_main, WindowState::Main);
 
     // Verify Popup view doesn't crash
     let _ = app.view_window(id_popup);
-
-    // Verify Auth view doesn't crash
-    let _ = app.view_window(id_auth);
-
-    // Verify Main view doesn't crash
-    let _ = app.view_window(id_main);
 }
 
 #[tokio::test]

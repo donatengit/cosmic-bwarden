@@ -11,19 +11,11 @@ use crate::app::applet_search;
 use crate::app::tasks::{fetch_applet_search, fetch_applet_secret};
 use crate::view::applet::{search, unlock};
 use crate::fl;
+use zeroize::Zeroize;
 
 impl CosmicBWardenApp {
     pub fn update_applet(&mut self, message: Message) -> Option<Task<Message>> {
         match message {
-            Message::SpawnApplication => {
-                if let Some(exe) = std::env::current_exe().ok() {
-                    let mut cmd = std::process::Command::new(exe);
-                    cmd.env("COSMIC_BWARDEN_MODE", "application");
-                    cmd.env_remove("COSMIC_PANEL_NAME");
-                    tokio::spawn(cosmic::process::spawn(cmd));
-                }
-                Some(Task::none())
-            }
             Message::AppletIconClicked(offset, bounds) => {
                 if let Some(id) = self.applet_popup {
                     return Some(Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(cosmic::surface::action::destroy_popup(id)))));
@@ -32,10 +24,10 @@ impl CosmicBWardenApp {
                 // Reset transient popup state for a fresh open.
                 self.applet_search_query.clear();
                 self.applet_search_only_favourites = false;
-                self.applet_unlock_password.clear();
+                self.applet_unlock_password.zeroize();
                 self.applet_unlock_password_revealed = false;
                 self.applet_reprompt_id = None;
-                self.applet_reprompt_password.clear();
+                self.applet_reprompt_password.zeroize();
                 self.applet_reprompt_password_revealed = false;
                 self.applet_error = None;
                 self.applet_search_id += 1;
@@ -101,6 +93,46 @@ impl CosmicBWardenApp {
             Message::Exit => {
                 std::process::exit(0)
             }
+            Message::OpenVaultRequested => {
+                let mut tasks = Vec::new();
+
+                if let Some(popup_id) = self.applet_popup.take() {
+                    self.windows.remove(&popup_id);
+                    tasks.push(Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(cosmic::surface::action::destroy_popup(popup_id)))));
+                }
+
+                if let Some(tx) = self.token_tx.as_ref() {
+                    let _ = tx.send(cosmic::applet::token::subscription::TokenRequest {
+                        app_id: crate::app::state::APP_ID.to_string(),
+                        exec: "open-vault".to_string(),
+                    });
+                }
+
+                Some(Task::batch(tasks))
+            }
+            Message::Token(update) => {
+                match update {
+                    cosmic::applet::token::subscription::TokenUpdate::Init(tx) => {
+                        self.token_tx = Some(tx);
+                    }
+                    cosmic::applet::token::subscription::TokenUpdate::Finished => {
+                        self.token_tx = None;
+                    }
+                    cosmic::applet::token::subscription::TokenUpdate::ActivationToken { token, .. } => {
+                        if let Ok(exe) = std::env::current_exe() {
+                            let mut cmd = std::process::Command::new(exe);
+                            cmd.env("COSMIC_BWARDEN_MODE", "application");
+                            cmd.env_remove("COSMIC_PANEL_NAME");
+                            if let Some(token) = token {
+                                cmd.env("XDG_ACTIVATION_TOKEN", &token);
+                                cmd.env("DESKTOP_STARTUP_ID", &token);
+                            }
+                            tokio::spawn(cosmic::process::spawn(cmd));
+                        }
+                    }
+                }
+                Some(Task::none())
+            }
 
             // Inline unlock
             Message::AppletUnlockPasswordChanged(p) => {
@@ -119,7 +151,7 @@ impl CosmicBWardenApp {
                 }, |res| Action::App(Message::AppletUnlockResult(res))))
             }
             Message::AppletUnlockResult(res) => {
-                self.applet_unlock_password.clear();
+                self.applet_unlock_password.zeroize();
                 match res {
                     Ok(()) => {
                         self.applet_error = None;
@@ -182,14 +214,14 @@ impl CosmicBWardenApp {
                 match res {
                     Ok(secret) => {
                         self.applet_reprompt_id = None;
-                        self.applet_reprompt_password.clear();
+                        self.applet_reprompt_password.zeroize();
                         self.applet_error = None;
                         Some(self.applet_copy_to_clipboard(secret))
                     }
                     Err((id, msg)) => {
                         if msg == "reprompt_required" {
                             self.applet_reprompt_id = Some(id);
-                            self.applet_reprompt_password.clear();
+                            self.applet_reprompt_password.zeroize();
                             return Some(text_input::focus(search::reprompt_input_id()));
                         } else {
                             self.applet_error = Some(msg);
@@ -213,7 +245,7 @@ impl CosmicBWardenApp {
             }
             Message::AppletRepromptCancelled => {
                 self.applet_reprompt_id = None;
-                self.applet_reprompt_password.clear();
+                self.applet_reprompt_password.zeroize();
                 Some(Task::none())
             }
 
@@ -231,20 +263,6 @@ impl CosmicBWardenApp {
             Message::CloseToast(id) => {
                 self.applet_toasts.remove(id);
                 Some(Task::none())
-            }
-
-            // Quit actions
-            Message::LockAndQuit => {
-                Some(Task::perform(async {
-                    let agent = AgentClient::new();
-                    let _ = agent.send(AgentAction::Lock).await;
-                }, |_| Action::App(Message::Exit)))
-            }
-            Message::LogoutAndQuit => {
-                Some(Task::perform(async {
-                    let agent = AgentClient::new();
-                    let _ = agent.send(AgentAction::Logout).await;
-                }, |_| Action::App(Message::Exit)))
             }
 
             _ => None,

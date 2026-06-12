@@ -19,57 +19,6 @@ impl CosmicBWardenApp {
             Some(WindowState::Popup) => {
                 self.applet_popup_content()
             }
-            Some(WindowState::Auth) => {
-                use cosmic::widget::{column, header_bar};
-                let content = self.view_auth();
-                let title = if self.view == View::Setup { "Login" } else { "Unlock Vault" };
-                
-                container(column![
-                    header_bar().title(title),
-                    container(content)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .center_x(Length::Fill)
-                        .center_y(Length::Fill)
-                ]
-                .width(Length::Fill)
-                .height(Length::Fill))
-                .class(cosmic::theme::Container::WindowBackground)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into()
-            }
-            Some(WindowState::Main) => {
-                use cosmic::widget::{column, header_bar};
-                let content = self.view_content();
-
-                let view = container(content)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .padding(20);
-
-                let window_content: Element<Message> = if let Some(dialog) = self.view_dialogs() {
-                    let modal = container(dialog)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .center_x(Length::Fill)
-                        .center_y(Length::Fill)
-                        .class(cosmic::theme::Container::Dialog);
-                    
-                    cosmic::iced::widget::stack![view, modal].into()
-                } else {
-                    view.into()
-                };
-
-                container(column![
-                    header_bar().title(fl!("app-title")),
-                    window_content
-                ])
-                .class(cosmic::theme::Container::WindowBackground)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into()
-            }
             None => {
                 // Check if this is the panel providing a surface
                 if std::env::var("COSMIC_PANEL_NAME").is_ok() {

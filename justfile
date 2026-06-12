@@ -4,7 +4,10 @@ share_dir := prefix + "/share"
 applets_dir := share_dir + "/cosmic/applets"
 apps_dir := share_dir + "/applications"
 
-local_share := env_var("HOME") + "/.local/share"
+# Resolve the invoking user's home dir even when run via `sudo just ...`,
+# so user-local install/uninstall paths don't end up under /root.
+real_home := `if [ -n "${SUDO_USER:-}" ]; then getent passwd "$SUDO_USER" | cut -d: -f6; else echo "$HOME"; fi`
+local_share := real_home + "/.local/share"
 local_applets := local_share + "/cosmic/applets"
 local_apps := local_share + "/applications"
 

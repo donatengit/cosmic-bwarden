@@ -1,13 +1,12 @@
 use cosmic::app::Task;
-use cosmic::iced::window;
 use cosmic::Action;
 use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
 use cosmic_bwarden_core::agent_client::AgentClient;
-use crate::message::{Message, View, WindowState};
+use crate::message::{Message, View};
 use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::{fetch_sidebar_entries, fetch_top_entries};
-use crate::fl;
 use tracing::{error};
+use zeroize::Zeroize;
 
 impl CosmicBWardenApp {
     pub fn update_auth(&mut self, message: Message) -> Option<Task<Message>> {
@@ -79,31 +78,14 @@ impl CosmicBWardenApp {
                     Ok(()) => {
                         self.view = View::Vault;
                         self.error = None;
-                        self.login_password = String::new();
-                        self.unlock_password = String::new();
+                        self.login_password.zeroize();
+                        self.unlock_password.zeroize();
                         
-                        let mut tasks = vec![
+                        let tasks = vec![
                            fetch_sidebar_entries(self.search_id, None, None, false),
                            fetch_top_entries(self.config.top_popular_count as usize, Some(self.config.top_popular_days)),
                         ];
 
-                        if std::env::var("COSMIC_PANEL_NAME").is_ok() {
-                            if let Some((&id, _)) = self.windows.iter().find(|(_, w)| matches!(w, WindowState::Auth)) {
-                                tasks.push(window::close(id).map(move |_: ()| Action::App(Message::WindowClosed(id))));
-                                let settings = window::Settings::default();
-                                let (new_id, spawn) = window::open(settings);
-                                self.windows.insert(new_id, WindowState::Main);
-                                tasks.push(self.core.set_title(Some(new_id), fl!("app-title").to_string()));
-                                tasks.push(spawn.map(move |_: window::Id| Action::App(Message::WindowOpened(new_id))));
-                            } else if self.windows.iter().find(|(_, w)| matches!(w, WindowState::Main)).is_none() {
-                                // If no windows are open (e.g. auth happened via applet popup or background), open main window
-                                let settings = window::Settings::default();
-                                let (new_id, spawn) = window::open(settings);
-                                self.windows.insert(new_id, WindowState::Main);
-                                tasks.push(self.core.set_title(Some(new_id), fl!("app-title").to_string()));
-                                tasks.push(spawn.map(move |_: window::Id| Action::App(Message::WindowOpened(new_id))));
-                            }
-                        }
                         return Some(Task::batch(tasks));
                     }
                     Err(e) => {
