@@ -21,16 +21,7 @@ const VISIBLE_RESULT_ROWS: f32 = 3.0;
 /// additional results are reachable by scrolling.
 const RESULTS_MAX_HEIGHT: f32 = RESULT_ROW_HEIGHT * VISIBLE_RESULT_ROWS + RESULTS_SPACING * (VISIBLE_RESULT_ROWS - 1.0);
 
-fn secret_label(key: &str) -> String {
-    match key {
-        "note-label" => fl!("note-label"),
-        "private-key-label" => fl!("private-key-label"),
-        "public-key-label" => fl!("public-key-label"),
-        _ => fl!("password-label"),
-    }
-}
-
-/// Muted/secondary text color, used for the "Note" hint on secure note rows.
+/// Muted/secondary text color, used for the "| 🗅" hint on secure note rows.
 fn muted_text() -> cosmic::theme::Text {
     cosmic::theme::Text::Custom(|theme| cosmic::iced::widget::text::Style {
         color: Some(cosmic::iced::Color::from(theme.cosmic().background.component.on_disabled)),
@@ -56,7 +47,7 @@ pub fn view(app: &CosmicBWardenApp) -> Element<'_, Message> {
     let mut results_col = column::with_capacity(rows.len().max(1)).spacing(RESULTS_SPACING);
     if rows.is_empty() {
         let empty_text = if app.applet_search_query.trim().is_empty() { fl!("no-pinned-entries") } else { fl!("no-results") };
-        results_col = results_col.push(container(text::body(empty_text)).padding(10));
+        results_col = results_col.push(container(text::caption(empty_text)).padding(10));
     } else {
         for result_row in rows {
             if app.applet_reprompt_id.as_deref() == Some(result_row.id.as_str()) {
@@ -80,15 +71,23 @@ fn result_row_view(result_row: AppletRow) -> Element<'static, Message> {
     let primary_id = result_row.id.clone();
     let secret_id = result_row.id.clone();
 
+    let secret_content = row::with_capacity(2)
+        .spacing(4)
+        .align_y(Alignment::Center)
+        .push(text::caption("🔑"))
+        .push(icon::from_name("edit-copy-symbolic").size(16));
+
     row::with_capacity(2)
         .spacing(5)
-        .push(button::custom(text::body(result_row.primary_label))
+        .align_y(Alignment::Center)
+        .push(button::custom(text::caption(result_row.primary_label))
             .on_press_maybe(result_row.primary_value.map(|_| Message::AppletCopyPrimary(primary_id)))
-            .width(Length::FillPortion(1))
+            .width(Length::Fill)
             .class(cosmic::theme::Button::Text))
-        .push(button::suggested(secret_label(result_row.secret_label_key))
+        .push(button::custom(secret_content)
             .on_press(Message::AppletCopySecret(secret_id))
-            .width(Length::FillPortion(1)))
+            .padding([8, 14])
+            .class(cosmic::theme::Button::Suggested))
         .into()
 }
 
@@ -98,8 +97,8 @@ fn note_row_view(result_row: AppletRow) -> Element<'static, Message> {
     let content = row::with_capacity(2)
         .spacing(5)
         .align_y(Alignment::Center)
-        .push(text::body(result_row.primary_label).width(Length::Fill))
-        .push(text::caption(secret_label(result_row.secret_label_key)).class(muted_text()));
+        .push(text::caption(result_row.primary_label).width(Length::Fill))
+        .push(text::caption("| 🗅").class(muted_text()));
 
     button::custom(content)
         .on_press(Message::AppletCopySecret(secret_id))

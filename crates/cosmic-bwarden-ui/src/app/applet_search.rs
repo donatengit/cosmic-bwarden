@@ -2,16 +2,15 @@ use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
 use crate::fl;
 
 pub const APPLET_SEARCH_LIMIT: usize = 10;
-pub const APPLET_LABEL_MAX_LEN: usize = 25;
+pub const APPLET_LABEL_MAX_LEN: usize = 40;
 
 /// A single result row in the applet search popup.
 pub struct AppletRow {
     pub id: String,
     pub primary_label: String,
     pub primary_value: Option<String>,
-    pub secret_label_key: &'static str,
-    /// Render as a single button (caption + muted secret label) rather than
-    /// a primary/secret button pair.
+    /// Render as a single button (name + note marker) rather than a
+    /// primary/secret button pair.
     pub single_button: bool,
 }
 
@@ -26,30 +25,6 @@ pub fn truncate_label(s: &str) -> String {
     s.chars().take(APPLET_LABEL_MAX_LEN).collect()
 }
 
-/// Normalizes a dotted name (e.g. a website) down to its 2nd-level domain,
-/// e.g. "www.facebook.com" -> "facebook". Names without a dot are returned
-/// unchanged.
-fn normalize_domain_name(name: &str) -> String {
-    let parts: Vec<&str> = name.split('.').collect();
-    if parts.len() >= 2 {
-        parts[parts.len() - 2].to_string()
-    } else {
-        name.to_string()
-    }
-}
-
-/// Strips the TLD from an email-shaped login, e.g. "some@email.com" ->
-/// "some@email". Logins that aren't email-shaped (no "@", or no dot in the
-/// domain part) are returned unchanged.
-fn normalize_email_login(login: &str) -> String {
-    if let Some((local, domain)) = login.split_once('@') {
-        if let Some(idx) = domain.rfind('.') {
-            return format!("{}@{}", local, &domain[..idx]);
-        }
-    }
-    login.to_string()
-}
-
 /// Builds the applet result rows from sidebar entries, dropping entry types
 /// that don't have an applet copy action (Card, Identity), and limiting to
 /// `APPLET_SEARCH_LIMIT` rows.
@@ -58,16 +33,14 @@ pub fn build_applet_rows(entries: &[SidebarEntry]) -> Vec<AppletRow> {
         .iter()
         .filter_map(|e| match e.entry_type {
             EntryType::Login => {
-                let name = normalize_domain_name(&e.name);
                 let label = match e.username.as_deref() {
-                    Some(login) if !login.is_empty() => format!("{} | {}", name, normalize_email_login(login)),
-                    _ => name,
+                    Some(login) if !login.is_empty() => format!("{} | {}", e.name, login),
+                    _ => e.name.clone(),
                 };
                 Some(AppletRow {
                     id: e.id.clone(),
                     primary_label: truncate_label(&label),
                     primary_value: e.username.clone(),
-                    secret_label_key: "password-label",
                     single_button: false,
                 })
             }
@@ -75,14 +48,12 @@ pub fn build_applet_rows(entries: &[SidebarEntry]) -> Vec<AppletRow> {
                 id: e.id.clone(),
                 primary_label: truncate_label(&e.name),
                 primary_value: None,
-                secret_label_key: "note-label",
                 single_button: true,
             }),
             EntryType::SshKey => Some(AppletRow {
                 id: e.id.clone(),
                 primary_label: truncate_label(&format!("{} | {}", e.name, fl!("public-key-label"))),
                 primary_value: e.public_key.clone(),
-                secret_label_key: "private-key-label",
                 single_button: false,
             }),
             EntryType::Card | EntryType::Identity => None,
@@ -121,16 +92,18 @@ mod tests {
 
     #[test]
     fn truncate_label_truncates_long_strings() {
-        let s = "abcdefghijklmnopqrstuvwxyz";
-        assert_eq!(truncate_label(s), "abcdefghijklmnopqrstuvwxy");
+        let s = "abcdefghijklmnopqrstuvwxyz0123456789abcdef";
+        let truncated = truncate_label(s);
+        assert_eq!(truncated.chars().count(), APPLET_LABEL_MAX_LEN);
+        assert_eq!(truncated, "abcdefghijklmnopqrstuvwxyz0123456789abcd");
     }
 
     #[test]
     fn truncate_label_leaves_short_strings_untouched() {
         assert_eq!(truncate_label("short"), "short");
-        let exact = "abcdefghijklmnopqrstuvwxy";
+        let exact: String = "abcdefghijklmnopqrstuvwxyz0123456789abcd".chars().collect();
         assert_eq!(exact.chars().count(), APPLET_LABEL_MAX_LEN);
-        assert_eq!(truncate_label(exact), exact);
+        assert_eq!(truncate_label(&exact), exact);
     }
 
     #[test]
@@ -151,7 +124,6 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].primary_label, "My Site | alice");
         assert_eq!(rows[0].primary_value, Some("alice".to_string()));
-        assert_eq!(rows[0].secret_label_key, "password-label");
         assert!(!rows[0].single_button);
     }
 
@@ -165,21 +137,12 @@ mod tests {
     }
 
     #[test]
-    fn build_applet_rows_normalizes_domain_name_and_email_login() {
+    fn build_applet_rows_keeps_full_domain_and_email() {
         let mut e = entry("1", EntryType::Login);
         e.name = "www.facebook.com".to_string();
         e.username = Some("some@email.com".to_string());
         let rows = build_applet_rows(&[e]);
-        assert_eq!(rows[0].primary_label, "facebook | some@email");
-    }
-
-    #[test]
-    fn build_applet_rows_leaves_non_dotted_names_and_non_email_logins_alone() {
-        let mut e = entry("1", EntryType::Login);
-        e.name = "MyServer".to_string();
-        e.username = Some("admin".to_string());
-        let rows = build_applet_rows(&[e]);
-        assert_eq!(rows[0].primary_label, "MyServer | admin");
+        assert_eq!(rows[0].primary_label, "www.facebook.com | some@email.com");
     }
 
     #[test]
@@ -190,7 +153,6 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].primary_label, "My Note");
         assert_eq!(rows[0].primary_value, None);
-        assert_eq!(rows[0].secret_label_key, "note-label");
         assert!(rows[0].single_button);
     }
 
@@ -203,7 +165,6 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].primary_label, "My Server | Public key");
         assert_eq!(rows[0].primary_value, Some("ssh-ed25519 AAAA...".to_string()));
-        assert_eq!(rows[0].secret_label_key, "private-key-label");
         assert!(!rows[0].single_button);
     }
 

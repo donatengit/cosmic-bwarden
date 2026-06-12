@@ -8,12 +8,9 @@ description = "CosmicBWarden UI"
 cosmic-bwarden-core = { path = "../cosmic-bwarden-core" }
 anyhow = "1.0"
 libcosmic = { git = "https://github.com/pop-os/libcosmic", branch = "master", features = ["applet", "applet-token", "process", "single-instance"] }
-cosmic-config = { git = "https://github.com/pop-os/libcosmic", branch = "master", default-features = false, features = ["macro"] }
 tokio = { version = "1.0", features = ["full"] }
-log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 postcard = { version = "1.0", features = ["alloc"] }
-env_logger = "0.11"
 chrono = "0.4"
 tracing = "0.1"
 async-stream = "0.3"
