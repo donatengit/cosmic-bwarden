@@ -71,12 +71,6 @@ fn result_row_view(result_row: AppletRow) -> Element<'static, Message> {
     let primary_id = result_row.id.clone();
     let secret_id = result_row.id.clone();
 
-    let secret_content = row::with_capacity(2)
-        .spacing(4)
-        .align_y(Alignment::Center)
-        .push(text::caption("🔑"))
-        .push(icon::from_name("edit-copy-symbolic").size(16));
-
     row::with_capacity(2)
         .spacing(5)
         .align_y(Alignment::Center)
@@ -84,7 +78,7 @@ fn result_row_view(result_row: AppletRow) -> Element<'static, Message> {
             .on_press_maybe(result_row.primary_value.map(|_| Message::AppletCopyPrimary(primary_id)))
             .width(Length::Fill)
             .class(cosmic::theme::Button::Text))
-        .push(button::custom(secret_content)
+        .push(button::custom(text::caption("🔑"))
             .on_press(Message::AppletCopySecret(secret_id))
             .padding([8, 14])
             .class(cosmic::theme::Button::Suggested))
@@ -98,11 +92,12 @@ fn note_row_view(result_row: AppletRow) -> Element<'static, Message> {
         .spacing(5)
         .align_y(Alignment::Center)
         .push(text::caption(result_row.primary_label).width(Length::Fill))
-        .push(text::caption("| 🗅").class(muted_text()));
+        .push(text::caption("🗅").class(muted_text()));
 
     button::custom(content)
         .on_press(Message::AppletCopySecret(secret_id))
         .width(Length::Fill)
+        .class(cosmic::theme::Button::Text)
         .into()
 }
 

@@ -34,7 +34,7 @@ pub fn build_applet_rows(entries: &[SidebarEntry]) -> Vec<AppletRow> {
         .filter_map(|e| match e.entry_type {
             EntryType::Login => {
                 let label = match e.username.as_deref() {
-                    Some(login) if !login.is_empty() => format!("{} | {}", e.name, login),
+                    Some(login) if !login.is_empty() => format!("{} 👤 {}", e.name, login),
                     _ => e.name.clone(),
                 };
                 Some(AppletRow {
@@ -122,7 +122,7 @@ mod tests {
         e.username = Some("alice".to_string());
         let rows = build_applet_rows(&[e]);
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].primary_label, "My Site | alice");
+        assert_eq!(rows[0].primary_label, "My Site 👤 alice");
         assert_eq!(rows[0].primary_value, Some("alice".to_string()));
         assert!(!rows[0].single_button);
     }
@@ -142,7 +142,7 @@ mod tests {
         e.name = "www.facebook.com".to_string();
         e.username = Some("some@email.com".to_string());
         let rows = build_applet_rows(&[e]);
-        assert_eq!(rows[0].primary_label, "www.facebook.com | some@email.com");
+        assert_eq!(rows[0].primary_label, "www.facebook.com 👤 some@email.com");
     }
 
     #[test]
