@@ -46,14 +46,20 @@ impl ssh_agent_lib::agent::Session for SshAgent {
 
         let mut identities = Vec::new();
         for entry in &db.entries {
-            if let cosmic_bwarden_core::db::EntryData::SshKey { public_key: Some(pk_enc), .. } = &entry.data {
-                if let Ok(pk_str) = cosmic_bwarden_core::vault::decrypt(pk_enc, keys, entry.key.as_deref()) {
-                    if let Ok(pk) = pk_str.parse::<PublicKey>() {
-                        identities.push(Identity {
-                            pubkey: pk.key_data().clone(),
-                            comment: entry.name.clone(),
-                        });
-                    }
+            if !matches!(entry.data, cosmic_bwarden_core::db::EntryData::SshKey { .. }) {
+                continue;
+            }
+            // Vaultwarden's sync response leaves the SSH-key cipher
+            // sub-data empty; `decrypt()` falls back to the
+            // "public_key"/"private_key" custom fields where the real
+            // (encrypted) values actually live.
+            let decrypted = entry.decrypt(keys);
+            if let cosmic_bwarden_core::db::EntryData::SshKey { public_key: Some(pk_str), .. } = &decrypted.data {
+                if let Ok(pk) = pk_str.parse::<PublicKey>() {
+                    identities.push(Identity {
+                        pubkey: pk.key_data().clone(),
+                        comment: entry.name.clone(),
+                    });
                 }
             }
         }
@@ -76,18 +82,20 @@ impl ssh_agent_lib::agent::Session for SshAgent {
         let req_bytes = req_pubkey.to_bytes();
 
         for entry in &db.entries {
-            if let cosmic_bwarden_core::db::EntryData::SshKey { private_key: Some(sk_enc), public_key: Some(pk_enc), .. } = &entry.data {
-                if let Ok(pk_str) = cosmic_bwarden_core::vault::decrypt(pk_enc, keys, entry.key.as_deref()) {
-                    if let Ok(pk) = pk_str.parse::<PublicKey>() {
-                        if pk.to_bytes() == req_bytes {
-                            let sk_str = cosmic_bwarden_core::vault::decrypt(sk_enc.expose(), keys, entry.key.as_deref())
-                                .map_err(|e| ssh_agent_lib::error::AgentError::other(e))?;
-                            
-                            let sk = PrivateKey::from_openssh(sk_str)
-                                .map_err(|e| ssh_agent_lib::error::AgentError::other(e))?;
-                            
-                            return sign_with_key(&sk, &request.data, request.flags);
-                        }
+            if !matches!(entry.data, cosmic_bwarden_core::db::EntryData::SshKey { .. }) {
+                continue;
+            }
+            // See comment in `request_identities`: decrypt via the entry's
+            // fallback-field-aware `decrypt()` rather than the raw
+            // (often-empty) SSH-key cipher sub-data.
+            let decrypted = entry.decrypt(keys);
+            if let cosmic_bwarden_core::db::EntryData::SshKey { private_key: Some(sk), public_key: Some(pk_str), .. } = &decrypted.data {
+                if let Ok(pk) = pk_str.parse::<PublicKey>() {
+                    if pk.to_bytes() == req_bytes {
+                        let sk = PrivateKey::from_openssh(sk.expose())
+                            .map_err(|e| ssh_agent_lib::error::AgentError::other(e))?;
+
+                        return sign_with_key(&sk, &request.data, request.flags);
                     }
                 }
             }

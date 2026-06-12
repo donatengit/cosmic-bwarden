@@ -20,6 +20,7 @@ The project follows a modular Rust-based architecture split into specialized cra
     - `app/`: MVU decomposition into `state.rs`, `update/` (chained `lifecycle`/`auth`/`vault`/`applet` handlers), and `tasks.rs`.
     - `view/`: Modular view components (Auth, Vault, Settings, `applet/`).
 - **`cosmic-bwarden-tests`**: End-to-end integration tests using Docker.
+    - `vault/ssh_agent.rs` / `vault/ssh_agent_lifecycle.rs`: Real-protocol SSH agent coverage — a real `ssh`/`ssh-add` client signs/authenticates against a containerized `sshd` via the agent's `ssh-agent-socket` (Ed25519 + RSA), including lock/unlock and logout/login state-transition checks. Helpers in `ssh_test_utils.rs`.
 
 ## Technical Stack
 

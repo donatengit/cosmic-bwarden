@@ -15,6 +15,8 @@ mod pinned_ops;
 #[cfg(test)]
 mod security;
 #[cfg(test)]
+mod ssh_test_utils;
+#[cfg(test)]
 mod vault;
 #[cfg(test)]
 mod window_flow;
