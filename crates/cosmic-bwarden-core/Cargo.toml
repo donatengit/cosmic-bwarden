@@ -5,35 +5,34 @@ edition = "2021"
 
 [dependencies]
 aes = "0.8.4"
-anyhow = "1.0.100"
+anyhow = { workspace = true }
 argon2 = "0.5.3"
 arrayvec = "0.7.6"
-base32 = "0.5.1"
 base64 = "0.22.1"
 block-padding = "0.3.3"
 cbc = { version = "0.1.2", features = ["alloc", "std"] }
 directories = "6.0"
 hkdf = "0.12.4"
-log = "0.4"
+log = { workspace = true }
 hmac = { version = "0.12.1", features = ["std"] }
 pbkdf2 = "0.12.2"
 percent-encoding = "2.3"
 pkcs8 = "0.10.2"
-rand = "0.9"
+rand = { workspace = true }
 region = "3.0"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
-rsa = "0.9.9"
-rustix = { version = "1.0", features = ["process"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+rsa = { workspace = true }
+rustix = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 serde_path_to_error = "0.1"
 serde_repr = "0.1"
-postcard = { version = "1.0", features = ["alloc"] }
-sha1 = "0.10.6"
-sha2 = "0.10.9"
+postcard = { workspace = true }
+sha1 = { workspace = true }
+sha2 = { workspace = true }
 thiserror = "2.0"
-tokio = { version = "1.0", features = ["full"] }
-cosmic-config = { git = "https://github.com/pop-os/libcosmic", branch = "master", default-features = false, features = ["macro"] }
+tokio = { workspace = true, features = ["rt", "macros", "net", "time", "io-util", "fs"] }
+cosmic-config = { workspace = true }
 url = "2.5"
 uuid = { version = "1.0", features = ["v4"] }
-zeroize = { version = "1.8", features = ["derive"] }
+zeroize = { workspace = true }

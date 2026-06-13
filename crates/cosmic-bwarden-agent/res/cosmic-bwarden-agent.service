@@ -1,0 +1,11 @@
+[Unit]
+Description=Cosmic Bitwarden Agent
+After=network.target
+
+[Service]
+ExecStart=@BINDIR@/cosmic-bwarden-agent
+Restart=on-failure
+LimitCORE=0
+
+[Install]
+WantedBy=default.target

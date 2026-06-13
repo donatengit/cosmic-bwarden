@@ -1,4 +1,3 @@
-use crate::keyring;
 use crate::state::State;
 use cosmic_bwarden_core::db::Secret;
 use cosmic_bwarden_core::protocol::{Event, Response};

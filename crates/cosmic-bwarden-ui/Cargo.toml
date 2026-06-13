@@ -6,17 +6,17 @@ description = "CosmicBWarden UI"
 
 [dependencies]
 cosmic-bwarden-core = { path = "../cosmic-bwarden-core" }
-anyhow = "1.0"
-libcosmic = { git = "https://github.com/pop-os/libcosmic", branch = "master", features = ["applet", "applet-token", "process", "single-instance"] }
-tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "net", "io-util"] }
-serde = { version = "1.0", features = ["derive"] }
-postcard = { version = "1.0", features = ["alloc"] }
-chrono = "0.4"
-tracing = "0.1"
+anyhow = { workspace = true }
+libcosmic = { workspace = true, features = ["applet", "applet-token", "process", "single-instance"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-util"] }
+serde = { workspace = true }
+postcard = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
 async-stream = "0.3"
-tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
 tracing-journald = "0.3"
-i18n-embed = { version = "0.16.0", features = ["fluent-system", "desktop-requester"] }
-i18n-embed-fl = "0.10"
-rust-embed = "8.11.0"
-zeroize = "1.8"
+i18n-embed = { workspace = true }
+i18n-embed-fl = { workspace = true }
+rust-embed = { workspace = true }
+zeroize = { workspace = true }

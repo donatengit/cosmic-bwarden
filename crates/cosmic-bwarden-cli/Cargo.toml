@@ -6,6 +6,6 @@ edition = "2021"
 [dependencies]
 cosmic-bwarden-core = { path = "../cosmic-bwarden-core" }
 clap = { version = "4.5", features = ["derive"] }
-tokio = { version = "1.0", features = ["full"] }
-anyhow = "1.0"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-util"] }
+anyhow = { workspace = true }
 rpassword = "7.3"
