@@ -12,6 +12,7 @@ pub struct State {
     pub username_cache: HashMap<String, String>, // id -> decrypted username
     pub pubkey_cache: HashMap<String, String>, // id -> decrypted SSH public key
     pub subscribers: Vec<mpsc::UnboundedSender<cosmic_bwarden_core::protocol::Event>>,
+    pub shutdown_tx: Option<mpsc::UnboundedSender<()>>,
     /// Set once an `Event::UnlockRequested` has been broadcast for the
     /// current lock period, so repeated requests don't spam subscribers.
     /// Cleared on the next `lock()`.
@@ -30,6 +31,7 @@ impl State {
             username_cache: HashMap::new(),
             pubkey_cache: HashMap::new(),
             subscribers: Vec::new(),
+            shutdown_tx: None,
             unlock_requested_notified: false,
         }
     }

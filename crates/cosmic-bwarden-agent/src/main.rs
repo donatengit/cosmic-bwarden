@@ -67,7 +67,12 @@ async fn main() -> anyhow::Result<()> {
         socket_path.display()
     );
 
+    let (shutdown_tx, mut shutdown_rx) = tokio::sync::mpsc::unbounded_channel();
     let state = Arc::new(Mutex::new(State::new()));
+    {
+        let mut state_guard = state.lock().await;
+        state_guard.shutdown_tx = Some(shutdown_tx);
+    }
     let ssh_agent = SshAgent::new(Arc::clone(&state));
 
     let state_for_agent = Arc::clone(&state);
@@ -211,6 +216,9 @@ async fn main() -> anyhow::Result<()> {
         _ = agent_handle => {},
         _ = ssh_agent_handle => {},
         _ = logind_handle => {},
+        _ = shutdown_rx.recv() => {
+            log::info!("Shutting down agent gracefully");
+        },
     }
 
     Ok(())
