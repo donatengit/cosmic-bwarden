@@ -14,12 +14,20 @@
 - **Diverse Vault Items**: Full support for standard logins, Secure Notes, and SSH Keys, with automatic synchronization and local caching.
 - **Master Password Reprompt**: Implements granular security for sensitive items, requiring master password verification for specifically marked entries.
 - **SSH Agent Integration**: Automatically serves SSH keys stored in your Bitwarden vault to the system's SSH agent.
+- **Browser Extension**: A high-performance, thin-client Firefox extension that provides seamless autofill and search capabilities, powered by the background agent.
 - **Tray Applet with Frequent Access**: A specialized panel applet provides quick access to your top-5 most frequently used passwords.
 
 ## Architecture Overview
 
-The project is structured as a Rust workspace with four main components, each following a strict modular decomposition (targeting <250 lines per file) to ensure high maintainability and security auditing:
+The project is structured as a Rust workspace with several specialized components, each following a strict modular decomposition (targeting <250 lines per file) to ensure high maintainability and security auditing:
 - `cosmic-bwarden-core`: The internal library for cryptography, Bitwarden API communication, and data modeling.
-- `cosmic-bwarden-agent`: The background service managing the unlocked vault and SSH agent.
+- `cosmic-bwarden-agent`: The background service managing the unlocked vault, SSH agent, and browser integration.
 - `cosmic-bwarden-ui`: The main application for searching and managing vault entries, following the MVU pattern.
+- `cosmic-bwarden-cli`: A full-featured command-line interface for vault management and automation.
 - `cosmic-bwarden-tests`: A comprehensive E2E suite using Docker to verify the full stack.
+
+### Specialized Integrations
+
+For more details on specific system integrations, see:
+- [SSH Agent Integration](./ssh-agent.md)
+- [Browser Extension Integration](./browser_integration.md)
