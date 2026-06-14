@@ -67,7 +67,7 @@ async fn test_popup_lifecycle() {
     app.windows.insert(id, WindowState::Popup);
 
     // Close popup
-    let _ = app.update(Message::PopupClosed(id));
+    let _ = app.update(Message::WindowClosed(id));
     assert!(app.applet_popup.is_none());
     assert!(app.windows.get(&id).is_none());
 }

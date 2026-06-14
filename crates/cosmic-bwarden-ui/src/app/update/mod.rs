@@ -39,10 +39,10 @@ impl CosmicBWardenApp {
             Message::EntriesReceived(_, _) | Message::TopEntriesReceived(_) | Message::SyncClicked | Message::SyncResult(_) |
             Message::TogglePin(_) | Message::ToggleSearchPinned | Message::RepromptPasswordChanged(_) |
             Message::SubmitReprompt | Message::CancelReprompt | Message::NewEntryTypeChanged(_) |
-            Message::ConfigReceived(_) | Message::EventReceived(_) | Message::WindowOpened(_) |
+            Message::ConfigReceived(_) | Message::EventReceived(_) |
             Message::WindowClosed(_) | Message::RefreshStateInternal |
-            Message::AppletIconClicked(_, _) | Message::CopyPassword(_) |
-            Message::PopupClosed(_) | Message::Surface(_) | Message::Exit |
+            Message::AppletIconClicked(_, _) |
+            Message::Surface(_) | Message::Exit |
             Message::OpenVaultRequested | Message::Token(_) |
             Message::AppletUnlockPasswordChanged(_) | Message::AppletUnlockSubmitted | Message::AppletUnlockResult(_) |
             Message::AppletSearchChanged(_) | Message::AppletToggleFavouritesFilter | Message::AppletSearchResultsReceived(_, _) |

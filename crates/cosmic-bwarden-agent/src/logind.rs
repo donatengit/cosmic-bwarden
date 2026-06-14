@@ -1,8 +1,21 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use crate::state::State;
-use futures_util::StreamExt;
+use tokio_stream::StreamExt;
 
+// `zbus` (+ `zvariant`) accounts for ~558KB of .text in the release binary,
+// measured with `cargo bloat --release --crates`, almost entirely for this
+// function's use of `Connection::system()` + `MessageStream` (no proxies or
+// registered objects are used here). Most of that cost can't be trimmed:
+// `Connection::system()` is a bus connection, so zbus unconditionally
+// activates its `ObjectServer`/`fdo` interface dispatch at runtime
+// (`ensure_object_server`) regardless of whether we register any objects,
+// and the rest is the SASL handshake + message (de)serialization needed by
+// any correct D-Bus client. A hand-rolled raw-socket client or a switch to
+// a less-maintained crate (e.g. `rustbus`) was considered and rejected:
+// `zbus` is already pulled in transitively via the UI's `libcosmic`
+// dependency, and this auto-lock path is security-sensitive enough that a
+// battle-tested D-Bus implementation is worth ~0.5MB. Kept as-is.
 pub async fn listen_to_logind(state: Arc<Mutex<State>>) -> zbus::Result<()> {
     let connection = zbus::Connection::system().await?;
 

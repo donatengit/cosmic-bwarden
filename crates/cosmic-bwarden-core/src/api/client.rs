@@ -171,28 +171,7 @@ impl Client {
             }
             reqwest::StatusCode::BAD_REQUEST => {
                 let err: ConnectErrorRes = res.json_with_path().await?;
-                if err.error == "invalid_grant" {
-                    if let Some(token) = err.sso_email_2fa_session_token {
-                        Err(Error::TwoFactorRequired {
-                            providers: err
-                                .two_factor_providers
-                                .unwrap_or_default()
-                                .into_iter()
-                                .map(|p| p as u32)
-                                .collect(),
-                            token,
-                        })
-                    } else {
-                        Err(Error::Other("Invalid credentials".to_string()))
-                    }
-                } else if err.error == "invalid_token"
-                    && err.error_description.as_deref()
-                        == Some("Device verification required.")
-                {
-                    Err(Error::NewDeviceVerificationRequired)
-                } else {
-                    Err(Error::Other(err.error_description.unwrap_or(err.error)))
-                }
+                Err(map_connect_error(err))
             }
             _ => Err(Error::RequestFailed {
                 status: res.status().as_u16(),
@@ -593,5 +572,110 @@ impl Client {
                 status: res.status().as_u16(),
             }),
         }
+    }
+}
+
+/// Maps a `400 Bad Request` response from `/connect/token` to an [`Error`],
+/// falling back from `error_description` to `error_model.message` to the
+/// raw `error` code when the server doesn't provide a human-readable reason.
+fn map_connect_error(err: ConnectErrorRes) -> Error {
+    if err.error == "invalid_grant" {
+        if let Some(token) = err.sso_email_2fa_session_token {
+            Error::TwoFactorRequired {
+                providers: err
+                    .two_factor_providers
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|p| p as u32)
+                    .collect(),
+                token,
+            }
+        } else {
+            Error::Other("Invalid credentials".to_string())
+        }
+    } else if err.error == "invalid_token"
+        && err.error_description.as_deref() == Some("Device verification required.")
+    {
+        Error::NewDeviceVerificationRequired
+    } else {
+        Error::Other(
+            err.error_description
+                .unwrap_or_else(|| err.error_model.map(|m| m.message).unwrap_or(err.error)),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base_error(error: &str) -> ConnectErrorRes {
+        ConnectErrorRes {
+            error: error.to_string(),
+            error_description: None,
+            error_model: None,
+            two_factor_providers: None,
+            sso_email_2fa_session_token: None,
+        }
+    }
+
+    #[test]
+    fn invalid_grant_without_2fa_token_is_invalid_credentials() {
+        let err = map_connect_error(base_error("invalid_grant"));
+        assert!(matches!(err, Error::Other(msg) if msg == "Invalid credentials"));
+    }
+
+    #[test]
+    fn invalid_grant_with_2fa_token_requires_two_factor() {
+        let mut res = base_error("invalid_grant");
+        res.sso_email_2fa_session_token = Some("session-token".to_string());
+        res.two_factor_providers = Some(vec![TwoFactorProviderType::Authenticator]);
+
+        let err = map_connect_error(res);
+        match err {
+            Error::TwoFactorRequired { providers, token } => {
+                assert_eq!(providers, vec![0]);
+                assert_eq!(token, "session-token");
+            }
+            other => panic!("expected TwoFactorRequired, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn invalid_token_with_device_verification_message() {
+        let mut res = base_error("invalid_token");
+        res.error_description = Some("Device verification required.".to_string());
+
+        let err = map_connect_error(res);
+        assert!(matches!(err, Error::NewDeviceVerificationRequired));
+    }
+
+    #[test]
+    fn falls_back_to_error_description_when_present() {
+        let mut res = base_error("some_error");
+        res.error_description = Some("Human readable description".to_string());
+        res.error_model = Some(ConnectErrorResErrorModel {
+            message: "Model message".to_string(),
+        });
+
+        let err = map_connect_error(res);
+        assert!(matches!(err, Error::Other(msg) if msg == "Human readable description"));
+    }
+
+    #[test]
+    fn falls_back_to_error_model_message_when_no_description() {
+        let mut res = base_error("some_error");
+        res.error_model = Some(ConnectErrorResErrorModel {
+            message: "Model message".to_string(),
+        });
+
+        let err = map_connect_error(res);
+        assert!(matches!(err, Error::Other(msg) if msg == "Model message"));
+    }
+
+    #[test]
+    fn falls_back_to_raw_error_code_when_nothing_else_present() {
+        let err = map_connect_error(base_error("some_error"));
+        assert!(matches!(err, Error::Other(msg) if msg == "some_error"));
     }
 }

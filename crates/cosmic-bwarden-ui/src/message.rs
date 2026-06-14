@@ -20,12 +20,10 @@ pub enum WindowState {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum Message {
     ConfigReceived(Result<(CosmicBWardenConfig, bool, bool, bool), String>),
 
     // Window management
-    WindowOpened(window::Id),
     WindowClosed(window::Id),
     RefreshStateInternal,
     AppletIconClicked(cosmic::iced::Vector, cosmic::iced::Rectangle),
@@ -56,7 +54,6 @@ pub enum Message {
     EditNameChanged(String),
     EntriesReceived(u32, Result<Vec<SidebarEntry>, String>),
     TopEntriesReceived(Result<Vec<SidebarEntry>, String>),
-    CopyPassword(String),
     CopyToClipboard(String),
     NotesAction(widget::text_editor::Action),
     DeleteEntry(String),
@@ -71,7 +68,6 @@ pub enum Message {
     ToggleAdvanced,
 
     // Applet actions
-    PopupClosed(window::Id),
     Surface(cosmic::surface::Action),
     OpenVaultRequested,
     Token(cosmic::applet::token::subscription::TokenUpdate),

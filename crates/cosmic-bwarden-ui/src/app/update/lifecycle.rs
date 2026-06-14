@@ -59,10 +59,6 @@ impl CosmicBWardenApp {
                 }
                 Some(Task::none())
             }
-            Message::WindowOpened(id) => {
-                debug!("Window opened: {:?}", id);
-                Some(Task::none())
-            }
             Message::WindowClosed(id) => {
                 debug!("Window closed: {:?}", id);
                 if self.applet_popup == Some(id) {

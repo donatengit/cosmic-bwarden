@@ -23,25 +23,6 @@ impl CosmicBWardenApp {
 
                 Some(self.open_applet_popup_task(Some((offset, bounds))))
             }
-            Message::CopyPassword(id) => {
-                Some(Task::perform(async move {
-                    let agent = AgentClient::new();
-                    match agent.send(AgentAction::GetPassword { id, password: None }).await {
-                        Ok(Response::Password { password }) => Ok(password),
-                        _ => Err("failed to get password".to_string()),
-                    }
-                }, |res| cosmic::Action::App(res)).then(|res| match res {
-                    cosmic::Action::App(Ok(p)) => cosmic::iced::clipboard::write(p).map(|_: ()| cosmic::Action::None),
-                    _ => Task::done(cosmic::Action::None),
-                }))
-            }
-            Message::PopupClosed(id) => {
-                if self.applet_popup == Some(id) {
-                    self.applet_popup = None;
-                }
-                self.windows.remove(&id);
-                Some(Task::none())
-            }
             Message::Surface(action) => Some(Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(action)))),
             Message::Exit => {
                 std::process::exit(0)

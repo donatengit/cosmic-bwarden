@@ -5,9 +5,37 @@ const LEN: usize = 4096;
 static REGION_LOCK_WORKS: std::sync::OnceLock<bool> =
     std::sync::OnceLock::new();
 
+/// RAII guard that `mlock`s a memory region for its lifetime, `munlock`ing
+/// it on drop. Replaces the `region` crate, which is a thin wrapper around
+/// the same `mlock`/`munlock` syscalls that `rustix` already exposes.
+struct MlockGuard {
+    ptr: *const u8,
+    len: usize,
+}
+
+// The pointer is only ever passed to `mlock`/`munlock`; it's never
+// dereferenced through this type, so it's safe to move/share across threads.
+unsafe impl Send for MlockGuard {}
+unsafe impl Sync for MlockGuard {}
+
+impl MlockGuard {
+    fn new(ptr: *const u8, len: usize) -> rustix::io::Result<Self> {
+        unsafe { rustix::mm::mlock(ptr.cast_mut().cast(), len)? };
+        Ok(Self { ptr, len })
+    }
+}
+
+impl Drop for MlockGuard {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = rustix::mm::munlock(self.ptr.cast_mut().cast(), self.len);
+        }
+    }
+}
+
 pub struct Vec {
     data: Box<arrayvec::ArrayVec<u8, LEN>>,
-    _lock: Option<region::LockGuard>,
+    _lock: Option<MlockGuard>,
 }
 
 impl Default for Vec {
@@ -15,10 +43,10 @@ impl Default for Vec {
         let data = Box::new(arrayvec::ArrayVec::<_, LEN>::new());
         let lock = match REGION_LOCK_WORKS.get() {
             Some(true) => {
-                Some(region::lock(data.as_ptr(), data.capacity()).unwrap())
+                Some(MlockGuard::new(data.as_ptr(), data.capacity()).unwrap())
             }
             Some(false) => None,
-            None => match region::lock(data.as_ptr(), data.capacity()) {
+            None => match MlockGuard::new(data.as_ptr(), data.capacity()) {
                 Ok(lock) => {
                     let _ = REGION_LOCK_WORKS.set(true);
                     Some(lock)

@@ -206,7 +206,7 @@ impl Application for CosmicBWardenApp {
                 {
                     tracing::error!(?why, "config load error");
                 }
-                Message::RefreshStateInternal
+                Message::ConfigChanged(u.config)
             });
 
         let agent_subscription = Subscription::run(|| {

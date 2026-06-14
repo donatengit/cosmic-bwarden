@@ -60,8 +60,13 @@ pub enum Error {
     #[error("incorrect api key")]
     IncorrectApiKey,
 
+    #[cfg(feature = "debug-api")]
     #[error("json error at {}: {}", .source.path(), .source.inner())]
     Json { source: serde_path_to_error::Error<serde_json::Error> },
+
+    #[cfg(not(feature = "debug-api"))]
+    #[error("json error: {source}")]
+    Json { source: serde_json::Error },
 
     #[error("two factor authentication required")]
     TwoFactorRequired {

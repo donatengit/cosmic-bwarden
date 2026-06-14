@@ -272,14 +272,6 @@ pub(crate) struct ConnectRefreshTokenReq {
 }
 
 #[derive(serde::Deserialize, Debug)]
-pub(crate) struct ConnectRefreshTokenRes {
-    pub(crate) access_token: String,
-    pub(crate) refresh_token: Option<String>,
-    #[serde(rename = "Key", alias = "key")]
-    pub(crate) key: Option<String>,
-}
-
-#[derive(serde::Deserialize, Debug)]
 pub(crate) struct SyncRes {
     #[serde(rename = "Ciphers", alias = "ciphers")]
     pub(crate) ciphers: Vec<SyncResCipher>,
@@ -591,21 +583,6 @@ pub(crate) struct CiphersPutReq {
     pub(crate) ssh_key: Option<CipherSshKey>,
     pub(crate) password_history: Vec<serde_json::Value>,
     pub(crate) reprompt: CipherRepromptType,
-}
-
-#[derive(serde::Deserialize, Debug)]
-pub(crate) struct FoldersRes {
-    pub(crate) data: Vec<SyncResFolder>,
-}
-
-#[derive(serde::Deserialize, Debug)]
-pub(crate) struct FoldersResData {
-    pub(crate) id: String,
-}
-
-#[derive(serde::Serialize, Debug)]
-pub(crate) struct FoldersPostReq {
-    pub(crate) name: String,
 }
 
 #[derive(

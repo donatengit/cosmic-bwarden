@@ -13,18 +13,19 @@ ssh-agent-lib = "0.5.1"
 signature = "2.2"
 rand = { workspace = true }
 rand_core = "0.6"
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "time", "io-util", "sync"] }
+tokio = { workspace = true, features = ["rt", "macros", "net", "time", "io-util", "sync"] }
 tokio-stream = { version = "0.1", features = ["net"] }
-chrono = { workspace = true }
 postcard = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
-env_logger = "0.11"
+# default-features = false drops the `regex`/`humantime` deps (regex_automata
+# + aho_corasick + regex_syntax + jiff cost ~450KB of .text); env_filter still
+# supports plain `module=level` RUST_LOG directives without regex patterns.
+env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 libc = "0.2"
 rustix = { workspace = true }
 zbus = { workspace = true }
-futures-util = "0.3"
 oo7 = { version = "0.3", optional = true }
 
 [features]

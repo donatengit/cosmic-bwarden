@@ -13,11 +13,10 @@ anyhow = "1.0.102"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.49.0" }
-rustix = { version = "1.1", features = ["process"] }
+rustix = { version = "1.1", features = ["process", "mm"] }
 log = "0.4"
 tracing = "0.1"
 tracing-subscriber = "0.3"
-chrono = "0.4"
 postcard = { version = "1.0", features = ["alloc"] }
 zeroize = { version = "1.8", features = ["derive"] }
 libcosmic = { git = "https://github.com/pop-os/libcosmic", branch = "master" }
@@ -31,9 +30,24 @@ sha2 = "0.10.9"
 rand = "0.9"
 zbus = { version = "5.14.0", default-features = false, features = ["tokio"] }
 
+# `cargo build --release` and `cargo bloat` fail with "cannot prefer dynamic
+# linking when performing LTO" unless RUSTFLAGS is set, because
+# .cargo/config.toml's `build.rustflags` sets `-C prefer-dynamic`, which is
+# incompatible with any non-"off" `lto` setting below. `just build` already
+# works around this: its `RUSTFLAGS="-C target-cpu=native"` env var fully
+# REPLACES (not merges with) config.toml's rustflags, dropping
+# `prefer-dynamic`. Don't "fix" `just build` by removing that env var.
 [profile.release]
 opt-level = "z"     # Optimize for size
 lto = "fat"         # Enable full LTO for maximal cross-crate optimization
 codegen-units = 1   # Maximize optimization potential
 strip = true        # Automatically strip symbols from the binary
 incremental = false # Disable incremental compilation for release
+# `panic` is intentionally left at the default ("unwind"), not "abort":
+# the agent is a long-running daemon holding decrypted vault secrets in
+# memory-locked, Zeroize-on-Drop buffers (see core/src/locked.rs). Under
+# "abort", any panic in a per-connection handler kills the whole daemon
+# without running Drop/zeroize, dropping every client's session and leaving
+# secrets unzeroized. Under "unwind", a panic only unwinds (and zeroizes)
+# the task that panicked. The binary-size win from "abort" (~5-10% of an
+# already ~6-7MB stripped, fat-LTO binary) isn't worth that regression.
