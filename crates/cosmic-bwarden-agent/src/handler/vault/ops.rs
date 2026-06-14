@@ -1,9 +1,59 @@
 use crate::server::update_entry_on_server;
 use crate::state::State;
-use cosmic_bwarden_core::db::{Entry, Secret, Field};
+use cosmic_bwarden_core::db::{Entry, Secret, Field, EntryData};
 use cosmic_bwarden_core::protocol::{Response, EntryType};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use totp_rs::{Algorithm, TOTP};
+
+pub async fn handle_get_totp(id: String, state: &Arc<Mutex<State>>) -> Response {
+    let state_guard = state.lock().await;
+    let entry = if let Some(db) = &state_guard.db {
+        db.entries.iter().find(|e| e.id == id).cloned()
+    } else {
+        None
+    };
+    let keys = state_guard.keys.clone();
+    drop(state_guard);
+
+    if let (Some(entry), Some(keys)) = (entry, keys) {
+        let entry = entry.decrypt(&keys);
+        if let EntryData::Login { totp: Some(totp_secret), .. } = &entry.data {
+            let secret = totp_secret.expose();
+            // Bitwarden stores TOTP as either the secret key or an otpauth:// URL
+            let secret_key = if secret.starts_with("otpauth://") {
+                match TOTP::from_url(secret) {
+                    Ok(t) => t.get_secret_base32(),
+                    Err(_) => secret.to_string(),
+                }
+            } else {
+                secret.to_string()
+            };
+
+            match TOTP::new(
+                Algorithm::SHA1,
+                6,
+                1,
+                30,
+                secret_key.as_bytes().to_vec(),
+                None,
+                "".to_string(),
+            ) {
+                Ok(totp) => {
+                    match totp.generate_current() {
+                        Ok(code) => Response::Totp { code },
+                        Err(e) => Response::Error { message: format!("TOTP generation failed: {}", e) },
+                    }
+                }
+                Err(e) => Response::Error { message: format!("Invalid TOTP secret: {}", e) },
+            }
+        } else {
+            Response::Error { message: "Entry has no TOTP secret".to_string() }
+        }
+    } else {
+        Response::Error { message: "Agent is locked or entry not found".to_string() }
+    }
+}
 
 pub async fn handle_delete_entry(id: String, state: &Arc<Mutex<State>>) -> Response {
     let config = match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {

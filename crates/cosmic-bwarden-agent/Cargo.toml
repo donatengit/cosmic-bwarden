@@ -13,7 +13,7 @@ ssh-agent-lib = "0.5.1"
 signature = "2.2"
 rand = { workspace = true }
 rand_core = "0.6"
-tokio = { workspace = true, features = ["rt", "macros", "net", "time", "io-util", "sync"] }
+tokio = { workspace = true, features = ["rt", "macros", "net", "time", "io-util", "sync", "io-std"] }
 tokio-stream = { version = "0.1", features = ["net"] }
 postcard = { workspace = true }
 serde = { workspace = true }
@@ -27,7 +27,9 @@ libc = "0.2"
 rustix = { workspace = true }
 zbus = { workspace = true }
 oo7 = { version = "0.3", optional = true }
+totp-rs = { version = "5.7.1", features = ["otpauth"] }
 
 [features]
-default = []
+default = ["browser-host"]
 keyring = ["dep:oo7"]
+browser-host = []

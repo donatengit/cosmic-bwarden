@@ -58,6 +58,9 @@ pub enum Action {
         id: String,
         password: Option<String>,
     },
+    GetTotp {
+        id: String,
+    },
     CopyToClipboard {
         id: String,
     },
@@ -152,6 +155,7 @@ pub enum Response {
     SidebarEntries { entries: Vec<SidebarEntry> },
     Entry { entry: crate::db::Entry },
     Password { password: String },
+    Totp { code: String },
     Version { version: String },
     Event { event: Event },
 }

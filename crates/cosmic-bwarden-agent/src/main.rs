@@ -5,6 +5,9 @@ mod server;
 mod ssh_agent;
 mod state;
 
+#[cfg(feature = "browser-host")]
+mod browser_host;
+
 use cosmic_bwarden_core::protocol::{Action, Response};
 use handler::handle_request;
 use logind::listen_to_logind;
@@ -18,6 +21,18 @@ use tokio::sync::Mutex;
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
+
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 && args[1] == "browser-host" {
+        #[cfg(feature = "browser-host")]
+        {
+            return browser_host::run().await;
+        }
+        #[cfg(not(feature = "browser-host"))]
+        {
+            anyhow::bail!("browser-host feature is not enabled in this build");
+        }
+    }
 
     // Prevent core dumps and ptrace attachment
     #[cfg(target_os = "linux")]

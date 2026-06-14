@@ -149,3 +149,12 @@ run: build
     ./target/release/cosmic-bwarden-agent &
     echo "Starting UI..."
     ./target/release/cosmic-bwarden-ui
+
+# Register the browser native messaging host
+register-browser-host: build
+    python3 tools/register_browser_host.py
+
+# Pack the browser extension for distribution
+pack-extension:
+    mkdir -p dist
+    cd browser-extension && zip -r ../dist/cosmic-bwarden-extension.zip .

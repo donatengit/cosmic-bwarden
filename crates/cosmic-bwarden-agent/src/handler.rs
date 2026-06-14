@@ -24,6 +24,7 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
         | Action::GetSidebarEntries { .. }
         | Action::GetEntry { .. }
         | Action::GetPassword { .. }
+        | Action::GetTotp { .. }
         | Action::CopyToClipboard { .. }
         | Action::DeleteEntry { .. }
         | Action::UpdateEntry { .. }
