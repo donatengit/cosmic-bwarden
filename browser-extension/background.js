@@ -1,4 +1,6 @@
 let port = null;
+const queue = [];
+let isProcessing = false;
 
 function connect() {
     console.log("Connecting to cosmic-bwarden-agent...");
@@ -11,27 +13,50 @@ function connect() {
             console.log("Disconnected from agent");
         }
         port = null;
+        // Reject all pending in queue
+        while (queue.length > 0) {
+            const req = queue.shift();
+            req.reject(new Error("Agent disconnected: " + (p.error || "unknown error")));
+        }
+        isProcessing = false;
+    });
+
+    port.onMessage.addListener((response) => {
+        const req = queue.shift();
+        if (req) {
+            req.resolve(response);
+        }
+        isProcessing = false;
+        processQueue();
     });
 }
 
-async function sendToAgent(action) {
+function processQueue() {
+    if (isProcessing || queue.length === 0) return;
+    
     if (!port) {
         connect();
     }
 
+    isProcessing = true;
+    const { action, reject } = queue[0]; 
+    // We don't shift until we get a response (or error)
+    
+    try {
+        port.postMessage(action);
+    } catch (e) {
+        console.error("Failed to post message:", e);
+        queue.shift();
+        isProcessing = false;
+        reject(e);
+        processQueue();
+    }
+}
+
+async function sendToAgent(action) {
     return new Promise((resolve, reject) => {
-        const listener = (response) => {
-            port.onMessage.removeListener(listener);
-            resolve(response);
-        };
-        port.onMessage.addListener(listener);
-        
-        try {
-            port.postMessage(action);
-        } catch (e) {
-            port.onMessage.removeListener(listener);
-            reject(e);
-        }
+        queue.push({ action, resolve, reject });
+        processQueue();
     });
 }
 

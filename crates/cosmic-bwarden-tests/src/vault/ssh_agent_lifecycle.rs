@@ -25,7 +25,7 @@ async fn setup_with_ssh_key(email: &str, password: &str) -> Result<LifecycleEnv>
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     client
         .send(Action::Login {
             email: email.to_string(),
@@ -63,7 +63,7 @@ async fn setup_with_ssh_key(email: &str, password: &str) -> Result<LifecycleEnv>
         anyhow::bail!("Sync failed: {message}");
     }
 
-    let sock = cosmic_bwarden_core::dirs::ssh_agent_socket_file();
+    let sock = env.ssh_socket_path.clone();
     wait_for_socket(&sock, Duration::from_secs(5)).await?;
 
     Ok(LifecycleEnv {

@@ -1,5 +1,18 @@
 use crate::error::{Error, Result};
 use std::os::unix::fs::{DirBuilderExt as _, PermissionsExt as _};
+use std::path::PathBuf;
+
+pub fn set_config_override(path: PathBuf) {
+    std::env::set_var("COSMIC_BWARDEN_CONFIG", path);
+}
+
+pub fn set_socket_override(path: PathBuf) {
+    std::env::set_var("COSMIC_BWARDEN_SOCKET", path);
+}
+
+pub fn set_ssh_socket_override(path: PathBuf) {
+    std::env::set_var("COSMIC_BWARDEN_SSH_SOCKET", path);
+}
 
 pub fn make_all() -> Result<()> {
     create_dir_all_with_permissions(&cache_dir(), 0o700)?;
@@ -24,7 +37,9 @@ fn create_dir_all_with_permissions(
 }
 
 pub fn config_file() -> std::path::PathBuf {
-    config_dir().join("config.json")
+    std::env::var_os("COSMIC_BWARDEN_CONFIG")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| config_dir().join("config.json"))
 }
 
 const INVALID_PATH: &percent_encoding::AsciiSet =
@@ -54,11 +69,15 @@ pub fn device_id_file() -> std::path::PathBuf {
 }
 
 pub fn socket_file() -> std::path::PathBuf {
-    runtime_dir().join("socket")
+    std::env::var_os("COSMIC_BWARDEN_SOCKET")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| runtime_dir().join("socket"))
 }
 
 pub fn ssh_agent_socket_file() -> std::path::PathBuf {
-    runtime_dir().join("ssh-agent-socket")
+    std::env::var_os("COSMIC_BWARDEN_SSH_SOCKET")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| runtime_dir().join("ssh-agent-socket"))
 }
 
 fn config_dir() -> std::path::PathBuf {

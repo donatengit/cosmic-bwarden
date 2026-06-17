@@ -1,12 +1,11 @@
-use crate::message::WindowState;
 use crate::app::CosmicBWardenApp;
 use crate::message::Message;
 use crate::message::View;
 use cosmic::Application;
 use cosmic::widget;
 use cosmic_bwarden_core::config::CosmicBWardenConfig;
-use cosmic_bwarden_core::db::{Entry, EntryData};
-use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
+use cosmic_bwarden_core::db::EntryData;
+use cosmic_bwarden_core::protocol::EntryType;
 
 #[tokio::test]
 async fn test_e2e_user_flow_login_and_add_note() {

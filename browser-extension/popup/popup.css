@@ -1,9 +1,10 @@
 body {
-    width: 350px;
+    width: 380px;
     font-family: sans-serif;
     margin: 0;
     padding: 10px;
     background: #f4f4f4;
+    color: #333;
 }
 
 #app {
@@ -15,6 +16,7 @@ body {
 #header {
     display: flex;
     gap: 5px;
+    align-items: center;
 }
 
 #search {
@@ -24,9 +26,22 @@ body {
     border-radius: 4px;
 }
 
-#sync-btn {
-    padding: 5px 10px;
+button {
+    padding: 6px 12px;
     cursor: pointer;
+    border: 1px solid #ddd;
+    background: #fff;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+button:hover {
+    background: #f0f0f0;
+}
+
+#back-btn, #add-btn, #sync-btn {
+    padding: 5px 10px;
+    font-weight: bold;
 }
 
 #status {
@@ -38,7 +53,7 @@ body {
 }
 
 .hidden {
-    display: none;
+    display: none !important;
 }
 
 #results {
@@ -57,12 +72,18 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    cursor: pointer;
+}
+
+.entry:hover {
+    background: #fafafa;
 }
 
 .entry-info {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    flex-grow: 1;
 }
 
 .entry-name {
@@ -75,9 +96,6 @@ body {
 .entry-user {
     font-size: 0.85em;
     color: #666;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .entry-actions {
@@ -85,22 +103,86 @@ body {
     gap: 5px;
 }
 
-.entry-actions button {
-    padding: 4px 8px;
-    cursor: pointer;
-    border: 1px solid #ddd;
-    background: #f9f9f9;
-    border-radius: 3px;
-}
-
-.entry-actions button:hover {
-    background: #eee;
-}
-
 .no-results {
     text-align: center;
     color: #888;
     padding: 20px;
+}
+
+/* Forms and Details */
+.form-group {
+    margin-bottom: 10px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.8em;
+    color: #666;
+    margin-bottom: 3px;
+}
+
+.form-group input, .form-group select, .form-group textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.form-group textarea {
+    height: 60px;
+    resize: vertical;
+}
+
+.form-actions, .view-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.form-actions button, .view-actions button {
+    flex-grow: 1;
+}
+
+#save-btn {
+    background: #2e7d32;
+    color: white;
+    border: none;
+}
+
+#save-btn:hover {
+    background: #1b5e20;
+}
+
+button.danger {
+    color: #c00;
+}
+
+button.danger:hover {
+    background: #fee;
+    border-color: #c00;
+}
+
+#detail-content {
+    background: white;
+    padding: 10px;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.detail-item {
+    margin-bottom: 8px;
+    word-break: break-all;
+}
+
+.detail-label {
+    font-size: 0.75em;
+    color: #888;
+    text-transform: uppercase;
+}
+
+.detail-value {
+    font-weight: 500;
 }
 
 #footer {
@@ -111,12 +193,10 @@ body {
 }
 
 #lock-btn {
-    padding: 8px 16px;
-    cursor: pointer;
     background: #333;
     color: white;
     border: none;
-    border-radius: 4px;
+    width: 100%;
 }
 
 #lock-btn:hover {

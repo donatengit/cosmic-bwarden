@@ -27,7 +27,7 @@ async fn test_applet_unlock_after_lock() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     login(&client, &env.vault_url, email, password).await?;
 
     client.send(Action::Lock).await?;
@@ -66,7 +66,7 @@ async fn test_applet_unlock_wrong_password() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     login(&client, &env.vault_url, email, password).await?;
 
     client.send(Action::Lock).await?;
@@ -87,7 +87,7 @@ async fn test_favourites_only_when_query_empty() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     login(&client, &env.vault_url, email, password).await?;
 
     for i in 1..=3 {
@@ -142,7 +142,7 @@ async fn test_ssh_public_key_in_sidebar_entries() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     login(&client, &env.vault_url, email, password).await?;
 
     client.send(Action::AddSshKey {
@@ -176,7 +176,7 @@ async fn test_get_password_for_secure_note() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     login(&client, &env.vault_url, email, password).await?;
 
     client.send(Action::AddSecureNote {
@@ -213,7 +213,7 @@ async fn test_get_password_reprompt_flow() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     login(&client, &env.vault_url, email, password).await?;
 
     client.send(Action::AddEntry {

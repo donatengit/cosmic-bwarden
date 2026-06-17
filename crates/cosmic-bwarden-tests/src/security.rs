@@ -13,7 +13,7 @@ async fn test_lock_unlock() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     client.send(Action::Login {
         email: email.to_string(),
         password: password.to_string(),
@@ -51,7 +51,7 @@ async fn test_reprompt() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     client.send(Action::Login {
         email: email.to_string(),
         password: password.to_string(),
@@ -114,7 +114,7 @@ async fn test_agent_events() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     client.send(Action::Login {
         email: email.to_string(),
         password: password.to_string(),
@@ -131,7 +131,7 @@ async fn test_agent_events() -> Result<()> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use cosmic_bwarden_core::protocol::{Event};
 
-    let mut stream = UnixStream::connect(cosmic_bwarden_core::dirs::socket_file()).await?;
+    let mut stream = UnixStream::connect(&env.socket_path).await?;
     let subscribe_req = Action::Subscribe;
     let req_bytes = postcard::to_allocvec(&subscribe_req)?;
     let len = req_bytes.len() as u32;
@@ -177,7 +177,7 @@ async fn test_agent_events() -> Result<()> {
     use crate::ssh_test_utils::{run_ssh_add_list, wait_for_socket};
     use std::time::Duration;
 
-    let ssh_sock = cosmic_bwarden_core::dirs::ssh_agent_socket_file();
+    let ssh_sock = &env.ssh_socket_path;
     wait_for_socket(&ssh_sock, Duration::from_secs(5)).await?;
 
     let _ = run_ssh_add_list(&ssh_sock)?;
@@ -214,7 +214,7 @@ async fn test_token_leakage() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     client.send(Action::Login {
         email: email.to_string(),
         password: password.to_string(),
@@ -226,10 +226,27 @@ async fn test_token_leakage() -> Result<()> {
         device_verification_code: None,
     }).await?;
 
-    // Check the DB file on disk
-    let db_path = cosmic_bwarden_core::dirs::db_file(&env.vault_url, email);
-    assert!(db_path.exists());
+    // Force sync to ensure DB is written to disk
+    client.send(Action::Sync).await?;
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
+    // Find the DB file in the isolated cache directory (search recursively)
+    let mut db_path = None;
+    for _ in 0..10 {
+        for entry in walkdir::WalkDir::new(&env.cache_home) {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    db_path = Some(path.to_path_buf());
+                    break;
+                }
+            }
+        }
+        if db_path.is_some() { break; }
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    }
+    
+    let db_path = db_path.expect("No DB file found in cache after login and sync");
     let content = std::fs::read_to_string(db_path)?;
     assert!(!content.contains("access_token"));
     assert!(!content.contains("refresh_token"));

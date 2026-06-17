@@ -2,10 +2,7 @@ use crate::app::CosmicBWardenApp;
 use crate::message::Message;
 use crate::message::View;
 use cosmic::Application;
-use cosmic::widget;
-use cosmic_bwarden_core::config::CosmicBWardenConfig;
 use cosmic_bwarden_core::db::{Entry, EntryData};
-use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
 
 fn create_test_entry(id: &str, name: &str) -> Entry {
     Entry {

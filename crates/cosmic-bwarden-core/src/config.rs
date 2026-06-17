@@ -12,6 +12,8 @@ pub struct CosmicBWardenConfig {
     pub identity_url: Option<String>,
     pub ui_url: Option<String>,
     pub device_id: Option<String>,
+    pub socket_path: Option<String>,
+    pub ssh_agent_socket_path: Option<String>,
     #[serde(default = "default_lock_timeout")]
     pub lock_timeout: u64,
     #[serde(default = "default_top_popular_count")]
@@ -30,6 +32,8 @@ impl Default for CosmicBWardenConfig {
             identity_url: None,
             ui_url: None,
             device_id: None,
+            socket_path: None,
+            ssh_agent_socket_path: None,
             lock_timeout: default_lock_timeout(),
             top_popular_count: default_top_popular_count(),
             top_popular_days: default_top_popular_days(),

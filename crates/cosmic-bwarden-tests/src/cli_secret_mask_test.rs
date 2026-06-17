@@ -2,29 +2,19 @@
 
 use crate::common::{register_user, setup_env};
 use anyhow::Result;
-use std::path::PathBuf;
-use std::process::Command;
 
 #[tokio::test]
 async fn test_cli_secret_masked() -> Result<()> {
     // 1️⃣ Set up a fresh Vaultwarden container + agent
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
 
     // 2️⃣ Register a user (same as other CLI tests)
     let email = "masked-test@example.com";
     let password = "maskedpass123";
     register_user(&env.vault_url, email, password).await?;
 
-    // 3️⃣ Build the path to the compiled CLI binary
-    let mut cli_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    cli_path.pop(); // …/crates/cosmic-bwarden-tests
-    cli_path.pop(); // …/crates
-    cli_path.push("target/debug/cosmic-bwarden-cli");
-
     // 4️⃣ Login
-    let login_out = Command::new(&cli_path)
-        .env("COSMIC_BWARDEN_PROFILE", &env.profile)
+    let login_out = env.cli_cmd()
         .arg("login")
         .arg(email)
         .arg("--server")
@@ -39,8 +29,7 @@ async fn test_cli_secret_masked() -> Result<()> {
     );
 
     // 5️⃣ Add a Secure Note (no `-S` flag)
-    let add_out = Command::new(&cli_path)
-        .env("COSMIC_BWARDEN_PROFILE", &env.profile)
+    let add_out = env.cli_cmd()
         .arg("add")
         .arg("MaskedNote")
         .arg("notes=This is a secret note")
@@ -53,8 +42,7 @@ async fn test_cli_secret_masked() -> Result<()> {
     );
 
     // 6️⃣ Sync so the note is persisted on the server
-    let sync_out = Command::new(&cli_path)
-        .env("COSMIC_BWARDEN_PROFILE", &env.profile)
+    let sync_out = env.cli_cmd()
         .arg("sync")
         .output()?;
     assert!(
@@ -64,8 +52,7 @@ async fn test_cli_secret_masked() -> Result<()> {
     );
 
     // 7️⃣ Retrieve the note **without** `-S`
-    let get_out = Command::new(&cli_path)
-        .env("COSMIC_BWARDEN_PROFILE", &env.profile)
+    let get_out = env.cli_cmd()
         .arg("get")
         .arg("MaskedNote")
         .output()?;

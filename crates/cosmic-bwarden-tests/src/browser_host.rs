@@ -15,6 +15,10 @@ async fn test_browser_host_proxy_comprehensive() -> anyhow::Result<()> {
 
     // Spawn agent in browser-host mode
     let mut host_process = Command::new(&agent_path)
+        .arg("--socket")
+        .arg(&env.socket_path)
+        .arg("--config")
+        .arg(&env.config_path)
         .arg("browser-host")
         .env("COSMIC_BWARDEN_PROFILE", &env.profile)
         .stdin(Stdio::piped())

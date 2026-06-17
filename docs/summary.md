@@ -28,6 +28,7 @@ The project is structured as a Rust workspace with several specialized component
 
 ### Specialized Integrations
 
-For more details on specific system integrations, see:
+For more details on specific system integrations and configuration, see:
 - [SSH Agent Integration](./ssh-agent.md)
 - [Browser Extension Integration](./browser_integration.md)
+- [Configurable Paths and Isolation](./configurable_paths.md)

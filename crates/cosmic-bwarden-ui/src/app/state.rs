@@ -125,7 +125,10 @@ impl Default for CosmicBWardenApp {
 }
 
 #[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct AppFlags;
+pub struct AppFlags {
+    pub config: Option<std::path::PathBuf>,
+    pub socket: Option<std::path::PathBuf>,
+}
 
 impl cosmic::app::CosmicFlags for AppFlags {
     type SubCommand = String;

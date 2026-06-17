@@ -20,7 +20,7 @@ pub async fn run() -> anyhow::Result<()> {
             log::error!("Failed to read length prefix: {}", e);
             return Err(e.into());
         }
-        let len = u32::from_ne_bytes(len_buf) as usize;
+        let len = u32::from_le_bytes(len_buf) as usize;
 
         // Safety limit for browser messages (e.g. 1MB)
         if len > 1024 * 1024 {
@@ -46,7 +46,7 @@ pub async fn run() -> anyhow::Result<()> {
                 });
                 let response_json = serde_json::to_vec(&error_response)?;
                 let len = response_json.len() as u32;
-                let _ = stdout.write_all(&len.to_ne_bytes()).await;
+                let _ = stdout.write_all(&len.to_le_bytes()).await;
                 let _ = stdout.write_all(&response_json).await;
                 let _ = stdout.flush().await;
                 continue;
@@ -61,7 +61,7 @@ pub async fn run() -> anyhow::Result<()> {
                 // Send back to browser
                 let response_json = serde_json::to_vec(&response)?;
                 let len = response_json.len() as u32;
-                if let Err(e) = stdout.write_all(&len.to_ne_bytes()).await {
+                if let Err(e) = stdout.write_all(&len.to_le_bytes()).await {
                     log::error!("Failed to write length prefix to stdout: {}", e);
                     return Err(e.into());
                 }
@@ -82,7 +82,7 @@ pub async fn run() -> anyhow::Result<()> {
                 });
                 let response_json = serde_json::to_vec(&error_response)?;
                 let len = response_json.len() as u32;
-                let _ = stdout.write_all(&len.to_ne_bytes()).await;
+                let _ = stdout.write_all(&len.to_le_bytes()).await;
                 let _ = stdout.write_all(&response_json).await;
                 let _ = stdout.flush().await;
             }

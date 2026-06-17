@@ -3,8 +3,6 @@ use crate::common::{setup_env, register_user};
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action, Response};
 use tokio::time::{sleep, Duration};
-use std::process::Command;
-use std::path::PathBuf;
 
 #[tokio::test]
 async fn test_pinning_lifecycle() -> Result<()> {
@@ -16,7 +14,7 @@ async fn test_pinning_lifecycle() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     client.send(Action::Login {
         email: email.to_string(),
         password: password.to_string(),
@@ -88,15 +86,7 @@ async fn test_pinning_lifecycle() -> Result<()> {
         child.kill()?;
     }
     
-    let mut agent_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    agent_path.pop();
-    agent_path.pop();
-    agent_path.push("target/debug/cosmic-bwarden-agent");
-
-    env.agent_process = Some(Command::new(&agent_path)
-        .env("COSMIC_BWARDEN_PROFILE", &env.profile)
-        .env("RUST_LOG", "debug")
-        .spawn()?);
+    env.agent_process = Some(env.start_agent()?);
     sleep(Duration::from_millis(1000)).await;
 
     // Must login again

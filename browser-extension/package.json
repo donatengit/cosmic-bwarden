@@ -1,0 +1,16 @@
+{
+  "name": "cosmic-bwarden-extension",
+  "version": "1.0.0",
+  "description": "Firefox extension for Cosmic BWarden",
+  "private": true,
+  "scripts": {
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=firefox-mock",
+    "test:e2e-full": "playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=firefox-full"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.1",
+    "vitest": "^1.6.0",
+    "jsdom": "^24.1.0"
+  }
+}

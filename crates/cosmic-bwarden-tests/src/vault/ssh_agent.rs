@@ -15,7 +15,7 @@ async fn run_signing_test(key_type: &str, bits: Option<u32>, email: &str, passwo
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     client
         .send(Action::Login {
             email: email.to_string(),
@@ -53,7 +53,7 @@ async fn run_signing_test(key_type: &str, bits: Option<u32>, email: &str, passwo
         anyhow::bail!("Sync failed: {message}");
     }
 
-    let sock = cosmic_bwarden_core::dirs::ssh_agent_socket_file();
+    let sock = env.ssh_socket_path.clone();
     wait_for_socket(&sock, Duration::from_secs(5)).await?;
 
     // The agent must enforce 0600 on the socket and 0700 on its parent

@@ -1,26 +1,80 @@
+function showError(msg) {
+    const statusDiv = document.getElementById('status');
+    if (statusDiv) {
+        statusDiv.textContent = msg;
+        statusDiv.classList.remove('hidden');
+    }
+    const resultsDiv = document.getElementById('results');
+    if (resultsDiv && currentView === 'list') resultsDiv.innerHTML = '';
+}
+
+window.onerror = (msg, url, line) => {
+    showError(`JS Error: ${msg} at ${line}`);
+};
+
 const searchInput = document.getElementById('search');
 const resultsDiv = document.getElementById('results');
 const syncBtn = document.getElementById('sync-btn');
+const addBtn = document.getElementById('add-btn');
+const backBtn = document.getElementById('back-btn');
 const lockBtn = document.getElementById('lock-btn');
 const statusDiv = document.getElementById('status');
+
+const viewList = document.getElementById('view-list');
+const viewDetail = document.getElementById('view-detail');
+const viewEdit = document.getElementById('view-edit');
+
+const detailContent = document.getElementById('detail-content');
+const editForm = document.getElementById('edit-form');
+const editType = document.getElementById('edit-type');
+const editName = document.getElementById('edit-name');
+const editNotes = document.getElementById('edit-notes');
+const dynamicFields = document.getElementById('dynamic-fields');
+const cancelBtn = document.getElementById('cancel-btn');
+const editBtn = document.getElementById('edit-btn');
+const deleteBtn = document.getElementById('delete-btn');
+
+let currentEntry = null;
+let currentView = 'list';
+
+function showView(view) {
+    currentView = view;
+    viewList.classList.add('hidden');
+    viewDetail.classList.add('hidden');
+    viewEdit.classList.add('hidden');
+    backBtn.classList.add('hidden');
+    searchInput.classList.add('hidden');
+    addBtn.classList.add('hidden');
+    syncBtn.classList.add('hidden');
+
+    if (view === 'list') {
+        viewList.classList.remove('hidden');
+        searchInput.classList.remove('hidden');
+        addBtn.classList.remove('hidden');
+        syncBtn.classList.remove('hidden');
+        updateResults();
+    } else if (view === 'detail') {
+        viewDetail.classList.remove('hidden');
+        backBtn.classList.remove('hidden');
+    } else if (view === 'edit') {
+        viewEdit.classList.remove('hidden');
+        backBtn.classList.remove('hidden');
+    }
+}
 
 async function updateResults() {
     const query = searchInput.value;
     try {
-        // Check vault status first
         const configResp = await browser.runtime.sendMessage("GetConfig");
         if (configResp.Config) {
             if (configResp.Config.is_locked) {
-                showError("Vault is locked. Please unlock it in the Cosmic BWarden app.");
+                showError("Vault is locked.");
                 return;
             }
             if (configResp.Config.needs_login) {
-                showError("Not logged in. Please log in using the Cosmic BWarden app.");
+                showError("Not logged in.");
                 return;
             }
-        } else if (configResp.Error) {
-            showError(configResp.Error.message);
-            return;
         }
 
         const response = await browser.runtime.sendMessage({
@@ -38,7 +92,7 @@ async function updateResults() {
             showError(response.Error.message);
         }
     } catch (e) {
-        showError("Failed to communicate with agent. Is it running?");
+        showError("Failed to communicate with agent.");
     }
 }
 
@@ -52,79 +106,231 @@ function renderEntries(entries) {
     entries.forEach(entry => {
         const div = document.createElement('div');
         div.className = 'entry';
+        div.onclick = () => showDetail(entry.id);
         
         const info = document.createElement('div');
         info.className = 'entry-info';
         info.innerHTML = `
             <div class="entry-name">${escapeHtml(entry.name)}</div>
-            <div class="entry-user">${escapeHtml(entry.username || '')}</div>
+            <div class="entry-user">${escapeHtml(entry.username || entry.entry_type)}</div>
         `;
         
         const actions = document.createElement('div');
         actions.className = 'entry-actions';
         
-        const copyBtn = document.createElement('button');
-        copyBtn.textContent = 'Copy';
-        copyBtn.title = 'Copy Password';
-        copyBtn.onclick = (e) => copyPassword(entry.id, e.target);
-        
-        const totpBtn = document.createElement('button');
-        totpBtn.textContent = 'TOTP';
-        totpBtn.title = 'Copy TOTP Code';
-        totpBtn.onclick = (e) => copyTotp(entry.id, e.target);
-
         const fillBtn = document.createElement('button');
         fillBtn.textContent = 'Fill';
-        fillBtn.title = 'Fill Form';
-        fillBtn.onclick = () => fillEntry(entry.id);
+        fillBtn.onclick = (e) => {
+            e.stopPropagation();
+            fillEntry(entry.id);
+        };
         
-        actions.appendChild(copyBtn);
-        actions.appendChild(totpBtn);
         actions.appendChild(fillBtn);
-        
         div.appendChild(info);
         div.appendChild(actions);
         resultsDiv.appendChild(div);
     });
 }
 
-async function copyPassword(id, btn) {
+async function showDetail(id) {
     try {
         const response = await browser.runtime.sendMessage({
-            "GetPassword": { "id": id, "password": null }
+            "GetEntry": { "id": id, "password": null }
         });
-        if (response.Password) {
-            await navigator.clipboard.writeText(response.Password.password);
-            showFeedback(btn, 'Copied!');
+        if (response.Entry) {
+            currentEntry = response.Entry.entry;
+            renderDetail(currentEntry);
+            showView('detail');
+        }
+    } catch (e) {
+        showError("Failed to load entry details.");
+    }
+}
+
+function renderDetail(entry) {
+    let html = `
+        <div class="detail-item"><div class="detail-label">Name</div><div class="detail-value">${escapeHtml(entry.name)}</div></div>
+        <div class="detail-item"><div class="detail-label">Type</div><div class="detail-value">${entry.entry_type}</div></div>
+    `;
+
+    const data = entry.data;
+    if (data.Login) {
+        html += `<div class="detail-item"><div class="detail-label">Username</div><div class="detail-value">${escapeHtml(data.Login.username || '')}</div></div>`;
+        html += `<div class="detail-item"><div class="detail-label">Password</div><div class="detail-value">******** <button onclick="copyText('${data.Login.password || ''}')">Copy</button></div></div>`;
+        if (data.Login.totp) {
+            html += `<div class="detail-item"><div class="detail-label">TOTP</div><div class="detail-value"><button onclick="copyTotp('${entry.id}')">Copy TOTP</button></div></div>`;
+        }
+    } else if (data.Card) {
+        html += `<div class="detail-item"><div class="detail-label">Number</div><div class="detail-value">${escapeHtml(data.Card.number || '')} <button onclick="copyText('${data.Card.number || ''}')">Copy</button></div></div>`;
+        html += `<div class="detail-item"><div class="detail-label">Cardholder</div><div class="detail-value">${escapeHtml(data.Card.cardholder_name || '')}</div></div>`;
+        html += `<div class="detail-item"><div class="detail-label">Brand</div><div class="detail-value">${escapeHtml(data.Card.brand || '')}</div></div>`;
+        html += `<div class="detail-item"><div class="detail-label">Expiry</div><div class="detail-value">${data.Card.exp_month || ''}/${data.Card.exp_year || ''}</div></div>`;
+    } else if (data.Identity) {
+        html += `<div class="detail-item"><div class="detail-label">First Name</div><div class="detail-value">${escapeHtml(data.Identity.first_name || '')}</div></div>`;
+        html += `<div class="detail-item"><div class="detail-label">Last Name</div><div class="detail-value">${escapeHtml(data.Identity.last_name || '')}</div></div>`;
+        html += `<div class="detail-item"><div class="detail-label">Email</div><div class="detail-value">${escapeHtml(data.Identity.email || '')}</div></div>`;
+        html += `<div class="detail-item"><div class="detail-label">Phone</div><div class="detail-value">${escapeHtml(data.Identity.phone || '')}</div></div>`;
+        html += `<div class="detail-item"><div class="detail-label">Address</div><div class="detail-value">${escapeHtml(data.Identity.address1 || '')}, ${escapeHtml(data.Identity.city || '')}, ${escapeHtml(data.Identity.state || '')} ${escapeHtml(data.Identity.postal_code || '')}</div></div>`;
+    } else if (data.SshKey) {
+        html += `<div class="detail-item"><div class="detail-label">Public Key</div><div class="detail-value" style="font-size:0.7em; word-break:break-all;">${escapeHtml(data.SshKey.public_key || '')}</div></div>`;
+    }
+
+    if (entry.notes) {
+        html += `<div class="detail-item"><div class="detail-label">Notes</div><div class="detail-value">${escapeHtml(entry.notes)}</div></div>`;
+    }
+
+    detailContent.innerHTML = html;
+}
+
+window.copyText = async (text) => {
+    await navigator.clipboard.writeText(text);
+};
+
+window.copyTotp = async (id) => {
+    const response = await browser.runtime.sendMessage({ "GetTotp": { "id": id } });
+    if (response.Totp) {
+        await navigator.clipboard.writeText(response.Totp.code);
+    }
+};
+
+function showAddForm() {
+    currentEntry = null;
+    editForm.reset();
+    editType.disabled = false;
+    renderDynamicFields('Login');
+    showView('edit');
+}
+
+function showEditForm() {
+    if (!currentEntry) return;
+    editType.value = currentEntry.entry_type;
+    editType.disabled = true;
+    editName.value = currentEntry.name;
+    editNotes.value = currentEntry.notes || '';
+    renderDynamicFields(currentEntry.entry_type, currentEntry.data);
+    showView('edit');
+}
+
+editType.onchange = () => renderDynamicFields(editType.value);
+
+function renderDynamicFields(type, data = {}) {
+    dynamicFields.innerHTML = '';
+    const fields = getFieldsForType(type);
+    
+    fields.forEach(field => {
+        const group = document.createElement('div');
+        group.className = 'form-group';
+        const val = (data[type] && data[type][field.key]) || '';
+        group.innerHTML = `
+            <label for="f-${field.key}">${field.label}</label>
+            ${field.type === 'textarea' 
+                ? `<textarea id="f-${field.key}">${escapeHtml(val.toString())}</textarea>`
+                : `<input type="${field.type || 'text'}" id="f-${field.key}" value="${escapeHtml(val.toString())}">`
+            }
+        `;
+        dynamicFields.appendChild(group);
+    });
+}
+
+function getFieldsForType(type) {
+    switch (type) {
+        case 'Login': return [
+            { key: 'username', label: 'Username' },
+            { key: 'password', label: 'Password', type: 'password' },
+            { key: 'totp', label: 'TOTP Secret' }
+        ];
+        case 'Card': return [
+            { key: 'cardholder_name', label: 'Cardholder Name' },
+            { key: 'number', label: 'Number' },
+            { key: 'brand', label: 'Brand' },
+            { key: 'exp_month', label: 'Exp Month' },
+            { key: 'exp_year', label: 'Exp Year' },
+            { key: 'code', label: 'Security Code', type: 'password' }
+        ];
+        case 'Identity': return [
+            { key: 'first_name', label: 'First Name' },
+            { key: 'last_name', label: 'Last Name' },
+            { key: 'email', label: 'Email' },
+            { key: 'phone', label: 'Phone' },
+            { key: 'address1', label: 'Address 1' },
+            { key: 'city', label: 'City' },
+            { key: 'state', label: 'State' },
+            { key: 'postal_code', label: 'Postal Code' },
+            { key: 'country', label: 'Country' }
+        ];
+        case 'SshKey': return [
+            { key: 'public_key', label: 'Public Key' },
+            { key: 'private_key', label: 'Private Key', type: 'textarea' }
+        ];
+        default: return [];
+    }
+}
+
+editForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const type = editType.value;
+    const name = editName.value;
+    const notes = editNotes.value;
+    
+    const payload = {
+        name,
+        notes: notes || null,
+        fields: []
+    };
+
+    getFieldsForType(type).forEach(f => {
+        const input = document.getElementById(`f-${f.key}`);
+        payload[f.key] = input.value || null;
+    });
+
+    try {
+        let action;
+        if (currentEntry) {
+            const updatedEntry = JSON.parse(JSON.stringify(currentEntry));
+            updatedEntry.name = name;
+            updatedEntry.notes = notes || null;
+            const typeData = updatedEntry.data[type];
+            getFieldsForType(type).forEach(f => {
+                const input = document.getElementById(`f-${f.key}`);
+                typeData[f.key] = input.value || null;
+            });
+            action = { "UpdateEntry": { "entry": updatedEntry } };
+        } else {
+            if (type === 'Login') {
+                action = { "AddEntry": { ...payload, entry_type: 'Login' } };
+            } else if (type === 'SecureNote') {
+                action = { "AddSecureNote": payload };
+            } else if (type === 'Card') {
+                action = { "AddCard": payload };
+            } else if (type === 'Identity') {
+                action = { "AddIdentity": payload };
+            } else if (type === 'SshKey') {
+                action = { "AddSshKey": payload };
+            }
+        }
+
+        const response = await browser.runtime.sendMessage(action);
+        if (response === "Ack" || response.Ack) {
+            showView('list');
         } else if (response.Error) {
             showError(response.Error.message);
         }
     } catch (e) {
-        showError("Failed to copy password.");
+        showError("Failed to save entry.");
     }
-}
+};
 
-async function copyTotp(id, btn) {
+deleteBtn.onclick = async () => {
+    if (!currentEntry || !confirm("Delete this entry?")) return;
     try {
-        const response = await browser.runtime.sendMessage({
-            "GetTotp": { "id": id }
-        });
-        if (response.Totp) {
-            await navigator.clipboard.writeText(response.Totp.code);
-            showFeedback(btn, 'Copied!');
-        } else if (response.Error) {
-            showError(response.Error.message);
+        const response = await browser.runtime.sendMessage({ "DeleteEntry": { "id": currentEntry.id } });
+        if (response === "Ack" || response.Ack) {
+            showView('list');
         }
     } catch (e) {
-        showError("Failed to copy TOTP.");
+        showError("Failed to delete entry.");
     }
-}
-
-function showFeedback(btn, text) {
-    const originalText = btn.textContent;
-    btn.textContent = text;
-    setTimeout(() => btn.textContent = originalText, 1000);
-}
+};
 
 async function fillEntry(id) {
     try {
@@ -139,22 +345,15 @@ async function fillEntry(id) {
                     entry: response.Entry.entry
                 });
             }
-        } else if (response.Error) {
-            showError(response.Error.message);
         }
     } catch (e) {
         showError("Failed to fill form.");
     }
 }
 
-function showError(msg) {
-    statusDiv.textContent = msg;
-    statusDiv.classList.remove('hidden');
-    resultsDiv.innerHTML = '';
-}
-
 function escapeHtml(unsafe) {
-    return unsafe
+    if (!unsafe) return '';
+    return unsafe.toString()
          .replace(/&/g, "&amp;")
          .replace(/</g, "&lt;")
          .replace(/>/g, "&gt;")
@@ -163,16 +362,18 @@ function escapeHtml(unsafe) {
 }
 
 searchInput.addEventListener('input', updateResults);
-
 syncBtn.onclick = async () => {
     await browser.runtime.sendMessage("Sync");
     updateResults();
 };
-
+addBtn.onclick = showAddForm;
+backBtn.onclick = () => showView('list');
+cancelBtn.onclick = () => showView(currentEntry ? 'detail' : 'list');
+editBtn.onclick = showEditForm;
 lockBtn.onclick = async () => {
     await browser.runtime.sendMessage("Lock");
-    updateResults();
+    showView('list');
 };
 
 // Initial load
-updateResults();
+showView('list');

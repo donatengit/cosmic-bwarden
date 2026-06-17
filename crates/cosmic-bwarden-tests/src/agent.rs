@@ -3,8 +3,6 @@ use crate::common::{setup_env, register_user};
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action, Response};
 use tokio::time::{sleep, Duration};
-use std::path::PathBuf;
-use std::process::Command;
 
 #[tokio::test]
 async fn test_agent_login_lifecycle() -> Result<()> {
@@ -16,7 +14,7 @@ async fn test_agent_login_lifecycle() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
 
     // 1. Login
     let res = client.send(Action::Login {
@@ -64,7 +62,7 @@ async fn test_remember_email() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
 
     client.send(Action::Login {
         email: email.to_string(),
@@ -83,20 +81,12 @@ async fn test_remember_email() -> Result<()> {
     }
     
     // Restart the agent
-    let mut agent_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    agent_path.pop();
-    agent_path.pop();
-    agent_path.push("target/debug/cosmic-bwarden-agent");
-
-    let agent_process = Command::new(&agent_path)
-        .env("COSMIC_BWARDEN_PROFILE", &env.profile)
-        .env("RUST_LOG", "debug")
-        .spawn()?;
+    let agent_process = env.start_agent()?;
 
     sleep(Duration::from_millis(1000)).await;
     env.agent_process = Some(agent_process);
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     let res = client.send(Action::GetConfig).await?;
     if let Response::Config { config, .. } = res {
         assert_eq!(config.email, Some(email.to_string()));
@@ -117,7 +107,7 @@ async fn test_unlock_after_restart_is_not_routed_back_to_login() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     client.send(Action::Login {
         email: email.to_string(),
         password: password.to_string(),
@@ -136,20 +126,12 @@ async fn test_unlock_after_restart_is_not_routed_back_to_login() -> Result<()> {
         proc.kill()?;
     }
 
-    let mut agent_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    agent_path.pop();
-    agent_path.pop();
-    agent_path.push("target/debug/cosmic-bwarden-agent");
-
-    let agent_process = Command::new(&agent_path)
-        .env("COSMIC_BWARDEN_PROFILE", &env.profile)
-        .env("RUST_LOG", "debug")
-        .spawn()?;
+    let agent_process = env.start_agent()?;
 
     sleep(Duration::from_millis(1000)).await;
     env.agent_process = Some(agent_process);
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
 
     // Fresh process: locked, but the account/vault data is on disk.
     let res = client.send(Action::GetConfig).await?;

@@ -13,7 +13,7 @@ async fn test_note_crud_lifecycle() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     client
         .send(Action::Login {
             email: email.to_string(),
@@ -137,7 +137,7 @@ async fn test_login_crud_lifecycle() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     client
         .send(Action::Login {
             email: email.to_string(),
@@ -257,7 +257,7 @@ async fn test_card_crud_lifecycle() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     client
         .send(Action::Login {
             email: email.to_string(),
@@ -345,7 +345,7 @@ async fn test_identity_crud_lifecycle() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     client
         .send(Action::Login {
             email: email.to_string(),

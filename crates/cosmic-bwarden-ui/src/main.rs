@@ -5,11 +5,25 @@ mod view;
 
 use cosmic::app::{Application, Task};
 use cosmic::iced::{window, Subscription};
+use clap::Parser;
+use std::path::PathBuf;
 
 use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
 use cosmic_bwarden_core::agent_client::AgentClient;
-use crate::app::{CosmicBWardenApp, APP_ID};
+use crate::app::{CosmicBWardenApp, APP_ID, AppFlags};
 use crate::message::{Message, View};
+
+#[derive(Parser, Debug)]
+#[command(author, version, about = "cosmic-bwarden: Secure COSMIC Bitwarden client")]
+struct Cli {
+    /// Path to the configuration file. Overrides default and environment.
+    #[arg(long, env = "COSMIC_BWARDEN_CONFIG")]
+    config: Option<PathBuf>,
+
+    /// Path to the Unix socket for IPC. Overrides config, default and environment.
+    #[arg(long, env = "COSMIC_BWARDEN_SOCKET")]
+    socket: Option<PathBuf>,
+}
 
 extern crate tracing;
 
@@ -85,8 +99,25 @@ impl Application for CosmicBWardenApp {
         &mut self.core
     }
 
-    fn init(core: cosmic::app::Core, _flags: Self::Flags) -> (Self, Task<Self::Message>) {
+    fn init(core: cosmic::app::Core, flags: Self::Flags) -> (Self, Task<Self::Message>) {
         tracing::info!("Initializing CosmicBWardenApp");
+        
+        if let Some(config_path) = &flags.config {
+            cosmic_bwarden_core::dirs::set_config_override(config_path.clone());
+        }
+        if let Some(socket_path) = &flags.socket {
+            cosmic_bwarden_core::dirs::set_socket_override(socket_path.clone());
+        }
+
+        // Load configuration to check for additional overrides if flags didn't set socket
+        if flags.socket.is_none() && std::env::var("COSMIC_BWARDEN_SOCKET").is_err() {
+            if let Ok(config) = cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
+                if let Some(path) = config.socket_path {
+                    cosmic_bwarden_core::dirs::set_socket_override(std::path::PathBuf::from(path));
+                }
+            }
+        }
+
         let mut app = CosmicBWardenApp::default();
         app.core = core;
 
@@ -283,27 +314,34 @@ impl Application for CosmicBWardenApp {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_logs();
+
+    let args = Cli::try_parse().unwrap_or_else(|_| Cli { config: None, socket: None });
+    let flags = AppFlags {
+        config: args.config,
+        socket: args.socket,
+    };
+
     let mode = detect_run_mode();
     tracing::info!(?mode, "Starting CosmicBWarden UI");
     localize::localize();
 
     match mode {
-        RunMode::Applet => run_applet().map_err(|e| e.into()),
-        RunMode::Application => run_application().map_err(|e| e.into()),
+        RunMode::Applet => run_applet(flags).map_err(|e| e.into()),
+        RunMode::Application => run_application(flags).map_err(|e| e.into()),
     }
 }
 
-fn run_applet() -> cosmic::iced::Result {
+fn run_applet(flags: AppFlags) -> cosmic::iced::Result {
     tracing::info!("Running in Applet mode");
-    cosmic::applet::run::<CosmicBWardenApp>(crate::app::AppFlags::default())
+    cosmic::applet::run::<CosmicBWardenApp>(flags)
 }
 
-fn run_application() -> cosmic::iced::Result {
+fn run_application(flags: AppFlags) -> cosmic::iced::Result {
     tracing::info!("Running in Application mode");
     let settings = cosmic::app::Settings::default()
         .no_main_window(false)
         .exit_on_close(true)
         .default_mmap_threshold(Some(131072));
 
-    cosmic::app::run_single_instance::<CosmicBWardenApp>(settings, crate::app::AppFlags::default())
+    cosmic::app::run_single_instance::<CosmicBWardenApp>(settings, flags)
 }

@@ -13,7 +13,7 @@ async fn test_ssh_key_crud_lifecycle() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     client
         .send(Action::Login {
             email: email.to_string(),

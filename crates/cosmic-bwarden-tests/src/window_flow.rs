@@ -13,7 +13,7 @@ async fn test_detached_auth_flow_simulation() -> Result<()> {
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     
     // 1. Simulate applet start (Agent is locked)
     let res = client.send(Action::GetConfig).await?;

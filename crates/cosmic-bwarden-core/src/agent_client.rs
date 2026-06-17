@@ -14,6 +14,12 @@ impl AgentClient {
         }
     }
 
+    pub fn new_with_socket(path: std::path::PathBuf) -> Self {
+        Self {
+            socket_path: path,
+        }
+    }
+
     pub async fn send(&self, action: Action) -> Result<Response> {
         let mut socket = UnixStream::connect(&self.socket_path).await.map_err(|e| Error::Other(format!("failed to connect to agent: {}", e)))?;
         

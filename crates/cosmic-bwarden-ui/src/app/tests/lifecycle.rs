@@ -4,7 +4,6 @@ use crate::message::Message;
 use crate::message::View;
 use cosmic::Application;
 use cosmic::iced::window;
-use cosmic::widget;
 use cosmic_bwarden_core::config::CosmicBWardenConfig;
 use cosmic_bwarden_core::db::{Entry, EntryData};
 use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};

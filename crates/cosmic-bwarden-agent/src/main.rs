@@ -17,20 +17,70 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
 use tokio::sync::Mutex;
+use clap::Parser;
+use std::path::PathBuf;
+
+#[derive(Parser)]
+#[command(author, version, about = "cosmic-bwarden-agent: Secure background agent")]
+struct Cli {
+    /// Path to the configuration file. Overrides default and environment.
+    #[arg(long, env = "COSMIC_BWARDEN_CONFIG")]
+    config: Option<PathBuf>,
+
+    /// Path to the Unix socket for IPC. Overrides config, default and environment.
+    #[arg(long, env = "COSMIC_BWARDEN_SOCKET")]
+    socket: Option<PathBuf>,
+
+    /// Path to the SSH agent Unix socket. Overrides config, default and environment.
+    #[arg(long, env = "COSMIC_BWARDEN_SSH_SOCKET")]
+    ssh_socket: Option<PathBuf>,
+
+    #[arg(hide = true)]
+    browser_host: Option<String>,
+}
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 && args[1] == "browser-host" {
-        #[cfg(feature = "browser-host")]
-        {
-            return browser_host::run().await;
+    let args = Cli::parse();
+    
+    // Apply CLI overrides to dirs early
+    if let Some(config_path) = &args.config {
+        cosmic_bwarden_core::dirs::set_config_override(config_path.clone());
+    }
+    if let Some(socket_path) = &args.socket {
+        cosmic_bwarden_core::dirs::set_socket_override(socket_path.clone());
+    }
+    if let Some(ssh_socket_path) = &args.ssh_socket {
+        cosmic_bwarden_core::dirs::set_ssh_socket_override(ssh_socket_path.clone());
+    }
+
+    // Load configuration to check for additional overrides
+    let config = cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy().unwrap_or_default();
+    
+    // Config overrides apply ONLY if CLI/Env was not set
+    if args.socket.is_none() && std::env::var("COSMIC_BWARDEN_SOCKET").is_err() {
+        if let Some(path) = config.socket_path {
+            cosmic_bwarden_core::dirs::set_socket_override(PathBuf::from(path));
         }
-        #[cfg(not(feature = "browser-host"))]
-        {
-            anyhow::bail!("browser-host feature is not enabled in this build");
+    }
+    if args.ssh_socket.is_none() && std::env::var("COSMIC_BWARDEN_SSH_SOCKET").is_err() {
+        if let Some(path) = config.ssh_agent_socket_path {
+            cosmic_bwarden_core::dirs::set_ssh_socket_override(PathBuf::from(path));
+        }
+    }
+
+    if let Some(bh) = args.browser_host {
+        if bh == "browser-host" {
+            #[cfg(feature = "browser-host")]
+            {
+                return browser_host::run().await;
+            }
+            #[cfg(not(feature = "browser-host"))]
+            {
+                anyhow::bail!("browser-host feature is not enabled in this build");
+            }
         }
     }
 

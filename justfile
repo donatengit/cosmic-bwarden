@@ -152,9 +152,33 @@ run: build
 
 # Register the browser native messaging host
 register-browser-host: build
-    python3 tools/register_browser_host.py
+    python3 tests/browser-extension/register_host.py
 
 # Pack the browser extension for distribution
 pack-extension:
     mkdir -p dist
     cd browser-extension && zip -r ../dist/cosmic-bwarden-extension.zip .
+
+# Setup extension testing environment (installs npm dependencies)
+test-extension-setup:
+    cd browser-extension && npm install
+
+# Run extension unit/logic tests
+test-extension-unit:
+    cd browser-extension && npm run test:unit
+
+# Run extension E2E tests (Playwright)
+test-extension-e2e:
+    cd browser-extension && npx playwright install firefox
+    cd browser-extension && npx playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=firefox-mock
+
+# Run full extension E2E tests with real agent and vaultwarden
+test-extension-e2e-full: build test-extension-setup
+    @echo "--- Extension Full E2E (Real Agent & Vaultwarden) ---"
+    bash tests/browser-extension/run-e2e.sh
+
+# Debug extension E2E tests (Playwright with UI)
+test-extension-e2e-debug: build test-extension-setup
+    cd browser-extension && npx playwright install firefox
+    bash tests/browser-extension/playwright/setup_native_host.sh
+    cd browser-extension && npx playwright test --config=../tests/browser-extension/playwright/playwright.config.js --ui

@@ -2,6 +2,7 @@ use anyhow::Result;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action, Response};
 use std::env;
+use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use testcontainers::{
@@ -13,11 +14,6 @@ use tokio::time::{sleep, Duration};
 
 pub struct TestEnv {
     // Ensure testcontainers uses Podman if available
-    // This is set once per process
-    // NOTE: Podman socket path may vary; adjust as needed
-    // Setting env var before any container creation
-    // Allows CI environments without Docker daemon
-    // to run tests using Podman.
     pub _container: testcontainers::ContainerAsync<GenericImage>,
     pub agent_process: Option<std::process::Child>,
     pub vault_url: String,
@@ -25,13 +21,58 @@ pub struct TestEnv {
     pub _log_file: tempfile::NamedTempFile,
     pub log_path: PathBuf,
     pub _temp_dir: tempfile::TempDir,
+    pub socket_path: PathBuf,
+    pub ssh_socket_path: PathBuf,
+    pub config_path: PathBuf,
+    pub agent_path: PathBuf,
+    pub config_home: PathBuf,
+    pub cache_home: PathBuf,
+    pub data_home: PathBuf,
+    pub runtime_home: PathBuf,
 }
 
-impl Drop for TestEnv {
-    fn drop(&mut self) {
-        if let Some(mut child) = self.agent_process.take() {
-            let _ = child.kill();
-        }
+impl TestEnv {
+    pub fn start_agent(&self) -> Result<std::process::Child> {
+        let log_file = std::fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(&self.log_path)?;
+
+        Ok(Command::new(&self.agent_path)
+            .arg("--socket")
+            .arg(&self.socket_path)
+            .arg("--ssh-socket")
+            .arg(&self.ssh_socket_path)
+            .arg("--config")
+            .arg(&self.config_path)
+            .env("COSMIC_BWARDEN_PROFILE", &self.profile)
+            .env("XDG_CONFIG_HOME", &self.config_home)
+            .env("XDG_CACHE_HOME", &self.cache_home)
+            .env("XDG_DATA_HOME", &self.data_home)
+            .env("XDG_RUNTIME_DIR", &self.runtime_home)
+            .env("RUST_LOG", "debug")
+            .stdout(log_file.try_clone()?)
+            .stderr(log_file.try_clone()?)
+            .spawn()?)
+    }
+
+    pub fn cli_cmd(&self) -> Command {
+        let mut cli_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        cli_path.pop();
+        cli_path.pop();
+        cli_path.push("target/debug/cosmic-bwarden-cli");
+
+        let mut cmd = Command::new(cli_path);
+        cmd.arg("--socket")
+            .arg(&self.socket_path)
+            .arg("--config")
+            .arg(&self.config_path)
+            .env("COSMIC_BWARDEN_PROFILE", &self.profile)
+            .env("XDG_CONFIG_HOME", &self.config_home)
+            .env("XDG_CACHE_HOME", &self.cache_home)
+            .env("XDG_DATA_HOME", &self.data_home)
+            .env("XDG_RUNTIME_DIR", &self.runtime_home);
+        cmd
     }
 }
 
@@ -62,15 +103,12 @@ pub async fn setup_env() -> Result<TestEnv> {
     let config_home = temp_path.join("config");
     let cache_home = temp_path.join("cache");
     let data_home = temp_path.join("data");
+    let runtime_home = temp_path.join("runtime");
 
-    std::fs::create_dir_all(&config_home)?;
-    std::fs::create_dir_all(&cache_home)?;
-    std::fs::create_dir_all(&data_home)?;
-
-    // Set for current process too
-    std::env::set_var("XDG_CONFIG_HOME", &config_home);
-    std::env::set_var("XDG_CACHE_HOME", &cache_home);
-    std::env::set_var("XDG_DATA_HOME", &data_home);
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&config_home)?;
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&cache_home)?;
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&data_home)?;
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&runtime_home)?;
 
     let mut agent_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     agent_path.pop();
@@ -81,30 +119,37 @@ pub async fn setup_env() -> Result<TestEnv> {
     log_path.pop();
     log_path.pop();
     log_path.push("agent_test.log");
-    let log_file = std::fs::File::create(&log_path)?;
+    let _log_file_handle = std::fs::File::create(&log_path)?;
 
-    let agent_process = Command::new(&agent_path)
-        .env("COSMIC_BWARDEN_PROFILE", &profile)
-        .env("XDG_CONFIG_HOME", &config_home)
-        .env("XDG_CACHE_HOME", &cache_home)
-        .env("XDG_DATA_HOME", &data_home)
-        .env("RUST_LOG", "debug")
-        .stdout(log_file.try_clone()?)
-        .stderr(log_file.try_clone()?)
-        .spawn()?;
+    let socket_path = runtime_home.join("socket");
+    let ssh_socket_path = runtime_home.join("ssh-agent-socket");
+    let config_path = config_home.join("config.json");
 
-    // Wait for agent to start and create socket
-    sleep(Duration::from_millis(1000)).await;
-
-    Ok(TestEnv {
+    let mut env = TestEnv {
         _container: container,
-        agent_process: Some(agent_process),
+        agent_process: None,
         vault_url,
         profile,
         _log_file: tempfile::NamedTempFile::new()?, // unused but keep for compat
         log_path,
         _temp_dir: temp_dir,
-    })
+        socket_path,
+        ssh_socket_path,
+        config_path,
+        agent_path,
+        config_home,
+        cache_home,
+        data_home,
+        runtime_home,
+    };
+
+    let agent_process = env.start_agent()?;
+    env.agent_process = Some(agent_process);
+
+    // Wait for agent to start and create socket
+    sleep(Duration::from_millis(1000)).await;
+
+    Ok(env)
 }
 
 pub async fn register_user(url: &str, email: &str, password: &str) -> Result<()> {

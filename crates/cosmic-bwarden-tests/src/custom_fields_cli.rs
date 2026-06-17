@@ -2,20 +2,17 @@ use crate::common::{register_user, setup_env};
 use anyhow::Result;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action, Response};
-use std::path::PathBuf;
-use std::process::Command;
 
 #[tokio::test]
 async fn test_custom_fields_cli() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
 
     let email = "fields@example.com";
     let password = "fieldpassword123";
 
     register_user(&env.vault_url, email, password).await?;
 
-    let client = AgentClient::new();
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
     client
         .send(Action::Login {
             email: email.to_string(),
@@ -29,14 +26,8 @@ async fn test_custom_fields_cli() -> Result<()> {
         })
         .await?;
 
-    let mut cli_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    cli_path.pop();
-    cli_path.pop();
-    cli_path.push("target/debug/cosmic-bwarden-cli");
-
     // 1. Add entry with custom fields via CLI
-    let output = Command::new(&cli_path)
-        .env("COSMIC_BWARDEN_PROFILE", &env.profile)
+    let output = env.cli_cmd()
         .arg("add")
         .arg("FieldEntry")
         .arg("username=user1")
@@ -89,8 +80,7 @@ async fn test_custom_fields_cli() -> Result<()> {
     assert_eq!(f2.ty, Some(cosmic_bwarden_core::api::FieldType::Hidden));
 
     // 3. Test CLI output masking
-    let output = Command::new(&cli_path)
-        .env("COSMIC_BWARDEN_PROFILE", &env.profile)
+    let output = env.cli_cmd()
         .arg("get")
         .arg("FieldEntry")
         .output()?;
@@ -101,8 +91,7 @@ async fn test_custom_fields_cli() -> Result<()> {
     assert!(!stdout.contains("SecretValue"));
 
     // 4. Edit field via CLI
-    let output = Command::new(&cli_path)
-        .env("COSMIC_BWARDEN_PROFILE", &env.profile)
+    let output = env.cli_cmd()
         .arg("edit")
         .arg("FieldEntry")
         .arg("--field")
