@@ -1,9 +1,9 @@
-use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
-use cosmic_bwarden_core::db::Entry;
-use cosmic_bwarden_core::config::CosmicBWardenConfig;
 use cosmic::iced::window;
 use cosmic::widget;
 use cosmic::widget::ToastId;
+use cosmic_bwarden_core::config::CosmicBWardenConfig;
+use cosmic_bwarden_core::db::Entry;
+use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum View {
@@ -28,6 +28,8 @@ pub enum Message {
     RefreshStateInternal,
     AppletIconClicked(cosmic::iced::Vector, cosmic::iced::Rectangle),
     Exit,
+    LockAndQuit,
+    LogoutAndQuit,
     // Setup actions
     EmailChanged(String),
     PasswordChanged(String),
@@ -91,6 +93,9 @@ pub enum Message {
     AppletRepromptPasswordChanged(String),
     AppletRepromptSubmitted,
     AppletRepromptCancelled,
+
+    // Protocol version check
+    ProtocolVersionCheck(Result<bool, String>),
 
     // Applet popup: password reveal toggles
     AppletToggleUnlockPasswordReveal,

@@ -1,10 +1,34 @@
 # cosmic-bwarden: Agent Guidelines
 
+## Key Documents
+
+Start here, then go deeper as needed:
+
+| Document | Purpose |
+|---|---|
+| [`CONTEXT.md`](CONTEXT.md) | Architecture, security invariants, key workflows, "game-changing" features — the canonical project map |
+| [`docs/summary.md`](docs/summary.md) | User-facing project overview and feature list |
+| [`docs/build_and_run.md`](docs/build_and_run.md) | Prerequisites, build commands, run modes |
+| [`docs/testing.md`](docs/testing.md) | Complexity-ordered testing strategy and what each test suite covers |
+| [`docs/ssh-agent.md`](docs/ssh-agent.md) | SSH agent protocol implementation and socket paths |
+| [`docs/browser_integration.md`](docs/browser_integration.md) | Native browser extension architecture and IPC protocol |
+| [`docs/configurable_paths.md`](docs/configurable_paths.md) | Socket, config, and SSH path overrides; multi-instance isolation |
+| [`docs/cosmic_integration.md`](docs/cosmic_integration.md) | COSMIC panel applet registration and metadata |
+| [`docs/implementation.md`](docs/implementation.md) | Crypto, vault sync, and data model internals |
+
 ## Golden Rules
 - **Never ask for confirmation.** Apply fixes, run validation, iterate until passing. Report only on final outcome or exhausted options.
 - **Never circle back to a failed approach.** If a fix didn't work, note why and move forward.
 - **One responsibility per file.** If a file exceeds ~250 lines, it needs splitting.
 - **cargo check before cargo test.** Don't run expensive tests against code that won't compile.
+
+## Versioning
+
+- **Build version**: `YYYY.MM-N-<git_id>` generated in `core/build.rs`. Reused across crates via a 30-second `target/build_version.txt` cache.
+- **Protocol version**: Currently identical to build version. `Response::Version` always includes both `version` and `protocol_version` fields.
+- **Compatibility check**: Pure function `check_protocol_compatibility()` in the CLI crate compares local version against agent's `protocol_version`. Unit-tested for both match and mismatch scenarios.
+- **Adding a version subcommand**: Always add `Commands::Version` to the CLI's enum, route it to the auth handler, and include the `check_protocol_compatibility()` call. Update `preprocess_args` if the new command name conflicts with type keywords.
+- **Breaking protocol changes**: Bump the `protocol_version` in `Response::Version` by updating `check_protocol_compatibility` expectations if the protocol surface changes incompatibly.
 
 ## Workspace Structure
 

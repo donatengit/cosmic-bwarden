@@ -43,6 +43,8 @@ install: build
     sed "s|@BINDIR@|{{bin_dir}}|g" crates/cosmic-bwarden-agent/res/cosmic-bwarden-agent.service > /tmp/cosmic-bwarden-agent.service
     install -Dm644 /tmp/cosmic-bwarden-agent.service {{systemd_user_dir}}/cosmic-bwarden-agent.service
     rm /tmp/cosmic-bwarden-agent.service
+    echo "Reloading systemd user daemon..."
+    systemctl --user daemon-reload
 
 # Perform a completely fresh installation (removes old files first)
 clean-install: uninstall build
@@ -64,6 +66,12 @@ clean-install: uninstall build
     sed "s|@BINDIR@|{{bin_dir}}|g" crates/cosmic-bwarden-agent/res/cosmic-bwarden-agent.service > /tmp/cosmic-bwarden-agent.service
     sudo install -Dm644 /tmp/cosmic-bwarden-agent.service {{systemd_user_dir}}/cosmic-bwarden-agent.service
     rm /tmp/cosmic-bwarden-agent.service
+    echo "Reloading systemd user daemon..."
+    if [ -n "$SUDO_USER" ]; then \
+        sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$(id -u $SUDO_USER)" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u $SUDO_USER)/bus" systemctl --user daemon-reload; \
+    else \
+        systemctl --user daemon-reload; \
+    fi
     echo "Done. Please run 'just restart-panel' and 'just enable-agent'."
 
 # Install metadata and desktop files for the current user (only if not installing system-wide)

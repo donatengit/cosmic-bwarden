@@ -1,4 +1,5 @@
 app-title = CosmicBWarden
+protocol-version-mismatch = Protocol version mismatch, please restart agent and/or this app
 login = Login
 unlock = Unlock
 vault = Vault
@@ -26,8 +27,11 @@ select-entry = Select an entry
 error = Error
 open-vault-window = Open Vault
 quit = Quit
+lock-and-quit = Lock and Quit
+logout-and-quit = Logout and Quit
 copied-to-clipboard = Copied to clipboard
 no-results = No results
 master-password = Master Password
 public-key-label = Public key
 locked-need-password = Locked: need password
+not-configured = Not logged in — open vault to sign in.

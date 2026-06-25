@@ -1,11 +1,11 @@
-pub mod lifecycle;
-pub mod auth;
-pub mod vault;
 pub mod applet;
+pub mod auth;
+pub mod lifecycle;
+pub mod vault;
 
-use cosmic::app::Task;
-use crate::message::Message;
 use crate::app::state::CosmicBWardenApp;
+use crate::message::Message;
+use cosmic::app::Task;
 
 impl CosmicBWardenApp {
     pub fn update_app(&mut self, message: Message) -> Task<Message> {
@@ -27,29 +27,73 @@ impl CosmicBWardenApp {
 
         // Handle remaining messages
         match message {
-            Message::EmailChanged(_) | Message::PasswordChanged(_) | Message::ServerChanged(_) |
-            Message::RememberChanged(_) | Message::VerificationCodeChanged(_) | Message::LoginSubmitted |
-            Message::UnlockPasswordChanged(_) | Message::UnlockSubmitted | Message::AuthResult(_) |
-            Message::LockClicked | Message::LockResult | Message::LogoutClicked | Message::LogoutResult |
-            Message::SearchChanged(_) | Message::SearchSubmitted(_) | Message::FilterTypeChanged(_) |
-            Message::SelectEntry(_) | Message::EntryReceived(_) | Message::AddEntryRequested |
-            Message::EditEntry | Message::CancelEdit | Message::SaveEdit | Message::SaveEditResult(_) |
-            Message::EditFieldChanged(_, _) | Message::EditNameChanged(_) | Message::NotesAction(_) |
-            Message::DeleteEntry(_) | Message::ConfirmDelete | Message::CancelDelete | Message::DeleteEntryResult(_) |
-            Message::EntriesReceived(_, _) | Message::TopEntriesReceived(_) | Message::SyncClicked | Message::SyncResult(_) |
-            Message::TogglePin(_) | Message::ToggleSearchPinned | Message::RepromptPasswordChanged(_) |
-            Message::SubmitReprompt | Message::CancelReprompt | Message::NewEntryTypeChanged(_) |
-            Message::ConfigReceived(_) | Message::EventReceived(_) |
-            Message::WindowClosed(_) | Message::RefreshStateInternal |
-            Message::AppletIconClicked(_, _) |
-            Message::Surface(_) | Message::Exit |
-            Message::OpenVaultRequested | Message::Token(_) |
-            Message::AppletUnlockPasswordChanged(_) | Message::AppletUnlockSubmitted | Message::AppletUnlockResult(_) |
-            Message::AppletSearchChanged(_) | Message::AppletToggleFavouritesFilter | Message::AppletSearchResultsReceived(_, _) |
-            Message::AppletCopyPrimary(_) | Message::AppletCopySecret(_) | Message::AppletSecretReceived(_) |
-            Message::AppletRepromptPasswordChanged(_) | Message::AppletRepromptSubmitted | Message::AppletRepromptCancelled |
-            Message::AppletToggleUnlockPasswordReveal | Message::AppletToggleRepromptPasswordReveal |
-            Message::CloseToast(_) => Task::none(),
+            Message::EmailChanged(_)
+            | Message::PasswordChanged(_)
+            | Message::ServerChanged(_)
+            | Message::RememberChanged(_)
+            | Message::VerificationCodeChanged(_)
+            | Message::LoginSubmitted
+            | Message::UnlockPasswordChanged(_)
+            | Message::UnlockSubmitted
+            | Message::AuthResult(_)
+            | Message::LockClicked
+            | Message::LockResult
+            | Message::LogoutClicked
+            | Message::LogoutResult
+            | Message::SearchChanged(_)
+            | Message::SearchSubmitted(_)
+            | Message::FilterTypeChanged(_)
+            | Message::SelectEntry(_)
+            | Message::EntryReceived(_)
+            | Message::AddEntryRequested
+            | Message::EditEntry
+            | Message::CancelEdit
+            | Message::SaveEdit
+            | Message::SaveEditResult(_)
+            | Message::EditFieldChanged(_, _)
+            | Message::EditNameChanged(_)
+            | Message::NotesAction(_)
+            | Message::DeleteEntry(_)
+            | Message::ConfirmDelete
+            | Message::CancelDelete
+            | Message::DeleteEntryResult(_)
+            | Message::EntriesReceived(_, _)
+            | Message::TopEntriesReceived(_)
+            | Message::SyncClicked
+            | Message::SyncResult(_)
+            | Message::TogglePin(_)
+            | Message::ToggleSearchPinned
+            | Message::RepromptPasswordChanged(_)
+            | Message::SubmitReprompt
+            | Message::CancelReprompt
+            | Message::NewEntryTypeChanged(_)
+            | Message::ConfigReceived(_)
+            | Message::EventReceived(_)
+            | Message::WindowClosed(_)
+            | Message::RefreshStateInternal
+            | Message::AppletIconClicked(_, _)
+            | Message::Surface(_)
+            | Message::Exit
+            | Message::LockAndQuit
+            | Message::LogoutAndQuit
+            | Message::OpenVaultRequested
+            | Message::Token(_)
+            | Message::AppletUnlockPasswordChanged(_)
+            | Message::AppletUnlockSubmitted
+            | Message::AppletUnlockResult(_)
+            | Message::AppletSearchChanged(_)
+            | Message::AppletToggleFavouritesFilter
+            | Message::AppletSearchResultsReceived(_, _)
+            | Message::AppletCopyPrimary(_)
+            | Message::AppletCopySecret(_)
+            | Message::AppletSecretReceived(_)
+            | Message::AppletRepromptPasswordChanged(_)
+            | Message::AppletRepromptSubmitted
+            | Message::AppletRepromptCancelled
+            | Message::AppletToggleUnlockPasswordReveal
+            | Message::AppletToggleRepromptPasswordReveal
+            | Message::CloseToast(_)
+            | Message::ProtocolVersionCheck(_) => Task::none(),
 
             Message::CopyToClipboard(text) => {
                 cosmic::iced::clipboard::write(text).map(|_: ()| cosmic::Action::None)

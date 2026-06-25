@@ -22,6 +22,14 @@ The project follows a modular Rust-based architecture split into specialized cra
 - **`cosmic-bwarden-tests`**: End-to-end integration tests using Docker.
     - `vault/ssh_agent.rs` / `vault/ssh_agent_lifecycle.rs`: Real-protocol SSH agent coverage — a real `ssh`/`ssh-add` client signs/authenticates against a containerized `sshd` via the agent's `ssh-agent-socket` (Ed25519 + RSA), including lock/unlock and logout/login state-transition checks. Helpers in `ssh_test_utils.rs`.
 
+## Versioning & Protocol Compatibility
+
+- **Application version**: Generated at build time in `cosmic-bwarden-core/build.rs` with format `YYYY.MM-N-<short git id>` where N is the number of seconds elapsed in the current month.
+- **Unified builds**: A 30-second cache window via `target/build_version.txt` ensures all crates in a single build share the same version.
+- **IPC protocol**: `Response::Version { version, protocol_version }` carries both the agent's build version and the protocol version. Currently both fields contain the same build version since all binaries are built together.
+- **CLI check**: `cosmic-bwarden-cli version` subcommand queries the agent, prints local/agent/protocol versions, and runs `check_protocol_compatibility()` — a pure function that compares the local build version against the agent's `protocol_version`.
+- **UI display**: Version is shown muted in the applet context menu (next to "Open Vault") and in the Settings panel.
+
 ## Technical Stack
 
 - **Language**: Rust
@@ -63,5 +71,16 @@ The project follows a modular Rust-based architecture split into specialized cra
 The applet popup (`view/applet/`) is self-sufficient for everyday use without opening the full vault window:
 - **Inline Unlock**: A master-password `secure_input` (with eye-icon reveal toggle) showing "Locked: need password" while locked, with an unlock-icon submit button and Enter-to-submit (`view/applet/unlock.rs`); a successful `AppletUnlockResult` immediately switches the popup to the search view and refreshes results, with `Event::Unlocked` as a secondary sync path.
 - **Quick Search**: A `search_input` plus a favourites star toggle (`view/applet/search.rs`). An empty query always shows favourites only, regardless of the toggle. Results are capped at 10 and rendered as two buttons per entry — a truncated primary label (username/note title/"Public key") and a secret label ("Password"/"Note"/"Private key") — both copying to the clipboard with a toast confirmation. Sensitive copies that require reprompt show an inline master-password row with a reveal toggle and Enter-to-submit.
-- **Menu Actions**: "Open Vault Window" (was "CosmicBWarden"), "Lock", "Logout and Quit", and "Lock and Quit" (was "Exit") — no dividers or "Pinned" label.
+- **Menu Actions** (when unlocked): "Open Vault Window", "Lock" (stay running), "Logout" (stay running), "Lock and Quit", "Logout and Quit", "Quit" (plain close, no state change). When locked: "Open Vault Window" and "Quit" only. "Quit" intentionally does not lock so the agent's unlocked state remains available to the SSH agent and CLI.
 - Pure popup logic (row building, truncation, favourites/query rules) lives in `app/applet_search.rs`, unit-tested without any widget dependencies.
+
+## See Also
+
+- [`AGENTS.md`](AGENTS.md) — agent/AI guidelines, golden rules, validation commands, and the full document index
+- [`docs/ssh-agent.md`](docs/ssh-agent.md) — SSH agent protocol and socket configuration
+- [`docs/browser_integration.md`](docs/browser_integration.md) — browser extension IPC
+- [`docs/configurable_paths.md`](docs/configurable_paths.md) — path overrides and multi-instance isolation
+- [`docs/cosmic_integration.md`](docs/cosmic_integration.md) — COSMIC panel applet registration
+- [`docs/testing.md`](docs/testing.md) — test suite structure and run order
+- [`docs/build_and_run.md`](docs/build_and_run.md) — build instructions and run modes
+- [`docs/implementation.md`](docs/implementation.md) — crypto and vault sync internals

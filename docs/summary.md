@@ -32,3 +32,10 @@ For more details on specific system integrations and configuration, see:
 - [SSH Agent Integration](./ssh-agent.md)
 - [Browser Extension Integration](./browser_integration.md)
 - [Configurable Paths and Isolation](./configurable_paths.md)
+- [COSMIC DE Integration](./cosmic_integration.md)
+- [Build and Run](./build_and_run.md)
+- [Testing Strategy](./testing.md)
+- [Implementation Details](./implementation.md)
+
+For architecture and security invariants, see [`CONTEXT.md`](../CONTEXT.md).
+For agent/AI guidelines and the full document index, see [`AGENTS.md`](../AGENTS.md).

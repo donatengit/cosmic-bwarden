@@ -1,16 +1,16 @@
+use crate::app::applet_search;
+use crate::app::state::CosmicBWardenApp;
+use crate::app::tasks::{check_protocol_version, fetch_applet_search, fetch_applet_secret};
+use crate::fl;
+use crate::message::{Message, View};
+use crate::view::applet::{search, unlock};
 use cosmic::app::Task;
 use cosmic::iced::window;
 use cosmic::widget::text_input;
-use cosmic::Action;
 use cosmic::widget::Toast;
-use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
+use cosmic::Action;
 use cosmic_bwarden_core::agent_client::AgentClient;
-use crate::message::{Message, View};
-use crate::app::state::CosmicBWardenApp;
-use crate::app::applet_search;
-use crate::app::tasks::{fetch_applet_search, fetch_applet_secret};
-use crate::view::applet::{search, unlock};
-use crate::fl;
+use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
 use zeroize::Zeroize;
 
 impl CosmicBWardenApp {
@@ -18,21 +18,58 @@ impl CosmicBWardenApp {
         match message {
             Message::AppletIconClicked(offset, bounds) => {
                 if let Some(id) = self.applet_popup {
-                    return Some(Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(cosmic::surface::action::destroy_popup(id)))));
+                    return Some(Task::done(cosmic::Action::Cosmic(
+                        cosmic::app::Action::Surface(cosmic::surface::action::destroy_popup(id)),
+                    )));
                 }
 
                 Some(self.open_applet_popup_task(Some((offset, bounds))))
             }
-            Message::Surface(action) => Some(Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(action)))),
+            Message::Surface(action) => Some(Task::done(cosmic::Action::Cosmic(
+                cosmic::app::Action::Surface(action),
+            ))),
             Message::Exit => {
-                std::process::exit(0)
+                let mut tasks = Vec::new();
+
+                if let Some(popup_id) = self.applet_popup.take() {
+                    self.windows.remove(&popup_id);
+                    tasks.push(Task::done(cosmic::Action::Cosmic(
+                        cosmic::app::Action::Surface(cosmic::surface::action::destroy_popup(
+                            popup_id,
+                        )),
+                    )));
+                }
+
+                tasks.push(Task::done(cosmic::Action::Cosmic(
+                    cosmic::app::Action::Close,
+                )));
+
+                Some(Task::batch(tasks))
             }
+            Message::LockAndQuit => Some(Task::perform(
+                async {
+                    let agent = AgentClient::new();
+                    let _ = agent.send(AgentAction::Lock).await;
+                },
+                |_| Action::App(Message::Exit),
+            )),
+            Message::LogoutAndQuit => Some(Task::perform(
+                async {
+                    let agent = AgentClient::new();
+                    let _ = agent.send(AgentAction::Logout).await;
+                },
+                |_| Action::App(Message::Exit),
+            )),
             Message::OpenVaultRequested => {
                 let mut tasks = Vec::new();
 
                 if let Some(popup_id) = self.applet_popup.take() {
                     self.windows.remove(&popup_id);
-                    tasks.push(Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(cosmic::surface::action::destroy_popup(popup_id)))));
+                    tasks.push(Task::done(cosmic::Action::Cosmic(
+                        cosmic::app::Action::Surface(cosmic::surface::action::destroy_popup(
+                            popup_id,
+                        )),
+                    )));
                 }
 
                 if let Some(tx) = self.token_tx.as_ref() {
@@ -52,7 +89,10 @@ impl CosmicBWardenApp {
                     cosmic::applet::token::subscription::TokenUpdate::Finished => {
                         self.token_tx = None;
                     }
-                    cosmic::applet::token::subscription::TokenUpdate::ActivationToken { token, .. } => {
+                    cosmic::applet::token::subscription::TokenUpdate::ActivationToken {
+                        token,
+                        ..
+                    } => {
                         if let Ok(exe) = std::env::current_exe() {
                             let mut cmd = std::process::Command::new(exe);
                             cmd.env("COSMIC_BWARDEN_MODE", "application");
@@ -75,14 +115,17 @@ impl CosmicBWardenApp {
             }
             Message::AppletUnlockSubmitted => {
                 let password = self.applet_unlock_password.clone();
-                Some(Task::perform(async move {
-                    let agent = AgentClient::new();
-                    match agent.send(AgentAction::Unlock { password }).await {
-                        Ok(Response::Ack) => Ok(()),
-                        Ok(Response::Error { message }) => Err(message),
-                        _ => Err("unexpected response".to_string()),
-                    }
-                }, |res| Action::App(Message::AppletUnlockResult(res))))
+                Some(Task::perform(
+                    async move {
+                        let agent = AgentClient::new();
+                        match agent.send(AgentAction::Unlock { password }).await {
+                            Ok(Response::Ack) => Ok(()),
+                            Ok(Response::Error { message }) => Err(message),
+                            _ => Err("unexpected response".to_string()),
+                        }
+                    },
+                    |res| Action::App(Message::AppletUnlockResult(res)),
+                ))
             }
             Message::AppletUnlockResult(res) => {
                 self.applet_unlock_password.zeroize();
@@ -91,9 +134,20 @@ impl CosmicBWardenApp {
                         self.applet_error = None;
                         self.view = View::Vault;
                         self.applet_search_id += 1;
-                        let only_pinned = applet_search::effective_only_pinned(&self.applet_search_query, self.applet_search_only_favourites);
-                        let query = if self.applet_search_query.trim().is_empty() { None } else { Some(self.applet_search_query.clone()) };
-                        return Some(fetch_applet_search(self.applet_search_id, query, only_pinned));
+                        let only_pinned = applet_search::effective_only_pinned(
+                            &self.applet_search_query,
+                            self.applet_search_only_favourites,
+                        );
+                        let query = if self.applet_search_query.trim().is_empty() {
+                            None
+                        } else {
+                            Some(self.applet_search_query.clone())
+                        };
+                        return Some(fetch_applet_search(
+                            self.applet_search_id,
+                            query,
+                            only_pinned,
+                        ));
                     }
                     Err(e) => self.applet_error = Some(e),
                 }
@@ -104,20 +158,32 @@ impl CosmicBWardenApp {
             Message::AppletSearchChanged(q) => {
                 self.applet_search_query = q.clone();
                 self.applet_search_id += 1;
-                let only_pinned = applet_search::effective_only_pinned(&q, self.applet_search_only_favourites);
+                let only_pinned =
+                    applet_search::effective_only_pinned(&q, self.applet_search_only_favourites);
                 let query = if q.trim().is_empty() { None } else { Some(q) };
-                Some(fetch_applet_search(self.applet_search_id, query, only_pinned))
+                Some(fetch_applet_search(
+                    self.applet_search_id,
+                    query,
+                    only_pinned,
+                ))
             }
             Message::AppletToggleFavouritesFilter => {
                 self.applet_search_only_favourites = !self.applet_search_only_favourites;
                 self.applet_search_id += 1;
-                let only_pinned = applet_search::effective_only_pinned(&self.applet_search_query, self.applet_search_only_favourites);
+                let only_pinned = applet_search::effective_only_pinned(
+                    &self.applet_search_query,
+                    self.applet_search_only_favourites,
+                );
                 let query = if self.applet_search_query.trim().is_empty() {
                     None
                 } else {
                     Some(self.applet_search_query.clone())
                 };
-                Some(fetch_applet_search(self.applet_search_id, query, only_pinned))
+                Some(fetch_applet_search(
+                    self.applet_search_id,
+                    query,
+                    only_pinned,
+                ))
             }
             Message::AppletSearchResultsReceived(id, res) => {
                 if id == self.applet_search_id {
@@ -137,33 +203,35 @@ impl CosmicBWardenApp {
             // Copy actions
             Message::AppletCopyPrimary(id) => {
                 let rows = applet_search::build_applet_rows(&self.applet_search_results);
-                if let Some(value) = rows.iter().find(|r| r.id == id).and_then(|r| r.primary_value.clone()) {
+                if let Some(value) = rows
+                    .iter()
+                    .find(|r| r.id == id)
+                    .and_then(|r| r.primary_value.clone())
+                {
                     Some(self.applet_copy_to_clipboard(value))
                 } else {
                     Some(Task::none())
                 }
             }
             Message::AppletCopySecret(id) => Some(fetch_applet_secret(id, None)),
-            Message::AppletSecretReceived(res) => {
-                match res {
-                    Ok(secret) => {
-                        self.applet_reprompt_id = None;
-                        self.applet_reprompt_password.zeroize();
-                        self.applet_error = None;
-                        Some(self.applet_copy_to_clipboard(secret))
-                    }
-                    Err((id, msg)) => {
-                        if msg == "reprompt_required" {
-                            self.applet_reprompt_id = Some(id);
-                            self.applet_reprompt_password.zeroize();
-                            return Some(text_input::focus(search::reprompt_input_id()));
-                        } else {
-                            self.applet_error = Some(msg);
-                        }
-                        Some(Task::none())
-                    }
+            Message::AppletSecretReceived(res) => match res {
+                Ok(secret) => {
+                    self.applet_reprompt_id = None;
+                    self.applet_reprompt_password.zeroize();
+                    self.applet_error = None;
+                    Some(self.applet_copy_to_clipboard(secret))
                 }
-            }
+                Err((id, msg)) => {
+                    if msg == "reprompt_required" {
+                        self.applet_reprompt_id = Some(id);
+                        self.applet_reprompt_password.zeroize();
+                        return Some(text_input::focus(search::reprompt_input_id()));
+                    } else {
+                        self.applet_error = Some(msg);
+                    }
+                    Some(Task::none())
+                }
+            },
 
             // Inline reprompt
             Message::AppletRepromptPasswordChanged(p) => {
@@ -172,7 +240,10 @@ impl CosmicBWardenApp {
             }
             Message::AppletRepromptSubmitted => {
                 if let Some(id) = self.applet_reprompt_id.clone() {
-                    Some(fetch_applet_secret(id, Some(self.applet_reprompt_password.clone())))
+                    Some(fetch_applet_secret(
+                        id,
+                        Some(self.applet_reprompt_password.clone()),
+                    ))
                 } else {
                     Some(Task::none())
                 }
@@ -211,10 +282,12 @@ impl CosmicBWardenApp {
     /// (e.g. opened in response to `Event::UnlockRequested`),
     /// `get_popup_settings`'s default `anchor_rect` is used, which anchors
     /// next to the applet's own panel icon.
-    pub(crate) fn open_applet_popup_task(&mut self, anchor: Option<(cosmic::iced::Vector, cosmic::iced::Rectangle)>) -> Task<Message> {
-        // Reset transient popup state for a fresh open.
-        self.applet_search_query.clear();
-        self.applet_search_only_favourites = false;
+    pub(crate) fn open_applet_popup_task(
+        &mut self,
+        anchor: Option<(cosmic::iced::Vector, cosmic::iced::Rectangle)>,
+    ) -> Task<Message> {
+        // Reset only truly transient state; preserve search query and
+        // favourites-filter so the popup re-opens with the last search intact.
         self.applet_unlock_password.zeroize();
         self.applet_unlock_password_revealed = false;
         self.applet_reprompt_id = None;
@@ -223,49 +296,73 @@ impl CosmicBWardenApp {
         self.applet_error = None;
         self.applet_search_id += 1;
 
+        let only_pinned = applet_search::effective_only_pinned(
+            &self.applet_search_query,
+            self.applet_search_only_favourites,
+        );
+        let query = if self.applet_search_query.trim().is_empty() {
+            None
+        } else {
+            Some(self.applet_search_query.clone())
+        };
+
         let mut tasks = Vec::new();
+        tasks.push(check_protocol_version());
         tasks.push(text_input::focus(unlock::password_input_id()));
-        tasks.push(Task::perform(async {
-            let agent = AgentClient::new();
-            match agent.send(AgentAction::GetConfig).await {
-                Ok(Response::Config { config, needs_login, has_account, is_locked }) => Ok((config, needs_login, has_account, is_locked)),
-                Ok(Response::Error { message }) => Err(message),
-                _ => Err("unexpected response".to_string()),
-            }
-        }, |res| cosmic::Action::App(Message::ConfigReceived(res))));
-
-        tasks.push(fetch_applet_search(self.applet_search_id, None, true));
-
-        let popup_task = Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(cosmic::surface::action::app_popup::<CosmicBWardenApp>(
-            move |state: &mut CosmicBWardenApp| {
-                let new_id = window::Id::unique();
-                state.applet_popup = Some(new_id);
-                state.windows.insert(new_id, crate::message::WindowState::Popup);
-                let mut popup_settings = state.core.applet.get_popup_settings(
-                    state.core.main_window_id().unwrap_or(window::Id::RESERVED),
-                    new_id,
-                    None,
-                    None,
-                    None,
-                );
-                if let Some((offset, bounds)) = anchor {
-                    popup_settings.positioner.anchor_rect = cosmic::iced::Rectangle {
-                        x: (bounds.x - offset.x) as i32,
-                        y: (bounds.y - offset.y) as i32,
-                        width: bounds.width as i32,
-                        height: bounds.height as i32,
-                    };
+        tasks.push(Task::perform(
+            async {
+                let agent = AgentClient::new();
+                match agent.send(AgentAction::GetConfig).await {
+                    Ok(Response::Config {
+                        config,
+                        needs_login,
+                        has_account,
+                        is_locked,
+                    }) => Ok((config, needs_login, has_account, is_locked)),
+                    Ok(Response::Error { message }) => Err(message),
+                    _ => Err("unexpected response".to_string()),
                 }
-                popup_settings
             },
-            None,
-        ))));
+            |res| cosmic::Action::App(Message::ConfigReceived(res)),
+        ));
+
+        tasks.push(fetch_applet_search(self.applet_search_id, query, only_pinned));
+
+        let popup_task = Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(
+            cosmic::surface::action::app_popup::<CosmicBWardenApp>(
+                move |state: &mut CosmicBWardenApp| {
+                    let new_id = window::Id::unique();
+                    state.applet_popup = Some(new_id);
+                    state
+                        .windows
+                        .insert(new_id, crate::message::WindowState::Popup);
+                    let mut popup_settings = state.core.applet.get_popup_settings(
+                        state.core.main_window_id().unwrap_or(window::Id::RESERVED),
+                        new_id,
+                        None,
+                        None,
+                        None,
+                    );
+                    if let Some((offset, bounds)) = anchor {
+                        popup_settings.positioner.anchor_rect = cosmic::iced::Rectangle {
+                            x: (bounds.x - offset.x) as i32,
+                            y: (bounds.y - offset.y) as i32,
+                            width: bounds.width as i32,
+                            height: bounds.height as i32,
+                        };
+                    }
+                    popup_settings
+                },
+                None,
+            ),
+        )));
         tasks.push(popup_task);
         Task::batch(tasks)
     }
 
     fn applet_copy_to_clipboard(&mut self, value: String) -> Task<Message> {
-        let clipboard_task = cosmic::iced::clipboard::write(value).map(|_: ()| cosmic::Action::None);
+        let clipboard_task =
+            cosmic::iced::clipboard::write(value).map(|_: ()| cosmic::Action::None);
         let toast_task = self
             .applet_toasts
             .push(Toast::new(fl!("copied-to-clipboard")))
