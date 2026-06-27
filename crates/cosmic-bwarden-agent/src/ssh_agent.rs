@@ -1,5 +1,5 @@
 use crate::state::State;
-use ssh_agent_lib::proto::Identity;
+use ssh_agent_lib::proto::{Extension, Identity};
 use ssh_agent_lib::ssh_key::{PrivateKey, PublicKey, Signature};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -72,6 +72,16 @@ impl ssh_agent_lib::agent::Session for SshAgent {
             }
         }
         Ok(identities)
+    }
+
+    async fn extension(
+        &mut self,
+        _extension: Extension,
+    ) -> Result<Option<Extension>, ssh_agent_lib::error::AgentError> {
+        // Return Ok(None) so the library sends SSH_AGENT_SUCCESS without logging
+        // an error. SSH clients routinely probe for extensions (command 27) and
+        // handle a silent "not supported" response correctly.
+        Ok(None)
     }
 
     async fn sign(

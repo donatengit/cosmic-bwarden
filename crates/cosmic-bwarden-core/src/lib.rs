@@ -14,5 +14,5 @@ pub mod vault;
 pub mod tests;
 
 pub fn version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
+    env!("COSMIC_BWARDEN_VERSION")
 }

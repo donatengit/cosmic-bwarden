@@ -92,6 +92,9 @@ impl CosmicBWardenApp {
             | Message::AppletRepromptCancelled
             | Message::AppletToggleUnlockPasswordReveal
             | Message::AppletToggleRepromptPasswordReveal
+            | Message::AppletOpenInVault(_)
+            | Message::AppletOpenLink(_)
+            | Message::AppletQuitMenuToggle
             | Message::CloseToast(_)
             | Message::ProtocolVersionCheck(_) => Task::none(),
 

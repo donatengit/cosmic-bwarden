@@ -1,7 +1,7 @@
 use crate::server::update_entry_on_server;
 use crate::state::State;
-use cosmic_bwarden_core::db::{Entry, Secret, Field, EntryData};
-use cosmic_bwarden_core::protocol::{Response, EntryType};
+use cosmic_bwarden_core::db::{Entry, EntryData, Field, Secret};
+use cosmic_bwarden_core::protocol::{EntryType, Response};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use totp_rs::{Algorithm, TOTP};
@@ -18,7 +18,11 @@ pub async fn handle_get_totp(id: String, state: &Arc<Mutex<State>>) -> Response 
 
     if let (Some(entry), Some(keys)) = (entry, keys) {
         let entry = entry.decrypt(&keys);
-        if let EntryData::Login { totp: Some(totp_secret), .. } = &entry.data {
+        if let EntryData::Login {
+            totp: Some(totp_secret),
+            ..
+        } = &entry.data
+        {
             let secret = totp_secret.expose();
             // Bitwarden stores TOTP as either the secret key or an otpauth:// URL
             let secret_key = if secret.starts_with("otpauth://") {
@@ -39,19 +43,25 @@ pub async fn handle_get_totp(id: String, state: &Arc<Mutex<State>>) -> Response 
                 None,
                 "".to_string(),
             ) {
-                Ok(totp) => {
-                    match totp.generate_current() {
-                        Ok(code) => Response::Totp { code },
-                        Err(e) => Response::Error { message: format!("TOTP generation failed: {}", e) },
-                    }
-                }
-                Err(e) => Response::Error { message: format!("Invalid TOTP secret: {}", e) },
+                Ok(totp) => match totp.generate_current() {
+                    Ok(code) => Response::Totp { code },
+                    Err(e) => Response::Error {
+                        message: format!("TOTP generation failed: {}", e),
+                    },
+                },
+                Err(e) => Response::Error {
+                    message: format!("Invalid TOTP secret: {}", e),
+                },
             }
         } else {
-            Response::Error { message: "Entry has no TOTP secret".to_string() }
+            Response::Error {
+                message: "Entry has no TOTP secret".to_string(),
+            }
         }
     } else {
-        Response::Error { message: "Agent is locked or entry not found".to_string() }
+        Response::Error {
+            message: "Agent is locked or entry not found".to_string(),
+        }
     }
 }
 
@@ -112,9 +122,17 @@ pub async fn handle_update_entry(entry: Entry, state: &Arc<Mutex<State>>) -> Res
 }
 
 pub async fn handle_pin_entry(id: String, state: &Arc<Mutex<State>>) -> Response {
-    let state_guard = state.lock().await;
-    let entry = if let Some(db) = &state_guard.db {
-        db.entries.iter().find(|e| e.id == id).cloned()
+    let mut state_guard = state.lock().await;
+    let entry = if let Some(db) = &mut state_guard.db {
+        // Update in-memory immediately to prevent concurrent reads from
+        // seeing stale favorite values (e.g. GetSidebarEntries requesting
+        // only_pinned between this handler and the eventual handle_sync).
+        if let Some(e) = db.entries.iter_mut().find(|e| e.id == id) {
+            e.favorite = true;
+            Some(e.clone())
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -123,8 +141,7 @@ pub async fn handle_pin_entry(id: String, state: &Arc<Mutex<State>>) -> Response
 
     let keys_is_some = keys.is_some();
     if let (Some(entry), Some(keys)) = (entry, keys) {
-        let mut entry = entry.decrypt(&keys);
-        entry.favorite = true;
+        let entry = entry.decrypt(&keys);
         let config = match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
             Ok(c) => c,
             Err(e) => {
@@ -152,9 +169,14 @@ pub async fn handle_pin_entry(id: String, state: &Arc<Mutex<State>>) -> Response
 }
 
 pub async fn handle_unpin_entry(id: String, state: &Arc<Mutex<State>>) -> Response {
-    let state_guard = state.lock().await;
-    let entry = if let Some(db) = &state_guard.db {
-        db.entries.iter().find(|e| e.id == id).cloned()
+    let mut state_guard = state.lock().await;
+    let entry = if let Some(db) = &mut state_guard.db {
+        if let Some(e) = db.entries.iter_mut().find(|e| e.id == id) {
+            e.favorite = false;
+            Some(e.clone())
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -163,8 +185,7 @@ pub async fn handle_unpin_entry(id: String, state: &Arc<Mutex<State>>) -> Respon
 
     let keys_is_some = keys.is_some();
     if let (Some(entry), Some(keys)) = (entry, keys) {
-        let mut entry = entry.decrypt(&keys);
-        entry.favorite = false;
+        let entry = entry.decrypt(&keys);
         let config = match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
             Ok(c) => c,
             Err(e) => {

@@ -21,7 +21,7 @@ use clap::Parser;
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(author, version, about = "cosmic-bwarden-agent: Secure background agent")]
+#[command(author, version = cosmic_bwarden_core::version(), about = "cosmic-bwarden-agent: Secure background agent")]
 struct Cli {
     /// Path to the configuration file. Overrides default and environment.
     #[arg(long, env = "COSMIC_BWARDEN_CONFIG")]
@@ -202,7 +202,7 @@ async fn main() -> anyhow::Result<()> {
                     log::debug!("Response: {:?}", response);
 
                     if let Response::Error { message } = &response {
-                        log::error!("request failed: {}", message);
+                        log::warn!("request failed: {}", message);
                     }
                     let response_bytes = postcard::to_allocvec(&response).unwrap();
                     let len = response_bytes.len() as u32;
@@ -221,6 +221,14 @@ async fn main() -> anyhow::Result<()> {
                         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
                         {
                             let mut state_guard = state.lock().await;
+                            // Deliver any pending deep-link entry to this new subscriber
+                            // (covers the case where the vault window wasn't open yet
+                            // when SetPendingEntry was called).
+                            if let Some(id) = state_guard.pending_entry_id.take() {
+                                let _ = tx.send(
+                                    cosmic_bwarden_core::protocol::Event::OpenEntry { id },
+                                );
+                            }
                             state_guard.subscribers.push(tx);
                         }
 

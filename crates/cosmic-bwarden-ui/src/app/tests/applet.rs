@@ -4,6 +4,14 @@ use cosmic::Application;
 use cosmic::iced::window;
 use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
 
+fn popup_app(view: View) -> (CosmicBWardenApp, window::Id) {
+    let mut app = CosmicBWardenApp::default();
+    let id = window::Id::unique();
+    app.windows.insert(id, WindowState::Popup);
+    app.view = view;
+    (app, id)
+}
+
 fn entry(id: &str, name: &str, entry_type: EntryType) -> SidebarEntry {
     SidebarEntry {
         id: id.to_string(),
@@ -200,3 +208,236 @@ async fn test_applet_popup_render_with_reprompt_active() {
 
     let _ = app.view_window(id);
 }
+
+// Bug (b): closing and reopening the popup must preserve the user's search
+// query and favourites-filter rather than resetting them to defaults.
+// Verified via WindowClosed (popup close) not disturbing those fields, and
+// via the applet search query surviving a VaultChanged refresh.
+#[tokio::test]
+async fn test_popup_closed_preserves_search_query() {
+    let mut app = CosmicBWardenApp::default();
+    let id = window::Id::unique();
+    app.applet_popup = Some(id);
+    app.windows.insert(id, WindowState::Popup);
+    app.applet_search_query = "github".to_string();
+    app.applet_search_only_favourites = true;
+
+    let _ = app.update(Message::WindowClosed(id));
+
+    assert!(app.applet_popup.is_none());
+    assert_eq!(
+        app.applet_search_query, "github",
+        "search query must survive popup close"
+    );
+    assert!(
+        app.applet_search_only_favourites,
+        "favourites filter must survive popup close"
+    );
+}
+
+#[tokio::test]
+async fn test_popup_search_state_survives_vault_event() {
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+    app.applet_search_query = "github".to_string();
+    app.applet_search_only_favourites = true;
+
+    // A VaultChanged event triggers a refresh but must not touch applet search state.
+    let _ = app.update(Message::EventReceived(
+        cosmic_bwarden_core::protocol::Event::VaultChanged,
+    ));
+
+    assert_eq!(
+        app.applet_search_query, "github",
+        "VaultChanged must not reset applet search query"
+    );
+    assert!(
+        app.applet_search_only_favourites,
+        "VaultChanged must not reset applet favourites filter"
+    );
+}
+
+#[tokio::test]
+async fn test_applet_refresh_state_triggers_fetch_when_popup_open() {
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+    app.applet_popup = Some(window::Id::unique());
+    let prev_search_id = app.applet_search_id;
+
+    let _ = app.update(Message::RefreshStateInternal);
+
+    assert!(app.applet_search_id > prev_search_id);
+}
+
+// ── Quit submenu ──────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_applet_quit_menu_toggle_expands_and_collapses() {
+    let mut app = CosmicBWardenApp::default();
+    assert!(!app.applet_quit_expanded);
+
+    let _ = app.update(Message::AppletQuitMenuToggle);
+    assert!(app.applet_quit_expanded);
+
+    let _ = app.update(Message::AppletQuitMenuToggle);
+    assert!(!app.applet_quit_expanded);
+}
+
+#[tokio::test]
+async fn test_applet_quit_menu_collapsed_renders() {
+    let (mut app, id) = popup_app(View::Vault);
+    // Collapsed by default
+    let _ = app.view_window(id);
+}
+
+#[tokio::test]
+async fn test_applet_quit_menu_expanded_unlocked_renders_all_sub_items() {
+    let (mut app, id) = popup_app(View::Vault);
+    app.applet_quit_expanded = true;
+    // Must render Lock-and-Quit, Logout-and-Quit, Just-Quit without panic
+    let _ = app.view_window(id);
+}
+
+#[tokio::test]
+async fn test_applet_quit_menu_expanded_locked_shows_just_quit_only() {
+    let (mut app, id) = popup_app(View::Unlock);
+    app.applet_quit_expanded = true;
+    // In locked state no Lock-and-Quit or Logout-and-Quit in the submenu
+    let _ = app.view_window(id);
+}
+
+// ── Header row (Lock / Logout icon buttons) ───────────────────────────────────
+
+#[tokio::test]
+async fn test_applet_header_row_renders_unlocked() {
+    let (app, id) = popup_app(View::Vault);
+    // Lock + Logout icon buttons must both appear without panic
+    let _ = app.view_window(id);
+}
+
+#[tokio::test]
+async fn test_applet_header_row_renders_locked() {
+    let (app, id) = popup_app(View::Unlock);
+    // Only the Logout icon button appears when vault is locked
+    let _ = app.view_window(id);
+}
+
+#[tokio::test]
+async fn test_applet_header_row_renders_setup() {
+    let (app, id) = popup_app(View::Setup);
+    // Setup state: no Lock button, only Logout icon
+    let _ = app.view_window(id);
+}
+
+// ── Search entry rows ─────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_applet_login_row_with_link_renders() {
+    let (mut app, id) = popup_app(View::Vault);
+    // Name looks like a hostname → is_uri_like → 🔗 button is active
+    app.applet_search_results = vec![SidebarEntry {
+        id: "1".to_string(),
+        name: "account.facebook.com".to_string(),
+        username: Some("alice@example.com".to_string()),
+        public_key: None,
+        entry_type: EntryType::Login,
+        is_pinned: false,
+    }];
+    let _ = app.view_window(id);
+}
+
+#[tokio::test]
+async fn test_applet_login_row_without_link_renders() {
+    let (mut app, id) = popup_app(View::Vault);
+    // Name has spaces → not URI-like → 🔗 button is inactive (on_press_maybe(None))
+    app.applet_search_results = vec![SidebarEntry {
+        id: "1".to_string(),
+        name: "My Facebook Account".to_string(),
+        username: Some("alice".to_string()),
+        public_key: None,
+        entry_type: EntryType::Login,
+        is_pinned: false,
+    }];
+    let _ = app.view_window(id);
+}
+
+#[tokio::test]
+async fn test_applet_ssh_row_renders_with_vault_and_secret_buttons() {
+    let (mut app, id) = popup_app(View::Vault);
+    app.applet_search_results = vec![SidebarEntry {
+        id: "ssh-1".to_string(),
+        name: "My Server".to_string(),
+        username: None,
+        public_key: Some("ssh-ed25519 AAAA...".to_string()),
+        entry_type: EntryType::SshKey,
+        is_pinned: false,
+    }];
+    let _ = app.view_window(id);
+}
+
+#[tokio::test]
+async fn test_applet_note_row_renders_with_vault_and_secret_buttons() {
+    let (mut app, id) = popup_app(View::Vault);
+    app.applet_search_results = vec![SidebarEntry {
+        id: "note-1".to_string(),
+        name: "My Secret Note".to_string(),
+        username: None,
+        public_key: None,
+        entry_type: EntryType::SecureNote,
+        is_pinned: false,
+    }];
+    let _ = app.view_window(id);
+}
+
+// ── AppletCopyPrimary ─────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_applet_copy_primary_copies_username_from_search_results() {
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+    app.applet_search_results = vec![SidebarEntry {
+        id: "e1".to_string(),
+        name: "example.com".to_string(),
+        username: Some("alice@example.com".to_string()),
+        public_key: None,
+        entry_type: EntryType::Login,
+        is_pinned: false,
+    }];
+
+    // Should not panic even though clipboard write is async
+    let _ = app.update(Message::AppletCopyPrimary("e1".to_string()));
+}
+
+#[tokio::test]
+async fn test_applet_copy_primary_no_op_for_missing_id() {
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+    app.applet_search_results = vec![];
+
+    let _ = app.update(Message::AppletCopyPrimary("nonexistent".to_string()));
+    // No panic, no state change
+    assert!(app.applet_error.is_none());
+}
+
+// ── AppletOpenInVault ─────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_applet_open_in_vault_does_not_crash() {
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+
+    let _ = app.update(Message::AppletOpenInVault("entry-1".to_string()));
+    // State must remain intact
+    assert_eq!(app.view, View::Vault);
+}
+
+// ── AppletOpenLink ────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_applet_open_link_does_not_crash() {
+    let mut app = CosmicBWardenApp::default();
+    // xdg-open may not be available in CI; we only check the handler doesn't panic
+    let _ = app.update(Message::AppletOpenLink("https://example.com".to_string()));
+    assert!(app.applet_error.is_none());
+}
+

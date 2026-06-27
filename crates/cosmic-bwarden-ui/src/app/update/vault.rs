@@ -251,6 +251,8 @@ impl CosmicBWardenApp {
                             self.entries = entries;
                             self.error = None;
                         }
+                        // In-flight request arrived after lock — not an error.
+                        Err(e) if e == "agent is locked" => self.entries.clear(),
                         Err(e) => self.error = Some(e),
                     }
                 }

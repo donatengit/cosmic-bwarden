@@ -1,11 +1,60 @@
 use crate::app::CosmicBWardenApp;
 use crate::message::Message;
 use crate::message::View;
-use cosmic::Application;
 use cosmic::widget;
+use cosmic::Application;
 use cosmic_bwarden_core::config::CosmicBWardenConfig;
 use cosmic_bwarden_core::db::EntryData;
-use cosmic_bwarden_core::protocol::EntryType;
+use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
+
+#[test]
+fn test_toggle_pin_flips_is_pinned() {
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+    let id = "entry-1".to_string();
+
+    app.entries = vec![SidebarEntry {
+        id: id.clone(),
+        name: "Test Entry".to_string(),
+        username: None,
+        public_key: None,
+        entry_type: EntryType::Login,
+        is_pinned: false,
+    }];
+
+    // Pin it
+    let _ = app.update(Message::TogglePin(id.clone()));
+    assert!(
+        app.entries[0].is_pinned,
+        "entry should be pinned after TogglePin"
+    );
+
+    // Unpin it
+    let _ = app.update(Message::TogglePin(id.clone()));
+    assert!(
+        !app.entries[0].is_pinned,
+        "entry should be unpinned after second TogglePin"
+    );
+}
+
+#[test]
+fn test_toggle_search_pinned_filter() {
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+
+    assert!(!app.search_only_pinned);
+    let prev_search_id = app.search_id;
+
+    let _ = app.update(Message::ToggleSearchPinned);
+    assert!(app.search_only_pinned);
+    assert!(
+        app.search_id > prev_search_id,
+        "search_id should increment to trigger refetch"
+    );
+
+    let _ = app.update(Message::ToggleSearchPinned);
+    assert!(!app.search_only_pinned);
+}
 
 #[tokio::test]
 async fn test_e2e_user_flow_login_and_add_note() {

@@ -1,3 +1,4 @@
+use crate::keyring;
 use crate::state::State;
 use cosmic_bwarden_core::db::Secret;
 use cosmic_bwarden_core::protocol::{Event, Response};
@@ -25,10 +26,7 @@ pub async fn handle_login(
     config.email = Some(email.clone());
     config.persist_session = remember_me;
 
-    let client = cosmic_bwarden_core::api::Client::new(
-        &config.base_url(),
-        &config.identity_url(),
-    );
+    let client = cosmic_bwarden_core::api::Client::new(&config.base_url(), &config.identity_url());
 
     let (kdf, iterations, memory, parallelism) = match client.prelogin(&email).await {
         Ok(res) => res,
@@ -82,10 +80,7 @@ pub async fn handle_login(
     {
         Ok(res) => res,
         Err(cosmic_bwarden_core::error::Error::TwoFactorRequired { providers, token }) => {
-            return Response::TwoFactorRequired {
-                token,
-                providers,
-            };
+            return Response::TwoFactorRequired { token, providers };
         }
         Err(cosmic_bwarden_core::error::Error::NewDeviceVerificationRequired) => {
             return Response::NewDeviceVerificationRequired;
@@ -97,16 +92,10 @@ pub async fn handle_login(
         }
     };
 
-    #[cfg(feature = "keyring")]
     if config.persist_session {
         if let Some(rt) = &refresh_token {
-            if let Err(e) = keyring::store_tokens(
-                &config.server_name(),
-                &email,
-                &access_token,
-                rt,
-            )
-            .await
+            if let Err(e) =
+                keyring::store_tokens(&config.server_name(), &email, &access_token, rt).await
             {
                 log::error!("failed to store tokens in keyring: {}", e);
             }
@@ -127,8 +116,7 @@ pub async fn handle_login(
         Ok((pk, ppk, pok, entries)) => {
             db.protected_key = Some(Secret::from(pk));
             db.protected_private_key = ppk.map(Secret::from);
-            db.protected_org_keys =
-                pok.into_iter().map(|(k, v)| (k, Secret::from(v))).collect();
+            db.protected_org_keys = pok.into_iter().map(|(k, v)| (k, Secret::from(v))).collect();
             db.entries = entries;
         }
         Err(e) => {

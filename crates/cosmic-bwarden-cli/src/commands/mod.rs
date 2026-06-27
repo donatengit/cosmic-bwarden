@@ -1,8 +1,8 @@
 pub mod auth;
 pub mod vault;
 
-use anyhow::Result;
 use crate::args::{Cli, Commands};
+use anyhow::Result;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::EntryType as ProtocolEntryType;
 
@@ -16,9 +16,11 @@ pub async fn run(
         | Commands::Login { .. }
         | Commands::Unlock { .. }
         | Commands::Lock
+        | Commands::Logout
         | Commands::Quit
-        | Commands::Unlocked => auth::handle_command(cli, client).await,
-        
+        | Commands::Unlocked
+        | Commands::Version => auth::handle_command(cli, client).await,
+
         Commands::Sync
         | Commands::List { .. }
         | Commands::Pin { .. }

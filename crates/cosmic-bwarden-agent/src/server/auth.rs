@@ -28,7 +28,7 @@ where
         (
             db.access_token
                 .as_ref()
-                .ok_or("not logged in")?
+                .ok_or("no API session token — please logout and log in again to restore server sync")?
                 .expose()
                 .to_string(),
             db.refresh_token

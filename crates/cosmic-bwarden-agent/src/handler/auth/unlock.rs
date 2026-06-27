@@ -34,6 +34,12 @@ pub async fn handle_unlock(
         }
     };
 
+    if !db.has_account() {
+        return Response::Error {
+            message: "No account configured on this agent. Please login first.".to_string(),
+        };
+    }
+
     if db.access_token.is_none() && config.persist_session {
         match keyring::get_tokens(&config.server_name(), email).await {
             Ok(Some((at, rt))) => {

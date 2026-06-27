@@ -48,7 +48,8 @@ impl CosmicBWardenApp {
         }
 
         let mut content = list_column();
-        content = content.add(menu::open_vault_button());
+        content = content.add(menu::header_row(self));
+        content = content.add(menu::version_row());
 
         content = match self.view {
             View::Vault | View::Settings => content.add(search::view(self)),
@@ -63,8 +64,8 @@ impl CosmicBWardenApp {
             content = content.add(container(text::body(error)).padding(5));
         }
 
-        for button in menu::footer_buttons(self) {
-            content = content.add(button);
+        for item in menu::quit_footer(self) {
+            content = content.add(item);
         }
 
         toaster(

@@ -88,11 +88,13 @@ async fn test_lock_logout_clears_state() {
         .insert(("1".to_string(), "Password".to_string()));
 
     // 1. Test Lock
+    app.error = Some("prior error".to_string());
     let _ = app.update(Message::LockResult);
     assert_eq!(app.view, View::Unlock);
     assert!(app.entries.is_empty());
     assert!(app.selected_entry_id.is_none());
     assert!(app.revealed_fields.is_empty());
+    assert!(app.error.is_none(), "LockResult must clear app.error");
 
     // 2. Setup for Logout
     app.view = View::Vault;
@@ -143,6 +145,67 @@ async fn test_config_received_routes_by_has_account_not_needs_login() {
     // No account on disk at all -> Setup, regardless of is_locked.
     let _ = app.update(Message::ConfigReceived(Ok((config, true, false, false))));
     assert_eq!(app.view, View::Setup);
+}
+
+// Bug (a): ConfigReceived while already unlocked must trigger an entry fetch.
+// The prior code set view=Vault but returned Task::none(), leaving the sidebar
+// empty until the user typed in the search box.
+#[tokio::test]
+async fn test_config_received_vault_triggers_entry_fetch() {
+    let mut app = CosmicBWardenApp::default();
+    let prev_id = app.search_id;
+
+    // Unlocked: has_account=true, is_locked=false
+    let _ = app.update(Message::ConfigReceived(Ok((
+        CosmicBWardenConfig::default(),
+        false,
+        true,
+        false,
+    ))));
+
+    assert_eq!(app.view, View::Vault);
+    assert!(
+        app.search_id > prev_id,
+        "ConfigReceived with unlocked vault must increment search_id to trigger fetch"
+    );
+}
+
+// Bug (d): LockResult and LogoutResult must clear any prior error so it does
+// not bleed through onto the Unlock/Setup screen.
+#[test]
+fn test_lock_logout_clears_error() {
+    let mut app = CosmicBWardenApp::default();
+
+    app.error = Some("sync failed: no API session token".to_string());
+    let _ = app.update(Message::LockResult);
+    assert!(app.error.is_none(), "LockResult must clear app.error");
+
+    app.error = Some("sync failed: no API session token".to_string());
+    let _ = app.update(Message::LogoutResult);
+    assert!(app.error.is_none(), "LogoutResult must clear app.error");
+}
+
+// Bug (d): an in-flight GetSidebarEntries that returns "agent is locked"
+// (because the lock raced the response) must silently clear entries rather
+// than surfacing the error to the user.
+#[test]
+fn test_entries_received_locked_clears_without_setting_error() {
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+    app.search_id = 3;
+    app.entries = vec![SidebarEntry {
+        id: "1".to_string(),
+        name: "Entry 1".to_string(),
+        username: None,
+        public_key: None,
+        entry_type: EntryType::Login,
+        is_pinned: false,
+    }];
+
+    let _ = app.update(Message::EntriesReceived(3, Err("agent is locked".to_string())));
+
+    assert!(app.entries.is_empty(), "entries must be cleared on locked error");
+    assert!(app.error.is_none(), "agent-is-locked must not set app.error");
 }
 
 #[test]

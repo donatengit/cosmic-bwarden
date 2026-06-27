@@ -153,4 +153,18 @@ mod tests {
             assert_eq!(entry, deserialized);
         }
     }
+
+    #[test]
+    fn test_db_has_account() {
+        use crate::db::Db;
+        let mut db = Db::new();
+        assert!(!db.has_account());
+
+        db.iterations = Some(100_000);
+        db.kdf = Some(api::KdfType::Pbkdf2);
+        assert!(!db.has_account());
+
+        db.protected_key = Some(crate::db::Secret::from("key".to_string()));
+        assert!(db.has_account());
+    }
 }

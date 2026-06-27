@@ -17,6 +17,113 @@ async fn login(client: &AgentClient, vault_url: &str, email: &str, password: &st
     Ok(())
 }
 
+// Bug (f): after Logout the agent must clear its in-memory Db so that the
+// next GetConfig correctly reports has_account=false. Before the fix the Db
+// was only cleared on disk; the stale in-memory record caused GetConfig to
+// keep reporting has_account=true, leaving the applet stuck on the Unlock
+// screen instead of the Login/Setup screen.
+#[tokio::test]
+async fn test_logout_clears_account_state() -> Result<()> {
+    let env = setup_env().await?;
+    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+
+    let email = "logout-state@example.com";
+    let password = "logoutpassword123";
+
+    register_user(&env.vault_url, email, password).await?;
+
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
+    login(&client, &env.vault_url, email, password).await?;
+
+    let res = client.send(Action::GetConfig).await?;
+    if let Response::Config { has_account, is_locked, .. } = res {
+        assert!(has_account, "has_account must be true after login");
+        assert!(!is_locked, "vault must be unlocked after login");
+    } else {
+        anyhow::bail!("Expected Config response after login");
+    }
+
+    let res = client.send(Action::Logout).await?;
+    assert!(matches!(res, Response::Ack), "Logout must respond Ack");
+
+    // The critical assertion: in-memory Db must be cleared so GetConfig
+    // loads the empty on-disk record and returns has_account=false.
+    let res = client.send(Action::GetConfig).await?;
+    if let Response::Config { has_account, needs_login, .. } = res {
+        assert!(
+            !has_account,
+            "has_account must be false after logout (in-memory db must be cleared)"
+        );
+        assert!(needs_login, "needs_login must be true after logout");
+    } else {
+        anyhow::bail!("Expected Config response after logout");
+    }
+
+    Ok(())
+}
+
+// Lock must report is_locked=true without clearing the account, and Unlock
+// must restore full access — entries visible immediately without re-login.
+#[tokio::test]
+async fn test_lock_preserves_account_unlock_restores_entries() -> Result<()> {
+    let env = setup_env().await?;
+    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+
+    let email = "lock-restore@example.com";
+    let password = "lockrestorepass123";
+
+    register_user(&env.vault_url, email, password).await?;
+
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
+    login(&client, &env.vault_url, email, password).await?;
+
+    client.send(Action::AddEntry {
+        name: "Restore Test".to_string(),
+        entry_type: EntryType::Login,
+        username: Some("restoreuser".to_string()),
+        password: Some("restorepass".to_string().into()),
+        notes: None,
+        fields: Vec::new(),
+    }).await?;
+    client.send(Action::Sync).await?;
+
+    client.send(Action::Lock).await?;
+
+    // has_account stays true (only keys are cleared on lock, not the account record)
+    let res = client.send(Action::GetConfig).await?;
+    if let Response::Config { has_account, is_locked, .. } = res {
+        assert!(has_account, "has_account must remain true after lock");
+        assert!(is_locked, "is_locked must be true after lock");
+    } else {
+        anyhow::bail!("Expected Config after lock");
+    }
+
+    // GetSidebarEntries while locked must return an error, not an empty list
+    let res = client.send(Action::GetSidebarEntries {
+        query: None, entry_type: None, only_pinned: false,
+    }).await?;
+    assert!(
+        matches!(res, Response::Error { .. }),
+        "GetSidebarEntries while locked must return Error"
+    );
+
+    let res = client.send(Action::Unlock { password: password.to_string() }).await?;
+    assert!(matches!(res, Response::Ack), "Unlock must respond Ack");
+
+    // Entries must be accessible immediately after unlock (no re-login needed)
+    let res = client.send(Action::GetSidebarEntries {
+        query: None, entry_type: None, only_pinned: false,
+    }).await?;
+    if let Response::SidebarEntries { entries } = res {
+        assert_eq!(entries.len(), 1, "entry must be visible after unlock without re-login");
+        assert_eq!(entries[0].name, "Restore Test");
+    } else {
+        anyhow::bail!("Expected SidebarEntries after unlock, got {:?}", res);
+    }
+
+    Ok(())
+}
+
 #[tokio::test]
 async fn test_applet_unlock_after_lock() -> Result<()> {
     let env = setup_env().await?;
@@ -252,3 +359,4 @@ async fn test_get_password_reprompt_flow() -> Result<()> {
 
     Ok(())
 }
+

@@ -34,7 +34,7 @@ impl CosmicBWardenApp {
             Message::LoginSubmitted => {
                 let email = self.login_email.clone();
                 let password = self.login_password.clone();
-                let server_url = if self.login_server.trim().is_empty() { None } else { Some(self.login_server.clone()) };
+                let server_url = Some(self.login_server.clone());
                 let remember_me = self.login_remember;
                 let device_verification_code = if self.login_verification_code.is_empty() { None } else { Some(self.login_verification_code.clone()) };
                 
@@ -119,13 +119,13 @@ impl CosmicBWardenApp {
                 self.selected_entry = None;
                 self.editing_entry = None;
                 self.revealed_fields.clear();
+                self.error = None;
                 Some(Task::none())
             }
             Message::LogoutClicked => {
                 Some(Task::perform(async {
                     let agent = AgentClient::new();
                     let _ = agent.send(AgentAction::Logout).await;
-                    ()
                 }, |_| Action::App(Message::LogoutResult)))
             }
             Message::LogoutResult => {
@@ -136,6 +136,7 @@ impl CosmicBWardenApp {
                 self.selected_entry = None;
                 self.editing_entry = None;
                 self.revealed_fields.clear();
+                self.error = None;
                 Some(Task::none())
             }
             _ => None,

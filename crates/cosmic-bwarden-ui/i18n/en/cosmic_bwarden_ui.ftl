@@ -29,6 +29,7 @@ open-vault-window = Open Vault
 quit = Quit
 lock-and-quit = Lock and Quit
 logout-and-quit = Logout and Quit
+just-quit = Just Quit
 copied-to-clipboard = Copied to clipboard
 no-results = No results
 master-password = Master Password

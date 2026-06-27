@@ -202,18 +202,31 @@ impl CosmicBWardenApp {
 
             // Copy actions
             Message::AppletCopyPrimary(id) => {
-                let rows = applet_search::build_applet_rows(&self.applet_search_results);
-                if let Some(value) = rows
-                    .iter()
-                    .find(|r| r.id == id)
-                    .and_then(|r| r.primary_value.clone())
-                {
-                    Some(self.applet_copy_to_clipboard(value))
-                } else {
-                    Some(Task::none())
+                if let Some(entry) = self.applet_search_results.iter().find(|e| e.id == id) {
+                    if let Some(username) = entry.username.clone() {
+                        return Some(self.applet_copy_to_clipboard(username));
+                    }
                 }
+                Some(Task::none())
             }
             Message::AppletCopySecret(id) => Some(fetch_applet_secret(id, None)),
+            Message::AppletOpenInVault(id) => {
+                Some(Task::perform(
+                    async move {
+                        let agent = AgentClient::new();
+                        let _ = agent.send(AgentAction::SetPendingEntry { id }).await;
+                    },
+                    |_| Action::App(Message::OpenVaultRequested),
+                ))
+            }
+            Message::AppletOpenLink(uri) => {
+                let _ = std::process::Command::new("xdg-open").arg(&uri).spawn();
+                Some(Task::none())
+            }
+            Message::AppletQuitMenuToggle => {
+                self.applet_quit_expanded = !self.applet_quit_expanded;
+                Some(Task::none())
+            }
             Message::AppletSecretReceived(res) => match res {
                 Ok(secret) => {
                     self.applet_reprompt_id = None;

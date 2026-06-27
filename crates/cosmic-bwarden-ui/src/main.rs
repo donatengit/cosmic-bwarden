@@ -1,20 +1,20 @@
-mod localize;
 mod app;
+mod localize;
 mod message;
 mod view;
 
+use clap::Parser;
 use cosmic::app::{Application, Task};
 use cosmic::iced::{window, Subscription};
-use clap::Parser;
 use std::path::PathBuf;
 
-use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
-use cosmic_bwarden_core::agent_client::AgentClient;
-use crate::app::{CosmicBWardenApp, APP_ID, AppFlags};
+use crate::app::{AppFlags, CosmicBWardenApp, APP_ID};
 use crate::message::{Message, View};
+use cosmic_bwarden_core::agent_client::AgentClient;
+use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = "cosmic-bwarden: Secure COSMIC Bitwarden client")]
+#[command(author, version = cosmic_bwarden_core::version(), about = "cosmic-bwarden: Secure COSMIC Bitwarden client")]
 struct Cli {
     /// Path to the configuration file. Overrides default and environment.
     #[arg(long, env = "COSMIC_BWARDEN_CONFIG")]
@@ -63,7 +63,7 @@ pub(crate) fn detect_run_mode() -> RunMode {
 }
 
 fn setup_logs() {
-    use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+    use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
     let fmt_layer = fmt::layer().with_target(false);
     let filter_layer = EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new(format!(
@@ -101,7 +101,7 @@ impl Application for CosmicBWardenApp {
 
     fn init(core: cosmic::app::Core, flags: Self::Flags) -> (Self, Task<Self::Message>) {
         tracing::info!("Initializing CosmicBWardenApp");
-        
+
         if let Some(config_path) = &flags.config {
             cosmic_bwarden_core::dirs::set_config_override(config_path.clone());
         }
@@ -122,35 +122,52 @@ impl Application for CosmicBWardenApp {
         app.core = core;
 
         let tasks = vec![
-            Task::perform(async {
-                tracing::debug!("Connecting to agent...");
-                let agent = AgentClient::new();
-                match agent.send(AgentAction::GetConfig).await {
-                    Ok(Response::Config { config, needs_login, has_account, is_locked }) => {
-                        tracing::info!(needs_login, has_account, is_locked, "Agent config received");
-                        Ok((config, needs_login, has_account, is_locked))
-                    },
-                    Ok(Response::Error { message }) => {
-                        tracing::error!("Agent error: {}", message);
-                        Err(message)
-                    },
-                    Ok(_) => {
-                        tracing::error!("Unexpected response from agent");
-                        Err("unexpected response from agent".to_string())
-                    },
-                    Err(e) => {
-                        tracing::error!("Failed to connect to agent: {}", e);
-                        Err(format!("failed to connect to agent: {}", e))
-                    },
-                }
-            }, |res| cosmic::Action::App(Message::ConfigReceived(res))),
+            crate::app::tasks::check_protocol_version(),
+            Task::perform(
+                async {
+                    tracing::debug!("Connecting to agent...");
+                    let agent = AgentClient::new();
+                    match agent.send(AgentAction::GetConfig).await {
+                        Ok(Response::Config {
+                            config,
+                            needs_login,
+                            has_account,
+                            is_locked,
+                        }) => {
+                            tracing::info!(
+                                needs_login,
+                                has_account,
+                                is_locked,
+                                "Agent config received"
+                            );
+                            Ok((config, needs_login, has_account, is_locked))
+                        }
+                        Ok(Response::Error { message }) => {
+                            tracing::error!("Agent error: {}", message);
+                            Err(message)
+                        }
+                        Ok(_) => {
+                            tracing::error!("Unexpected response from agent");
+                            Err("unexpected response from agent".to_string())
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to connect to agent: {}", e);
+                            Err(format!("failed to connect to agent: {}", e))
+                        }
+                    }
+                },
+                |res| cosmic::Action::App(Message::ConfigReceived(res)),
+            ),
         ];
 
         if std::env::var("COSMIC_PANEL_NAME").is_err() {
             tracing::info!("Not run as applet");
             // In standalone mode, the main window will show the vault UI
         } else {
-            tracing::info!("Run as applet in {}", std::env::var("COSMIC_PANEL_NAME").unwrap());
+            tracing::info!(
+                "Run as applet in {}",
+                std::env::var("COSMIC_PANEL_NAME").unwrap()
+            );
         }
 
         (app, Task::batch(tasks))
@@ -170,8 +187,8 @@ impl Application for CosmicBWardenApp {
             self.applet_view()
         } else {
             // Standard window view
-            use cosmic::widget::{column, header_bar, container};
             use cosmic::iced::Length;
+            use cosmic::widget::{column, container, header_bar};
             let content = self.view_content();
             let is_auth = matches!(self.view, View::Setup | View::Unlock);
 
@@ -191,7 +208,8 @@ impl Application for CosmicBWardenApp {
                     .into()
             };
 
-            let window_content: cosmic::Element<Message> = if let Some(dialog) = self.view_dialogs() {
+            let window_content: cosmic::Element<Message> = if let Some(dialog) = self.view_dialogs()
+            {
                 let modal = container(dialog)
                     .width(Length::Fill)
                     .height(Length::Fill)
@@ -204,12 +222,11 @@ impl Application for CosmicBWardenApp {
                 view
             };
 
-            container(column![
-                header_bar().title(""),
-                window_content
-            ]
-            .width(Length::Fill)
-            .height(Length::Fill))
+            container(
+                column![header_bar().title(""), window_content]
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+            )
             .class(cosmic::theme::Container::WindowBackground)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -222,12 +239,13 @@ impl Application for CosmicBWardenApp {
     }
 
     fn subscription(&self) -> Subscription<Self::Message> {
-        use cosmic::iced::Subscription;
-        use cosmic::cosmic_config::Update;
         use cosmic::applet::token::subscription::activation_token_subscription;
+        use cosmic::cosmic_config::Update;
+        use cosmic::iced::Subscription;
         use cosmic_bwarden_core::config::CosmicBWardenConfig;
 
-        let config_watch = self.core
+        let config_watch = self
+            .core
             .watch_config(cosmic_bwarden_core::config::CONFIG_ID)
             .map(|u: Update<CosmicBWardenConfig>| {
                 for why in u
@@ -295,11 +313,7 @@ impl Application for CosmicBWardenApp {
             Subscription::none()
         };
 
-        Subscription::batch(vec![
-            config_watch,
-            agent_subscription,
-            token_subscription,
-        ])
+        Subscription::batch(vec![config_watch, agent_subscription, token_subscription])
     }
 
     fn style(&self) -> Option<cosmic::iced::theme::Style> {
@@ -315,7 +329,10 @@ impl Application for CosmicBWardenApp {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_logs();
 
-    let args = Cli::try_parse().unwrap_or_else(|_| Cli { config: None, socket: None });
+    let args = Cli::try_parse().unwrap_or_else(|_| Cli {
+        config: None,
+        socket: None,
+    });
     let flags = AppFlags {
         config: args.config,
         socket: args.socket,

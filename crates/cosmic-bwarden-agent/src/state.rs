@@ -11,6 +11,9 @@ pub struct State {
     pub name_cache: HashMap<String, String>, // id -> decrypted name
     pub username_cache: HashMap<String, String>, // id -> decrypted username
     pub pubkey_cache: HashMap<String, String>, // id -> decrypted SSH public key
+    /// Entry id to navigate to when the vault window next opens/connects.
+    /// Set by `Action::SetPendingEntry` from the applet; cleared on delivery.
+    pub pending_entry_id: Option<String>,
     pub subscribers: Vec<mpsc::UnboundedSender<cosmic_bwarden_core::protocol::Event>>,
     pub shutdown_tx: Option<mpsc::UnboundedSender<()>>,
     /// Set once an `Event::UnlockRequested` has been broadcast for the
@@ -30,6 +33,7 @@ impl State {
             name_cache: HashMap::new(),
             username_cache: HashMap::new(),
             pubkey_cache: HashMap::new(),
+            pending_entry_id: None,
             subscribers: Vec::new(),
             shutdown_tx: None,
             unlock_requested_notified: false,
@@ -50,6 +54,7 @@ impl State {
         self.name_cache.clear();
         self.username_cache.clear();
         self.pubkey_cache.clear();
+        self.pending_entry_id = None;
         self.unlock_requested_notified = false;
         self.broadcast(cosmic_bwarden_core::protocol::Event::Locked);
     }

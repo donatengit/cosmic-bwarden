@@ -120,6 +120,9 @@ pub enum Action {
         fields: Vec<crate::db::Field>,
     },
 
+    SetPendingEntry {
+        id: String,
+    },
     Quit,
     Version,
     DeleteEntry {
@@ -142,20 +145,47 @@ pub enum Event {
     /// subscribers can prompt the user to unlock without being spammed by
     /// repeated requests.
     UnlockRequested,
+    /// Requests the vault window to open and navigate to a specific entry.
+    OpenEntry { id: String },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub enum Response {
     Ack,
-    Error { message: String },
-    TwoFactorRequired { token: String, providers: Vec<u32> },
+    Error {
+        message: String,
+    },
+    TwoFactorRequired {
+        token: String,
+        providers: Vec<u32>,
+    },
     NewDeviceVerificationRequired,
-    Config { config: crate::config::CosmicBWardenConfig, needs_login: bool, has_account: bool, is_locked: bool },
-    Entries { entries: Vec<crate::db::Entry> },
-    SidebarEntries { entries: Vec<SidebarEntry> },
-    Entry { entry: crate::db::Entry },
-    Password { password: String },
-    Totp { code: String },
-    Version { version: String },
-    Event { event: Event },
+    Config {
+        config: crate::config::CosmicBWardenConfig,
+        needs_login: bool,
+        has_account: bool,
+        is_locked: bool,
+    },
+    Entries {
+        entries: Vec<crate::db::Entry>,
+    },
+    SidebarEntries {
+        entries: Vec<SidebarEntry>,
+    },
+    Entry {
+        entry: crate::db::Entry,
+    },
+    Password {
+        password: String,
+    },
+    Totp {
+        code: String,
+    },
+    Version {
+        version: String,
+        protocol_version: String,
+    },
+    Event {
+        event: Event,
+    },
 }

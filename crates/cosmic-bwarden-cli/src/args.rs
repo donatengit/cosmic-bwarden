@@ -4,7 +4,7 @@ use cosmic_bwarden_core::protocol::EntryType as ProtocolEntryType;
 #[derive(Parser)]
 #[command(
     author,
-    version,
+    version = cosmic_bwarden_core::version(),
     about = "cosmic-bwarden: A secure COSMIC Bitwarden client",
     long_about = "A secure Bitwarden client for the COSMIC desktop, featuring a background agent and CLI.",
     after_help = "EXAMPLES:
@@ -186,8 +186,12 @@ ENTRY TYPE DETAILS:
         #[arg(short, long)]
         notes: Option<String>,
     },
+    /// Log out and clear local session data
+    Logout,
     /// Check if vault is unlocked
     Unlocked,
     /// Stop the agent
     Quit,
+    /// Show version information and check agent compatibility
+    Version,
 }

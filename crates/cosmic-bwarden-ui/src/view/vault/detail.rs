@@ -163,7 +163,12 @@ impl CosmicBWardenApp {
                 .width(Length::Fill));
         }
 
-        outer = outer.push(text::caption(format!("ID: {}", entry.id)).class(muted_text()));
+        outer = outer.push(
+            button::custom(text::caption(format!("ID: {}", entry.id)).class(muted_text()))
+                .on_press(Message::CopyToClipboard(entry.id.clone()))
+                .class(cosmic::theme::Button::Text)
+                .padding([2, 0]),
+        );
 
         outer.into()
     }

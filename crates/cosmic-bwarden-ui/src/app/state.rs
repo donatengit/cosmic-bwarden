@@ -1,10 +1,10 @@
-use std::collections::{HashMap, HashSet};
 use cosmic::app::Core;
 use cosmic::iced::window;
 use cosmic::widget;
-use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
-use cosmic_bwarden_core::db::Entry;
 use cosmic_bwarden_core::config::CosmicBWardenConfig;
+use cosmic_bwarden_core::db::Entry;
+use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
+use std::collections::{HashMap, HashSet};
 
 use crate::message::{View, WindowState};
 
@@ -40,7 +40,11 @@ pub struct CosmicBWardenApp {
     pub unlock_password: String,
 
     // Applet State
-    pub token_tx: Option<cosmic::cctk::sctk::reexports::calloop::channel::Sender<cosmic::applet::token::subscription::TokenRequest>>,
+    pub token_tx: Option<
+        cosmic::cctk::sctk::reexports::calloop::channel::Sender<
+            cosmic::applet::token::subscription::TokenRequest,
+        >,
+    >,
     pub applet_popup: Option<window::Id>,
     pub applet_unlock_password: String,
     pub applet_error: Option<String>,
@@ -53,6 +57,7 @@ pub struct CosmicBWardenApp {
     pub applet_unlock_password_revealed: bool,
     pub applet_reprompt_password_revealed: bool,
     pub applet_toasts: widget::Toasts<crate::message::Message>,
+    pub applet_quit_expanded: bool,
 
     // Settings editing state
     pub editing_config: Option<CosmicBWardenConfig>,
@@ -68,6 +73,10 @@ pub struct CosmicBWardenApp {
     pub reprompt_password: String,
     pub edit_password_revealed: bool,
     pub reprompt_password_revealed: bool,
+    pub protocol_mismatch: bool,
+    /// Entry id received via `Event::OpenEntry` before the vault view was ready.
+    /// Applied as `SelectEntry` on the next transition to `View::Vault`.
+    pub pending_vault_entry: Option<String>,
 }
 
 impl Default for CosmicBWardenApp {
@@ -107,6 +116,7 @@ impl Default for CosmicBWardenApp {
             applet_unlock_password_revealed: false,
             applet_reprompt_password_revealed: false,
             applet_toasts: widget::Toasts::new(crate::message::Message::CloseToast),
+            applet_quit_expanded: false,
             editing_config: None,
             settings_lock_timeout: String::new(),
             settings_popular_count: String::new(),
@@ -120,6 +130,8 @@ impl Default for CosmicBWardenApp {
             reprompt_password: String::new(),
             edit_password_revealed: false,
             reprompt_password_revealed: false,
+            protocol_mismatch: false,
+            pending_vault_entry: None,
         }
     }
 }

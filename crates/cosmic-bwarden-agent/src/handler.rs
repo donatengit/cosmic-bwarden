@@ -37,7 +37,7 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
         | Action::AddSshKey { .. }
         | Action::GetTopFrequent { .. } => vault::handle_request(action, state).await,
         // Subscription / control actions
-        Action::Subscribe | Action::Quit => {
+        Action::Subscribe | Action::Quit | Action::SetPendingEntry { .. } => {
             subscription_handler::handle_request(action, state).await
         }
     }

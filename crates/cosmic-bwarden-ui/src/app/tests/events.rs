@@ -3,6 +3,7 @@ use crate::message::Message;
 use crate::message::View;
 use cosmic::Application;
 use cosmic_bwarden_core::db::{Entry, EntryData};
+use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
 
 fn create_test_entry(id: &str, name: &str) -> Entry {
     Entry {
@@ -57,6 +58,34 @@ async fn test_reactive_events() {
     assert_eq!(app.view, View::Vault);
 }
 
+// Bug (d)/(f): EventReceived(Locked) must clear entries and any prior error
+// immediately, regardless of whether the lock was triggered by the user or
+// by a logout. Prior code preserved entries and error across the transition.
+#[tokio::test]
+async fn test_event_locked_clears_entries_and_error() {
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+    app.entries = vec![SidebarEntry {
+        id: "1".to_string(),
+        name: "Some Entry".to_string(),
+        username: None,
+        public_key: None,
+        entry_type: EntryType::Login,
+        is_pinned: false,
+    }];
+    app.error = Some("sync failed: no API session token".to_string());
+    app.selected_entry_id = Some("1".to_string());
+
+    let _ = app.update(Message::EventReceived(
+        cosmic_bwarden_core::protocol::Event::Locked,
+    ));
+
+    assert_eq!(app.view, View::Unlock);
+    assert!(app.entries.is_empty(), "EventReceived(Locked) must clear sidebar entries");
+    assert!(app.error.is_none(), "EventReceived(Locked) must clear app.error");
+    assert!(app.selected_entry_id.is_none());
+}
+
 #[tokio::test]
 async fn test_unlock_requested_event_shows_unlock_view() {
     let mut app = CosmicBWardenApp::default();
@@ -68,4 +97,37 @@ async fn test_unlock_requested_event_shows_unlock_view() {
     ));
     assert_eq!(app.view, View::Unlock);
     assert!(app.selected_entry_id.is_none());
+}
+
+#[tokio::test]
+async fn test_open_entry_event_dispatches_select_entry_when_in_vault() {
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+
+    // EventReceived(OpenEntry) returns Task::done(SelectEntry(id)).
+    // In tests the runtime doesn't execute returned tasks, so we simulate the
+    // two-step dispatch: OpenEntry → SelectEntry.
+    let _ = app.update(Message::EventReceived(
+        cosmic_bwarden_core::protocol::Event::OpenEntry { id: "entry-42".to_string() },
+    ));
+    // View must not have changed.
+    assert_eq!(app.view, View::Vault);
+
+    // Now simulate the runtime delivering the inner SelectEntry message.
+    let _ = app.update(Message::SelectEntry("entry-42".to_string()));
+    assert_eq!(app.selected_entry_id.as_deref(), Some("entry-42"));
+}
+
+#[tokio::test]
+async fn test_open_entry_event_stores_pending_when_not_in_vault() {
+    let mut app = CosmicBWardenApp::default();
+    // View::Loading is the initial state before ConfigReceived
+    assert_eq!(app.view, View::Loading);
+
+    let _ = app.update(Message::EventReceived(
+        cosmic_bwarden_core::protocol::Event::OpenEntry { id: "entry-42".to_string() },
+    ));
+    // Not in vault → stored for later, SelectEntry NOT dispatched yet
+    assert!(app.selected_entry_id.is_none());
+    assert_eq!(app.pending_vault_entry.as_deref(), Some("entry-42"));
 }

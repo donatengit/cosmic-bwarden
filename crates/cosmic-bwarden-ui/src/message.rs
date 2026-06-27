@@ -88,6 +88,9 @@ pub enum Message {
     AppletCopyPrimary(String),
     AppletCopySecret(String),
     AppletSecretReceived(Result<String, (String, String)>),
+    AppletOpenInVault(String),
+    AppletOpenLink(String),
+    AppletQuitMenuToggle,
 
     // Applet popup: inline reprompt for AppletCopySecret
     AppletRepromptPasswordChanged(String),

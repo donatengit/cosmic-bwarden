@@ -4,6 +4,17 @@ use crate::output::handle_response;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action, Response};
 
+pub fn check_protocol_compatibility(local: &str, protocol: &str) -> Result<()> {
+    if local != protocol {
+        anyhow::bail!(
+            "Version mismatch! CLI (v{}) is incompatible with agent (protocol v{}).",
+            local,
+            protocol,
+        );
+    }
+    Ok(())
+}
+
 pub async fn handle_command(cli: &Cli, client: &AgentClient) -> Result<()> {
     match &cli.command {
         Commands::Register {
@@ -132,12 +143,51 @@ pub async fn handle_command(cli: &Cli, client: &AgentClient) -> Result<()> {
                 Err(e) => anyhow::bail!("Agent is not running or not reachable: {}", e),
             }
         }
+        Commands::Logout => {
+            let res = client.send(Action::Logout).await?;
+            handle_response(res)?;
+            println!("Logged out successfully");
+        }
         Commands::Quit => {
             let res = client.send(Action::Quit).await?;
             handle_response(res)?;
             println!("Agent quit successfully");
         }
+        Commands::Version => {
+            let res = client.send(Action::Version).await?;
+            if let Response::Version {
+                version: agent_version,
+                protocol_version,
+            } = res
+            {
+                let local = cosmic_bwarden_core::version();
+                println!("Local version:     {}", local);
+                println!("Agent version:     {}", agent_version);
+                println!("Protocol version:  {}", protocol_version);
+                check_protocol_compatibility(local, &protocol_version)?;
+                println!("Compatibility:     OK");
+            } else {
+                anyhow::bail!("Unexpected response: {:?}", res);
+            }
+        }
         _ => unreachable!(),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_version_match_ok() {
+        assert!(check_protocol_compatibility("2026.06-100-abc", "2026.06-100-abc").is_ok());
+    }
+
+    #[test]
+    fn test_version_mismatch_error() {
+        let err =
+            check_protocol_compatibility("2026.06-100-abc", "0.0.0-fake").unwrap_err();
+        assert!(err.to_string().contains("Version mismatch"));
+    }
 }

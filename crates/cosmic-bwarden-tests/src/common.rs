@@ -252,8 +252,8 @@ pub async fn logout_login_cycle(
         })
         .await?;
     if let Response::Error { message } = res {
-        if !message.contains("not logged in") && !message.contains("locked") {
-            anyhow::bail!("Expected not logged in error, got: {}", message);
+        if !message.contains("no API session token") && !message.contains("locked") {
+            anyhow::bail!("Expected session-token or locked error, got: {}", message);
         }
     } else {
         anyhow::bail!("Expected error response when logged out, got: {:?}", res);
