@@ -185,11 +185,12 @@ async fn test_pinning_lifecycle() -> Result<()> {
         }
     }
 
-    // 3. Verify Top Frequent (now returns pinned entries)
+    // 3. Verify pinned sidebar entries
     let res = client
-        .send(Action::GetTopFrequent {
-            limit: 5,
-            days: None,
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: true,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {
@@ -198,7 +199,7 @@ async fn test_pinning_lifecycle() -> Result<()> {
         assert!(entries.iter().any(|e| e.id == id2));
         assert!(entries.iter().any(|e| e.id == id3));
     } else {
-        anyhow::bail!("Expected top frequent entries");
+        anyhow::bail!("Expected pinned sidebar entries");
     }
 
     // 4. Persistence across restart
@@ -224,9 +225,10 @@ async fn test_pinning_lifecycle() -> Result<()> {
         .await?;
 
     let res = client
-        .send(Action::GetTopFrequent {
-            limit: 5,
-            days: None,
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: true,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {
@@ -236,7 +238,7 @@ async fn test_pinning_lifecycle() -> Result<()> {
             "Pinned status should be persisted on server"
         );
     } else {
-        anyhow::bail!("Expected top frequent entries after restart");
+        anyhow::bail!("Expected pinned sidebar entries after restart");
     }
 
     // 5. Unpinning
@@ -244,9 +246,10 @@ async fn test_pinning_lifecycle() -> Result<()> {
     client.send(Action::Sync).await?;
 
     let res = client
-        .send(Action::GetTopFrequent {
-            limit: 5,
-            days: None,
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: true,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {
@@ -259,9 +262,10 @@ async fn test_pinning_lifecycle() -> Result<()> {
     client.send(Action::Sync).await?;
 
     let res = client
-        .send(Action::GetTopFrequent {
-            limit: 5,
-            days: None,
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: true,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {

@@ -5,15 +5,41 @@ use crate::app::CosmicBWardenApp;
 use crate::message::{Message, View};
 use crate::fl;
 
-/// Top header row: "Open Vault" + Lock|Logout icon buttons (or just Logout when locked).
+/// Top header row: "Open Vault" (or "⚠ Not synced" in red) + Lock|Logout icon buttons.
 pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
-    let open_btn = button::text(fl!("open-vault-window"))
-        .on_press(Message::OpenVaultRequested)
-        .width(Length::Fill);
-
     let is_unlocked = matches!(app.view, View::Vault | View::Settings);
 
-    let mut action_row = row::with_capacity(2).spacing(0).align_y(Alignment::Center);
+    let open_btn: Element<'static, Message> = if app.sync_failed && is_unlocked {
+        button::destructive(fl!("open-vault-window"))
+            .on_press(Message::OpenVaultRequested)
+            .width(Length::Fill)
+            .into()
+    } else {
+        button::text(fl!("open-vault-window"))
+            .on_press(Message::OpenVaultRequested)
+            .width(Length::Fill)
+            .into()
+    };
+
+    let mut action_row = row::with_capacity(3).spacing(0).align_y(Alignment::Center);
+
+    if app.sync_failed && is_unlocked {
+        let session_expired = app.error.as_deref()
+            .map(|e| e.contains("session token"))
+            .unwrap_or(false);
+        let (icon_name, tooltip_label, action) = if session_expired {
+            ("dialog-password-symbolic", "Session expired — click to log in again", Message::LogoutClicked)
+        } else {
+            ("network-error-symbolic", "Not synced — click to retry", Message::SyncClicked)
+        };
+        let not_synced_btn = tooltip(
+            button::icon(icon::from_name(icon_name))
+                .on_press(action),
+            text::caption(tooltip_label),
+            tooltip::Position::Bottom,
+        );
+        action_row = action_row.push(not_synced_btn);
+    }
 
     if is_unlocked {
         let lock_btn = tooltip(
@@ -39,16 +65,6 @@ pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
         .push(open_btn)
         .push(action_row)
         .into()
-}
-
-/// Version caption row, shown below the header.
-pub fn version_row() -> Element<'static, Message> {
-    container(
-        text::caption(cosmic_bwarden_core::version())
-            .class(crate::view::style::muted_text()),
-    )
-    .padding([0, 4])
-    .into()
 }
 
 /// Quit footer: a single "Quit" button that expands to show sub-actions.

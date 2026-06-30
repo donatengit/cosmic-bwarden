@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "CosmicBWarden UI"
 
+[[bin]]
+name = "cosmic-applet-bwarden"
+path = "src/main.rs"
+
 [dependencies]
 cosmic-bwarden-core = { path = "../cosmic-bwarden-core" }
 anyhow = { workspace = true }

@@ -57,23 +57,6 @@ pub fn fetch_sidebar_entries(
     )
 }
 
-pub fn fetch_top_entries(limit: usize, days: Option<u32>) -> Task<Message> {
-    Task::perform(
-        async move {
-            let agent = AgentClient::new();
-            match agent
-                .send(AgentAction::GetTopFrequent { limit, days })
-                .await
-            {
-                Ok(Response::SidebarEntries { entries }) => Ok(entries),
-                Ok(Response::Error { message }) => Err(message),
-                _ => Err("unexpected response".to_string()),
-            }
-        },
-        |res| Action::App(Message::TopEntriesReceived(res)),
-    )
-}
-
 pub fn fetch_applet_search(id: u32, query: Option<String>, only_pinned: bool) -> Task<Message> {
     Task::perform(
         async move {

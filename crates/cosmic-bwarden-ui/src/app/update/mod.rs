@@ -41,7 +41,6 @@ impl CosmicBWardenApp {
             | Message::LogoutClicked
             | Message::LogoutResult
             | Message::SearchChanged(_)
-            | Message::SearchSubmitted(_)
             | Message::FilterTypeChanged(_)
             | Message::SelectEntry(_)
             | Message::EntryReceived(_)
@@ -58,7 +57,6 @@ impl CosmicBWardenApp {
             | Message::CancelDelete
             | Message::DeleteEntryResult(_)
             | Message::EntriesReceived(_, _)
-            | Message::TopEntriesReceived(_)
             | Message::SyncClicked
             | Message::SyncResult(_)
             | Message::TogglePin(_)
@@ -96,14 +94,32 @@ impl CosmicBWardenApp {
             | Message::AppletOpenLink(_)
             | Message::AppletQuitMenuToggle
             | Message::CloseToast(_)
-            | Message::ProtocolVersionCheck(_) => Task::none(),
+            | Message::ProtocolVersionCheck(_)
+            | Message::AppletPinChanged(_)
+            | Message::AppletPinSubmitted
+            | Message::AppletPinResult(_)
+            | Message::AppletTogglePinReveal
+            | Message::AppletUseMasterPasswordInstead
+            | Message::MainWindowPinChanged(_)
+            | Message::MainWindowPinSubmitted
+            | Message::TpmStatusReceived(_)
+            | Message::TpmDiagnosticsReceived(_)
+            | Message::TpmSetupFormToggle
+            | Message::TpmDisableFormToggle
+            | Message::TpmSetupPinChanged(_)
+            | Message::TpmSetupPinRevealToggled
+            | Message::TpmSetupSubmitted
+            | Message::TpmSetupResult(_)
+            | Message::TpmDisableSubmitted
+            | Message::TpmDisableResult(_)
+            | Message::TpmServerCredentialsToggled(_)
+            | Message::TpmServerCredentialsResult(_)
+            | Message::LoginPinEnabledToggled(_)
+            | Message::LoginPinChanged(_)
+            | Message::LoginPinRevealToggled => Task::none(),
 
             Message::CopyToClipboard(text) => {
                 cosmic::iced::clipboard::write(text).map(|_: ()| cosmic::Action::None)
-            }
-            Message::ConfigChanged(config) => {
-                self.config = config;
-                Task::none()
             }
             Message::ToggleRevealField(id, field) => {
                 let key = (id, field);
@@ -131,7 +147,9 @@ impl CosmicBWardenApp {
                 self.selected_entry_id = None;
                 self.selected_entry = None;
                 self.editing_entry = None;
-                Task::none()
+                // Refresh TPM status every time settings opens — hardware
+                // state or group membership may have changed since startup.
+                lifecycle::check_tpm_task()
             }
             Message::VaultViewClicked => {
                 self.view = crate::message::View::Vault;
@@ -139,24 +157,30 @@ impl CosmicBWardenApp {
             }
             Message::SettingsEditClicked => {
                 self.editing_config = Some(self.config.clone());
-                self.settings_lock_timeout = format!("{}", self.config.lock_timeout / 60);
-                self.settings_popular_count = format!("{}", self.config.top_popular_count);
-                self.settings_popular_days = format!("{}", self.config.top_popular_days);
                 Task::none()
             }
             Message::SettingsSaveClicked => {
-                if let Some(mut config) = self.editing_config.take() {
-                    if let Ok(minutes) = self.settings_lock_timeout.parse::<u64>() {
-                        config.lock_timeout = minutes * 60;
-                    }
-                    if let Ok(count) = self.settings_popular_count.parse::<u32>() {
-                        config.top_popular_count = count;
-                    }
-                    if let Ok(days) = self.settings_popular_days.parse::<u32>() {
-                        config.top_popular_days = days;
-                    }
+                if let Some(config) = self.editing_config.take() {
                     self.config = config.clone();
-                    Task::done(cosmic::Action::App(Message::VaultViewClicked))
+                    let lock_timeout = config.lock_timeout;
+                    // Persist to disk so the agent picks it up on next restart.
+                    if let Err(e) = config.save_legacy() {
+                        tracing::error!("failed to save config: {}", e);
+                    }
+                    // Stay on the Settings pane after save.
+                    self.view = crate::message::View::Settings;
+                    // Notify the running agent to update its live timer.
+                    Task::perform(
+                        async move {
+                            let agent = cosmic_bwarden_core::agent_client::AgentClient::new();
+                            let _ = agent
+                                .send(cosmic_bwarden_core::protocol::Action::UpdateLockTimeout {
+                                    seconds: lock_timeout,
+                                })
+                                .await;
+                        },
+                        |_| cosmic::Action::None,
+                    )
                 } else {
                     Task::none()
                 }
@@ -165,28 +189,16 @@ impl CosmicBWardenApp {
                 self.editing_config = None;
                 Task::none()
             }
-            Message::SettingsEmailChanged(e) => {
-                if let Some(config) = &mut self.editing_config {
-                    config.email = Some(e);
-                }
-                Task::none()
-            }
             Message::SettingsServerChanged(s) => {
                 if let Some(config) = &mut self.editing_config {
                     config.base_url = Some(s);
                 }
                 Task::none()
             }
-            Message::SettingsLockTimeoutChanged(v) => {
-                self.settings_lock_timeout = v;
-                Task::none()
-            }
-            Message::SettingsPopularCountChanged(v) => {
-                self.settings_popular_count = v;
-                Task::none()
-            }
-            Message::SettingsPopularDaysChanged(v) => {
-                self.settings_popular_days = v;
+            Message::SettingsLockTimeoutChanged(minutes) => {
+                if let Some(config) = &mut self.editing_config {
+                    config.lock_timeout = minutes as u64 * 60;
+                }
                 Task::none()
             }
             Message::ToggleAdvanced => {

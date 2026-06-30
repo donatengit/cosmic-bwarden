@@ -51,6 +51,8 @@ impl ssh_agent_lib::agent::Session for SshAgent {
             state.request_unlock();
             return Ok(Vec::new());
         };
+        let empty_org_keys = std::collections::HashMap::new();
+        let org_keys = state.org_keys.as_ref().unwrap_or(&empty_org_keys);
 
         let mut identities = Vec::new();
         for entry in &db.entries {
@@ -61,7 +63,7 @@ impl ssh_agent_lib::agent::Session for SshAgent {
             // sub-data empty; `decrypt()` falls back to the
             // "public_key"/"private_key" custom fields where the real
             // (encrypted) values actually live.
-            let decrypted = entry.decrypt(keys);
+            let decrypted = entry.decrypt(keys, org_keys);
             if let cosmic_bwarden_core::db::EntryData::SshKey { public_key: Some(pk_str), .. } = &decrypted.data {
                 if let Ok(pk) = pk_str.parse::<PublicKey>() {
                     identities.push(Identity {
@@ -97,6 +99,8 @@ impl ssh_agent_lib::agent::Session for SshAgent {
             state.request_unlock();
             return Err(ssh_agent_lib::error::AgentError::other(cosmic_bwarden_core::error::Error::Other("agent is locked".to_string())));
         };
+        let empty_org_keys = std::collections::HashMap::new();
+        let org_keys = state.org_keys.as_ref().unwrap_or(&empty_org_keys);
 
         let req_pubkey = PublicKey::new(request.pubkey, "");
         let req_bytes = req_pubkey.to_bytes();
@@ -108,7 +112,7 @@ impl ssh_agent_lib::agent::Session for SshAgent {
             // See comment in `request_identities`: decrypt via the entry's
             // fallback-field-aware `decrypt()` rather than the raw
             // (often-empty) SSH-key cipher sub-data.
-            let decrypted = entry.decrypt(keys);
+            let decrypted = entry.decrypt(keys, org_keys);
             if let cosmic_bwarden_core::db::EntryData::SshKey { private_key: Some(sk), public_key: Some(pk_str), .. } = &decrypted.data {
                 if let Ok(pk) = pk_str.parse::<PublicKey>() {
                     if pk.to_bytes() == req_bytes {

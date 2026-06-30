@@ -18,7 +18,10 @@ pub async fn handle_login(
 ) -> Response {
     let mut config = match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
         Ok(c) => c,
-        Err(_) => cosmic_bwarden_core::config::CosmicBWardenConfig::default(),
+        Err(e) => {
+            log::debug!("login: no existing config ({}); starting fresh", e);
+            cosmic_bwarden_core::config::CosmicBWardenConfig::default()
+        }
     };
     if let Some(url) = server_url {
         config.base_url = Some(url);
@@ -102,8 +105,13 @@ pub async fn handle_login(
         }
     }
 
-    let mut db = cosmic_bwarden_core::db::Db::load(&config.server_name(), &email)
-        .unwrap_or_else(|_| cosmic_bwarden_core::db::Db::new());
+    let mut db = match cosmic_bwarden_core::db::Db::load(&config.server_name(), &email) {
+        Ok(db) => db,
+        Err(e) => {
+            log::warn!("could not load existing vault DB ({}); starting fresh — data may be lost if disk is full or permissions are wrong", e);
+            cosmic_bwarden_core::db::Db::new()
+        }
+    };
     db.access_token = Some(Secret::from(access_token.clone()));
     db.refresh_token = refresh_token.map(Secret::from);
     db.kdf = Some(kdf);
@@ -165,8 +173,10 @@ pub async fn handle_login(
                 }
             }
             state_guard.db = Some(db);
+            state_guard.rebuild_sidebar_cache();
 
             state_guard.broadcast(Event::Unlocked);
+            log::info!("login: {} authenticated (server: {})", email, config.server_name());
             Response::Ack
         }
         Err(e) => Response::Error {

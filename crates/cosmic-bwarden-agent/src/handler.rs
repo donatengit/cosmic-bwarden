@@ -9,15 +9,31 @@ use tokio::sync::Mutex;
 
 pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Response {
     log::info!("Received action: {:?}", action);
+    let response = dispatch(action, state).await;
+    if let Response::Error { message } = &response {
+        log::error!("Action returned error: {}", message);
+    }
+    response
+}
+
+async fn dispatch(action: Action, state: &Arc<Mutex<State>>) -> Response {
     match action {
-        // Authentication actions
+        // Authentication and TPM PIN actions
         Action::Version
         | Action::GetConfig
         | Action::Register { .. }
         | Action::Login { .. }
         | Action::Unlock { .. }
         | Action::Lock
-        | Action::Logout => auth::handle_request(action, state).await,
+        | Action::Logout
+        | Action::CheckTpm
+        | Action::CheckTpmDiagnostics
+        | Action::SetupTpmPin { .. }
+        | Action::SetupTpmPinFromUnlocked { .. }
+        | Action::UnlockWithPin { .. }
+        | Action::DisableTpmPin
+        | Action::EnableTpmServerCredentials
+        | Action::DisableTpmServerCredentials => auth::handle_request(action, state).await,
         // Vault operations
         Action::Sync
         | Action::GetEntries { .. }
@@ -34,11 +50,12 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
         | Action::AddSecureNote { .. }
         | Action::AddCard { .. }
         | Action::AddIdentity { .. }
-        | Action::AddSshKey { .. }
-        | Action::GetTopFrequent { .. } => vault::handle_request(action, state).await,
+        | Action::AddSshKey { .. } => vault::handle_request(action, state).await,
         // Subscription / control actions
         Action::Subscribe | Action::Quit | Action::SetPendingEntry { .. } => {
             subscription_handler::handle_request(action, state).await
         }
+        // Intercepted in main.rs before reaching dispatch
+        Action::UpdateLockTimeout { .. } => Response::Ack,
     }
 }

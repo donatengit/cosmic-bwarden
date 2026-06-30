@@ -52,20 +52,34 @@ pub fn db_file(server: &str, email: &str) -> std::path::PathBuf {
     cache_dir().join(format!("{server}:{email}.json"))
 }
 
-pub fn pid_file() -> std::path::PathBuf {
-    runtime_dir().join("pidfile")
-}
-
-pub fn agent_stdout_file() -> std::path::PathBuf {
-    data_dir().join("agent.out")
-}
-
-pub fn agent_stderr_file() -> std::path::PathBuf {
-    data_dir().join("agent.err")
-}
-
 pub fn device_id_file() -> std::path::PathBuf {
     data_dir().join("device_id")
+}
+
+/// Path for the per-account TPM sealed-blob file.
+/// Uses an 8-hex-char prefix of SHA-256(server ‖ '\0' ‖ email) to avoid
+/// special characters in the filename while keeping it unique per account.
+pub fn tpm_blob_file(server: &str, email: &str) -> std::path::PathBuf {
+    use sha2::{Digest as _, Sha256};
+    let mut h = Sha256::new();
+    h.update(server.as_bytes());
+    h.update(b"\0");
+    h.update(email.as_bytes());
+    let hex = format!("{:x}", h.finalize());
+    data_dir().join(format!("tpm_sealed_{}.bin", &hex[..16]))
+}
+
+/// Path for the per-account TPM sealed master-password-hash blob file.
+/// Distinct from `tpm_blob_file` (vault keys) — same account-hash prefix but
+/// different filename so both blobs can coexist independently.
+pub fn tpm_hash_blob_file(server: &str, email: &str) -> std::path::PathBuf {
+    use sha2::{Digest as _, Sha256};
+    let mut h = Sha256::new();
+    h.update(server.as_bytes());
+    h.update(b"\0");
+    h.update(email.as_bytes());
+    let hex = format!("{:x}", h.finalize());
+    data_dir().join(format!("tpm_sealed_hash_{}.bin", &hex[..16]))
 }
 
 pub fn socket_file() -> std::path::PathBuf {

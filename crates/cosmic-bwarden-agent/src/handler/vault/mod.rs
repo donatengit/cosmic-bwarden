@@ -149,7 +149,6 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
             )
             .await
         }
-        Action::GetTopFrequent { limit, .. } => query::handle_get_top_frequent(limit, state).await,
         _ => Response::Error {
             message: "not implemented in vault handler".to_string(),
         },

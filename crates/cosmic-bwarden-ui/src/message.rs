@@ -21,7 +21,7 @@ pub enum WindowState {
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    ConfigReceived(Result<(CosmicBWardenConfig, bool, bool, bool), String>),
+    ConfigReceived(Result<(CosmicBWardenConfig, bool, bool, bool, bool), String>),
 
     // Window management
     WindowClosed(window::Id),
@@ -44,7 +44,6 @@ pub enum Message {
 
     // Vault actions
     SearchChanged(String),
-    SearchSubmitted(String),
     FilterTypeChanged(Option<EntryType>),
     SelectEntry(String),
     EntryReceived(Result<Entry, String>),
@@ -55,7 +54,6 @@ pub enum Message {
     EditFieldChanged(String, String), // field name, value
     EditNameChanged(String),
     EntriesReceived(u32, Result<Vec<SidebarEntry>, String>),
-    TopEntriesReceived(Result<Vec<SidebarEntry>, String>),
     CopyToClipboard(String),
     NotesAction(widget::text_editor::Action),
     DeleteEntry(String),
@@ -107,9 +105,6 @@ pub enum Message {
     // Toast dismissal
     CloseToast(ToastId),
 
-    // Config actions
-    ConfigChanged(CosmicBWardenConfig),
-
     // UI actions
     ToggleRevealField(String, String), // id, field
     ToggleMasterPasswordReveal,
@@ -134,9 +129,32 @@ pub enum Message {
     SettingsEditClicked,
     SettingsSaveClicked,
     SettingsCancelClicked,
-    SettingsEmailChanged(String),
     SettingsServerChanged(String),
-    SettingsLockTimeoutChanged(String),
-    SettingsPopularCountChanged(String),
-    SettingsPopularDaysChanged(String),
+    SettingsLockTimeoutChanged(u32),
+    // TPM PIN setup during login
+    LoginPinEnabledToggled(bool),
+    LoginPinChanged(String),
+    LoginPinRevealToggled,
+
+    // TPM / PIN unlock
+    AppletPinChanged(String),
+    AppletPinSubmitted,
+    AppletPinResult(Result<(), String>),
+    AppletTogglePinReveal,
+    AppletUseMasterPasswordInstead,
+    // Main-window PIN unlock (shown in View::Unlock when tpm_configured)
+    MainWindowPinChanged(String),
+    MainWindowPinSubmitted,
+    TpmStatusReceived(Result<(bool, bool, bool), String>),
+    TpmDiagnosticsReceived(Vec<(String, bool, String)>),
+    TpmSetupFormToggle,
+    TpmDisableFormToggle,
+    TpmSetupPinChanged(String),
+    TpmSetupPinRevealToggled,
+    TpmSetupSubmitted,
+    TpmSetupResult(Result<(), String>),
+    TpmDisableSubmitted,
+    TpmDisableResult(Result<(), String>),
+    TpmServerCredentialsToggled(bool),
+    TpmServerCredentialsResult(Result<(), String>),
 }

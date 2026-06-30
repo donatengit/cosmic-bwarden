@@ -20,20 +20,19 @@ pub async fn handle_command(
         Commands::List { query, pinned } => {
             if *pinned {
                 let res = client
-                    .send(Action::GetTopFrequent {
-                        limit: 100,
-                        days: None,
+                    .send(Action::GetSidebarEntries {
+                        query: query.clone(),
+                        entry_type,
+                        only_pinned: true,
                     })
                     .await?;
-                if let Response::Entries { entries } = res {
+                if let Response::SidebarEntries { entries } = res {
                     for entry in entries {
-                        let info = match &entry.data {
-                            cosmic_bwarden_core::db::EntryData::Login {
-                                username: Some(u),
-                                ..
-                            } => format!(" ({})", u),
-                            _ => String::new(),
-                        };
+                        let info = entry
+                            .username
+                            .as_deref()
+                            .map(|u| format!(" ({})", u))
+                            .unwrap_or_default();
                         println!("{} | {}{}", entry.id, entry.name, info);
                     }
                 } else {

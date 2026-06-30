@@ -118,6 +118,35 @@ pub async fn handle_command(cli: &Cli, client: &AgentClient) -> Result<()> {
 
             handle_response(res)?;
             println!("Logged in successfully");
+
+            // Offer PIN unlock setup if TPM2 is available and not yet configured.
+            if let Ok(Response::TpmStatus { available: true, configured: false, .. }) =
+                client.send(Action::CheckTpm).await
+            {
+                eprintln!(
+                    "TPM2 available. Enter a PIN (min 6 chars) to enable PIN unlock, or leave empty to skip:"
+                );
+                if let Ok(pin) = rpassword::prompt_password("PIN: ") {
+                    let pin = pin.trim().to_string();
+                    if !pin.is_empty() {
+                        if pin.len() < 6 {
+                            eprintln!("PIN must be at least 6 characters — skipping.");
+                        } else {
+                            let setup_res = client
+                                .send(Action::SetupTpmPinFromUnlocked { pin })
+                                .await
+                                .context("failed to set up TPM PIN")?;
+                            match setup_res {
+                                Response::Ack => println!("PIN unlock enabled."),
+                                Response::Error { message } => {
+                                    eprintln!("PIN setup failed: {}", message)
+                                }
+                                _ => eprintln!("Unexpected response from PIN setup"),
+                            }
+                        }
+                    }
+                }
+            }
         }
         Commands::Unlock { password } => {
             let password = if let Some(p) = password {

@@ -7,7 +7,7 @@ use crate::message::Message;
 use crate::fl;
 
 const RESULTS_SPACING: f32 = 5.0;
-const RESULT_ROW_HEIGHT: f32 = 44.0;
+const RESULT_ROW_HEIGHT: f32 = 50.0;
 const VISIBLE_RESULT_ROWS: f32 = 3.0;
 const RESULTS_MAX_HEIGHT: f32 =
     RESULT_ROW_HEIGHT * VISIBLE_RESULT_ROWS + RESULTS_SPACING * (VISIBLE_RESULT_ROWS - 1.0);
@@ -54,7 +54,10 @@ pub fn view(app: &CosmicBWardenApp) -> Element<'_, Message> {
         }
     }
 
-    col = col.push(scrollable(results_col).height(Length::Fixed(RESULTS_MAX_HEIGHT)));
+    col = col.push(
+        scrollable(container(results_col).padding([0, 12, 0, 0]))
+            .height(Length::Fixed(RESULTS_MAX_HEIGHT)),
+    );
     col.into()
 }
 
@@ -72,7 +75,7 @@ fn login_row_view(
     link: Option<String>,
 ) -> Element<'static, Message> {
     let copy_id = id.clone();
-    let label_btn = button::custom(text::caption(label))
+    let label_btn = button::custom(text::body(label))
         .on_press_maybe(
             username.is_some().then(|| Message::AppletCopyPrimary(copy_id)),
         )
@@ -120,7 +123,7 @@ fn secret_row_view(id: String, label: String) -> Element<'static, Message> {
         .padding([4, 6])
         .class(cosmic::theme::Button::Standard);
 
-    let label_btn = button::custom(text::caption(label))
+    let label_btn = button::custom(text::body(label))
         .on_press(Message::AppletCopySecret(id))
         .width(Length::Fill)
         .class(cosmic::theme::Button::Text);

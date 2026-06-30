@@ -65,14 +65,16 @@ async fn test_reactive_events() {
 async fn test_event_locked_clears_entries_and_error() {
     let mut app = CosmicBWardenApp::default();
     app.view = View::Vault;
-    app.entries = vec![SidebarEntry {
+    let entry = SidebarEntry {
         id: "1".to_string(),
         name: "Some Entry".to_string(),
         username: None,
         public_key: None,
         entry_type: EntryType::Login,
         is_pinned: false,
-    }];
+    };
+    app.all_entries = vec![entry.clone()];
+    app.entries = vec![entry];
     app.error = Some("sync failed: no API session token".to_string());
     app.selected_entry_id = Some("1".to_string());
 
@@ -82,6 +84,7 @@ async fn test_event_locked_clears_entries_and_error() {
 
     assert_eq!(app.view, View::Unlock);
     assert!(app.entries.is_empty(), "EventReceived(Locked) must clear sidebar entries");
+    assert!(app.all_entries.is_empty(), "EventReceived(Locked) must clear all_entries cache");
     assert!(app.error.is_none(), "EventReceived(Locked) must clear app.error");
     assert!(app.selected_entry_id.is_none());
 }

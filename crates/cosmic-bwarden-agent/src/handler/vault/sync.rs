@@ -54,17 +54,28 @@ pub async fn handle_sync(state: &Arc<Mutex<State>>) -> Response {
                     }
                 };
                 let server = config.server_name();
-                let _ = db.save(&server, email);
+                if let Err(e) = db.save(&server, email) {
+                    log::error!("failed to save vault DB after sync: {}", e);
+                }
             }
 
             *state_pinned_ids = pinned_ids;
-            state_guard.name_cache.clear();
-            state_guard.username_cache.clear();
+            state_guard.sync_failed = false;
+            state_guard.last_sync_error = None;
+            state_guard.rebuild_sidebar_cache();
             state_guard.broadcast(Event::VaultChanged);
             Response::Ack
         }
-        Err(e) => Response::Error {
-            message: format!("sync failed: {}", e),
-        },
+        Err(e) => {
+            {
+                let mut g = state.lock().await;
+                g.sync_failed = true;
+                g.last_sync_error = Some(e.clone());
+            }
+            log::warn!("sync failed: {}", e);
+            Response::Error {
+                message: format!("sync failed: {}", e),
+            }
+        }
     }
 }

@@ -1,4 +1,5 @@
 use crate::api;
+use std::collections::HashMap;
 use zeroize::Zeroize;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Eq, PartialEq)]
@@ -45,218 +46,92 @@ impl Entry {
         self.fields.retain(|f| f.name.as_deref() != Some(name));
     }
 
-    pub fn decrypt(&self, keys: &crate::locked::Keys) -> Self {
-        let mut decrypted = self.clone();
-        if let Ok(name) = crate::vault::decrypt(&self.name, keys, self.key.as_deref()) {
-            decrypted.name = name;
-        }
-        if let Some(notes) = &self.notes {
-            if let Ok(dec) = crate::vault::decrypt(notes.expose(), keys, self.key.as_deref()) {
-                decrypted.notes = Some(Secret::from(dec));
+    pub fn decrypt(&self, keys: &crate::locked::Keys, org_keys: &HashMap<String, crate::locked::Keys>) -> Self {
+        let keys = self.org_id.as_ref().and_then(|id| org_keys.get(id)).unwrap_or(keys);
+        let id = &self.id;
+        let entry_key = self.key.as_deref();
+
+        // Decrypt a plaintext field; logs a warning on failure so no error is ever silent.
+        let d = |cipher: &str, field: &'static str| -> Option<String> {
+            match crate::vault::decrypt(cipher, keys, entry_key) {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    log::warn!("entry {id}: failed to decrypt '{field}': {e}");
+                    None
+                }
             }
+        };
+        let ds = |cipher: &str, field: &'static str| -> Option<Secret> {
+            d(cipher, field).map(Secret::from)
+        };
+
+        let mut decrypted = self.clone();
+
+        if let Some(v) = d(&self.name, "name") { decrypted.name = v; }
+        if let Some(notes) = &self.notes {
+            if let Some(v) = ds(notes.expose(), "notes") { decrypted.notes = Some(v); }
         }
 
         match &mut decrypted.data {
-            EntryData::Login {
-                username,
-                password,
-                totp,
-                ..
-            } => {
-                if let Some(u) = username {
-                    if let Ok(dec) = crate::vault::decrypt(u, keys, self.key.as_deref()) {
-                        *username = Some(dec);
-                    }
-                }
-                if let Some(p) = password {
-                    if let Ok(dec) = crate::vault::decrypt(p.expose(), keys, self.key.as_deref()) {
-                        *password = Some(Secret::from(dec));
-                    }
-                }
-                if let Some(t) = totp {
-                    if let Ok(dec) = crate::vault::decrypt(t.expose(), keys, self.key.as_deref()) {
-                        *totp = Some(Secret::from(dec));
+            EntryData::Login { username, password, totp, uris } => {
+                if let Some(u) = username.as_deref() { *username = d(u, "username"); }
+                if let Some(p) = password.as_ref() { *password = ds(p.expose(), "password"); }
+                if let Some(t) = totp.as_ref() { *totp = ds(t.expose(), "totp"); }
+                for uri in uris.iter_mut() {
+                    if let Some(plain) = d(&uri.uri, "uri") {
+                        uri.uri = plain;
                     }
                 }
             }
-            EntryData::Card {
-                cardholder_name,
-                number,
-                brand,
-                exp_month,
-                exp_year,
-                code,
-            } => {
-                if let Some(v) = cardholder_name {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *cardholder_name = Some(dec);
-                    }
-                }
-                if let Some(v) = number {
-                    if let Ok(dec) = crate::vault::decrypt(v.expose(), keys, self.key.as_deref()) {
-                        *number = Some(Secret::from(dec));
-                    }
-                }
-                if let Some(v) = brand {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *brand = Some(dec);
-                    }
-                }
-                if let Some(v) = exp_month {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *exp_month = Some(dec);
-                    }
-                }
-                if let Some(v) = exp_year {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *exp_year = Some(dec);
-                    }
-                }
-                if let Some(v) = code {
-                    if let Ok(dec) = crate::vault::decrypt(v.expose(), keys, self.key.as_deref()) {
-                        *code = Some(Secret::from(dec));
-                    }
-                }
+            EntryData::Card { cardholder_name, number, brand, exp_month, exp_year, code } => {
+                if let Some(v) = cardholder_name.as_deref() { *cardholder_name = d(v, "cardholder_name"); }
+                if let Some(v) = number.as_ref() { *number = ds(v.expose(), "number"); }
+                if let Some(v) = brand.as_deref() { *brand = d(v, "brand"); }
+                if let Some(v) = exp_month.as_deref() { *exp_month = d(v, "exp_month"); }
+                if let Some(v) = exp_year.as_deref() { *exp_year = d(v, "exp_year"); }
+                if let Some(v) = code.as_ref() { *code = ds(v.expose(), "code"); }
             }
             EntryData::Identity {
-                title,
-                first_name,
-                middle_name,
-                last_name,
-                address1,
-                address2,
-                address3,
-                city,
-                state,
-                postal_code,
-                country,
-                phone,
-                email,
-                ssn,
-                license_number,
-                passport_number,
-                username,
+                title, first_name, middle_name, last_name,
+                address1, address2, address3, city, state,
+                postal_code, country, phone, email,
+                ssn, license_number, passport_number, username,
             } => {
-                if let Some(v) = title {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *title = Some(dec);
-                    }
-                }
-                if let Some(v) = first_name {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *first_name = Some(dec);
-                    }
-                }
-                if let Some(v) = middle_name {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *middle_name = Some(dec);
-                    }
-                }
-                if let Some(v) = last_name {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *last_name = Some(dec);
-                    }
-                }
-                if let Some(v) = address1 {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *address1 = Some(dec);
-                    }
-                }
-                if let Some(v) = address2 {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *address2 = Some(dec);
-                    }
-                }
-                if let Some(v) = address3 {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *address3 = Some(dec);
-                    }
-                }
-                if let Some(v) = city {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *city = Some(dec);
-                    }
-                }
-                if let Some(v) = state {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *state = Some(dec);
-                    }
-                }
-                if let Some(v) = postal_code {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *postal_code = Some(dec);
-                    }
-                }
-                if let Some(v) = country {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *country = Some(dec);
-                    }
-                }
-                if let Some(v) = phone {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *phone = Some(dec);
-                    }
-                }
-                if let Some(v) = email {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *email = Some(dec);
-                    }
-                }
-                if let Some(v) = ssn {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *ssn = Some(dec);
-                    }
-                }
-                if let Some(v) = license_number {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *license_number = Some(dec);
-                    }
-                }
-                if let Some(v) = passport_number {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *passport_number = Some(dec);
-                    }
-                }
-                if let Some(v) = username {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *username = Some(dec);
-                    }
-                }
+                if let Some(v) = title.as_deref() { *title = d(v, "title"); }
+                if let Some(v) = first_name.as_deref() { *first_name = d(v, "first_name"); }
+                if let Some(v) = middle_name.as_deref() { *middle_name = d(v, "middle_name"); }
+                if let Some(v) = last_name.as_deref() { *last_name = d(v, "last_name"); }
+                if let Some(v) = address1.as_deref() { *address1 = d(v, "address1"); }
+                if let Some(v) = address2.as_deref() { *address2 = d(v, "address2"); }
+                if let Some(v) = address3.as_deref() { *address3 = d(v, "address3"); }
+                if let Some(v) = city.as_deref() { *city = d(v, "city"); }
+                if let Some(v) = state.as_deref() { *state = d(v, "state"); }
+                if let Some(v) = postal_code.as_deref() { *postal_code = d(v, "postal_code"); }
+                if let Some(v) = country.as_deref() { *country = d(v, "country"); }
+                if let Some(v) = phone.as_deref() { *phone = d(v, "phone"); }
+                if let Some(v) = email.as_deref() { *email = d(v, "email"); }
+                if let Some(v) = ssn.as_deref() { *ssn = d(v, "ssn"); }
+                if let Some(v) = license_number.as_deref() { *license_number = d(v, "license_number"); }
+                if let Some(v) = passport_number.as_deref() { *passport_number = d(v, "passport_number"); }
+                if let Some(v) = username.as_deref() { *username = d(v, "username"); }
             }
             EntryData::SecureNote => {}
-            EntryData::SshKey {
-                private_key,
-                public_key,
-                fingerprint,
-            } => {
-                if let Some(v) = private_key {
-                    if let Ok(dec) = crate::vault::decrypt(v.expose(), keys, self.key.as_deref()) {
-                        *private_key = Some(Secret::from(dec));
-                    }
-                }
-                if let Some(v) = public_key {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *public_key = Some(dec);
-                    }
-                }
-                if let Some(v) = fingerprint {
-                    if let Ok(dec) = crate::vault::decrypt(v, keys, self.key.as_deref()) {
-                        *fingerprint = Some(dec);
-                    }
-                }
+            EntryData::SshKey { private_key, public_key, fingerprint } => {
+                if let Some(v) = private_key.as_ref() { *private_key = ds(v.expose(), "private_key"); }
+                if let Some(v) = public_key.as_deref() { *public_key = d(v, "public_key"); }
+                if let Some(v) = fingerprint.as_deref() { *fingerprint = d(v, "fingerprint"); }
             }
         }
 
         for field in &mut decrypted.fields {
-            if let Some(name) = &field.name {
-                if let Ok(dec) = crate::vault::decrypt(name, keys, self.key.as_deref()) {
-                    field.name = Some(dec);
-                }
+            if let Some(n) = field.name.as_deref() {
+                field.name = match d(n, "field.name") {
+                    Some(v) => Some(v),
+                    None => Some(n.to_string()),
+                };
             }
-            if let Some(value) = &field.value {
-                if let Ok(dec) = crate::vault::decrypt(value.expose(), keys, self.key.as_deref()) {
-                    field.value = Some(Secret::from(dec));
-                }
+            if let Some(v) = field.value.as_ref() {
+                field.value = ds(v.expose(), "field.value");
             }
         }
 

@@ -28,9 +28,22 @@ libc = "0.2"
 rustix = { workspace = true }
 zbus = { workspace = true }
 oo7 = { version = "0.3", optional = true }
+tss-esapi = { version = "8.0.0-alpha.2", optional = true, features = ["generate-bindings"] }
 totp-rs = { version = "5.7.1", features = ["otpauth"] }
+zeroize = { workspace = true }
+
+[[bin]]
+name = "cosmic-bwarden-agent"
+path = "src/main.rs"
+
+# TPM-enabled binary for E2E tests; produced by `cargo build -p cosmic-bwarden-agent --features tpm`
+[[bin]]
+name = "cosmic-bwarden-agent-tpm"
+path = "src/main.rs"
+required-features = ["tpm"]
 
 [features]
 default = ["browser-host"]
 keyring = ["dep:oo7"]
 browser-host = []
+tpm = ["dep:tss-esapi"]

@@ -1,6 +1,6 @@
 use crate::app::applet_search;
 use crate::app::state::CosmicBWardenApp;
-use crate::app::tasks::{check_protocol_version, fetch_applet_search, fetch_applet_secret};
+use crate::app::tasks::{check_protocol_version, fetch_applet_search, fetch_applet_secret, fetch_sidebar_entries};
 use crate::fl;
 use crate::message::{Message, View};
 use crate::view::applet::{search, unlock};
@@ -276,10 +276,160 @@ impl CosmicBWardenApp {
                 self.applet_reprompt_password_revealed = !self.applet_reprompt_password_revealed;
                 Some(Task::none())
             }
+            Message::AppletTogglePinReveal => {
+                self.applet_pin_revealed = !self.applet_pin_revealed;
+                Some(Task::none())
+            }
 
             // Toasts
             Message::CloseToast(id) => {
                 self.applet_toasts.remove(id);
+                Some(Task::none())
+            }
+
+            // TPM / PIN unlock
+            Message::AppletPinChanged(p) => {
+                self.applet_pin = p;
+                Some(Task::none())
+            }
+            Message::AppletPinSubmitted => {
+                let pin = self.applet_pin.clone();
+                Some(Task::perform(
+                    async move {
+                        let agent = AgentClient::new();
+                        match agent.send(AgentAction::UnlockWithPin { pin }).await {
+                            Ok(Response::Ack) => Ok(()),
+                            Ok(Response::Error { message }) => Err(message),
+                            _ => Err("unexpected response".to_string()),
+                        }
+                    },
+                    |res| Action::App(Message::AppletPinResult(res)),
+                ))
+            }
+            Message::AppletPinResult(res) => {
+                self.applet_pin.zeroize();
+                self.applet_pin_revealed = false;
+                match res {
+                    Ok(()) => {
+                        self.applet_error = None;
+                        self.error = None;
+                        self.show_pin_unlock = false;
+                        self.view = View::Vault;
+                        self.search_id += 1;
+                        self.applet_search_id += 1;
+                        let only_pinned = applet_search::effective_only_pinned(
+                            &self.applet_search_query,
+                            self.applet_search_only_favourites,
+                        );
+                        let query = if self.applet_search_query.trim().is_empty() {
+                            None
+                        } else {
+                            Some(self.applet_search_query.clone())
+                        };
+                        return Some(Task::batch(vec![
+                            fetch_sidebar_entries(self.search_id, None, None, false),
+                            fetch_applet_search(self.applet_search_id, query, only_pinned),
+                        ]));
+                    }
+                    Err(e) => {
+                        self.applet_error = Some(e.clone());
+                        self.error = Some(e);
+                        self.view = View::Unlock;
+                    }
+                }
+                Some(Task::none())
+            }
+            Message::AppletUseMasterPasswordInstead => {
+                self.show_pin_unlock = false;
+                Some(Task::none())
+            }
+
+            // TPM settings
+            Message::TpmSetupFormToggle => {
+                self.show_tpm_setup_form = !self.show_tpm_setup_form;
+                self.tpm_setup_pin.zeroize();
+                self.tpm_setup_pin_revealed = false;
+                self.tpm_error = None;
+                Some(Task::none())
+            }
+            Message::TpmDisableFormToggle => {
+                self.show_tpm_disable_form = !self.show_tpm_disable_form;
+                self.tpm_error = None;
+                Some(Task::none())
+            }
+            Message::TpmSetupPinChanged(p) => {
+                self.tpm_setup_pin = p;
+                Some(Task::none())
+            }
+            Message::TpmSetupPinRevealToggled => {
+                self.tpm_setup_pin_revealed = !self.tpm_setup_pin_revealed;
+                Some(Task::none())
+            }
+            Message::TpmSetupSubmitted => {
+                if self.tpm_setup_pin.len() < 6 {
+                    self.applet_error = Some("PIN must be at least 6 characters".to_string());
+                    return Some(Task::none());
+                }
+                let pin = self.tpm_setup_pin.clone();
+                Some(Task::perform(
+                    async move {
+                        let agent = AgentClient::new();
+                        match agent
+                            .send(AgentAction::SetupTpmPinFromUnlocked { pin })
+                            .await
+                        {
+                            Ok(Response::Ack) => Ok(()),
+                            Ok(Response::Error { message }) => Err(message),
+                            _ => Err("unexpected response".to_string()),
+                        }
+                    },
+                    |res| Action::App(Message::TpmSetupResult(res)),
+                ))
+            }
+            Message::TpmSetupResult(res) => {
+                self.tpm_setup_pin.zeroize();
+                self.tpm_setup_pin_revealed = false;
+                self.show_tpm_setup_form = false;
+                match res {
+                    Ok(()) => {
+                        self.tpm_configured = true;
+                        self.applet_error = None;
+                        self.tpm_error = None;
+                    }
+                    Err(e) => {
+                        tracing::error!("TPM PIN setup failed: {}", e);
+                        self.tpm_error = Some(e.clone());
+                        self.applet_error = Some(e);
+                    }
+                }
+                Some(Task::none())
+            }
+            Message::TpmDisableSubmitted => Some(Task::perform(
+                async {
+                    let agent = AgentClient::new();
+                    match agent.send(AgentAction::DisableTpmPin).await {
+                        Ok(Response::Ack) => Ok(()),
+                        Ok(Response::Error { message }) => Err(message),
+                        _ => Err("unexpected response".to_string()),
+                    }
+                },
+                |res| Action::App(Message::TpmDisableResult(res)),
+            )),
+            Message::TpmDisableResult(res) => {
+                self.show_tpm_disable_form = false;
+                match res {
+                    Ok(()) => {
+                        self.tpm_configured = false;
+                        self.show_pin_unlock = false;
+                        self.applet_error = None;
+                        self.tpm_error = None;
+                    }
+                    Err(e) => {
+                        tracing::error!("TPM PIN disable failed: {}", e);
+                        self.tpm_error = Some(e.clone());
+                        self.applet_error = Some(e);
+                    }
+                }
                 Some(Task::none())
             }
 
@@ -331,7 +481,8 @@ impl CosmicBWardenApp {
                         needs_login,
                         has_account,
                         is_locked,
-                    }) => Ok((config, needs_login, has_account, is_locked)),
+                        sync_failed,
+                    }) => Ok((config, needs_login, has_account, is_locked, sync_failed)),
                     Ok(Response::Error { message }) => Err(message),
                     _ => Err("unexpected response".to_string()),
                 }

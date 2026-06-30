@@ -49,7 +49,7 @@ pub async fn update_entry_on_server(
             username,
             password,
             totp,
-            ..
+            uris,
         } => {
             let mut u_enc = None;
             if let Some(u) = username {
@@ -87,9 +87,28 @@ pub async fn update_entry_on_server(
                     },
                 );
             }
+            let mut uris_enc = Vec::new();
+            for uri in uris {
+                let uri_enc = match cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(
+                    crypt_keys,
+                    uri.uri.as_bytes(),
+                ) {
+                    Ok(cs) => cs.to_string(),
+                    Err(e) => return Err(e.to_string()),
+                };
+                uris_enc.push(serde_json::json!({
+                    "uri": uri_enc,
+                    "match": uri.match_type,
+                }));
+            }
             (
                 1,
-                Some(serde_json::json!({ "username": u_enc, "password": p_enc, "totp": totp_enc })),
+                Some(serde_json::json!({
+                    "username": u_enc,
+                    "password": p_enc,
+                    "totp": totp_enc,
+                    "uris": uris_enc,
+                })),
                 None,
                 None,
                 None,
@@ -97,37 +116,24 @@ pub async fn update_entry_on_server(
         }
         cosmic_bwarden_core::db::EntryData::SecureNote => (2, None, None, None, None),
         cosmic_bwarden_core::db::EntryData::Identity {
+            title,
             first_name,
+            middle_name,
             last_name,
             address1,
+            address2,
+            address3,
             city,
             state,
             postal_code,
             country,
             email,
             phone,
-            ..
+            ssn,
+            license_number,
+            passport_number,
+            username,
         } => {
-            let mut id = cosmic_bwarden_core::api::CipherIdentity {
-                first_name: None,
-                last_name: None,
-                address1: None,
-                city: None,
-                state: None,
-                postal_code: None,
-                country: None,
-                email: None,
-                phone: None,
-                title: None,
-                middle_name: None,
-                address2: None,
-                address3: None,
-                ssn: None,
-                license_number: None,
-                passport_number: None,
-                username: None,
-            };
-
             let encrypt = |s: &Option<String>| -> Result<Option<String>, String> {
                 if let Some(s) = s {
                     Ok(Some(
@@ -140,15 +146,25 @@ pub async fn update_entry_on_server(
                 }
             };
 
-            id.first_name = encrypt(first_name)?;
-            id.last_name = encrypt(last_name)?;
-            id.address1 = encrypt(address1)?;
-            id.city = encrypt(city)?;
-            id.state = encrypt(state)?;
-            id.postal_code = encrypt(postal_code)?;
-            id.country = encrypt(country)?;
-            id.email = encrypt(email)?;
-            id.phone = encrypt(phone)?;
+            let id = cosmic_bwarden_core::api::CipherIdentity {
+                title: encrypt(title)?,
+                first_name: encrypt(first_name)?,
+                middle_name: encrypt(middle_name)?,
+                last_name: encrypt(last_name)?,
+                address1: encrypt(address1)?,
+                address2: encrypt(address2)?,
+                address3: encrypt(address3)?,
+                city: encrypt(city)?,
+                state: encrypt(state)?,
+                postal_code: encrypt(postal_code)?,
+                country: encrypt(country)?,
+                email: encrypt(email)?,
+                phone: encrypt(phone)?,
+                ssn: encrypt(ssn)?,
+                license_number: encrypt(license_number)?,
+                passport_number: encrypt(passport_number)?,
+                username: encrypt(username)?,
+            };
 
             (4, None, None, None, Some(id))
         }

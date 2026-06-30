@@ -17,9 +17,12 @@ pub struct CosmicBWardenApp {
 
     // Global State
     pub view: View,
+    /// True while a login/unlock/pin IPC request is in flight.
+    /// Disables the submit button without switching away from the form view.
+    pub auth_loading: bool,
     pub search_query: String,
     pub entries: Vec<SidebarEntry>,
-    pub top_entries: Vec<SidebarEntry>,
+    pub all_entries: Vec<SidebarEntry>,
     pub error: Option<String>,
     pub selected_entry_id: Option<String>,
     pub selected_entry: Option<Entry>,
@@ -61,9 +64,10 @@ pub struct CosmicBWardenApp {
 
     // Settings editing state
     pub editing_config: Option<CosmicBWardenConfig>,
-    pub settings_lock_timeout: String,
-    pub settings_popular_count: String,
-    pub settings_popular_days: String,
+    /// Login-time PIN setup (shown when TPM is available but not yet configured)
+    pub login_pin_enabled: bool,
+    pub login_pin: String,
+    pub login_pin_revealed: bool,
     pub master_password_revealed: bool,
     pub show_advanced: bool,
     pub notes_content: widget::text_editor::Content,
@@ -77,6 +81,39 @@ pub struct CosmicBWardenApp {
     /// Entry id received via `Event::OpenEntry` before the vault view was ready.
     /// Applied as `SelectEntry` on the next transition to `View::Vault`.
     pub pending_vault_entry: Option<String>,
+    /// Mirrors `State::sync_failed` from the agent. True when the last server
+    /// operation (add/update/delete/sync) failed. Shown as a red "Not synced"
+    /// button so the user knows the vault may be out of date.
+    pub sync_failed: bool,
+    /// True while a Sync request is in flight; shows a spinner on the Sync button.
+    pub syncing: bool,
+    /// True while a DeleteEntry request is in flight; shows a spinner in place of
+    /// the Delete button so the user knows the operation is running.
+    pub deleting: bool,
+
+    // TPM / PIN unlock state
+    /// False until the first TpmStatusReceived arrives. Prevents showing
+    /// "not accessible" before the agent has been queried.
+    pub tpm_status_known: bool,
+    pub tpm_available: bool,
+    pub tpm_configured: bool,
+    /// True when the master_password_hash is also sealed in the TPM.
+    pub tpm_server_credentials: bool,
+    /// When true, the applet unlock widget shows a PIN field instead of password.
+    pub show_pin_unlock: bool,
+    pub applet_pin: String,
+    pub applet_pin_revealed: bool,
+    /// PIN for the main-window unlock view (View::Unlock when tpm_configured).
+    pub main_window_pin: String,
+    // TPM settings dialog state
+    pub show_tpm_setup_form: bool,
+    pub tpm_setup_pin: String,
+    pub tpm_setup_pin_revealed: bool,
+    pub show_tpm_disable_form: bool,
+    /// Diagnostic check results populated by CheckTpmDiagnostics (shown when !tpm_available).
+    pub tpm_diagnostics: Vec<(String, bool, String)>,
+    /// Last error from a TPM setup/disable operation — shown in the settings TPM section.
+    pub tpm_error: Option<String>,
 }
 
 impl Default for CosmicBWardenApp {
@@ -86,9 +123,10 @@ impl Default for CosmicBWardenApp {
             config: CosmicBWardenConfig::default(),
             windows: HashMap::new(),
             view: View::Loading,
+            auth_loading: false,
             search_query: String::new(),
             entries: Vec::new(),
-            top_entries: Vec::new(),
+            all_entries: Vec::new(),
             error: None,
             selected_entry_id: None,
             selected_entry: None,
@@ -118,9 +156,9 @@ impl Default for CosmicBWardenApp {
             applet_toasts: widget::Toasts::new(crate::message::Message::CloseToast),
             applet_quit_expanded: false,
             editing_config: None,
-            settings_lock_timeout: String::new(),
-            settings_popular_count: String::new(),
-            settings_popular_days: String::new(),
+            login_pin_enabled: false,
+            login_pin: String::new(),
+            login_pin_revealed: false,
             master_password_revealed: false,
             show_advanced: false,
             notes_content: widget::text_editor::Content::new(),
@@ -132,6 +170,23 @@ impl Default for CosmicBWardenApp {
             reprompt_password_revealed: false,
             protocol_mismatch: false,
             pending_vault_entry: None,
+            sync_failed: false,
+            syncing: false,
+            deleting: false,
+            tpm_status_known: false,
+            tpm_available: false,
+            tpm_configured: false,
+            tpm_server_credentials: false,
+            show_pin_unlock: false,
+            applet_pin: String::new(),
+            applet_pin_revealed: false,
+            main_window_pin: String::new(),
+            show_tpm_setup_form: false,
+            tpm_setup_pin: String::new(),
+            tpm_setup_pin_revealed: false,
+            show_tpm_disable_form: false,
+            tpm_diagnostics: Vec::new(),
+            tpm_error: None,
         }
     }
 }

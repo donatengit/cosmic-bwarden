@@ -46,9 +46,12 @@ pub async fn run() -> anyhow::Result<()> {
                 });
                 let response_json = serde_json::to_vec(&error_response)?;
                 let len = response_json.len() as u32;
-                let _ = stdout.write_all(&len.to_le_bytes()).await;
-                let _ = stdout.write_all(&response_json).await;
-                let _ = stdout.flush().await;
+                if let Err(e) = stdout.write_all(&len.to_le_bytes()).await
+                    .and(stdout.write_all(&response_json).await)
+                    .and(stdout.flush().await)
+                {
+                    log::error!("failed to send parse-error response to browser: {}", e);
+                }
                 continue;
             }
         };
@@ -82,9 +85,12 @@ pub async fn run() -> anyhow::Result<()> {
                 });
                 let response_json = serde_json::to_vec(&error_response)?;
                 let len = response_json.len() as u32;
-                let _ = stdout.write_all(&len.to_le_bytes()).await;
-                let _ = stdout.write_all(&response_json).await;
-                let _ = stdout.flush().await;
+                if let Err(e) = stdout.write_all(&len.to_le_bytes()).await
+                    .and(stdout.write_all(&response_json).await)
+                    .and(stdout.flush().await)
+                {
+                    log::error!("failed to send agent-error response to browser: {}", e);
+                }
             }
         }
     }

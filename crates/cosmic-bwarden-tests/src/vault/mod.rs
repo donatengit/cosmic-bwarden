@@ -1,4 +1,10 @@
+pub mod card_identity;
 pub mod crud;
+pub mod entry_types;
+pub mod lifecycle_errors;
+pub mod login_fields;
 pub mod ssh;
 pub mod ssh_agent;
 pub mod ssh_agent_lifecycle;
+#[cfg(feature = "tpm-smoke")]
+pub mod tpm;

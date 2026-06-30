@@ -4,6 +4,9 @@ mod logind;
 mod server;
 mod ssh_agent;
 mod state;
+mod timeout;
+#[cfg(feature = "tpm")]
+mod tpm;
 
 #[cfg(feature = "browser-host")]
 mod browser_host;
@@ -13,6 +16,7 @@ use handler::handle_request;
 use logind::listen_to_logind;
 use ssh_agent::SshAgent;
 use state::State;
+use timeout::AutolockTimer;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
@@ -119,13 +123,33 @@ async fn main() -> anyhow::Result<()> {
 
     let (shutdown_tx, mut shutdown_rx) = tokio::sync::mpsc::unbounded_channel();
     let state = Arc::new(Mutex::new(State::new()));
+
+    // Autolock timer — checks every 5 minutes whether the inactivity threshold
+    // has been exceeded. timer_handle is cloned into the request loop.
+    let autolock_timer = AutolockTimer::new(config.lock_timeout);
+    let timer_handle = autolock_timer.handle();
     {
         let mut state_guard = state.lock().await;
         state_guard.shutdown_tx = Some(shutdown_tx);
+
+        // Detect whether a TPM sealed blob exists for the configured account.
+        // Done at startup so request_unlock() knows whether to broadcast
+        // PinRequested or UnlockRequested before the first unlock attempt.
+        if let Ok(cfg) = cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
+            if cfg.tpm_enabled {
+                if let Some(email) = &cfg.email {
+                    let blob_path = cosmic_bwarden_core::dirs::tpm_blob_file(
+                        &cfg.server_name(), email,
+                    );
+                    state_guard.tpm_configured = blob_path.exists();
+                }
+            }
+        }
     }
     let ssh_agent = SshAgent::new(Arc::clone(&state));
 
     let state_for_agent = Arc::clone(&state);
+    let timer_handle_for_agent = timer_handle.clone();
     let agent_handle = tokio::spawn(async move {
         loop {
             let (mut socket, _) = match listener.accept().await {
@@ -161,6 +185,7 @@ async fn main() -> anyhow::Result<()> {
             }
 
             let state = Arc::clone(&state_for_agent);
+            let timer_handle = timer_handle_for_agent.clone();
 
             tokio::spawn(async move {
                 loop {
@@ -198,8 +223,29 @@ async fn main() -> anyhow::Result<()> {
                     };
 
                     let is_subscribe = matches!(request, Action::Subscribe);
-                    let response = handle_request(request, &state).await;
+                    // Actions that should NOT reset the inactivity timer.
+                    let is_non_activity = matches!(&request,
+                        Action::Lock
+                        | Action::Logout
+                        | Action::Quit
+                        | Action::Subscribe
+                        | Action::Version
+                        | Action::GetConfig
+                        | Action::UpdateLockTimeout { .. }
+                    );
+                    // UpdateLockTimeout is handled here; all other actions go to dispatch.
+                    let response = if let Action::UpdateLockTimeout { seconds } = request {
+                        timer_handle.set_duration(seconds);
+                        Response::Ack
+                    } else {
+                        handle_request(request, &state).await
+                    };
                     log::debug!("Response: {:?}", response);
+
+                    // Reset the inactivity timer on any successful vault operation.
+                    if !is_non_activity && !matches!(&response, Response::Error { .. }) {
+                        timer_handle.reset();
+                    }
 
                     if let Response::Error { message } = &response {
                         log::warn!("request failed: {}", message);
@@ -217,7 +263,8 @@ async fn main() -> anyhow::Result<()> {
                     }
 
                     if is_subscribe {
-                        // Enter event streaming loop
+                        // Enter long-lived event streaming loop; connection is
+                        // dedicated to this subscriber from here on.
                         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
                         {
                             let mut state_guard = state.lock().await;
@@ -246,12 +293,9 @@ async fn main() -> anyhow::Result<()> {
                             }
                         }
                         return;
-                    } else {
-                        // For non-subscription requests, close the connection after one response
-                        // to match the expectation of AgentClient::send
-                        let _ = socket.shutdown().await;
-                        return;
                     }
+                    // Non-subscribe: loop back and read the next request on the
+                    // same connection. The client keeps it alive between calls.
                 }
             });
         }
@@ -270,10 +314,15 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    // Autolock task: polls every 5 minutes for inactivity threshold.
+    let state_for_timer = Arc::clone(&state);
+    let timer_handle_for_lock = tokio::spawn(autolock_timer.run(state_for_timer));
+
     tokio::select! {
         _ = agent_handle => {},
         _ = ssh_agent_handle => {},
         _ = logind_handle => {},
+        _ = timer_handle_for_lock => {},
         _ = shutdown_rx.recv() => {
             log::info!("Shutting down agent gracefully");
         },

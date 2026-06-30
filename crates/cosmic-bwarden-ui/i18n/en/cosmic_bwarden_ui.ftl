@@ -36,3 +36,6 @@ master-password = Master Password
 public-key-label = Public key
 locked-need-password = Locked: need password
 not-configured = Not logged in — open vault to sign in.
+
+locked-need-pin = Locked: enter PIN
+use-master-password-instead = Use master password instead

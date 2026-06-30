@@ -37,6 +37,7 @@ pub async fn handle_get_config(state: &Arc<Mutex<State>>) -> Response {
     let is_locked = state_guard.keys.is_none();
     let has_account = state_guard.db.as_ref().map_or(false, |db| db.has_account());
     let needs_login = state_guard.db.as_ref().map_or(true, |db| db.needs_login());
+    let sync_failed = state_guard.sync_failed;
 
     match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
         Ok(config) => Response::Config {
@@ -44,6 +45,7 @@ pub async fn handle_get_config(state: &Arc<Mutex<State>>) -> Response {
             needs_login,
             has_account,
             is_locked,
+            sync_failed,
         },
         Err(e) => Response::Error {
             message: format!("failed to load config: {}", e),
@@ -52,7 +54,14 @@ pub async fn handle_get_config(state: &Arc<Mutex<State>>) -> Response {
 }
 
 pub async fn handle_lock(state: &Arc<Mutex<State>>) -> Response {
+    let email = cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy()
+        .ok()
+        .and_then(|c| c.email)
+        .unwrap_or_else(|| "unknown".to_string());
     let mut state_guard = state.lock().await;
+    if state_guard.keys.is_some() {
+        log::info!("vault locked by user request (account: {})", email);
+    }
     state_guard.lock();
     Response::Ack
 }
@@ -73,12 +82,17 @@ pub async fn handle_logout(state: &Arc<Mutex<State>>) -> Response {
             let server = config.server_name();
             let email_clone = email.clone();
             tokio::spawn(async move {
-                let _ = keyring::delete_tokens(&server, &email_clone).await;
+                if let Err(e) = keyring::delete_tokens(&server, &email_clone).await {
+                    log::error!("failed to delete tokens from keyring on logout: {}", e);
+                }
             });
         }
         let db = cosmic_bwarden_core::db::Db::new();
-        let _ = db.save(&config.server_name(), email);
+        if let Err(e) = db.save(&config.server_name(), email) {
+            log::error!("failed to clear vault DB on logout: {}", e);
+        }
     }
+    log::info!("logout: {} logged out (server: {})", config.email.as_deref().unwrap_or("unknown"), config.server_name());
     let mut state_guard = state.lock().await;
     state_guard.lock();
     // Clear in-memory DB so the next GetConfig loads the empty on-disk

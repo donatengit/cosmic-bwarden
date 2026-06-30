@@ -29,21 +29,21 @@ pub(crate) fn idx_to_filter(idx: usize) -> Option<EntryType> {
 
 impl CosmicBWardenApp {
     pub fn view_sidebar(&self) -> Element<'_, Message> {
-        use cosmic::widget::{column, text_input};
+        use cosmic::widget::{column, search_input};
 
         let mut sidebar = column::with_capacity(6).spacing(10).height(Length::Fill);
 
         // Search Bar
-        let search_input = text_input::text_input(fl!("search"), &self.search_query)
+        let search_bar = search_input(fl!("search"), &self.search_query)
             .on_input(Message::SearchChanged)
-            .on_submit(Message::SearchSubmitted);
+            .width(Length::Fill);
 
         let star_icon = if self.search_only_pinned { "starred-symbolic" } else { "non-starred-symbolic" };
         let star_btn = button::icon(icon::from_name(star_icon))
             .on_press(Message::ToggleSearchPinned);
 
         sidebar = sidebar.push(cosmic::widget::row::with_capacity(2).spacing(5).align_y(Alignment::Center)
-            .push(search_input)
+            .push(search_bar)
             .push(star_btn));
 
         // Filter dropdown
@@ -77,8 +77,33 @@ impl CosmicBWardenApp {
 
         let mut top_row = cosmic::widget::row::with_capacity(2).spacing(10).align_y(Alignment::Center);
         top_row = top_row.push(button::suggested("Add").on_press(Message::AddEntryRequested).width(Length::Fill));
-        top_row = top_row.push(button::standard("Sync").on_press(Message::SyncClicked));
+
+        let session_expired = self.sync_failed
+            && self.error.as_deref().map(|e| e.contains("session token")).unwrap_or(false);
+
+        let sync_area: cosmic::Element<Message> = if self.syncing {
+            // Show a small spinner while the sync request is in flight so the
+            // user gets immediate feedback that something is happening.
+            container(cosmic::widget::indeterminate_circular().size(20.0))
+                .center_x(Length::Fixed(64.0))
+                .center_y(Length::Fixed(32.0))
+                .into()
+        } else if session_expired {
+            button::destructive("Session expired — log in").on_press(Message::LogoutClicked).into()
+        } else if self.sync_failed {
+            button::destructive("⚠ Not synced").on_press(Message::SyncClicked).into()
+        } else {
+            button::standard("Sync").on_press(Message::SyncClicked).into()
+        };
+        top_row = top_row.push(sync_area);
         sidebar = sidebar.push(top_row);
+
+        // Show the actual error text so the user knows WHY the button is red.
+        if self.sync_failed {
+            if let Some(ref msg) = self.error {
+                sidebar = sidebar.push(text::caption(msg.as_str()));
+            }
+        }
 
         let mut bottom_row = cosmic::widget::row::with_capacity(3).spacing(10).align_y(Alignment::Center);
         let settings_btn = if self.view == View::Settings { button::suggested(fl!("settings")) } else { button::standard(fl!("settings")) };

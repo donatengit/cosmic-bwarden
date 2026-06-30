@@ -8,6 +8,10 @@ mod browser_host;
 mod cli_lifecycle;
 #[cfg(test)]
 mod common;
+#[cfg(all(test, feature = "tpm-smoke"))]
+mod common_tpm;
+#[cfg(all(test, feature = "tpm-smoke"))]
+mod tpm_lifecycle;
 #[cfg(test)]
 mod custom_fields_cli;
 #[cfg(test)]

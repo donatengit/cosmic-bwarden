@@ -45,8 +45,15 @@ These must never regress. Treat violations as build-blocking bugs.
 - **Core dumps**: `libc::prctl(PR_SET_DUMPABLE, 0)` on daemon startup.
 - **IPC auth**: Verify every connection via `SO_PEERCRED`. Reject mismatched UIDs.
 - **Socket perms**: Create Unix sockets with mode `0600`.
-- **EOF signaling**: Call `socket.shutdown()` after non-subscription responses. Subscriptions use `Action::Subscribe` protocol.
+- **Persistent IPC connections**: The agent keeps client connections alive across multiple requests (one `tokio::spawn` per connected socket, inner `loop` for subsequent requests). Subscribe connections are long-lived; all others reuse the same socket until the client disconnects.
 - **Sensitive memory**: Use memory-locked storage for all key material and plaintext secrets.
+- **No silent failures**: Any operation that can fail and affect data availability, integrity, or security must log at `warn` or `error` level. Specifically:
+  - **Decryption**: Every `vault::decrypt` failure must log `warn!` with the entry ID and field name. Never use `.ok()` silently — a cipher string leaking into plaintext position caused a double-encryption incident.
+  - **Vault DB persistence** (`db.save`): Log `error!` if save fails. Silent failure means in-memory and on-disk state diverge; data is lost on agent restart.
+  - **Keyring operations** (`store_tokens`, `delete_tokens`): Log `error!` if they fail. Silent failure means tokens are lost across restarts or stale tokens survive logout.
+  - **Write failures on IPC/browser-host sockets**: Log `error!` if a response cannot be delivered to a client.
+  - **Fallbacks from load errors**: If a fallback value is used after a load error (e.g. creating a fresh DB when disk load fails), log `warn!` with the error so operators know data may be at risk.
+  - Use `let _ = expr` only for genuinely fire-and-forget side effects (e.g. removing a stale socket file before rebind) where the next operation will surface any real problem. Add a comment explaining why the error is intentionally discarded.
 
 ## Workflow
 
@@ -84,8 +91,23 @@ When a crate's main logic grows, decompose using these established patterns:
 - **File edits**: `replace` with enough surrounding context for uniqueness. One `replace` per file per turn maximum.
 - **State tracking**: `update_topic` on strategic pivots. `MEMO.md` for local/machine-specific notes only.
 
+## Optional Features
+
+### TPM PIN Unlock (`--features tpm`)
+Seals the 64-byte vault key (`enc_key_expanded ‖ mac_key_expanded`) in a TPM2 object protected by a user PIN and bound to PCR{0,7} (firmware + Secure Boot state).
+
+- **Agent**: `cargo check -p cosmic-bwarden-agent --features tpm`
+- **Module**: `crates/cosmic-bwarden-agent/src/tpm.rs` — seal/unseal/clear using `tss-esapi 8.0.0-alpha.2`
+- **Handler**: `crates/cosmic-bwarden-agent/src/handler/auth/tpm_pin.rs`
+- **State**: `tpm_configured` in agent `State`; `tpm_available`/`show_pin_unlock` in UI `CosmicBWardenApp`
+- **Blob storage**: `<data_dir>/tpm_sealed_<sha256hex16(server+email)>.bin` — per-account, persisted across reboots
+- **Graceful degradation**: if TPM hardware is absent at runtime, `is_available()` returns false, UI hides PIN controls
+- **Smoke tests**: `cargo test -p cosmic-bwarden-tests --features tpm-smoke -- tpm --test-threads=1` (requires `swtpm` in PATH; auto-skip when absent)
+
 ## Validation Commands
 ```
 cargo check -p <crate>
+cargo check -p cosmic-bwarden-agent --features tpm
 cargo test -p cosmic-bwarden-tests -- --test-threads=1
+cargo test -p cosmic-bwarden-tests --features tpm-smoke -- tpm --test-threads=1
 ```

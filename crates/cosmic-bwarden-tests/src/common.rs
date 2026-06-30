@@ -33,13 +33,18 @@ pub struct TestEnv {
 
 impl TestEnv {
     pub fn start_agent(&self) -> Result<std::process::Child> {
+        self.start_agent_with_env(&[])
+    }
+
+    /// Start the agent binary with additional environment variables.
+    pub fn start_agent_with_env(&self, extra_env: &[(&str, &str)]) -> Result<std::process::Child> {
         let log_file = std::fs::OpenOptions::new()
             .append(true)
             .create(true)
             .open(&self.log_path)?;
 
-        Ok(Command::new(&self.agent_path)
-            .arg("--socket")
+        let mut cmd = Command::new(&self.agent_path);
+        cmd.arg("--socket")
             .arg(&self.socket_path)
             .arg("--ssh-socket")
             .arg(&self.ssh_socket_path)
@@ -52,8 +57,13 @@ impl TestEnv {
             .env("XDG_RUNTIME_DIR", &self.runtime_home)
             .env("RUST_LOG", "debug")
             .stdout(log_file.try_clone()?)
-            .stderr(log_file.try_clone()?)
-            .spawn()?)
+            .stderr(log_file.try_clone()?);
+
+        for (key, val) in extra_env {
+            cmd.env(key, val);
+        }
+
+        Ok(cmd.spawn()?)
     }
 
     pub fn cli_cmd(&self) -> Command {
@@ -76,13 +86,20 @@ impl TestEnv {
     }
 }
 
-pub async fn setup_env() -> Result<TestEnv> {
-    // Prefer Podman if its socket is available. This avoids requiring the Docker daemon.
-    // Testcontainers reads the DOCKER_HOST environment variable.
+/// Like `setup_env` but does NOT start the agent process.
+/// The caller is responsible for starting the agent (possibly with a custom
+/// binary or extra environment variables) and assigning it to `env.agent_process`.
+pub async fn setup_env_no_agent() -> Result<TestEnv> {
     if env::var_os("DOCKER_HOST").is_none() {
-        let podman_socket = "/run/podman/podman.sock";
-        if Path::new(podman_socket).exists() {
-            env::set_var("DOCKER_HOST", format!("unix://{}", podman_socket));
+        let mut candidates = vec!["/run/podman/podman.sock".to_string()];
+        if let Ok(runtime_dir) = env::var("XDG_RUNTIME_DIR") {
+            candidates.push(format!("{}/podman/podman.sock", runtime_dir));
+        }
+        for sock in &candidates {
+            if Path::new(sock.as_str()).exists() {
+                env::set_var("DOCKER_HOST", format!("unix://{}", sock));
+                break;
+            }
         }
     }
     let node = GenericImage::new("vaultwarden/server", "latest")
@@ -125,12 +142,12 @@ pub async fn setup_env() -> Result<TestEnv> {
     let ssh_socket_path = runtime_home.join("ssh-agent-socket");
     let config_path = config_home.join("config.json");
 
-    let mut env = TestEnv {
+    Ok(TestEnv {
         _container: container,
         agent_process: None,
         vault_url,
         profile,
-        _log_file: tempfile::NamedTempFile::new()?, // unused but keep for compat
+        _log_file: tempfile::NamedTempFile::new()?,
         log_path,
         _temp_dir: temp_dir,
         socket_path,
@@ -141,14 +158,15 @@ pub async fn setup_env() -> Result<TestEnv> {
         cache_home,
         data_home,
         runtime_home,
-    };
+    })
+}
 
+pub async fn setup_env() -> Result<TestEnv> {
+    let mut env = setup_env_no_agent().await?;
     let agent_process = env.start_agent()?;
     env.agent_process = Some(agent_process);
-
     // Wait for agent to start and create socket
     sleep(Duration::from_millis(1000)).await;
-
     Ok(env)
 }
 

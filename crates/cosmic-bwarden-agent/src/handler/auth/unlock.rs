@@ -46,7 +46,8 @@ pub async fn handle_unlock(
                 db.access_token = Some(Secret::from(at));
                 db.refresh_token = Some(Secret::from(rt));
             }
-            _ => {}
+            Ok(None) => {}
+            Err(e) => log::warn!("unlock: could not load tokens from keyring: {}", e),
         }
     }
 
@@ -88,31 +89,90 @@ pub async fn handle_unlock(
             .collect::<std::collections::HashMap<_, _>>(),
     ) {
         Ok((keys, org_keys)) => {
-            let mut state_guard = state.lock().await;
+            // Determine whether we need a silent re-auth before committing state,
+            // so we can release the lock during the network call.
+            let master_password_hash = identity.master_password_hash.clone();
 
-            state_guard.keys = Some(keys);
-            state_guard.org_keys = Some(org_keys);
-            state_guard.master_password_hash = Some(identity.master_password_hash);
+            let needs_reauth = {
+                let mut state_guard = state.lock().await;
 
-            state_guard.pinned_ids.clear();
-            for entry in &db.entries {
-                if entry.favorite {
-                    state_guard.pinned_ids.insert(entry.id.clone());
+                state_guard.keys = Some(keys);
+                state_guard.org_keys = Some(org_keys);
+                state_guard.master_password_hash = Some(identity.master_password_hash);
+
+                state_guard.pinned_ids.clear();
+                for entry in &db.entries {
+                    if entry.favorite {
+                        state_guard.pinned_ids.insert(entry.id.clone());
+                    }
+                }
+
+                // access_token/refresh_token are `#[serde(skip)]` — not on disk.
+                // Try the previous in-memory DB first (covers lock→unlock without
+                // agent restart).
+                if db.access_token.is_none() {
+                    if let Some(prev_db) = &state_guard.db {
+                        db.access_token = prev_db.access_token.clone();
+                        db.refresh_token = prev_db.refresh_token.clone();
+                    }
+                }
+
+                let needs_reauth = db.access_token.is_none();
+                state_guard.db = Some(db);
+                state_guard.rebuild_sidebar_cache();
+                state_guard.broadcast(Event::Unlocked);
+                log::info!("vault unlocked via master password for {} (server: {})", email, config.server_name());
+                needs_reauth
+            };
+
+            // If tokens are still missing (agent restart, or persist_session=false),
+            // silently re-authenticate using the master-password hash we just derived.
+            // The lock is intentionally released here so the network call doesn't block
+            // other requests.
+            if needs_reauth {
+                log::info!("unlock: no session token available, attempting silent re-auth");
+                let client = cosmic_bwarden_core::api::Client::new(
+                    &config.base_url(),
+                    &config.identity_url(),
+                );
+                match config.device_id().await {
+                    Ok(device_id) => {
+                        match client
+                            .login(&email, &device_id, &master_password_hash,
+                                   None, None, None, None)
+                            .await
+                        {
+                            Ok((access_token, refresh_token, _protected_key)) => {
+                                log::info!("unlock: silent re-auth succeeded");
+                                {
+                                    let mut g = state.lock().await;
+                                    if let Some(db) = &mut g.db {
+                                        db.access_token = Some(Secret::from(access_token.clone()));
+                                        db.refresh_token = refresh_token.as_ref().map(|rt| Secret::from(rt.clone()));
+                                    }
+                                }
+                                if config.persist_session {
+                                    if let Some(rt) = &refresh_token {
+                                        if let Err(e) = keyring::store_tokens(
+                                            &config.server_name(), &email, &access_token, rt,
+                                        ).await {
+                                            log::error!("failed to store refreshed tokens in keyring: {}", e);
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                // Server may be unreachable or require 2FA — the vault
+                                // is still usable locally; sync will fail until the user
+                                // logs out and logs back in.
+                                log::warn!("unlock: silent re-auth failed (sync will be unavailable): {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => log::warn!("unlock: could not obtain device_id for silent re-auth: {}", e),
                 }
             }
 
-            // access_token/refresh_token are `#[serde(skip)]` and thus lost on
-            // reload from disk; carry over the in-memory tokens from the
-            // pre-lock state if the keyring didn't already restore them.
-            if db.access_token.is_none() {
-                if let Some(prev_db) = &state_guard.db {
-                    db.access_token = prev_db.access_token.clone();
-                    db.refresh_token = prev_db.refresh_token.clone();
-                }
-            }
-            state_guard.db = Some(db);
-
-            state_guard.broadcast(Event::Unlocked);
             Response::Ack
         }
         Err(e) => Response::Error {

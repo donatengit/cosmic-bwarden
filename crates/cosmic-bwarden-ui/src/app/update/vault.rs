@@ -1,29 +1,54 @@
 use cosmic::app::Task;
 use cosmic::Action;
-use cosmic_bwarden_core::protocol::{Action as AgentAction, Response, EntryType};
+use cosmic_bwarden_core::protocol::{Action as AgentAction, Response, EntryType, SidebarEntry};
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::db::{Entry, EntryData, Secret};
 use crate::message::{Message, View};
 use crate::app::state::CosmicBWardenApp;
-use crate::app::tasks::{fetch_sidebar_entries, fetch_top_entries};
+use crate::app::tasks::fetch_sidebar_entries;
 use zeroize::Zeroize;
+
+fn apply_local_filter(
+    all: &[SidebarEntry],
+    query: &str,
+    entry_type: Option<&EntryType>,
+    only_pinned: bool,
+) -> Vec<SidebarEntry> {
+    let q = query.trim().to_lowercase();
+    all.iter()
+        .filter(|e| {
+            if only_pinned && !e.is_pinned {
+                return false;
+            }
+            if let Some(et) = entry_type {
+                if std::mem::discriminant(&e.entry_type) != std::mem::discriminant(et) {
+                    return false;
+                }
+            }
+            if q.is_empty() {
+                return true;
+            }
+            if e.name.to_lowercase().contains(&q) {
+                return true;
+            }
+            e.username.as_ref().map(|u| u.to_lowercase().contains(&q)).unwrap_or(false)
+        })
+        .cloned()
+        .collect()
+}
 
 impl CosmicBWardenApp {
     pub fn update_vault(&mut self, message: Message) -> Option<Task<Message>> {
         match message {
             Message::SearchChanged(q) => {
                 self.search_query = q;
-                self.search_id += 1;
-                Some(fetch_sidebar_entries(self.search_id, Some(self.search_query.clone()), self.filter_type.clone(), self.search_only_pinned))
-            }
-            Message::SearchSubmitted(q) => {
-                self.search_id += 1;
-                Some(fetch_sidebar_entries(self.search_id, Some(q), self.filter_type.clone(), self.search_only_pinned))
+                self.entries = apply_local_filter(&self.all_entries, &self.search_query, self.filter_type.as_ref(), self.search_only_pinned);
+                Some(Task::none())
             }
             Message::FilterTypeChanged(t) => {
                 self.filter_type = t;
-                self.search_id += 1;
-                Some(fetch_sidebar_entries(self.search_id, Some(self.search_query.clone()), self.filter_type.clone(), self.search_only_pinned))
+                self.entries = apply_local_filter(&self.all_entries, &self.search_query, self.filter_type.as_ref(), self.search_only_pinned);
+                Some(Task::none())
             }
             Message::SelectEntry(id) => {
                 self.selected_entry_id = Some(id.clone());
@@ -129,11 +154,8 @@ impl CosmicBWardenApp {
                     Ok(()) => {
                         let id = self.selected_entry_id.clone();
                         self.editing_entry = None;
-                        // Refresh sidebar
                         self.search_id += 1;
-                        let sidebar_task = fetch_sidebar_entries(self.search_id, Some(self.search_query.clone()), self.filter_type.clone(), self.search_only_pinned);
-                        
-                        // Re-fetch selected entry if any
+                        let sidebar_task = fetch_sidebar_entries(self.search_id, None, None, false);
                         if let Some(id) = id {
                             Some(Task::batch(vec![
                                 sidebar_task,
@@ -144,6 +166,7 @@ impl CosmicBWardenApp {
                         }
                     }
                     Err(e) => {
+                        self.sync_failed = true;
                         self.error = Some(e);
                         Some(Task::none())
                     }
@@ -212,6 +235,7 @@ impl CosmicBWardenApp {
                 Some(Task::none())
             }
             Message::ConfirmDelete => {
+                self.deleting = true;
                 if let Some(id) = self.show_delete_confirm.take() {
                     Some(Task::perform(async move {
                         let agent = AgentClient::new();
@@ -230,15 +254,17 @@ impl CosmicBWardenApp {
                 Some(Task::none())
             }
             Message::DeleteEntryResult(res) => {
+                self.deleting = false;
                 match res {
                     Ok(()) => {
                         self.selected_entry_id = None;
                         self.selected_entry = None;
                         self.editing_entry = None;
                         self.search_id += 1;
-                        Some(fetch_sidebar_entries(self.search_id, Some(self.search_query.clone()), self.filter_type.clone(), self.search_only_pinned))
+                        Some(fetch_sidebar_entries(self.search_id, None, None, false))
                     }
                     Err(e) => {
+                        self.sync_failed = true;
                         self.error = Some(e);
                         Some(Task::none())
                     }
@@ -248,27 +274,34 @@ impl CosmicBWardenApp {
                 if id == self.search_id {
                     match res {
                         Ok(entries) => {
-                            self.entries = entries;
+                            // This is always a full (no-query) fetch used to refresh
+                            // the cache after mutations. Re-apply the local filter so
+                            // the displayed list stays consistent with the search bar.
+                            self.all_entries = entries;
+                            self.entries = apply_local_filter(&self.all_entries, &self.search_query, self.filter_type.as_ref(), self.search_only_pinned);
                             self.error = None;
+                            // If the selected entry was deleted on the server but the
+                            // previous sync failed (leaving it visible in the stale
+                            // cache), clear the detail panel now that entries are fresh.
+                            if let Some(sel_id) = &self.selected_entry_id {
+                                if !self.all_entries.iter().any(|e| e.id == *sel_id) {
+                                    self.selected_entry_id = None;
+                                    self.selected_entry = None;
+                                    self.editing_entry = None;
+                                }
+                            }
                         }
-                        // In-flight request arrived after lock — not an error.
-                        Err(e) if e == "agent is locked" => self.entries.clear(),
+                        Err(e) if e == "agent is locked" => {
+                            self.all_entries.clear();
+                            self.entries.clear();
+                        }
                         Err(e) => self.error = Some(e),
                     }
                 }
                 Some(Task::none())
             }
-            Message::TopEntriesReceived(res) => {
-                match res {
-                    Ok(entries) => {
-                        self.top_entries = entries;
-                        self.error = None;
-                    }
-                    Err(e) => self.error = Some(e),
-                }
-                Some(Task::none())
-            }
             Message::SyncClicked => {
+                self.syncing = true;
                 Some(Task::perform(async {
                     let agent = AgentClient::new();
                     match agent.send(AgentAction::Sync).await {
@@ -279,15 +312,22 @@ impl CosmicBWardenApp {
                 }, |res| Action::App(Message::SyncResult(res))))
             }
             Message::SyncResult(res) => {
+                self.syncing = false;
                 match res {
                     Ok(()) => {
+                        // Clear error state immediately — don't wait for the
+                        // VaultChanged → RefreshStateInternal → ConfigReceived
+                        // round-trip that would otherwise leave the red button
+                        // visible for a noticeable moment after sync succeeds.
+                        self.sync_failed = false;
+                        self.error = None;
                         self.search_id += 1;
                         Some(Task::batch(vec![
-                            fetch_sidebar_entries(self.search_id, Some(self.search_query.clone()), self.filter_type.clone(), self.search_only_pinned),
-                            fetch_top_entries(self.config.top_popular_count as usize, Some(self.config.top_popular_days)),
+                            fetch_sidebar_entries(self.search_id, None, None, false),
                         ]))
                     }
                     Err(e) => {
+                        self.sync_failed = true;
                         self.error = Some(e);
                         Some(Task::none())
                     }
@@ -298,11 +338,6 @@ impl CosmicBWardenApp {
                 if let Some(entry) = self.entries.iter_mut().find(|e| e.id == id) {
                     entry.is_pinned = !entry.is_pinned;
                     is_pinned = entry.is_pinned;
-                }
-                
-                // Also update top_entries for consistency if it's there
-                if let Some(entry) = self.top_entries.iter_mut().find(|e| e.id == id) {
-                    entry.is_pinned = is_pinned;
                 }
                 
                 // If it's the selected entry, update it too
@@ -325,8 +360,8 @@ impl CosmicBWardenApp {
             }
             Message::ToggleSearchPinned => {
                 self.search_only_pinned = !self.search_only_pinned;
-                self.search_id += 1;
-                Some(fetch_sidebar_entries(self.search_id, Some(self.search_query.clone()), self.filter_type.clone(), self.search_only_pinned))
+                self.entries = apply_local_filter(&self.all_entries, &self.search_query, self.filter_type.as_ref(), self.search_only_pinned);
+                Some(Task::none())
             }
             Message::RepromptPasswordChanged(p) => {
                 self.reprompt_password = p;

@@ -34,32 +34,13 @@ pub enum RunMode {
 }
 
 pub(crate) fn detect_run_mode() -> RunMode {
-    // 1. Check if we are being run by the COSMIC panel (most reliable for Applets)
+    // The COSMIC panel sets this env var when launching an applet.
+    // Running the binary directly (outside the panel) falls through to Application mode.
     if std::env::var("COSMIC_PANEL_NAME").is_ok() {
-        return RunMode::Applet;
+        RunMode::Applet
+    } else {
+        RunMode::Application
     }
-
-    // 2. Check environment variable override
-    if let Ok(mode) = std::env::var("COSMIC_BWARDEN_MODE") {
-        if mode.to_lowercase() == "applet" {
-            return RunMode::Applet;
-        }
-        if mode.to_lowercase() == "application" {
-            return RunMode::Application;
-        }
-    }
-
-    // 3. Check binary name (for symlink support when not run from panel)
-    if let Some(exe_path) = std::env::current_exe().ok() {
-        if let Some(name) = exe_path.file_name().and_then(|n| n.to_str()) {
-            if name.contains("com.system76.CosmicBWarden") {
-                return RunMode::Applet;
-            }
-        }
-    }
-
-    // 4. Fallback to Application
-    RunMode::Application
 }
 
 fn setup_logs() {
@@ -133,14 +114,16 @@ impl Application for CosmicBWardenApp {
                             needs_login,
                             has_account,
                             is_locked,
+                            sync_failed,
                         }) => {
                             tracing::info!(
                                 needs_login,
                                 has_account,
                                 is_locked,
+                                sync_failed,
                                 "Agent config received"
                             );
-                            Ok((config, needs_login, has_account, is_locked))
+                            Ok((config, needs_login, has_account, is_locked, sync_failed))
                         }
                         Ok(Response::Error { message }) => {
                             tracing::error!("Agent error: {}", message);
@@ -188,7 +171,7 @@ impl Application for CosmicBWardenApp {
         } else {
             // Standard window view
             use cosmic::iced::Length;
-            use cosmic::widget::{column, container, header_bar};
+            use cosmic::widget::container;
             let content = self.view_content();
             let is_auth = matches!(self.view, View::Setup | View::Unlock);
 
@@ -201,10 +184,10 @@ impl Application for CosmicBWardenApp {
                     .center_y(Length::Fill)
                     .into()
             } else {
+                // Vault view: no header bar, sidebar/detail handle their own spacing.
                 container(content)
                     .width(Length::Fill)
                     .height(Length::Fill)
-                    .padding(20)
                     .into()
             };
 
@@ -222,15 +205,11 @@ impl Application for CosmicBWardenApp {
                 view
             };
 
-            container(
-                column![header_bar().title(""), window_content]
-                    .width(Length::Fill)
-                    .height(Length::Fill),
-            )
-            .class(cosmic::theme::Container::WindowBackground)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+            container(window_content)
+                .class(cosmic::theme::Container::WindowBackground)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
         }
     }
 
@@ -240,23 +219,7 @@ impl Application for CosmicBWardenApp {
 
     fn subscription(&self) -> Subscription<Self::Message> {
         use cosmic::applet::token::subscription::activation_token_subscription;
-        use cosmic::cosmic_config::Update;
         use cosmic::iced::Subscription;
-        use cosmic_bwarden_core::config::CosmicBWardenConfig;
-
-        let config_watch = self
-            .core
-            .watch_config(cosmic_bwarden_core::config::CONFIG_ID)
-            .map(|u: Update<CosmicBWardenConfig>| {
-                for why in u
-                    .errors
-                    .into_iter()
-                    .filter(cosmic::cosmic_config::Error::is_err)
-                {
-                    tracing::error!(?why, "config load error");
-                }
-                Message::ConfigChanged(u.config)
-            });
 
         let agent_subscription = Subscription::run(|| {
             use cosmic_bwarden_core::protocol::{Action, Response};
@@ -313,7 +276,7 @@ impl Application for CosmicBWardenApp {
             Subscription::none()
         };
 
-        Subscription::batch(vec![config_watch, agent_subscription, token_subscription])
+        Subscription::batch(vec![agent_subscription, token_subscription])
     }
 
     fn style(&self) -> Option<cosmic::iced::theme::Style> {

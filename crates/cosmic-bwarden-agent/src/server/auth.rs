@@ -17,11 +17,15 @@ where
         let db = state_guard.db.as_mut().ok_or("agent is locked")?;
 
         if db.access_token.is_none() && config.persist_session {
-            if let Ok(Some((at, rt))) =
-                keyring::get_tokens(&config.server_name(), config.email.as_ref().unwrap()).await
-            {
-                db.access_token = Some(Secret::from(at));
-                db.refresh_token = Some(Secret::from(rt));
+            if let Some(email) = config.email.as_deref() {
+                match keyring::get_tokens(&config.server_name(), email).await {
+                    Ok(Some((at, rt))) => {
+                        db.access_token = Some(Secret::from(at));
+                        db.refresh_token = Some(Secret::from(rt));
+                    }
+                    Ok(None) => {}
+                    Err(e) => log::warn!("failed to load tokens from keyring: {}", e),
+                }
             }
         }
 
@@ -57,16 +61,29 @@ where
                             }
 
                             if config.persist_session {
-                                let _ = keyring::store_tokens(
-                                    &config.server_name(),
-                                    config.email.as_ref().unwrap(),
-                                    db.access_token.as_ref().unwrap().expose(),
-                                    db.refresh_token.as_ref().unwrap().expose(),
-                                )
-                                .await;
+                                if let Some(email) = config.email.as_deref() {
+                                    if let (Some(at), Some(rt)) = (db.access_token.as_ref(), db.refresh_token.as_ref()) {
+                                        if let Err(e) = keyring::store_tokens(
+                                            &config.server_name(),
+                                            email,
+                                            at.expose(),
+                                            rt.expose(),
+                                        ).await {
+                                            log::error!("failed to persist refreshed tokens to keyring: {}", e);
+                                        }
+                                    }
+                                } else {
+                                    log::error!("cannot persist tokens: email not set in config");
+                                }
                             }
 
-                            let _ = db.save(&config.server_name(), config.email.as_ref().unwrap());
+                            if let Some(email) = config.email.as_deref() {
+                                if let Err(e) = db.save(&config.server_name(), email) {
+                                    log::error!("failed to save vault DB after token refresh: {}", e);
+                                }
+                            } else {
+                                log::error!("cannot save vault DB after token refresh: email not set in config");
+                            }
                         }
                     }
                     // Retry

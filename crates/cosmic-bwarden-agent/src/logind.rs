@@ -2,6 +2,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use crate::state::State;
 use tokio_stream::StreamExt;
+use zbus::MatchRule;
 
 // `zbus` (+ `zvariant`) accounts for ~558KB of .text in the release binary,
 // measured with `cargo bloat --release --crates`, almost entirely for this
@@ -19,15 +20,25 @@ use tokio_stream::StreamExt;
 pub async fn listen_to_logind(state: Arc<Mutex<State>>) -> zbus::Result<()> {
     let connection = zbus::Connection::system().await?;
 
-    // Subscribe to Session Lock signal
-    // org.freedesktop.login1.Session.Lock
+    // On the D-Bus system bus, the daemon filters messages by default.
+    // Without explicit AddMatch calls the daemon never routes broadcast
+    // signals to this connection — MessageStream would receive nothing.
+    // Register each signal we care about before entering the stream loop.
+    let proxy = zbus::fdo::DBusProxy::new(&connection).await?;
+    for (interface, member) in [
+        ("org.freedesktop.login1.Session", "Lock"),
+        ("org.freedesktop.login1.Manager", "PrepareForShutdown"),
+        ("org.freedesktop.login1.Manager", "PrepareForSleep"),
+    ] {
+        let rule = MatchRule::builder()
+            .msg_type(zbus::message::Type::Signal)
+            .interface(interface).expect("valid interface name")
+            .member(member).expect("valid member name")
+            .build();
+        proxy.add_match_rule(rule).await?;
+    }
 
-    // Use zbus Proxy for easier signal handling if possible, or raw MatchRule
-    // For simplicity, we can use a basic Stream of messages
     let mut stream = zbus::MessageStream::from(&connection);
-
-    // We also want PrepareForShutdown
-    // interface='org.freedesktop.login1.Manager', member='PrepareForShutdown'
 
     while let Some(msg) = stream.next().await {
         match msg {
@@ -36,12 +47,23 @@ pub async fn listen_to_logind(state: Arc<Mutex<State>>) -> zbus::Result<()> {
                 let interface = header.interface();
                 let member = header.member();
 
-                if (interface.map(|i| i.as_str()) == Some("org.freedesktop.login1.Session")
-                    && member.map(|m| m.as_str()) == Some("Lock"))
-                    || (interface.map(|i| i.as_str()) == Some("org.freedesktop.login1.Manager")
-                        && member.map(|m| m.as_str()) == Some("PrepareForShutdown"))
-                {
-                    log::info!("received lock/shutdown signal from logind, locking vault");
+                let iface = interface.map(|i| i.as_str());
+                let mbr = member.map(|m| m.as_str());
+                let should_lock =
+                    (iface == Some("org.freedesktop.login1.Session") && mbr == Some("Lock"))
+                    || (iface == Some("org.freedesktop.login1.Manager")
+                        && (mbr == Some("PrepareForShutdown") || mbr == Some("PrepareForSleep")));
+                if should_lock {
+                    let reason = match mbr {
+                        Some("Lock") => "session lock",
+                        Some("PrepareForShutdown") => "system shutdown",
+                        Some("PrepareForSleep") => "system sleep/suspend",
+                        _ => "logind signal",
+                    };
+                    log::info!("vault locked: {} (signal: {}/{})",
+                        reason,
+                        iface.unwrap_or("?"),
+                        mbr.unwrap_or("?"));
                     let mut state_guard = state.lock().await;
                     state_guard.lock();
                 }
@@ -50,5 +72,9 @@ pub async fn listen_to_logind(state: Arc<Mutex<State>>) -> zbus::Result<()> {
         }
     }
 
+    // Stream ended — D-Bus connection was dropped. This causes the agent to
+    // exit via the select! in main (logind task completing is treated as a
+    // shutdown signal), so log at error level before returning.
+    log::error!("logind: D-Bus system bus connection closed unexpectedly — lock-on-sleep/suspend will not work until agent restarts");
     Ok(())
 }

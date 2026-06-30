@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=CosmicBWarden
 Comment=Secure Bitwarden client for COSMIC
-Exec=com.system76.CosmicBWarden
+Exec=cosmic-applet-bwarden
 Icon=password-manager-symbolic
 Terminal=false
 Type=Application

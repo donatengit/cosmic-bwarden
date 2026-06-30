@@ -16,12 +16,17 @@ pub struct CosmicBWardenConfig {
     pub ssh_agent_socket_path: Option<String>,
     #[serde(default = "default_lock_timeout")]
     pub lock_timeout: u64,
-    #[serde(default = "default_top_popular_count")]
-    pub top_popular_count: u32,
-    #[serde(default = "default_top_popular_days")]
-    pub top_popular_days: u32,
     #[serde(default)]
     pub persist_session: bool,
+    /// True when a TPM-sealed blob has been set up for this account.
+    /// Cleared on disable; set by the agent after successful sealing.
+    #[serde(default)]
+    pub tpm_enabled: bool,
+    /// When true, the master_password_hash is also sealed in the TPM so that
+    /// PIN unlock can silently re-authenticate with the server (enabling Sync).
+    /// Trade-off: physical TPM access (without PIN) allows server authentication.
+    #[serde(default)]
+    pub tpm_store_server_credentials: bool,
 }
 
 impl Default for CosmicBWardenConfig {
@@ -35,23 +40,15 @@ impl Default for CosmicBWardenConfig {
             socket_path: None,
             ssh_agent_socket_path: None,
             lock_timeout: default_lock_timeout(),
-            top_popular_count: default_top_popular_count(),
-            top_popular_days: default_top_popular_days(),
             persist_session: false,
+            tpm_enabled: false,
+            tpm_store_server_credentials: false,
         }
     }
 }
 
 pub fn default_lock_timeout() -> u64 {
-    3600
-}
-
-pub fn default_top_popular_count() -> u32 {
-    5
-}
-
-pub fn default_top_popular_days() -> u32 {
-    7
+    5400 // 90 minutes
 }
 
 impl CosmicBWardenConfig {

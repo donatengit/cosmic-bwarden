@@ -158,9 +158,18 @@ impl CosmicBWardenApp {
 
         if is_editing {
             outer = outer.push(divider::horizontal::default());
-            outer = outer.push(button::destructive("Delete Entry")
-                .on_press(Message::DeleteEntry(entry.id.clone()))
-                .width(Length::Fill));
+            let delete_area: Element<Message> = if self.deleting {
+                container(cosmic::widget::indeterminate_circular().size(24.0))
+                    .center_x(Length::Fill)
+                    .padding([6, 0])
+                    .into()
+            } else {
+                button::destructive("Delete Entry")
+                    .on_press(Message::DeleteEntry(entry.id.clone()))
+                    .width(Length::Fill)
+                    .into()
+            };
+            outer = outer.push(delete_area);
         }
 
         outer = outer.push(

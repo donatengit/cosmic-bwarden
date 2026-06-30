@@ -3,9 +3,71 @@ use cosmic_bwarden_core::protocol::{EntryType, Response, SidebarEntry};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-pub async fn handle_get_entries(query: Option<String>, entry_type: Option<EntryType>, only_pinned: bool, state: &Arc<Mutex<State>>) -> Response {
+pub async fn handle_get_sidebar_entries(
+    query: Option<String>,
+    entry_type: Option<EntryType>,
+    only_pinned: bool,
+    state: &Arc<Mutex<State>>,
+) -> Response {
+    let state_guard = state.lock().await;
+    if state_guard.keys.is_none() {
+        return Response::Error {
+            message: "agent is locked".to_string(),
+        };
+    }
+
+    let q = query.as_deref().map(str::to_lowercase);
+    let entries: Vec<SidebarEntry> = state_guard
+        .sidebar_cache
+        .iter()
+        .filter(|e| {
+            if only_pinned && !e.is_pinned {
+                return false;
+            }
+            if let Some(et) = entry_type {
+                let type_match = matches!(
+                    (&e.entry_type, et),
+                    (EntryType::Login, EntryType::Login)
+                        | (EntryType::Card, EntryType::Card)
+                        | (EntryType::Identity, EntryType::Identity)
+                        | (EntryType::SecureNote, EntryType::SecureNote)
+                        | (EntryType::SshKey, EntryType::SshKey)
+                );
+                if !type_match {
+                    return false;
+                }
+            }
+            if let Some(q) = &q {
+                if e.name.to_lowercase().contains(q.as_str()) {
+                    return true;
+                }
+                if e.id == *q {
+                    return true;
+                }
+                return e
+                    .username
+                    .as_ref()
+                    .map(|u| u.to_lowercase().contains(q.as_str()))
+                    .unwrap_or(false);
+            }
+            true
+        })
+        .cloned()
+        .collect();
+
+    Response::SidebarEntries { entries }
+}
+
+pub async fn handle_get_entries(
+    query: Option<String>,
+    entry_type: Option<EntryType>,
+    only_pinned: bool,
+    state: &Arc<Mutex<State>>,
+) -> Response {
     let state = state.lock().await;
     if let (Some(db), Some(keys)) = (&state.db, &state.keys) {
+        let empty_org_keys = std::collections::HashMap::new();
+        let org_keys = state.org_keys.as_ref().unwrap_or(&empty_org_keys);
         let mut entries = Vec::new();
         for entry in &db.entries {
             if only_pinned && !entry.favorite {
@@ -21,8 +83,7 @@ pub async fn handle_get_entries(query: Option<String>, entry_type: Option<EntryT
                     _ => continue,
                 }
             }
-
-            entries.push(entry.decrypt(keys));
+            entries.push(entry.decrypt(keys, org_keys));
         }
 
         let entries = if let Some(q) = query {
@@ -56,143 +117,15 @@ pub async fn handle_get_entries(query: Option<String>, entry_type: Option<EntryT
     }
 }
 
-pub async fn handle_get_sidebar_entries(query: Option<String>, entry_type: Option<EntryType>, only_pinned: bool, state: &Arc<Mutex<State>>) -> Response {
-    let mut state_guard = state.lock().await;
-    if let (Some(db), Some(keys)) = (&state_guard.db, &state_guard.keys) {
-        let mut entries = Vec::new();
-        let mut new_names = Vec::new();
-        let mut new_usernames = Vec::new();
-        let mut new_pubkeys = Vec::new();
-
-        for entry in &db.entries {
-            if only_pinned && !entry.favorite {
-                continue;
-            }
-            if let Some(et) = entry_type {
-                match (et, &entry.data) {
-                    (EntryType::Login, cosmic_bwarden_core::db::EntryData::Login { .. }) => (),
-                    (EntryType::Card, cosmic_bwarden_core::db::EntryData::Card { .. }) => (),
-                    (EntryType::Identity, cosmic_bwarden_core::db::EntryData::Identity { .. }) => (),
-                    (EntryType::SecureNote, cosmic_bwarden_core::db::EntryData::SecureNote) => (),
-                    (EntryType::SshKey, cosmic_bwarden_core::db::EntryData::SshKey { .. }) => (),
-                    _ => continue,
-                }
-            }
-
-            let decrypted_name = if let Some(name) = state_guard.name_cache.get(&entry.id) {
-                name.clone()
-            } else {
-                let name = match cosmic_bwarden_core::vault::decrypt(
-                    &entry.name,
-                    keys,
-                    entry.key.as_deref(),
-                ) {
-                    Ok(n) => n,
-                    Err(_) => entry.name.clone(),
-                };
-                new_names.push((entry.id.clone(), name.clone()));
-                name
-            };
-
-            let username_dec = if let Some(u) = state_guard.username_cache.get(&entry.id) {
-                Some(u.clone())
-            } else {
-                let mut u_dec = None;
-                if let cosmic_bwarden_core::db::EntryData::Login { username, .. } =
-                    &entry.data
-                {
-                    if let Some(u) = username {
-                        u_dec = Some(
-                            match cosmic_bwarden_core::vault::decrypt(
-                                u,
-                                keys,
-                                entry.key.as_deref(),
-                            ) {
-                                Ok(dec_u) => dec_u,
-                                Err(_) => u.clone(),
-                            },
-                        );
-                    }
-                }
-                if let Some(u) = &u_dec {
-                    new_usernames.push((entry.id.clone(), u.clone()));
-                }
-                u_dec
-            };
-
-            let pubkey_dec = if let Some(pk) = state_guard.pubkey_cache.get(&entry.id) {
-                Some(pk.clone())
-            } else {
-                let mut pk_dec = None;
-                if matches!(&entry.data, cosmic_bwarden_core::db::EntryData::SshKey { .. }) {
-                    if let cosmic_bwarden_core::db::EntryData::SshKey { public_key, .. } =
-                        &entry.decrypt(keys).data
-                    {
-                        pk_dec = public_key.clone();
-                    }
-                }
-                if let Some(pk) = &pk_dec {
-                    new_pubkeys.push((entry.id.clone(), pk.clone()));
-                }
-                pk_dec
-            };
-
-            entries.push((
-                SidebarEntry {
-                    id: entry.id.clone(),
-                    name: decrypted_name,
-                    username: username_dec.clone(),
-                    public_key: pubkey_dec,
-                    entry_type: match &entry.data {
-                        cosmic_bwarden_core::db::EntryData::Login { .. } => EntryType::Login,
-                        cosmic_bwarden_core::db::EntryData::Card { .. } => EntryType::Card,
-                        cosmic_bwarden_core::db::EntryData::Identity { .. } => EntryType::Identity,
-                        cosmic_bwarden_core::db::EntryData::SecureNote => EntryType::SecureNote,
-                        cosmic_bwarden_core::db::EntryData::SshKey { .. } => EntryType::SshKey,
-                    },
-                    is_pinned: entry.favorite,
-                },
-                username_dec,
-            ));
-        }
-
-        for (id, name) in new_names {
-            state_guard.name_cache.insert(id, name);
-        }
-        for (id, username) in new_usernames {
-            state_guard.username_cache.insert(id, username);
-        }
-        for (id, pubkey) in new_pubkeys {
-            state_guard.pubkey_cache.insert(id, pubkey);
-        }
-
-        let entries = if let Some(q) = query {
-            let q = q.to_lowercase();
-            entries
-                .into_iter()
-                .filter(|(e, u)| {
-                    e.name.to_lowercase().contains(&q)
-                        || e.id == q
-                        || u.as_ref()
-                            .map(|un| un.to_lowercase().contains(&q))
-                            .unwrap_or(false)
-                })
-                .map(|(e, _)| e)
-                .collect()
-        } else {
-            entries.into_iter().map(|(e, _)| e).collect()
-        };
-        Response::SidebarEntries { entries }
-    } else {
-        Response::Error {
-            message: "agent is locked".to_string(),
-        }
-    }
-}
-
-pub async fn handle_get_entry(id: String, password: Option<String>, state: &Arc<Mutex<State>>) -> Response {
+pub async fn handle_get_entry(
+    id: String,
+    password: Option<String>,
+    state: &Arc<Mutex<State>>,
+) -> Response {
     let state = state.lock().await;
     if let (Some(db), Some(keys)) = (&state.db, &state.keys) {
+        let empty_org_keys = std::collections::HashMap::new();
+        let org_keys = state.org_keys.as_ref().unwrap_or(&empty_org_keys);
         if let Some(entry) = db.entries.iter().find(|e| e.id == id) {
             if entry.master_password_reprompt() {
                 let password = match password {
@@ -259,50 +192,13 @@ pub async fn handle_get_entry(id: String, password: Option<String>, state: &Arc<
             }
 
             Response::Entry {
-                entry: entry.decrypt(keys),
+                entry: entry.decrypt(keys, org_keys),
             }
         } else {
             Response::Error {
                 message: "entry not found".to_string(),
             }
         }
-    } else {
-        Response::Error {
-            message: "agent is locked".to_string(),
-        }
-    }
-}
-
-pub async fn handle_get_top_frequent(limit: usize, state: &Arc<Mutex<State>>) -> Response {
-    let state_guard = state.lock().await;
-    if let Some(db) = &state_guard.db {
-        let mut entries = Vec::new();
-        for id in state_guard.pinned_ids.iter().take(limit) {
-            if let Some(entry) = db.entries.iter().find(|e| &e.id == id) {
-                let name = state_guard
-                    .name_cache
-                    .get(&entry.id)
-                    .cloned()
-                    .unwrap_or_else(|| entry.name.clone());
-                let username = state_guard.username_cache.get(&entry.id).cloned();
-                let public_key = state_guard.pubkey_cache.get(&entry.id).cloned();
-                entries.push(SidebarEntry {
-                    id: entry.id.clone(),
-                    name,
-                    username,
-                    public_key,
-                    entry_type: match &entry.data {
-                        cosmic_bwarden_core::db::EntryData::Login { .. } => EntryType::Login,
-                        cosmic_bwarden_core::db::EntryData::Card { .. } => EntryType::Card,
-                        cosmic_bwarden_core::db::EntryData::Identity { .. } => EntryType::Identity,
-                        cosmic_bwarden_core::db::EntryData::SecureNote => EntryType::SecureNote,
-                        cosmic_bwarden_core::db::EntryData::SshKey { .. } => EntryType::SshKey,
-                    },
-                    is_pinned: true,
-                });
-            }
-        }
-        Response::SidebarEntries { entries }
     } else {
         Response::Error {
             message: "agent is locked".to_string(),

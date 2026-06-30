@@ -12,6 +12,9 @@ local_share := real_home + "/.local/share"
 local_applets := local_share + "/cosmic/applets"
 local_apps := local_share + "/applications"
 
+# Auto-detect TPM2 support: enable the agent's `tpm` feature when libtss2-esys is present.
+_tpm_features := `pkg-config --exists tss2-esys 2>/dev/null && echo '--features cosmic-bwarden-agent/tpm' || true`
+
 # Default task: build the project
 default: build
 
@@ -19,16 +22,16 @@ default: build
 build:
     if [ -n "${SUDO_USER:-}" ]; then \
         echo "Detected sudo, running cargo build as $SUDO_USER..."; \
-        sudo -u "$SUDO_USER" env PATH="$PATH" RUSTFLAGS="-C target-cpu=native" cargo build --release --quiet; \
+        sudo -u "$SUDO_USER" env PATH="$PATH" RUSTFLAGS="-C target-cpu=native" cargo build --release --quiet {{_tpm_features}}; \
     else \
-        RUSTFLAGS="-C target-cpu=native" cargo build --release --quiet; \
+        RUSTFLAGS="-C target-cpu=native" cargo build --release --quiet {{_tpm_features}}; \
     fi
 
 # Install binaries, desktop entry, and COSMIC applet metadata system-wide
 install: build
     echo "Installing binaries..."
     install -Dm755 target/release/cosmic-bwarden-agent {{bin_dir}}/cosmic-bwarden-agent
-    install -Dm755 target/release/cosmic-bwarden-ui {{bin_dir}}/com.system76.CosmicBWarden
+    install -Dm755 target/release/cosmic-applet-bwarden {{bin_dir}}/cosmic-applet-bwarden
     install -Dm755 target/release/cosmic-bwarden-cli {{bin_dir}}/cosmic-bwarden-cli
     
     echo "Installing desktop entry..."
@@ -50,8 +53,7 @@ install: build
 clean-install: uninstall build
     echo "Installing binaries..."
     sudo install -Dm755 target/release/cosmic-bwarden-agent {{bin_dir}}/cosmic-bwarden-agent
-    sudo install -Dm755 target/release/cosmic-bwarden-ui {{bin_dir}}/cosmic-bwarden-ui
-    sudo ln -sf {{bin_dir}}/cosmic-bwarden-ui {{bin_dir}}/com.system76.CosmicBWarden
+    sudo install -Dm755 target/release/cosmic-applet-bwarden {{bin_dir}}/cosmic-applet-bwarden
     sudo install -Dm755 target/release/cosmic-bwarden-cli {{bin_dir}}/cosmic-bwarden-cli
 
     echo "Installing desktop entry..."
@@ -72,6 +74,16 @@ clean-install: uninstall build
     else \
         systemctl --user daemon-reload; \
     fi
+    if [ -n "{{_tpm_features}}" ]; then \
+        TARGET_USER="${SUDO_USER:-$USER}"; \
+        if ! id -nG "$TARGET_USER" 2>/dev/null | grep -qw tss; then \
+            echo "TPM2 support compiled in — adding $TARGET_USER to the 'tss' group..."; \
+            usermod -aG tss "$TARGET_USER" && \
+            echo "NOTE: log out and back in (or run 'newgrp tss') for TPM access to take effect."; \
+        else \
+            echo "TPM2 support compiled in — $TARGET_USER is already in the 'tss' group."; \
+        fi; \
+    fi
     echo "Done. Please run 'just restart-panel' and 'just enable-agent'."
 
 # Install metadata and desktop files for the current user (only if not installing system-wide)
@@ -85,8 +97,7 @@ user-install: build
     echo "Installing binaries to user bin..."
     mkdir -p {{local_share}}/../bin
     install -Dm755 target/release/cosmic-bwarden-agent {{local_share}}/../bin/cosmic-bwarden-agent
-    install -Dm755 target/release/cosmic-bwarden-ui {{local_share}}/../bin/cosmic-bwarden-ui
-    ln -sf {{local_share}}/../bin/cosmic-bwarden-ui {{local_share}}/../bin/com.system76.CosmicBWarden
+    install -Dm755 target/release/cosmic-applet-bwarden {{local_share}}/../bin/cosmic-applet-bwarden
     install -Dm755 target/release/cosmic-bwarden-cli {{local_share}}/../bin/cosmic-bwarden-cli
 
     echo "Installing COSMIC applet metadata to local applets..."
@@ -112,16 +123,21 @@ disable-agent:
 uninstall:
     echo "Uninstalling from system paths..."
     sudo rm -f {{bin_dir}}/cosmic-bwarden-agent
-    sudo rm -f {{bin_dir}}/cosmic-bwarden-ui
-    sudo rm -f {{bin_dir}}/com.system76.CosmicBWarden
+    sudo rm -f {{bin_dir}}/cosmic-applet-bwarden
     sudo rm -f {{bin_dir}}/cosmic-bwarden-cli
     sudo rm -f {{apps_dir}}/com.system76.CosmicBWarden.desktop
     sudo rm -f {{applets_dir}}/com.system76.CosmicBWarden.ron
     sudo rm -f {{systemd_user_dir}}/cosmic-bwarden-agent.service
+    # Legacy binary names (transitional cleanup)
+    sudo rm -f {{bin_dir}}/com.system76.CosmicBWarden
+    sudo rm -f {{bin_dir}}/cosmic-bwarden-ui
     echo "Uninstalling from local paths..."
     rm -f {{local_apps}}/com.system76.CosmicBWarden.desktop
     rm -f {{local_applets}}/com.system76.CosmicBWarden.ron
+    rm -f {{local_share}}/../bin/cosmic-applet-bwarden
+    # Legacy binary names (transitional cleanup)
     rm -f {{local_share}}/../bin/com.system76.CosmicBWarden
+    rm -f {{local_share}}/../bin/cosmic-bwarden-ui
 
 # Clean build artifacts
 clean: uninstall
@@ -156,7 +172,7 @@ run: build
     echo "Starting agent in background..."
     ./target/release/cosmic-bwarden-agent &
     echo "Starting UI..."
-    ./target/release/cosmic-bwarden-ui
+    ./target/release/cosmic-applet-bwarden
 
 # Register the browser native messaging host
 register-browser-host: build

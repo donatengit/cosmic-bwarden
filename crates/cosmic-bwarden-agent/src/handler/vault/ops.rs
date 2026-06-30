@@ -14,10 +14,11 @@ pub async fn handle_get_totp(id: String, state: &Arc<Mutex<State>>) -> Response 
         None
     };
     let keys = state_guard.keys.clone();
+    let org_keys = state_guard.org_keys.clone().unwrap_or_default();
     drop(state_guard);
 
     if let (Some(entry), Some(keys)) = (entry, keys) {
-        let entry = entry.decrypt(&keys);
+        let entry = entry.decrypt(&keys, &org_keys);
         if let EntryData::Login {
             totp: Some(totp_secret),
             ..
@@ -66,6 +67,7 @@ pub async fn handle_get_totp(id: String, state: &Arc<Mutex<State>>) -> Response 
 }
 
 pub async fn handle_delete_entry(id: String, state: &Arc<Mutex<State>>) -> Response {
+    log::debug!("entry delete: id={}", id);
     let config = match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
         Ok(c) => c,
         Err(e) => {
@@ -88,13 +90,32 @@ pub async fn handle_delete_entry(id: String, state: &Arc<Mutex<State>>) -> Respo
 
     match res {
         Ok(_) => crate::handler::vault::sync::handle_sync(state).await,
-        Err(e) => Response::Error {
-            message: format!("delete failed: {}", e),
-        },
+        Err(e) => {
+            {
+                let mut g = state.lock().await;
+                g.sync_failed = true;
+                g.last_sync_error = Some(e.clone());
+            }
+            log::warn!("delete failed: {}", e);
+            Response::Error {
+                message: format!("delete failed: {}", e),
+            }
+        }
     }
 }
 
-pub async fn handle_update_entry(entry: Entry, state: &Arc<Mutex<State>>) -> Response {
+pub async fn handle_update_entry(mut entry: Entry, state: &Arc<Mutex<State>>) -> Response {
+    log::debug!("entry update: id={}", entry.id);
+    // Keep SSH key custom fields in sync with entry.data so the plaintext fallback
+    // path in decrypt() always returns the latest values.
+    if let cosmic_bwarden_core::db::EntryData::SshKey { private_key, public_key, .. } = &entry.data.clone() {
+        if let Some(pk) = private_key {
+            entry.set_field("private_key", pk.expose(), cosmic_bwarden_core::api::FieldType::Hidden);
+        }
+        if let Some(pk) = public_key {
+            entry.set_field("public_key", pk, cosmic_bwarden_core::api::FieldType::Text);
+        }
+    }
     let config = match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
         Ok(c) => c,
         Err(e) => {
@@ -110,9 +131,17 @@ pub async fn handle_update_entry(entry: Entry, state: &Arc<Mutex<State>>) -> Res
     if let Some(keys) = keys {
         match update_entry_on_server(state, &entry, &config, &keys).await {
             Ok(()) => crate::handler::vault::sync::handle_sync(state).await,
-            Err(e) => Response::Error {
-                message: format!("failed to update entry on server: {}", e),
-            },
+            Err(e) => {
+                {
+                    let mut g = state.lock().await;
+                    g.sync_failed = true;
+                    g.last_sync_error = Some(e.to_string());
+                }
+                log::warn!("update entry failed: {}", e);
+                Response::Error {
+                    message: format!("failed to update entry on server: {}", e),
+                }
+            }
         }
     } else {
         Response::Error {
@@ -121,95 +150,93 @@ pub async fn handle_update_entry(entry: Entry, state: &Arc<Mutex<State>>) -> Res
     }
 }
 
-pub async fn handle_pin_entry(id: String, state: &Arc<Mutex<State>>) -> Response {
-    let mut state_guard = state.lock().await;
-    let entry = if let Some(db) = &mut state_guard.db {
-        // Update in-memory immediately to prevent concurrent reads from
-        // seeing stale favorite values (e.g. GetSidebarEntries requesting
-        // only_pinned between this handler and the eventual handle_sync).
-        if let Some(e) = db.entries.iter_mut().find(|e| e.id == id) {
-            e.favorite = true;
-            Some(e.clone())
-        } else {
-            None
+async fn set_favorite(id: String, favorite: bool, state: &Arc<Mutex<State>>) -> Response {
+    log::debug!("entry favorite: id={}, pinned={}", id, favorite);
+    let config = match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
+        Ok(c) => c,
+        Err(e) => {
+            return Response::Error {
+                message: format!("failed to load config: {}", e),
+            };
         }
-    } else {
-        None
     };
-    let keys = state_guard.keys.clone();
-    drop(state_guard);
 
-    let keys_is_some = keys.is_some();
-    if let (Some(entry), Some(keys)) = (entry, keys) {
-        let entry = entry.decrypt(&keys);
-        let config = match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
-            Ok(c) => c,
-            Err(e) => {
+    // Update in-memory state immediately so concurrent reads see the new value.
+    {
+        let mut g = state.lock().await;
+        if g.keys.is_none() {
+            return Response::Error {
+                message: "agent is locked".to_string(),
+            };
+        }
+        let db = match &mut g.db {
+            Some(d) => d,
+            None => {
                 return Response::Error {
-                    message: format!("failed to load config: {}", e),
+                    message: "agent is locked".to_string(),
                 };
             }
         };
-        match update_entry_on_server(state, &entry, &config, &keys).await {
-            Ok(()) => crate::handler::vault::sync::handle_sync(state).await,
-            Err(e) => Response::Error {
-                message: format!("failed to pin entry on server: {}", e),
-            },
-        }
-    } else {
-        Response::Error {
-            message: if keys_is_some {
-                "entry not found"
-            } else {
-                "agent is locked"
+        match db.entries.iter_mut().find(|e| e.id == id) {
+            Some(e) => e.favorite = favorite,
+            None => {
+                return Response::Error {
+                    message: "entry not found".to_string(),
+                };
             }
-            .to_string(),
+        }
+        if favorite {
+            g.pinned_ids.insert(id.clone());
+        } else {
+            g.pinned_ids.remove(&id);
+        }
+        g.rebuild_sidebar_cache();
+        let email = config.email.as_deref().unwrap_or("");
+        let server = config.server_name();
+        if let Some(db) = &g.db {
+            if let Err(e) = db.save(&server, email) {
+                log::error!("failed to persist favorite change to disk: {}", e);
+            }
+        }
+    }
+
+    let id_clone = id.clone();
+    let res = crate::server::with_refresh(state, move |at| {
+        let id = id_clone.clone();
+        let base_url = config.base_url();
+        let identity_url = config.identity_url();
+        async move {
+            let client = cosmic_bwarden_core::api::Client::new(&base_url, &identity_url);
+            client.update_favorite(&at, &id, favorite).await
+        }
+    })
+    .await;
+
+    match res {
+        Ok(()) => {
+            state.lock().await.broadcast(cosmic_bwarden_core::protocol::Event::VaultChanged);
+            Response::Ack
+        }
+        Err(e) => {
+            {
+                let mut g = state.lock().await;
+                g.sync_failed = true;
+                g.last_sync_error = Some(e.clone());
+            }
+            log::warn!("update favorite failed: {}", e);
+            Response::Error {
+                message: format!("failed to update favorite on server: {}", e),
+            }
         }
     }
 }
 
-pub async fn handle_unpin_entry(id: String, state: &Arc<Mutex<State>>) -> Response {
-    let mut state_guard = state.lock().await;
-    let entry = if let Some(db) = &mut state_guard.db {
-        if let Some(e) = db.entries.iter_mut().find(|e| e.id == id) {
-            e.favorite = false;
-            Some(e.clone())
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-    let keys = state_guard.keys.clone();
-    drop(state_guard);
+pub async fn handle_pin_entry(id: String, state: &Arc<Mutex<State>>) -> Response {
+    set_favorite(id, true, state).await
+}
 
-    let keys_is_some = keys.is_some();
-    if let (Some(entry), Some(keys)) = (entry, keys) {
-        let entry = entry.decrypt(&keys);
-        let config = match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
-            Ok(c) => c,
-            Err(e) => {
-                return Response::Error {
-                    message: format!("failed to load config: {}", e),
-                };
-            }
-        };
-        match update_entry_on_server(state, &entry, &config, &keys).await {
-            Ok(()) => crate::handler::vault::sync::handle_sync(state).await,
-            Err(e) => Response::Error {
-                message: format!("failed to unpin entry on server: {}", e),
-            },
-        }
-    } else {
-        Response::Error {
-            message: if keys_is_some {
-                "entry not found"
-            } else {
-                "agent is locked"
-            }
-            .to_string(),
-        }
-    }
+pub async fn handle_unpin_entry(id: String, state: &Arc<Mutex<State>>) -> Response {
+    set_favorite(id, false, state).await
 }
 
 pub async fn handle_add_entry(
@@ -389,6 +416,14 @@ pub async fn handle_add_identity(
 }
 
 async fn add_entry_to_server(entry: Entry, state: &Arc<Mutex<State>>) -> Response {
+    let entry_type = match &entry.data {
+        cosmic_bwarden_core::db::EntryData::Login { .. } => "login",
+        cosmic_bwarden_core::db::EntryData::SecureNote => "secure_note",
+        cosmic_bwarden_core::db::EntryData::SshKey { .. } => "ssh_key",
+        cosmic_bwarden_core::db::EntryData::Card { .. } => "card",
+        cosmic_bwarden_core::db::EntryData::Identity { .. } => "identity",
+    };
+    log::debug!("entry create: type={} (id assigned by server)", entry_type);
     let config = match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
         Ok(c) => c,
         Err(e) => {
@@ -405,9 +440,17 @@ async fn add_entry_to_server(entry: Entry, state: &Arc<Mutex<State>>) -> Respons
     if let Some(keys) = keys {
         match crate::server::add_entry_on_server(state, &entry, &config, &keys).await {
             Ok(_) => crate::handler::vault::sync::handle_sync(state).await,
-            Err(e) => Response::Error {
-                message: format!("add failed: {}", e),
-            },
+            Err(e) => {
+                {
+                    let mut g = state.lock().await;
+                    g.sync_failed = true;
+                    g.last_sync_error = Some(e.to_string());
+                }
+                log::warn!("add entry failed: {}", e);
+                Response::Error {
+                    message: format!("add failed: {}", e),
+                }
+            }
         }
     } else {
         Response::Error {

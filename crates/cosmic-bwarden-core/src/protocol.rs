@@ -64,10 +64,6 @@ pub enum Action {
     CopyToClipboard {
         id: String,
     },
-    GetTopFrequent {
-        limit: usize,
-        days: Option<u32>,
-    },
     PinEntry {
         id: String,
     },
@@ -133,6 +129,37 @@ pub enum Action {
     },
     Logout,
     Subscribe,
+
+    // TPM PIN unlock actions (agent feature-gated; safe to send on non-TPM builds)
+    SetupTpmPin {
+        master_password: String,
+        pin: String,
+    },
+    /// Like SetupTpmPin but uses the vault keys already in memory (vault must be unlocked).
+    /// Does not require the master password to be re-entered.
+    SetupTpmPinFromUnlocked {
+        pin: String,
+    },
+    UnlockWithPin {
+        pin: String,
+    },
+    /// Disable PIN unlock. The vault must be currently unlocked (checked in the agent).
+    /// No master password needed — being authenticated in the vault is sufficient.
+    DisableTpmPin,
+    /// Seal the in-memory master_password_hash into a separate TPM blob (no PIN required
+    /// for this blob — it is TPM-bound only). Enables silent server re-auth after PIN unlock.
+    /// Fails if the vault was not unlocked with master password (hash not in memory).
+    EnableTpmServerCredentials,
+    /// Remove the TPM-sealed server-credentials blob, disabling silent re-auth.
+    DisableTpmServerCredentials,
+    CheckTpm,
+    /// Returns system-level diagnostic checks explaining why TPM may be unavailable.
+    CheckTpmDiagnostics,
+    /// Update the autolock timer duration live, without restarting the agent.
+    /// seconds=0 disables autolock.
+    UpdateLockTimeout {
+        seconds: u64,
+    },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -145,6 +172,9 @@ pub enum Event {
     /// subscribers can prompt the user to unlock without being spammed by
     /// repeated requests.
     UnlockRequested,
+    /// Like UnlockRequested, but TPM PIN unlock is configured — the UI
+    /// should show a PIN field instead of a full master-password prompt.
+    PinRequested,
     /// Requests the vault window to open and navigate to a specific entry.
     OpenEntry { id: String },
 }
@@ -165,6 +195,10 @@ pub enum Response {
         needs_login: bool,
         has_account: bool,
         is_locked: bool,
+        /// True when the most recent server operation failed due to a network or
+        /// backend error. Cleared by a successful sync. Visible in the UI as a
+        /// red "Not synced" button so the user knows data may be out of date.
+        sync_failed: bool,
     },
     Entries {
         entries: Vec<crate::db::Entry>,
@@ -187,5 +221,16 @@ pub enum Response {
     },
     Event {
         event: Event,
+    },
+    /// Whether the TPM is reachable and a sealed blob is configured for this account.
+    TpmStatus {
+        available: bool,
+        configured: bool,
+        /// True when the master_password_hash is also sealed (enables silent server re-auth).
+        server_credentials: bool,
+    },
+    /// System-level diagnostic checks: (label, passed, hint) triples.
+    TpmDiagnostics {
+        checks: Vec<(String, bool, String)>,
     },
 }

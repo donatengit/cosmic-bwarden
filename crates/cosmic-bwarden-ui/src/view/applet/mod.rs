@@ -49,7 +49,6 @@ impl CosmicBWardenApp {
 
         let mut content = list_column();
         content = content.add(menu::header_row(self));
-        content = content.add(menu::version_row());
 
         content = match self.view {
             View::Vault | View::Settings => content.add(search::view(self)),

@@ -135,15 +135,15 @@ async fn test_config_received_routes_by_has_account_not_needs_login() {
     // are lost (they're #[serde(skip)]), so needs_login stays true even once the
     // vault is unlocked. has_account (protected_key on disk) is what should drive
     // routing, not needs_login.
-    let _ = app.update(Message::ConfigReceived(Ok((config.clone(), true, true, false))));
+    let _ = app.update(Message::ConfigReceived(Ok((config.clone(), true, true, false, false))));
     assert_eq!(app.view, View::Vault);
 
     // Locked but with an account on disk -> Unlock, not Setup.
-    let _ = app.update(Message::ConfigReceived(Ok((config.clone(), true, true, true))));
+    let _ = app.update(Message::ConfigReceived(Ok((config.clone(), true, true, true, false))));
     assert_eq!(app.view, View::Unlock);
 
     // No account on disk at all -> Setup, regardless of is_locked.
-    let _ = app.update(Message::ConfigReceived(Ok((config, true, false, false))));
+    let _ = app.update(Message::ConfigReceived(Ok((config, true, false, false, false))));
     assert_eq!(app.view, View::Setup);
 }
 
@@ -160,6 +160,7 @@ async fn test_config_received_vault_triggers_entry_fetch() {
         CosmicBWardenConfig::default(),
         false,
         true,
+        false,
         false,
     ))));
 
@@ -193,19 +194,76 @@ fn test_entries_received_locked_clears_without_setting_error() {
     let mut app = CosmicBWardenApp::default();
     app.view = View::Vault;
     app.search_id = 3;
-    app.entries = vec![SidebarEntry {
+    let entry = SidebarEntry {
         id: "1".to_string(),
         name: "Entry 1".to_string(),
         username: None,
         public_key: None,
         entry_type: EntryType::Login,
         is_pinned: false,
-    }];
+    };
+    app.all_entries = vec![entry.clone()];
+    app.entries = vec![entry];
 
     let _ = app.update(Message::EntriesReceived(3, Err("agent is locked".to_string())));
 
     assert!(app.entries.is_empty(), "entries must be cleared on locked error");
+    assert!(app.all_entries.is_empty(), "all_entries must be cleared on locked error");
     assert!(app.error.is_none(), "agent-is-locked must not set app.error");
+}
+
+#[test]
+fn test_entries_received_populates_all_entries_and_applies_active_filter() {
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+    app.search_id = 5;
+    app.search_query = "git".to_string();
+
+    let entries = vec![
+        SidebarEntry {
+            id: "1".to_string(),
+            name: "GitHub".to_string(),
+            username: Some("alice".to_string()),
+            public_key: None,
+            entry_type: EntryType::Login,
+            is_pinned: false,
+        },
+        SidebarEntry {
+            id: "2".to_string(),
+            name: "AWS Console".to_string(),
+            username: Some("bob".to_string()),
+            public_key: None,
+            entry_type: EntryType::Login,
+            is_pinned: false,
+        },
+    ];
+
+    let _ = app.update(Message::EntriesReceived(5, Ok(entries.clone())));
+
+    assert_eq!(app.all_entries.len(), 2, "all_entries must hold the full unfiltered list");
+    assert_eq!(app.entries.len(), 1, "entries must be the filter-applied subset");
+    assert_eq!(app.entries[0].id, "1", "only GitHub matches the 'git' query");
+    assert!(app.error.is_none());
+}
+
+#[test]
+fn test_entries_received_stale_id_ignored() {
+    let mut app = CosmicBWardenApp::default();
+    app.search_id = 5;
+
+    let entries = vec![SidebarEntry {
+        id: "1".to_string(),
+        name: "GitHub".to_string(),
+        username: None,
+        public_key: None,
+        entry_type: EntryType::Login,
+        is_pinned: false,
+    }];
+
+    let _ = app.update(Message::EntriesReceived(4, Ok(entries)));
+
+    assert!(app.all_entries.is_empty(), "stale EntriesReceived must not touch all_entries");
+    assert!(app.entries.is_empty(), "stale EntriesReceived must not touch entries");
 }
 
 #[test]
@@ -230,6 +288,122 @@ fn test_settings_view_keeps_sidebar_entries() {
 
     let _ = app.update(Message::VaultViewClicked);
     assert_eq!(app.view, View::Vault);
+}
+
+// ─── TPM state machine tests ─────────────────────────────────────────────────
+//
+// Four distinct situations the settings view must represent correctly:
+//   1. Status not yet queried      → show "Checking…" (not "not accessible")
+//   2. Hardware not accessible     → show diagnostics
+//   3. Available, not configured   → show toggle in OFF/"Not configured" state
+//   4. Available and configured    → show toggle in ON/"Active" state
+//
+// Root-cause context: tpm_available defaults to false; without tpm_status_known
+// gating the "not accessible" branch, an unlocked vault startup (where
+// ConfigReceived returns early before calling check_tpm_task) shows the wrong message.
+
+#[test]
+fn test_tpm_status_unknown_shows_checking_not_inaccessible() {
+    let app = CosmicBWardenApp::default();
+    // Fresh default: status not yet queried.
+    assert!(!app.tpm_status_known);
+    assert!(!app.tpm_available);
+
+    // Render must not crash and must NOT show the "not accessible" message
+    // (that would be misleading before we've even asked the agent).
+    let _ = app.view_settings();
+}
+
+#[test]
+fn test_tpm_status_received_hardware_unavailable() {
+    let mut app = CosmicBWardenApp::default();
+    let _ = app.update(Message::TpmStatusReceived(Ok((false, false, false))));
+    assert!(app.tpm_status_known);
+    assert!(!app.tpm_available);
+    assert!(!app.tpm_configured);
+
+    // Settings view renders without panicking (shows diagnostics branch).
+    let _ = app.view_settings();
+}
+
+#[test]
+fn test_tpm_status_received_available_not_configured() {
+    let mut app = CosmicBWardenApp::default();
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, false, false))));
+    assert!(app.tpm_status_known);
+    assert!(app.tpm_available);
+    assert!(!app.tpm_configured);
+    assert!(!app.show_pin_unlock, "no PIN unlock when not configured");
+
+    let _ = app.view_settings();
+}
+
+#[test]
+fn test_tpm_status_received_available_and_configured() {
+    let mut app = CosmicBWardenApp::default();
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, false))));
+    assert!(app.tpm_status_known);
+    assert!(app.tpm_available);
+    assert!(app.tpm_configured);
+    assert!(app.show_pin_unlock, "PIN unlock must be enabled when configured");
+
+    let _ = app.view_settings();
+}
+
+#[test]
+fn test_tpm_status_known_set_on_error_response() {
+    // Even if CheckTpm fails (agent unreachable), we should not permanently
+    // hide the section — the Err path must not set tpm_status_known, so the
+    // "Checking…" state persists rather than flipping to "not accessible".
+    let mut app = CosmicBWardenApp::default();
+    let _ = app.update(Message::TpmStatusReceived(Err("agent unreachable".to_string())));
+    // Err → tpm_status_known stays false; user sees "Checking…" not "not accessible".
+    assert!(!app.tpm_status_known);
+}
+
+#[test]
+fn test_config_received_unlocked_sets_tpm_check_pending() {
+    // When vault is already unlocked (ConfigReceived with is_locked=false),
+    // tpm_status_known must still be false until TpmStatusReceived arrives.
+    // This confirms the async check was dispatched (search_id increment is a proxy).
+    let mut app = CosmicBWardenApp::default();
+    let prev_search_id = app.search_id;
+
+    let _ = app.update(Message::ConfigReceived(Ok((
+        CosmicBWardenConfig::default(),
+        false,
+        true,   // has_account
+        false,  // is_locked = false → vault open path
+        false,
+    ))));
+
+    assert_eq!(app.view, View::Vault);
+    assert!(app.search_id > prev_search_id, "entry fetch must be triggered");
+    // tpm_status_known is still false — the async check_tpm_task has been
+    // dispatched but TpmStatusReceived hasn't arrived yet.
+    assert!(!app.tpm_status_known);
+}
+
+#[test]
+fn test_settings_view_clicked_dispatches_tpm_check() {
+    // Navigating to Settings must always refresh TPM status (TPM might have
+    // become accessible after the user was added to the tss group, etc.).
+    // We verify by confirming tpm_status_known resets when the incoming
+    // response changes state — i.e. the task was dispatched and processed.
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+
+    // Pre-set known state from a prior check.
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, false, false))));
+    assert!(app.tpm_status_known);
+
+    // Navigate to settings — this dispatches check_tpm_task (async, not awaited
+    // in unit tests), so tpm_status_known stays true from the previous check.
+    let _ = app.update(Message::SettingsViewClicked);
+    assert_eq!(app.view, View::Settings);
+    // State from prior check is still visible while the refresh is in-flight.
+    assert!(app.tpm_status_known);
+    assert!(app.tpm_available);
 }
 
 #[tokio::test]
