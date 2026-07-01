@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 
-const EXTENSION_PATH = path.resolve(__dirname, '..');
+const EXTENSION_PATH = path.resolve(__dirname, '../../../browser-extension');
 
 test.describe('Autofill Content Script', () => {
   test('should fill login form', async ({ page, context }) => {

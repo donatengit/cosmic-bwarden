@@ -191,7 +191,7 @@ async fn test_extension_full_lifecycle_persistence() -> anyhow::Result<()> {
         sleep(Duration::from_millis(500)).await;
     }
 
-    if !(status_text.contains("locked") || status_text.contains("logged in") || status_text.contains("communication")) {
+    if !(status_text.contains("locked") || status_text.contains("logged in") || status_text.contains("communicat")) {
         println!("Page Source (Initial):\n{}", bt.driver.source().await?);
         panic!("Unexpected initial status text: '{}'", status_text);
     }

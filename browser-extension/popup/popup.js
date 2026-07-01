@@ -1,3 +1,5 @@
+if (typeof globalThis.browser === 'undefined') { globalThis.browser = globalThis.chrome; }
+
 function showError(msg) {
     const statusDiv = document.getElementById('status');
     if (statusDiv) {
@@ -147,51 +149,99 @@ async function showDetail(id) {
     }
 }
 
+function makeDetailItem(label, valueNode) {
+    const item = document.createElement('div');
+    item.className = 'detail-item';
+    const lbl = document.createElement('div');
+    lbl.className = 'detail-label';
+    lbl.textContent = label;
+    const val = document.createElement('div');
+    val.className = 'detail-value';
+    if (typeof valueNode === 'string') {
+        val.textContent = valueNode;
+    } else {
+        val.appendChild(valueNode);
+    }
+    item.appendChild(lbl);
+    item.appendChild(val);
+    return item;
+}
+
+function makeCopyBtn(getText) {
+    const btn = document.createElement('button');
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', async () => {
+        await navigator.clipboard.writeText(await getText());
+    });
+    return btn;
+}
+
 function renderDetail(entry) {
-    let html = `
-        <div class="detail-item"><div class="detail-label">Name</div><div class="detail-value">${escapeHtml(entry.name)}</div></div>
-        <div class="detail-item"><div class="detail-label">Type</div><div class="detail-value">${entry.entry_type}</div></div>
-    `;
+    detailContent.innerHTML = '';
+    detailContent.appendChild(makeDetailItem('Name', String(entry.name || '')));
+    detailContent.appendChild(makeDetailItem('Type', getEntryType(entry)));
 
     const data = entry.data;
     if (data.Login) {
-        html += `<div class="detail-item"><div class="detail-label">Username</div><div class="detail-value">${escapeHtml(data.Login.username || '')}</div></div>`;
-        html += `<div class="detail-item"><div class="detail-label">Password</div><div class="detail-value">******** <button onclick="copyText('${data.Login.password || ''}')">Copy</button></div></div>`;
+        detailContent.appendChild(makeDetailItem('Username', data.Login.username || ''));
+        const pwdFrag = document.createDocumentFragment();
+        pwdFrag.appendChild(document.createTextNode('******** '));
+        const password = data.Login.password || '';
+        pwdFrag.appendChild(makeCopyBtn(() => password));
+        const pwdItem = makeDetailItem('Password', '');
+        pwdItem.querySelector('.detail-value').appendChild(pwdFrag);
+        detailContent.appendChild(pwdItem);
         if (data.Login.totp) {
-            html += `<div class="detail-item"><div class="detail-label">TOTP</div><div class="detail-value"><button onclick="copyTotp('${entry.id}')">Copy TOTP</button></div></div>`;
+            const totpItem = makeDetailItem('TOTP', '');
+            const entryId = entry.id;
+            totpItem.querySelector('.detail-value').appendChild(makeCopyBtn(async () => {
+                const response = await browser.runtime.sendMessage({ "GetTotp": { "id": entryId } });
+                return response.Totp ? response.Totp.code : '';
+            }));
+            detailContent.appendChild(totpItem);
         }
     } else if (data.Card) {
-        html += `<div class="detail-item"><div class="detail-label">Number</div><div class="detail-value">${escapeHtml(data.Card.number || '')} <button onclick="copyText('${data.Card.number || ''}')">Copy</button></div></div>`;
-        html += `<div class="detail-item"><div class="detail-label">Cardholder</div><div class="detail-value">${escapeHtml(data.Card.cardholder_name || '')}</div></div>`;
-        html += `<div class="detail-item"><div class="detail-label">Brand</div><div class="detail-value">${escapeHtml(data.Card.brand || '')}</div></div>`;
-        html += `<div class="detail-item"><div class="detail-label">Expiry</div><div class="detail-value">${data.Card.exp_month || ''}/${data.Card.exp_year || ''}</div></div>`;
+        const cardNum = data.Card.number || '';
+        const numFrag = document.createDocumentFragment();
+        numFrag.appendChild(document.createTextNode('**** **** **** ' + cardNum.slice(-4) + ' '));
+        numFrag.appendChild(makeCopyBtn(() => cardNum));
+        const numItem = makeDetailItem('Number', '');
+        numItem.querySelector('.detail-value').appendChild(numFrag);
+        detailContent.appendChild(numItem);
+        detailContent.appendChild(makeDetailItem('Cardholder', data.Card.cardholder_name || ''));
+        detailContent.appendChild(makeDetailItem('Brand', data.Card.brand || ''));
+        detailContent.appendChild(makeDetailItem('Expiry', `${data.Card.exp_month || ''}/${data.Card.exp_year || ''}`));
     } else if (data.Identity) {
-        html += `<div class="detail-item"><div class="detail-label">First Name</div><div class="detail-value">${escapeHtml(data.Identity.first_name || '')}</div></div>`;
-        html += `<div class="detail-item"><div class="detail-label">Last Name</div><div class="detail-value">${escapeHtml(data.Identity.last_name || '')}</div></div>`;
-        html += `<div class="detail-item"><div class="detail-label">Email</div><div class="detail-value">${escapeHtml(data.Identity.email || '')}</div></div>`;
-        html += `<div class="detail-item"><div class="detail-label">Phone</div><div class="detail-value">${escapeHtml(data.Identity.phone || '')}</div></div>`;
-        html += `<div class="detail-item"><div class="detail-label">Address</div><div class="detail-value">${escapeHtml(data.Identity.address1 || '')}, ${escapeHtml(data.Identity.city || '')}, ${escapeHtml(data.Identity.state || '')} ${escapeHtml(data.Identity.postal_code || '')}</div></div>`;
+        if (data.Identity.first_name) detailContent.appendChild(makeDetailItem('First Name', data.Identity.first_name));
+        if (data.Identity.last_name) detailContent.appendChild(makeDetailItem('Last Name', data.Identity.last_name));
+        if (data.Identity.email) detailContent.appendChild(makeDetailItem('Email', data.Identity.email));
+        if (data.Identity.phone) detailContent.appendChild(makeDetailItem('Phone', data.Identity.phone));
+        const addrParts = [
+            data.Identity.address1, data.Identity.city,
+            data.Identity.state, data.Identity.postal_code, data.Identity.country,
+        ].filter(Boolean);
+        if (addrParts.length) detailContent.appendChild(makeDetailItem('Address', addrParts.join(', ')));
     } else if (data.SshKey) {
-        html += `<div class="detail-item"><div class="detail-label">Public Key</div><div class="detail-value" style="font-size:0.7em; word-break:break-all;">${escapeHtml(data.SshKey.public_key || '')}</div></div>`;
+        if (data.SshKey.public_key) {
+            const pk = data.SshKey.public_key;
+            const pkFrag = document.createDocumentFragment();
+            pkFrag.appendChild(document.createTextNode(pk + ' '));
+            pkFrag.appendChild(makeCopyBtn(() => pk));
+            const pkItem = makeDetailItem('Public Key', '');
+            const pkVal = pkItem.querySelector('.detail-value');
+            pkVal.style.cssText = 'font-size:0.7em; word-break:break-all;';
+            pkVal.appendChild(pkFrag);
+            detailContent.appendChild(pkItem);
+        }
+        if (data.SshKey.fingerprint) {
+            detailContent.appendChild(makeDetailItem('Fingerprint', data.SshKey.fingerprint));
+        }
     }
 
     if (entry.notes) {
-        html += `<div class="detail-item"><div class="detail-label">Notes</div><div class="detail-value">${escapeHtml(entry.notes)}</div></div>`;
+        detailContent.appendChild(makeDetailItem('Notes', entry.notes));
     }
-
-    detailContent.innerHTML = html;
 }
-
-window.copyText = async (text) => {
-    await navigator.clipboard.writeText(text);
-};
-
-window.copyTotp = async (id) => {
-    const response = await browser.runtime.sendMessage({ "GetTotp": { "id": id } });
-    if (response.Totp) {
-        await navigator.clipboard.writeText(response.Totp.code);
-    }
-};
 
 function showAddForm() {
     currentEntry = null;
@@ -203,11 +253,12 @@ function showAddForm() {
 
 function showEditForm() {
     if (!currentEntry) return;
-    editType.value = currentEntry.entry_type;
+    const type = getEntryType(currentEntry);
+    editType.value = type;
     editType.disabled = true;
     editName.value = currentEntry.name;
     editNotes.value = currentEntry.notes || '';
-    renderDynamicFields(currentEntry.entry_type, currentEntry.data);
+    renderDynamicFields(type, currentEntry.data);
     showView('edit');
 }
 
@@ -258,10 +309,6 @@ function getFieldsForType(type) {
             { key: 'postal_code', label: 'Postal Code' },
             { key: 'country', label: 'Country' }
         ];
-        case 'SshKey': return [
-            { key: 'public_key', label: 'Public Key' },
-            { key: 'private_key', label: 'Private Key', type: 'textarea' }
-        ];
         default: return [];
     }
 }
@@ -304,8 +351,6 @@ editForm.onsubmit = async (e) => {
                 action = { "AddCard": payload };
             } else if (type === 'Identity') {
                 action = { "AddIdentity": payload };
-            } else if (type === 'SshKey') {
-                action = { "AddSshKey": payload };
             }
         }
 
@@ -359,6 +404,17 @@ function escapeHtml(unsafe) {
          .replace(/>/g, "&gt;")
          .replace(/"/g, "&quot;")
          .replace(/'/g, "&#039;");
+}
+
+function getEntryType(entry) {
+    if (!entry || !entry.data) return 'Login';
+    const data = entry.data;
+    if (typeof data === 'string') return data;
+    if (data.Login) return 'Login';
+    if (data.Card) return 'Card';
+    if (data.Identity) return 'Identity';
+    if (data.SshKey) return 'SshKey';
+    return 'Login';
 }
 
 searchInput.addEventListener('input', updateResults);

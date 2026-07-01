@@ -47,7 +47,26 @@ install: build
     install -Dm644 /tmp/cosmic-bwarden-agent.service {{systemd_user_dir}}/cosmic-bwarden-agent.service
     rm /tmp/cosmic-bwarden-agent.service
     echo "Reloading systemd user daemon..."
-    systemctl --user daemon-reload
+    if [ -n "$SUDO_USER" ]; then \
+        sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$(id -u $SUDO_USER)" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u $SUDO_USER)/bus" systemctl --user daemon-reload; \
+    else \
+        systemctl --user daemon-reload; \
+    fi
+    if [ -n "{{_tpm_features}}" ]; then \
+        TARGET_USER="${SUDO_USER:-$USER}"; \
+        if ! id -nG "$TARGET_USER" 2>/dev/null | grep -qw tss; then \
+            echo "TPM2 support compiled in — adding $TARGET_USER to the 'tss' group..."; \
+            usermod -aG tss "$TARGET_USER" && \
+            echo "NOTE: log out and back in (or run 'newgrp tss') for TPM access to take effect."; \
+        else \
+            echo "TPM2 support compiled in — $TARGET_USER is already in the 'tss' group."; \
+        fi; \
+    fi
+    echo "Registering Firefox native messaging host..."
+    sudo -u "${SUDO_USER:-$USER}" python3 tests/browser-extension/register_host.py \
+        --agent-path {{bin_dir}}/cosmic-bwarden-agent \
+        --home {{real_home}}
+    echo "Done. Please run 'just restart-panel' and 'just enable-agent'."
 
 # Perform a completely fresh installation (removes old files first)
 clean-install: uninstall build
@@ -84,6 +103,10 @@ clean-install: uninstall build
             echo "TPM2 support compiled in — $TARGET_USER is already in the 'tss' group."; \
         fi; \
     fi
+    echo "Registering Firefox native messaging host..."
+    sudo -u "${SUDO_USER:-$USER}" python3 tests/browser-extension/register_host.py \
+        --agent-path {{bin_dir}}/cosmic-bwarden-agent \
+        --home {{real_home}}
     echo "Done. Please run 'just restart-panel' and 'just enable-agent'."
 
 # Install metadata and desktop files for the current user (only if not installing system-wide)
@@ -103,6 +126,10 @@ user-install: build
     echo "Installing COSMIC applet metadata to local applets..."
     mkdir -p {{local_applets}}
     echo '( name: "CosmicBWarden", description: "Secure Bitwarden client for COSMIC", identifier: "com.system76.CosmicBWarden", icon: "password-manager-symbolic", )' > {{local_applets}}/com.system76.CosmicBWarden.ron
+    echo "Registering Firefox native messaging host..."
+    python3 tests/browser-extension/register_host.py \
+        --agent-path {{local_share}}/../bin/cosmic-bwarden-agent \
+        --home {{real_home}}
     echo "Done. Please run 'just restart-panel'."
 
 
@@ -134,10 +161,15 @@ uninstall:
     echo "Uninstalling from local paths..."
     rm -f {{local_apps}}/com.system76.CosmicBWarden.desktop
     rm -f {{local_applets}}/com.system76.CosmicBWarden.ron
+    rm -f {{local_share}}/../bin/cosmic-bwarden-agent
     rm -f {{local_share}}/../bin/cosmic-applet-bwarden
+    rm -f {{local_share}}/../bin/cosmic-bwarden-cli
     # Legacy binary names (transitional cleanup)
     rm -f {{local_share}}/../bin/com.system76.CosmicBWarden
     rm -f {{local_share}}/../bin/cosmic-bwarden-ui
+    echo "Removing Firefox native messaging host..."
+    rm -f {{real_home}}/.mozilla/native-messaging-hosts/com.8bit.cosmic_bwarden.json
+    rm -f {{real_home}}/.mozilla/native-messaging-hosts/cosmic-bwarden-browser-host.sh
 
 # Clean build artifacts
 clean: uninstall
@@ -174,14 +206,20 @@ run: build
     echo "Starting UI..."
     ./target/release/cosmic-applet-bwarden
 
-# Register the browser native messaging host
-register-browser-host: build
+# [Dev] Register native messaging host pointing to debug build (use without a full install)
+register-browser-host:
+    cargo build -p cosmic-bwarden-agent --quiet
     python3 tests/browser-extension/register_host.py
 
-# Pack the browser extension for distribution
+# Pack the browser extension for distribution (production files only → target/)
 pack-extension:
-    mkdir -p dist
-    cd browser-extension && zip -r ../dist/cosmic-bwarden-extension.zip .
+    mkdir -p target
+    cd browser-extension && zip -r ../target/cosmic-bwarden-extension.zip . \
+        --exclude "node_modules/*" \
+        --exclude "package.json" \
+        --exclude "package-lock.json" \
+        --exclude "test-results/*" \
+        --exclude "*.tmp"
 
 # Setup extension testing environment (installs npm dependencies)
 test-extension-setup:
@@ -192,7 +230,7 @@ test-extension-unit:
     cd browser-extension && npm run test:unit
 
 # Run extension E2E tests (Playwright)
-test-extension-e2e:
+test-extension-e2e: test-extension-setup
     cd browser-extension && npx playwright install firefox
     cd browser-extension && npx playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=firefox-mock
 
@@ -201,8 +239,13 @@ test-extension-e2e-full: build test-extension-setup
     @echo "--- Extension Full E2E (Real Agent & Vaultwarden) ---"
     bash tests/browser-extension/run-e2e.sh
 
+# Run full extension E2E tests in Chrome (headless-compatible, real agent + Vaultwarden)
+test-extension-e2e-chrome: build test-extension-setup
+    @echo "--- Extension Chrome Full E2E ---"
+    bash tests/browser-extension/run-chrome-e2e.sh
+
 # Debug extension E2E tests (Playwright with UI)
-test-extension-e2e-debug: build test-extension-setup
+test-extension-e2e-debug: test-extension-setup
     cd browser-extension && npx playwright install firefox
     bash tests/browser-extension/playwright/setup_native_host.sh
     cd browser-extension && npx playwright test --config=../tests/browser-extension/playwright/playwright.config.js --ui

@@ -1,3 +1,5 @@
+if (typeof globalThis.browser === 'undefined') { globalThis.browser = globalThis.chrome; }
+
 let port = null;
 const queue = [];
 let isProcessing = false;
@@ -7,8 +9,9 @@ function connect() {
     port = browser.runtime.connectNative("com.8bit.cosmic_bwarden");
     
     port.onDisconnect.addListener((p) => {
-        if (p.error) {
-            console.error("Disconnected from agent with error:", p.error);
+        const lastErr = chrome.runtime.lastError;
+        if (p.error || lastErr) {
+            console.error("Disconnected from agent:", p.error || (lastErr && lastErr.message));
         } else {
             console.log("Disconnected from agent");
         }

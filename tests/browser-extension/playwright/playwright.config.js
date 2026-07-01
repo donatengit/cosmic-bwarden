@@ -13,8 +13,15 @@ export default defineConfig({
   },
   projects: [
     {
+      name: 'chrome-full',
+      testMatch: /.*chrome-full\.spec\.js/,
+      use: {
+        channel: 'chromium',
+      },
+    },
+    {
       name: 'firefox-mock',
-      testIgnore: /.*full\.spec\.js/,
+      testIgnore: /.*full\.spec\.js|.*chrome-full\.spec\.js/,
       use: {
         ...devices['Desktop Firefox'],
         headless: false,

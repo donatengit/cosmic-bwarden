@@ -6,7 +6,8 @@
   "scripts": {
     "test:unit": "vitest run",
     "test:e2e": "playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=firefox-mock",
-    "test:e2e-full": "playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=firefox-full"
+    "test:e2e-full": "playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=firefox-full",
+    "test:e2e-chrome": "playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=chrome-full"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.1",

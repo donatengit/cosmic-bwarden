@@ -1,3 +1,5 @@
+if (typeof globalThis.browser === 'undefined') { globalThis.browser = globalThis.chrome; }
+
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === "FILL_FORM") {
         fillForm(message.entry);

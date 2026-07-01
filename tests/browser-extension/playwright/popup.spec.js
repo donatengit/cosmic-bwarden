@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 
-const EXTENSION_PATH = path.resolve(__dirname, '..');
+const EXTENSION_PATH = path.resolve(__dirname, '../../../browser-extension');
 
 test.describe('Extension Popup', () => {
   test.beforeEach(async ({ page, context }) => {
@@ -26,8 +26,8 @@ test.describe('Extension Popup', () => {
                 }
               };
             }
-            if (message.GetPassword) {
-              return { Password: { password: 'testpassword' } };
+            if (message.GetEntry) {
+              return { Entry: { entry: { id: '1', name: 'Test Login', entry_type: 'Login', notes: null, data: { Login: { username: 'testuser', password: 'testpassword', totp: null } } } } };
             }
             return { Error: { message: 'Unknown mock request' } };
           },
@@ -58,21 +58,18 @@ test.describe('Extension Popup', () => {
   });
 
   test('should copy password', async ({ page, context }) => {
-    // Firefox doesn't support clipboard-read permission in Playwright
-    // and navigator.clipboard.readText() might fail in headless.
-    // We can mock the clipboard API in the browser context instead.
     await page.evaluate(() => {
       let clipboardText = '';
-      navigator.clipboard.writeText = async (text) => {
-        clipboardText = text;
-      };
+      navigator.clipboard.writeText = async (text) => { clipboardText = text; };
       navigator.clipboard.readText = async () => clipboardText;
     });
-    
+
+    // Open the entry detail view first — Copy button only exists there
+    await page.locator('.entry-name', { hasText: 'Test Login' }).click();
+
     const copyBtn = page.locator('button:has-text("Copy")').first();
     await copyBtn.click();
-    
-    // Check if the clipboard was actually updated
+
     const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
     expect(clipboardText).toBe('testpassword');
   });
