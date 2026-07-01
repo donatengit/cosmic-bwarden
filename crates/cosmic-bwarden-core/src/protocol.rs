@@ -119,6 +119,15 @@ pub enum Action {
     SetPendingEntry {
         id: String,
     },
+    /// Ask the agent to broadcast Event::UnlockRequested so the applet opens its
+    /// unlock screen. Sent by the browser extension when it detects the vault is locked.
+    RequestUnlock,
+    /// Like GetEntry but returns the entry with all secrets (password, TOTP,
+    /// card numbers, private keys, notes) redacted. Use for detail/view UI so
+    /// secrets are never eagerly fetched; request them on explicit user action.
+    GetEntryMeta {
+        id: String,
+    },
     Quit,
     Version,
     DeleteEntry {

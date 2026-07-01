@@ -104,10 +104,51 @@ Seals the 64-byte vault key (`enc_key_expanded ‖ mac_key_expanded`) in a TPM2 
 - **Graceful degradation**: if TPM hardware is absent at runtime, `is_available()` returns false, UI hides PIN controls
 - **Smoke tests**: `cargo test -p cosmic-bwarden-tests --features tpm-smoke -- tpm --test-threads=1` (requires `swtpm` in PATH; auto-skip when absent)
 
+## Browser Extension
+
+Source lives in `browser-extension/`. Plain vanilla JS — no bundler, no framework.
+
+| File | Responsibility |
+|---|---|
+| `background.js` | Native messaging queue, badge count, theme-aware icon switching |
+| `content.js` | Form fill injected into pages |
+| `popup/popup.js` | View management, list rendering, fill, domain helpers |
+| `popup/popup-detail.js` | Detail view, secret reveal/copy (on-demand via `GetPassword`) |
+| `popup/popup-edit.js` | Edit/add form, field rendering |
+| `popup/popup.css` | CSS custom properties; dark mode via `prefers-color-scheme` |
+
+**Icons**: `browser-extension/icons` is a symlink to the repo-root `icons/` folder (black*.png for light theme, white*.png for dark). `zip -r` dereferences symlinks, so `pack-extension` embeds them correctly.
+
+**Security invariant**: The detail view uses `GetEntryMeta` (no secrets). Secrets are fetched only on explicit reveal/copy (`GetPassword`/`GetTotp`) or fill (`GetEntry`). Never hold plaintext passwords in JS state from passive browsing.
+
+## Justfile (task runner)
+
+The project uses `just` for all build, install, and test orchestration. Key recipes:
+
+| Recipe | What it does |
+|---|---|
+| `just build` | Release build of all Rust crates (auto-detects TPM) |
+| `just install` | `build` + install binaries + register Firefox native host (system-wide, needs sudo) |
+| `just user-install` | Same but installs to `~/.local` (no sudo) |
+| `just pack-extension` | Zips `browser-extension/` → `target/cosmic-bwarden-extension.zip` (excludes node_modules, test artifacts). **Not part of `build`.** |
+| `just register-browser-host` | Registers native host pointing at debug build (dev workflow) |
+| `just test` | Full Rust test suite in order: unit → agent → CLI → UI |
+| `just test-extension-unit` | Extension JS unit tests (vitest) |
+| `just test-extension-e2e` | Extension Playwright E2E (Firefox, mock agent) |
+| `just test-extension-e2e-full` | Extension Playwright E2E (Firefox, real agent + Vaultwarden) |
+| `just test-extension-e2e-chrome` | Same but Chrome |
+| `just restart-panel` | Restart COSMIC panel after install |
+| `just enable-agent` | Enable + start agent systemd user service |
+
+When modifying the browser extension, validate with `just test-extension-unit` and `just test-extension-e2e` before reporting done.
+
 ## Validation Commands
 ```
 cargo check -p <crate>
 cargo check -p cosmic-bwarden-agent --features tpm
 cargo test -p cosmic-bwarden-tests -- --test-threads=1
 cargo test -p cosmic-bwarden-tests --features tpm-smoke -- tpm --test-threads=1
+just test-extension-unit
+just test-extension-e2e
+just pack-extension
 ```

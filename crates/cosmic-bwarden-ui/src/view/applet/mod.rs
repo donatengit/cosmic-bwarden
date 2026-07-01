@@ -14,6 +14,9 @@ impl CosmicBWardenApp {
         let btn = self
             .core
             .applet
+            // TODO: replace with our own branded icons (icons/black*.png / white*.png at repo root).
+            // Requires either installing them into the hicolor XDG theme via the justfile `install`
+            // recipe, or switching to icon::from_path() with a theme-aware path (dark/light variant).
             .icon_button("password-manager-symbolic")
             .on_press_with_rectangle(move |offset, bounds| {
                 Message::AppletIconClicked(offset, bounds)

@@ -32,18 +32,12 @@ test.describe('Autofill Content Script', () => {
       eval(script);
     }, contentScript);
 
-    // 3. Simulate receiving a FILL_FORM message
+    // 3. Simulate receiving a FILL_FORM message (new format: flat username/password)
     await page.evaluate(() => {
       window._contentScriptListener({
         type: 'FILL_FORM',
-        entry: {
-          data: {
-            Login: {
-              username: 'autofill-user',
-              password: 'autofill-password'
-            }
-          }
-        }
+        username: 'autofill-user',
+        password: 'autofill-password'
       });
     });
 

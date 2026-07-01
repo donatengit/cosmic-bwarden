@@ -39,6 +39,7 @@ async fn dispatch(action: Action, state: &Arc<Mutex<State>>) -> Response {
         | Action::GetEntries { .. }
         | Action::GetSidebarEntries { .. }
         | Action::GetEntry { .. }
+        | Action::GetEntryMeta { .. }
         | Action::GetPassword { .. }
         | Action::GetTotp { .. }
         | Action::CopyToClipboard { .. }
@@ -52,7 +53,7 @@ async fn dispatch(action: Action, state: &Arc<Mutex<State>>) -> Response {
         | Action::AddIdentity { .. }
         | Action::AddSshKey { .. } => vault::handle_request(action, state).await,
         // Subscription / control actions
-        Action::Subscribe | Action::Quit | Action::SetPendingEntry { .. } => {
+        Action::Subscribe | Action::Quit | Action::SetPendingEntry { .. } | Action::RequestUnlock => {
             subscription_handler::handle_request(action, state).await
         }
         // Intercepted in main.rs before reaching dispatch

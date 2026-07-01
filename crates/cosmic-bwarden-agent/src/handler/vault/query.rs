@@ -1,4 +1,5 @@
 use crate::state::State;
+use cosmic_bwarden_core::db::EntryData;
 use cosmic_bwarden_core::protocol::{EntryType, Response, SidebarEntry};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -114,6 +115,30 @@ pub async fn handle_get_entries(
         Response::Error {
             message: "agent is locked".to_string(),
         }
+    }
+}
+
+pub async fn handle_get_entry_meta(id: String, state: &Arc<Mutex<State>>) -> Response {
+    match handle_get_entry(id, None, state).await {
+        Response::Entry { mut entry } => {
+            match &mut entry.data {
+                EntryData::Login { password, totp, .. } => {
+                    *password = None;
+                    *totp = None;
+                }
+                EntryData::Card { number, code, .. } => {
+                    *number = None;
+                    *code = None;
+                }
+                EntryData::SshKey { private_key, .. } => {
+                    *private_key = None;
+                }
+                EntryData::SecureNote | EntryData::Identity { .. } => {}
+            }
+            entry.notes = None;
+            Response::Entry { entry }
+        }
+        r => r,
     }
 }
 

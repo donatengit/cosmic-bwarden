@@ -6,6 +6,11 @@ use tokio::sync::Mutex;
 pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Response {
     match action {
         Action::Subscribe => Response::Ack,
+        Action::RequestUnlock => {
+            let mut state_guard = state.lock().await;
+            state_guard.broadcast(Event::UnlockRequested);
+            Response::Ack
+        }
         Action::SetPendingEntry { id } => {
             let mut state_guard = state.lock().await;
             // Broadcast to already-connected vault windows (vault already open).

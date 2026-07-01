@@ -17,6 +17,7 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
             query::handle_get_sidebar_entries(query, entry_type, only_pinned, state).await
         }
         Action::GetEntry { id, password } => query::handle_get_entry(id, password, state).await,
+        Action::GetEntryMeta { id } => query::handle_get_entry_meta(id, state).await,
         Action::GetPassword { id, password } => {
             match query::handle_get_entry(id, password, state).await {
                 Response::Entry { entry } => {
