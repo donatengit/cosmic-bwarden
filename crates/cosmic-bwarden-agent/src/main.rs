@@ -198,6 +198,13 @@ async fn main() -> anyhow::Result<()> {
                     }
                     let len = u32::from_le_bytes(len_buf) as usize;
                     log::debug!("Read request length: {}", len);
+                    // Cap request size so a malformed/hostile length prefix can't
+                    // drive an unbounded allocation (matches the browser host cap).
+                    const MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
+                    if len > MAX_REQUEST_BYTES {
+                        log::error!("request length {} exceeds cap {}", len, MAX_REQUEST_BYTES);
+                        return;
+                    }
                     let mut buf = vec![0u8; len];
                     if let Err(e) = socket.read_exact(&mut buf).await {
                         log::error!("failed to read from socket: {}", e);

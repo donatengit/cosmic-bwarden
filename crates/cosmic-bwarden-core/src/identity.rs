@@ -44,16 +44,41 @@ impl Identity {
                 hasher.update(email.as_bytes());
                 let salt = hasher.finalize();
 
+                // Validate and clamp KDF params. A corrupt DB or a hostile server
+                // prelogin response must not panic (missing params) or drive the
+                // agent to allocate arbitrary memory.
+                let memory_mib = memory.ok_or_else(|| {
+                    Error::Other("Argon2id requires a memory parameter".to_string())
+                })?;
+                let parallelism = parallelism.ok_or_else(|| {
+                    Error::Other("Argon2id requires a parallelism parameter".to_string())
+                })?;
+                // Bitwarden allows 16..=1024 MiB memory and 1..=16 parallelism.
+                if !(16..=1024).contains(&memory_mib) {
+                    return Err(Error::Other(format!(
+                        "Argon2id memory {memory_mib} MiB out of allowed range (16..=1024)"
+                    )));
+                }
+                if !(1..=16).contains(&parallelism) {
+                    return Err(Error::Other(format!(
+                        "Argon2id parallelism {parallelism} out of allowed range (1..=16)"
+                    )));
+                }
+                let mem_kib = memory_mib.checked_mul(1024).ok_or_else(|| {
+                    Error::Other("Argon2id memory parameter overflow".to_string())
+                })?;
+
+                let params = argon2::Params::new(
+                    mem_kib,
+                    iterations.get(),
+                    parallelism,
+                    Some(32),
+                )
+                .map_err(|e| Error::Other(format!("invalid Argon2id parameters: {e}")))?;
                 let argon2_config = argon2::Argon2::new(
                     argon2::Algorithm::Argon2id,
                     argon2::Version::V0x13,
-                    argon2::Params::new(
-                        memory.unwrap() * 1024,
-                        iterations.get(),
-                        parallelism.unwrap(),
-                        Some(32),
-                    )
-                    .unwrap(),
+                    params,
                 );
                 argon2::Argon2::hash_password_into(
                     &argon2_config,

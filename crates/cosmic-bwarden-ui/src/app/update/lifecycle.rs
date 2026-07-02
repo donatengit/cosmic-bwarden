@@ -24,7 +24,49 @@ pub(super) fn check_tpm_task() -> Task<Message> {
     )
 }
 
+/// Query the agent's config/account state and route via `ConfigReceived`.
+pub(super) fn fetch_config_task() -> Task<Message> {
+    Task::perform(
+        async {
+            let agent = AgentClient::new();
+            match agent.send(AgentAction::GetConfig).await {
+                Ok(Response::Config { config, needs_login, has_account, is_locked, sync_failed }) => {
+                    Ok((config, needs_login, has_account, is_locked, sync_failed))
+                }
+                Ok(Response::Error { message }) => Err(message),
+                _ => Err("unexpected response".to_string()),
+            }
+        },
+        |res| Action::App(Message::ConfigReceived(res)),
+    )
+}
+
+/// Fetch the TPM dictionary-attack lockout status (attempts remaining, etc).
+/// The counter changes over time and after each failed PIN, so this is fetched
+/// on demand (settings open, PIN screen shown, after a PIN result) rather than
+/// cached at startup.
+pub(super) fn check_tpm_da_task() -> Task<Message> {
+    Task::perform(
+        async {
+            let agent = AgentClient::new();
+            match agent.send(AgentAction::GetTpmDaStatus).await {
+                Ok(Response::TpmDaStatus { status }) => Some(status),
+                _ => None,
+            }
+        },
+        |res| Action::App(Message::TpmDaStatusReceived(res)),
+    )
+}
+
 impl CosmicBWardenApp {
+    /// True when the agent has a usable account to unlock: an account is
+    /// configured (`has_account`) and an email is set. If false, prompting to
+    /// unlock is pointless — the user needs to log in instead.
+    pub(crate) fn unlock_prompt_ready(&self) -> bool {
+        self.has_account
+            && self.config.email.as_deref().is_some_and(|e| !e.trim().is_empty())
+    }
+
     pub fn update_lifecycle(&mut self, message: Message) -> Option<Task<Message>> {
         match message {
             Message::ConfigReceived(res) => {
@@ -32,6 +74,7 @@ impl CosmicBWardenApp {
                     Ok((config, _needs_login, has_account, is_locked, sync_failed)) => {
                         self.config = config;
                         self.sync_failed = sync_failed;
+                        self.has_account = has_account;
                         if !has_account {
                             self.view = View::Setup;
                             if let Some(email) = &self.config.email {
@@ -80,34 +123,40 @@ impl CosmicBWardenApp {
                         self.entries.clear();
                         self.all_entries.clear();
                         self.error = None;
+                        self.pin_incorrect = false;
                         // Re-query config: if this was a logout rather than a
                         // plain lock, ConfigReceived will set view=Setup.
-                        return Some(Task::perform(
-                            async {
-                                let agent = AgentClient::new();
-                                match agent.send(AgentAction::GetConfig).await {
-                                    Ok(Response::Config { config, needs_login, has_account, is_locked, sync_failed }) =>
-                                        Ok((config, needs_login, has_account, is_locked, sync_failed)),
-                                    Ok(Response::Error { message }) => Err(message),
-                                    _ => Err("unexpected response".to_string()),
-                                }
-                            },
-                            |res| Action::App(Message::ConfigReceived(res)),
-                        ));
+                        return Some(fetch_config_task());
                     }
                     cosmic_bwarden_core::protocol::Event::PinRequested => {
+                        // Don't prompt to unlock when there is nothing to unlock
+                        // (no configured account/email) — unlocking would just
+                        // error. Refresh config so the UI shows the right state.
+                        if !self.unlock_prompt_ready() {
+                            return Some(fetch_config_task());
+                        }
                         self.show_pin_unlock = true;
+                        self.pin_incorrect = false;
                         self.view = View::Unlock;
                         self.selected_entry = None;
                         self.editing_entry = None;
                         self.selected_entry_id = None;
+                        // Refresh the lockout counter shown on the PIN screen.
+                        let da_task = check_tpm_da_task();
                         if crate::detect_run_mode() == crate::RunMode::Applet
                             && self.applet_popup.is_none()
                         {
-                            return Some(self.open_applet_popup_task(None));
+                            return Some(Task::batch(vec![
+                                self.open_applet_popup_task(None),
+                                da_task,
+                            ]));
                         }
+                        return Some(da_task);
                     }
                     cosmic_bwarden_core::protocol::Event::UnlockRequested => {
+                        if !self.unlock_prompt_ready() {
+                            return Some(fetch_config_task());
+                        }
                         self.show_pin_unlock = false;
                         self.view = View::Unlock;
                         self.selected_entry = None;
@@ -174,6 +223,7 @@ impl CosmicBWardenApp {
                             self.show_pin_unlock = true;
                         }
                         if !available {
+                            self.tpm_da = None;
                             // Fetch diagnostics so the settings view can explain why.
                             return Some(Task::perform(
                                 async {
@@ -186,11 +236,17 @@ impl CosmicBWardenApp {
                                 |checks| Action::App(Message::TpmDiagnosticsReceived(checks)),
                             ));
                         }
+                        // TPM available — refresh the lockout status too.
+                        return Some(check_tpm_da_task());
                     }
                     Err(e) => {
                         tracing::warn!("TPM status check failed: {}", e);
                     }
                 }
+                return Some(Task::none());
+            }
+            Message::TpmDaStatusReceived(status) => {
+                self.tpm_da = status;
                 return Some(Task::none());
             }
             Message::TpmDiagnosticsReceived(checks) => {

@@ -41,6 +41,15 @@ pub struct CosmicBWardenApp {
 
     // Unlock form
     pub unlock_password: String,
+    /// PIN entered on the master-password unlock view to (re-)enable PIN unlock on
+    /// this device. Empty means "disable PIN unlock" when a (possibly stale) blob
+    /// exists. Shared by the main-window and applet master-password unlock views.
+    pub unlock_pin: String,
+    pub unlock_pin_revealed: bool,
+    /// Set when a master-password unlock is submitted from a view that showed the
+    /// PIN (re-)enable field, so `AuthResult` knows to apply `unlock_pin` (and not
+    /// confuse it with a login or PIN-unlock success).
+    pub unlock_pin_apply_pending: bool,
 
     // Applet State
     pub token_tx: Option<
@@ -114,6 +123,16 @@ pub struct CosmicBWardenApp {
     pub tpm_diagnostics: Vec<(String, bool, String)>,
     /// Last error from a TPM setup/disable operation — shown in the settings TPM section.
     pub tpm_error: Option<String>,
+    /// TPM dictionary-attack lockout status (attempts remaining before lockout).
+    /// Fetched on demand; `None` until first queried or if the TPM is unavailable.
+    pub tpm_da: Option<cosmic_bwarden_core::protocol::TpmDaStatus>,
+    /// True after a failed PIN unlock in the current lock session. Gates the
+    /// "attempts remaining" line so it only appears once the user got the PIN
+    /// wrong, not on every PIN prompt. Reset on a fresh prompt / success / lock.
+    pub pin_incorrect: bool,
+    /// True when the agent reports a configured account (`has_account`). Used to
+    /// avoid prompting to unlock when there is nothing to unlock (no account/email).
+    pub has_account: bool,
 }
 
 impl Default for CosmicBWardenApp {
@@ -141,6 +160,9 @@ impl Default for CosmicBWardenApp {
             login_verification_code: String::new(),
             show_verification_input: false,
             unlock_password: String::new(),
+            unlock_pin: String::new(),
+            unlock_pin_revealed: false,
+            unlock_pin_apply_pending: false,
             token_tx: None,
             applet_popup: None,
             applet_unlock_password: String::new(),
@@ -187,6 +209,9 @@ impl Default for CosmicBWardenApp {
             show_tpm_disable_form: false,
             tpm_diagnostics: Vec::new(),
             tpm_error: None,
+            tpm_da: None,
+            pin_incorrect: false,
+            has_account: false,
         }
     }
 }

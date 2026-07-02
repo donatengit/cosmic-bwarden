@@ -11,7 +11,44 @@ use cosmic::iced::{window, Length};
 use cosmic::widget::{button, container, text};
 use cosmic::Element;
 
+/// Format a duration in seconds as a compact human string (e.g. "2h", "90m").
+fn format_secs(secs: u32) -> String {
+    if secs == 0 {
+        fl!("duration-moment")
+    } else if secs % 3600 == 0 {
+        format!("{}h", secs / 3600)
+    } else if secs >= 3600 {
+        format!("{}h{}m", secs / 3600, (secs % 3600) / 60)
+    } else if secs >= 60 {
+        format!("{}m", secs / 60)
+    } else {
+        format!("{secs}s")
+    }
+}
+
 impl CosmicBWardenApp {
+    /// One-line summary of the TPM dictionary-attack lockout state for display on
+    /// the PIN screens and in Settings. `None` when the TPM is unavailable or the
+    /// status hasn't been fetched. Note: the counter is TPM-global (shared by all
+    /// DA-protected objects), so it's phrased as a machine-wide budget.
+    pub fn tpm_da_line(&self) -> Option<String> {
+        let da = self.tpm_da.as_ref()?;
+        if !da.available {
+            return None;
+        }
+        if da.in_lockout {
+            return Some(match da.recovery_interval_secs {
+                Some(s) => fl!("tpm-lockout-wait", time = format_secs(s)),
+                None => fl!("tpm-lockout"),
+            });
+        }
+        match (da.remaining, da.max_tries) {
+            (Some(rem), Some(max)) => Some(fl!("tpm-attempts-remaining", rem = rem, max = max)),
+            (Some(rem), None) => Some(fl!("tpm-attempts-remaining-simple", rem = rem)),
+            _ => None,
+        }
+    }
+
     pub fn view_instance(&self, id: window::Id) -> Element<'_, Message> {
         let state = self.windows.get(&id);
 
@@ -40,12 +77,10 @@ impl CosmicBWardenApp {
         if let Some(_id) = &self.show_delete_confirm {
             Some(
                 cosmic::widget::dialog()
-                    .title("Delete Entry?")
-                    .body(
-                        "Are you sure you want to delete this entry? This action cannot be undone.",
-                    )
-                    .primary_action(button::destructive("Delete").on_press(Message::ConfirmDelete))
-                    .secondary_action(button::standard("Cancel").on_press(Message::CancelDelete))
+                    .title(fl!("delete-entry-title"))
+                    .body(fl!("confirm-delete"))
+                    .primary_action(button::destructive(fl!("delete")).on_press(Message::ConfirmDelete))
+                    .secondary_action(button::standard(fl!("cancel")).on_press(Message::CancelDelete))
                     .width(Length::Fixed(400.0))
                     .into(),
             )
@@ -53,7 +88,7 @@ impl CosmicBWardenApp {
             let mut col = cosmic::widget::column::with_capacity(2).spacing(10);
 
             let password_input = secure_input(
-                "Master Password",
+                fl!("master-password"),
                 &self.reprompt_password,
                 Some(Message::ToggleRepromptPasswordReveal),
                 !self.reprompt_password_revealed,
@@ -65,11 +100,11 @@ impl CosmicBWardenApp {
 
             Some(
                 cosmic::widget::dialog()
-                    .title("Master Password Required")
-                    .body("Please enter your master password to view this sensitive entry.")
+                    .title(fl!("master-password-required"))
+                    .body(fl!("enter-master-password"))
                     .control(col)
-                    .primary_action(button::suggested("Verify").on_press(Message::SubmitReprompt))
-                    .secondary_action(button::standard("Cancel").on_press(Message::CancelReprompt))
+                    .primary_action(button::suggested(fl!("verify")).on_press(Message::SubmitReprompt))
+                    .secondary_action(button::standard(fl!("cancel")).on_press(Message::CancelReprompt))
                     .width(Length::Fixed(400.0))
                     .into(),
             )

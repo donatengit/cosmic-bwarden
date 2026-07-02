@@ -75,6 +75,11 @@ async fn test_reprompt() -> Result<()> {
 
     let res = client.send(Action::GetEntries { query: None, entry_type: None, only_pinned: false }).await?;
     let id = if let Response::Entries { entries } = res {
+        // Bulk read must never carry secrets: the login password is redacted here
+        // and only retrievable via GetPassword (which enforces reprompt).
+        if let cosmic_bwarden_core::db::EntryData::Login { password, .. } = &entries[0].data {
+            assert!(password.is_none(), "GetEntries leaked a login password");
+        }
         entries[0].id.clone()
     } else {
         anyhow::bail!("Expected entries");

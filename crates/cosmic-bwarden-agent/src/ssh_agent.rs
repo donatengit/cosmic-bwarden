@@ -1,4 +1,5 @@
 use crate::state::State;
+use ssh_agent_lib::agent::{Agent, Session};
 use ssh_agent_lib::proto::{Extension, Identity};
 use ssh_agent_lib::ssh_key::{PrivateKey, PublicKey, Signature};
 use std::sync::Arc;
@@ -8,31 +9,67 @@ use signature::{Signer as _, RandomizedSigner as _, SignatureEncoding as _};
 const SSH_AGENT_RSA_SHA2_256: u32 = 2;
 const SSH_AGENT_RSA_SHA2_512: u32 = 4;
 
+/// Per-connection session factory. `ssh-agent-lib`'s blanket `Agent` impl ignores
+/// the accepted socket, so we implement `Agent` explicitly to enforce a
+/// `SO_PEERCRED` same-UID check on every connection — matching the main IPC
+/// socket. The 0600 socket + 0700 parent dir already restrict access, but we
+/// verify the peer credential too rather than relying on filesystem perms alone.
+struct SshAgentFactory {
+    state: Arc<Mutex<State>>,
+}
+
+impl Agent<tokio::net::UnixListener> for SshAgentFactory {
+    fn new_session(&mut self, socket: &tokio::net::UnixStream) -> impl Session {
+        let my_uid = rustix::process::getuid().as_raw();
+        let authorized = match socket.peer_cred() {
+            Ok(cred) if cred.uid() == my_uid => true,
+            Ok(cred) => {
+                log::warn!("ssh-agent: rejected connection from unauthorized UID: {}", cred.uid());
+                false
+            }
+            Err(e) => {
+                log::error!("ssh-agent: failed to get peer credentials: {}", e);
+                false
+            }
+        };
+        SshAgent {
+            state: Arc::clone(&self.state),
+            authorized,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct SshAgent {
     state: Arc<Mutex<State>>,
+    /// False when the connecting peer's UID did not match ours; such a session
+    /// answers every request as if the agent were empty/locked.
+    authorized: bool,
 }
 
 impl SshAgent {
     pub fn new(state: Arc<Mutex<State>>) -> Self {
-        Self { state }
+        Self { state, authorized: true }
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
+        use std::os::unix::fs::{DirBuilderExt as _, PermissionsExt as _};
         let socket = cosmic_bwarden_core::dirs::ssh_agent_socket_file();
         let _ = std::fs::remove_file(&socket);
         if let Some(parent) = socket.parent() {
-            let _ = std::fs::create_dir_all(parent);
+            // 0700 parent dir (matches dirs::make_all); default create_dir_all
+            // would use 0755 when the socket path is overridden to a fresh dir.
+            let _ = std::fs::DirBuilder::new().recursive(true).mode(0o700).create(parent);
         }
 
         let listener = tokio::net::UnixListener::bind(&socket)?;
 
         // Enforce 0600 permissions on the socket, matching the main IPC
         // socket (main.rs) and the security model of a real ssh-agent.
-        use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&socket, std::fs::Permissions::from_mode(0o600))?;
 
-        ssh_agent_lib::agent::listen(listener, self).await?;
+        let factory = SshAgentFactory { state: self.state };
+        ssh_agent_lib::agent::listen(listener, factory).await?;
         Ok(())
     }
 }
@@ -42,6 +79,9 @@ impl ssh_agent_lib::agent::Session for SshAgent {
     async fn request_identities(
         &mut self,
     ) -> Result<Vec<Identity>, ssh_agent_lib::error::AgentError> {
+        if !self.authorized {
+            return Ok(Vec::new());
+        }
         let mut state = self.state.lock().await;
         let Some(db) = &state.db else {
             state.request_unlock();
@@ -90,6 +130,11 @@ impl ssh_agent_lib::agent::Session for SshAgent {
         &mut self,
         request: ssh_agent_lib::proto::SignRequest,
     ) -> Result<Signature, ssh_agent_lib::error::AgentError> {
+        if !self.authorized {
+            return Err(ssh_agent_lib::error::AgentError::other(
+                cosmic_bwarden_core::error::Error::Other("unauthorized peer".to_string()),
+            ));
+        }
         let mut state = self.state.lock().await;
         let Some(db) = &state.db else {
             state.request_unlock();

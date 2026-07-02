@@ -4,7 +4,9 @@ use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
 use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::fetch_sidebar_entries;
+use crate::fl;
 use crate::message::{Message, View};
+use crate::MIN_PIN_LEN;
 use tracing::error;
 use zeroize::Zeroize;
 
@@ -68,8 +70,8 @@ impl CosmicBWardenApp {
             }
             Message::LoginSubmitted => {
                 // Validate PIN length before sending the login request.
-                if self.login_pin_enabled && !self.login_pin.is_empty() && self.login_pin.len() < 6 {
-                    self.error = Some("PIN must be at least 6 characters".to_string());
+                if self.login_pin_enabled && !self.login_pin.is_empty() && self.login_pin.chars().count() < MIN_PIN_LEN {
+                    self.error = Some(fl!("pin-too-short", count = MIN_PIN_LEN));
                     return Some(Task::none());
                 }
 
@@ -112,8 +114,25 @@ impl CosmicBWardenApp {
                 self.unlock_password = p;
                 Some(Task::none())
             }
+            Message::UnlockPinChanged(p) => {
+                self.unlock_pin = p;
+                Some(Task::none())
+            }
+            Message::UnlockPinRevealToggled => {
+                self.unlock_pin_revealed = !self.unlock_pin_revealed;
+                Some(Task::none())
+            }
             Message::UnlockSubmitted => {
+                // If the user is (re-)enabling PIN, validate its length before we
+                // even unlock — matches the login/settings PIN rules.
+                if !self.unlock_pin.is_empty() && self.unlock_pin.chars().count() < MIN_PIN_LEN {
+                    self.error = Some(fl!("pin-too-short", count = MIN_PIN_LEN));
+                    return Some(Task::none());
+                }
                 let password = self.unlock_password.clone();
+                // Remember that this unlock should apply the PIN (re-)enable field.
+                // AuthResult is shared with login and PIN-unlock, so gate on this.
+                self.unlock_pin_apply_pending = true;
                 self.auth_loading = true;
                 Some(Task::perform(
                     async move {
@@ -129,12 +148,24 @@ impl CosmicBWardenApp {
             }
             Message::AuthResult(res) => {
                 self.auth_loading = false;
+                let apply_unlock_pin = std::mem::take(&mut self.unlock_pin_apply_pending);
                 match res {
                     Ok(()) => {
                         self.view = View::Vault;
                         self.error = None;
+                        self.pin_incorrect = false;
 
                         let mut tasks = vec![fetch_sidebar_entries(self.search_id, None, None, false)];
+
+                        // Master-password unlock that showed the PIN (re-)enable
+                        // field: reseal the PIN (non-empty) or remove a stale PIN
+                        // blob (empty). This is how the user recovers after a TPM
+                        // mismatch forced them back to the master password.
+                        if apply_unlock_pin {
+                            if let Some(task) = self.apply_unlock_pin_task() {
+                                tasks.push(task);
+                            }
+                        }
 
                         // If the user enabled PIN during login, set it up now.
                         // The vault is freshly unlocked, so we use SetupTpmPinFromUnlocked
@@ -180,6 +211,12 @@ impl CosmicBWardenApp {
                         if let Some(err) = &self.error {
                             error!("Auth failed: {}", err);
                         }
+                        // A failed PIN unlock consumes a DA attempt — reveal and
+                        // refresh the counter shown on the PIN screen.
+                        if self.show_pin_unlock && self.tpm_available {
+                            self.pin_incorrect = true;
+                            return Some(super::lifecycle::check_tpm_da_task());
+                        }
                     }
                 }
                 Some(Task::none())
@@ -199,8 +236,12 @@ impl CosmicBWardenApp {
                 self.editing_entry = None;
                 self.revealed_fields.clear();
                 self.error = None;
+                self.pin_incorrect = false;
                 self.main_window_pin.zeroize();
                 self.unlock_password.zeroize();
+                self.unlock_pin.zeroize();
+                self.unlock_pin_revealed = false;
+                self.unlock_pin_apply_pending = false;
                 self.login_password.zeroize();
                 Some(Task::none())
             }
@@ -219,10 +260,62 @@ impl CosmicBWardenApp {
                 self.editing_entry = None;
                 self.revealed_fields.clear();
                 self.error = None;
+                self.pin_incorrect = false;
                 self.main_window_pin.zeroize();
+                self.unlock_pin.zeroize();
+                self.unlock_pin_revealed = false;
+                self.unlock_pin_apply_pending = false;
                 Some(Task::none())
             }
             _ => None,
+        }
+    }
+
+    /// Build the task that applies the master-password-unlock PIN field: a
+    /// non-empty PIN reseals it against the current TPM/PCR state (recovering from
+    /// a mismatch); an empty PIN removes an existing (possibly stale) PIN blob.
+    /// Consumes `self.unlock_pin`. Returns None when there is nothing to do.
+    pub(crate) fn apply_unlock_pin_task(&mut self) -> Option<Task<Message>> {
+        if !self.tpm_available {
+            self.unlock_pin.zeroize();
+            self.unlock_pin.clear();
+            self.unlock_pin_revealed = false;
+            return None;
+        }
+        let pin = std::mem::take(&mut self.unlock_pin);
+        self.unlock_pin_revealed = false;
+
+        if !pin.is_empty() {
+            Some(Task::perform(
+                async move {
+                    let agent = AgentClient::new();
+                    match agent
+                        .send(AgentAction::SetupTpmPinFromUnlocked { pin })
+                        .await
+                    {
+                        Ok(Response::Ack) => Ok(()),
+                        Ok(Response::Error { message }) => Err(message),
+                        _ => Err("unexpected response".to_string()),
+                    }
+                },
+                |res| Action::App(Message::TpmSetupResult(res)),
+            ))
+        } else if self.tpm_configured {
+            // Empty PIN + an existing blob → disable PIN unlock (clears a stale
+            // blob left over after a TPM/PCR mismatch).
+            Some(Task::perform(
+                async {
+                    let agent = AgentClient::new();
+                    match agent.send(AgentAction::DisableTpmPin).await {
+                        Ok(Response::Ack) => Ok(()),
+                        Ok(Response::Error { message }) => Err(message),
+                        _ => Err("unexpected response".to_string()),
+                    }
+                },
+                |res| Action::App(Message::TpmDisableResult(res)),
+            ))
+        } else {
+            None
         }
     }
 }

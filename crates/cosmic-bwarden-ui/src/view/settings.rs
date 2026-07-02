@@ -1,6 +1,8 @@
 use crate::app::CosmicBWardenApp;
+use crate::fl;
 use crate::message::Message;
 use crate::view::style::muted_text;
+use crate::MIN_PIN_LEN;
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{button, container, list_column, row, settings as cosmic_settings, secure_input, slider, text};
 use cosmic::Element;
@@ -18,9 +20,9 @@ impl CosmicBWardenApp {
 
         if is_editing {
             col = col.add(cosmic_settings::item(
-                "Server URL",
+                fl!("server"),
                 cosmic::widget::text_input::text_input(
-                    "Server",
+                    fl!("server-label"),
                     config.base_url.as_deref().unwrap_or(""),
                 )
                 .on_input(Message::SettingsServerChanged)
@@ -32,7 +34,7 @@ impl CosmicBWardenApp {
                     LOCK_MIN as u64, LOCK_MAX as u64,
                 ) as u32;
                 col = col.add(cosmic_settings::item(
-                    format!("Auto-lock: {} min", minutes),
+                    fl!("autolock-minutes", minutes = minutes),
                     slider(LOCK_MIN..=LOCK_MAX, minutes, Message::SettingsLockTimeoutChanged)
                         .step(LOCK_STEP)
                         .width(Length::Fixed(300.0)),
@@ -40,30 +42,31 @@ impl CosmicBWardenApp {
             }
         } else {
             col = col.add(cosmic_settings::item(
-                "Account",
-                text::body(config.email.as_deref().unwrap_or("—")),
+                fl!("account"),
+                text::body(config.email.as_deref().unwrap_or("—").to_string()),
             ));
             col = col.add(cosmic_settings::item(
-                "Server",
-                text::body(config.base_url.as_deref().unwrap_or("Bitwarden Cloud")),
+                fl!("server-label"),
+                text::body(config.base_url.as_deref().map(|s| s.to_string()).unwrap_or_else(|| fl!("bitwarden-cloud"))),
             ));
-            let lock_label = format!("{} min", config.lock_timeout / 60);
-            col = col.add(cosmic_settings::item("Auto-lock", text::body(lock_label)));
+            let lock_minutes = config.lock_timeout / 60;
+            let lock_label = fl!("minutes-fmt", minutes = lock_minutes);
+            col = col.add(cosmic_settings::item(fl!("auto-lock"), text::body(lock_label)));
         }
 
         let header = cosmic::widget::row::with_capacity(2)
             .spacing(10)
             .align_y(Alignment::Center)
-            .push(text::title2("Settings").width(Length::Fill))
+            .push(text::title2(fl!("settings")).width(Length::Fill))
             .push(if is_editing {
                 Element::from(
                     row::with_capacity(2)
                         .spacing(5)
-                        .push(button::suggested("Save").on_press(Message::SettingsSaveClicked))
-                        .push(button::standard("Cancel").on_press(Message::SettingsCancelClicked)),
+                        .push(button::suggested(fl!("save")).on_press(Message::SettingsSaveClicked))
+                        .push(button::standard(fl!("cancel")).on_press(Message::SettingsCancelClicked)),
                 )
             } else {
-                button::suggested("Edit")
+                button::suggested(fl!("edit"))
                     .on_press(Message::SettingsEditClicked)
                     .into()
             });
@@ -100,19 +103,19 @@ impl CosmicBWardenApp {
 
     fn tpm_settings_section(&self) -> Element<'_, Message> {
         let mut col = list_column();
-        col = col.add(text::title3("PIN Unlock (TPM 2.0)"));
+        col = col.add(text::title3(fl!("pin-unlock-title")));
 
         if !self.tpm_status_known {
             // Still waiting for the first CheckTpm response — show nothing
             // rather than a misleading "not accessible" message.
-            col = col.add(text::body("Checking TPM availability…").class(muted_text()));
+            col = col.add(text::body(fl!("checking-tpm")).class(muted_text()));
             return col.into();
         }
 
         if !self.tpm_available {
             // Hardware not accessible — show diagnostics to help the user fix it.
             if self.tpm_diagnostics.is_empty() {
-                col = col.add(text::body("TPM 2.0 is not accessible (hardware missing or no permission).").class(muted_text()));
+                col = col.add(text::body(fl!("tpm-not-accessible")).class(muted_text()));
             } else {
                 for (label, passed, hint) in &self.tpm_diagnostics {
                     let icon = if *passed { "✅" } else { "❌" };
@@ -139,9 +142,9 @@ impl CosmicBWardenApp {
                 Message::TpmDisableFormToggle
             }
         });
-        let status_label = if tpm_toggle_state { "Active" } else { "Not configured" };
+        let status_label = if tpm_toggle_state { fl!("status-active") } else { fl!("status-not-configured") };
         col = col.add(cosmic_settings::item(
-            "PIN unlock",
+            fl!("pin-unlock"),
             row::with_capacity(2)
                 .spacing(10)
                 .align_y(cosmic::iced::Alignment::Center)
@@ -151,36 +154,42 @@ impl CosmicBWardenApp {
 
         if let Some(err) = &self.tpm_error {
             col = col.add(
-                text::body(format!("Error: {}", err))
+                text::body(fl!("error-fmt", error = err.clone()))
                     .class(cosmic::theme::Text::Color(cosmic::iced::Color::from_rgb(0.8, 0.1, 0.1))),
             );
         }
 
+        // Dictionary-attack lockout status (attempts remaining before the TPM
+        // locks out). Refreshed on settings open and after enable/disable.
+        if let Some(line) = self.tpm_da_line() {
+            col = col.add(text::caption(line).class(muted_text()));
+        }
+
         if self.tpm_configured && self.show_tpm_disable_form {
             // No master password required — vault is already unlocked (that's the authorization).
-            col = col.add(text::body("PIN unlock will be removed from this device.").class(muted_text()));
+            col = col.add(text::body(fl!("pin-will-be-removed")).class(muted_text()));
             col = col.add(
                 row::with_capacity(2)
                     .spacing(5)
-                    .push(button::destructive("Disable PIN unlock").on_press(Message::TpmDisableSubmitted))
-                    .push(button::standard("Cancel").on_press(Message::TpmDisableFormToggle)),
+                    .push(button::destructive(fl!("disable-pin-unlock")).on_press(Message::TpmDisableSubmitted))
+                    .push(button::standard(fl!("cancel")).on_press(Message::TpmDisableFormToggle)),
             );
         } else if !self.tpm_configured && self.show_tpm_setup_form {
             // Setup form: only needs the new PIN (vault is already unlocked).
-            let pin = secure_input("New PIN (min 6 characters)", &self.tpm_setup_pin, Some(Message::TpmSetupPinRevealToggled), !self.tpm_setup_pin_revealed)
+            let pin = secure_input(fl!("new-pin-min-chars", count = MIN_PIN_LEN), &self.tpm_setup_pin, Some(Message::TpmSetupPinRevealToggled), !self.tpm_setup_pin_revealed)
                 .on_input(Message::TpmSetupPinChanged)
                 .on_submit(|_| Message::TpmSetupSubmitted)
                 .width(Length::Fixed(300.0));
-            col = col.add(cosmic_settings::item("New PIN", pin));
+            col = col.add(cosmic_settings::item(fl!("new-pin"), pin));
             col = col.add(
-                text::caption("Secured by your device's hardware chip — PIN only works on this computer.")
+                text::caption(fl!("pin-tpm-note-settings"))
                     .class(muted_text()),
             );
             col = col.add(
                 row::with_capacity(2)
                     .spacing(5)
-                    .push(button::suggested("Enable").on_press(Message::TpmSetupSubmitted))
-                    .push(button::standard("Cancel").on_press(Message::TpmSetupFormToggle)),
+                    .push(button::suggested(fl!("enable")).on_press(Message::TpmSetupSubmitted))
+                    .push(button::standard(fl!("cancel")).on_press(Message::TpmSetupFormToggle)),
             );
         }
 
@@ -189,16 +198,11 @@ impl CosmicBWardenApp {
             let creds_toggle = cosmic::widget::toggler(self.tpm_server_credentials)
                 .on_toggle(Message::TpmServerCredentialsToggled);
             col = col.add(cosmic_settings::item(
-                "Store hashed password in this device TPM chip",
+                fl!("store-hashed-password-tpm"),
                 creds_toggle,
             ));
             col = col.add(
-                text::caption(
-                    "Fewer master password prompts after PIN unlock. \
-                     Trade-off: if your PIN is compromised, anyone with physical access \
-                     to this device can modify your Bitwarden account without knowing \
-                     your master password.",
-                )
+                text::caption(fl!("store-hashed-password-tpm-note"))
                 .class(muted_text()),
             );
         }

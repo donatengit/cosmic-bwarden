@@ -49,6 +49,11 @@ pub fn db_file(server: &str, email: &str) -> std::path::PathBuf {
     let server =
         percent_encoding::percent_encode(server.as_bytes(), INVALID_PATH)
             .to_string();
+    // Encode the email too — an address containing '/' or ".." must not be able
+    // to steer the cache path outside the cache dir.
+    let email =
+        percent_encoding::percent_encode(email.as_bytes(), INVALID_PATH)
+            .to_string();
     cache_dir().join(format!("{server}:{email}.json"))
 }
 

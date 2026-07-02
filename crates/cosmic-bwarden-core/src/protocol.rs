@@ -17,7 +17,28 @@ pub struct SidebarEntry {
     pub is_pinned: bool,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+/// TPM dictionary-attack (lockout) status. All counters are TPM-global (shared by
+/// every DA-protected object), not specific to our PIN blob, and self-heal over
+/// time (`recovery_interval_secs` per decrement). A successful PIN unlock resets
+/// the counter to zero. Fields are `Option` because a TPM may not report a given
+/// property.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+pub struct TpmDaStatus {
+    /// True when the TPM is reachable and the values below are meaningful.
+    pub available: bool,
+    /// Max authorization failures before lockout (`TPM_PT_MAX_AUTH_FAIL`).
+    pub max_tries: Option<u32>,
+    /// Current failure count (`TPM_PT_LOCKOUT_COUNTER`).
+    pub lockout_counter: Option<u32>,
+    /// `max_tries - lockout_counter`, saturating at 0.
+    pub remaining: Option<u32>,
+    /// True when the TPM is currently in DA lockout (`TPMA_PERMANENT.inLockout`).
+    pub in_lockout: bool,
+    /// Seconds after which one failure is forgiven (`TPM_PT_LOCKOUT_INTERVAL`).
+    pub recovery_interval_secs: Option<u32>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum Action {
     Register {
         email: String,
@@ -60,6 +81,11 @@ pub enum Action {
     },
     GetTotp {
         id: String,
+        /// Master password for reprompt-gated entries. Absent for entries that
+        /// don't require reprompt. (serde treats a missing Option field as None,
+        /// so JSON clients may omit it.)
+        #[serde(default)]
+        password: Option<String>,
     },
     CopyToClipboard {
         id: String,
@@ -164,11 +190,84 @@ pub enum Action {
     CheckTpm,
     /// Returns system-level diagnostic checks explaining why TPM may be unavailable.
     CheckTpmDiagnostics,
+    /// Returns the TPM dictionary-attack lockout status (attempts remaining, etc).
+    GetTpmDaStatus,
     /// Update the autolock timer duration live, without restarting the agent.
     /// seconds=0 disables autolock.
     UpdateLockTimeout {
         seconds: u64,
     },
+}
+
+impl Action {
+    /// Variant name only — used by the redacting `Debug` impl and for logging.
+    /// Never includes field values, which may hold passwords, PINs, or secrets.
+    pub fn variant_name(&self) -> &'static str {
+        match self {
+            Self::Register { .. } => "Register",
+            Self::Login { .. } => "Login",
+            Self::Unlock { .. } => "Unlock",
+            Self::Lock => "Lock",
+            Self::Sync => "Sync",
+            Self::GetConfig => "GetConfig",
+            Self::GetEntries { .. } => "GetEntries",
+            Self::GetSidebarEntries { .. } => "GetSidebarEntries",
+            Self::GetEntry { .. } => "GetEntry",
+            Self::GetPassword { .. } => "GetPassword",
+            Self::GetTotp { .. } => "GetTotp",
+            Self::CopyToClipboard { .. } => "CopyToClipboard",
+            Self::PinEntry { .. } => "PinEntry",
+            Self::UnpinEntry { .. } => "UnpinEntry",
+            Self::AddEntry { .. } => "AddEntry",
+            Self::AddSecureNote { .. } => "AddSecureNote",
+            Self::AddCard { .. } => "AddCard",
+            Self::AddIdentity { .. } => "AddIdentity",
+            Self::AddSshKey { .. } => "AddSshKey",
+            Self::SetPendingEntry { .. } => "SetPendingEntry",
+            Self::RequestUnlock => "RequestUnlock",
+            Self::GetEntryMeta { .. } => "GetEntryMeta",
+            Self::Quit => "Quit",
+            Self::Version => "Version",
+            Self::DeleteEntry { .. } => "DeleteEntry",
+            Self::UpdateEntry { .. } => "UpdateEntry",
+            Self::Logout => "Logout",
+            Self::Subscribe => "Subscribe",
+            Self::SetupTpmPin { .. } => "SetupTpmPin",
+            Self::SetupTpmPinFromUnlocked { .. } => "SetupTpmPinFromUnlocked",
+            Self::UnlockWithPin { .. } => "UnlockWithPin",
+            Self::DisableTpmPin => "DisableTpmPin",
+            Self::EnableTpmServerCredentials => "EnableTpmServerCredentials",
+            Self::DisableTpmServerCredentials => "DisableTpmServerCredentials",
+            Self::CheckTpm => "CheckTpm",
+            Self::CheckTpmDiagnostics => "CheckTpmDiagnostics",
+            Self::GetTpmDaStatus => "GetTpmDaStatus",
+            Self::UpdateLockTimeout { .. } => "UpdateLockTimeout",
+        }
+    }
+}
+
+// Manual `Debug` that never prints field values. Many `Action` variants carry
+// master passwords, PINs, TOTP secrets, and card data; the derived `Debug` would
+// leak them into logs (`handler.rs`, `main.rs`, `browser_host.rs`) at info/debug.
+impl std::fmt::Debug for Action {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            // Non-secret scalar fields are safe and useful for debugging.
+            Self::GetEntry { id, .. } => write!(f, "GetEntry {{ id: {id:?} }}"),
+            Self::GetEntryMeta { id } => write!(f, "GetEntryMeta {{ id: {id:?} }}"),
+            Self::GetPassword { id, .. } => write!(f, "GetPassword {{ id: {id:?} }}"),
+            Self::GetTotp { id, .. } => write!(f, "GetTotp {{ id: {id:?} }}"),
+            Self::DeleteEntry { id } => write!(f, "DeleteEntry {{ id: {id:?} }}"),
+            Self::PinEntry { id } => write!(f, "PinEntry {{ id: {id:?} }}"),
+            Self::UnpinEntry { id } => write!(f, "UnpinEntry {{ id: {id:?} }}"),
+            Self::SetPendingEntry { id } => write!(f, "SetPendingEntry {{ id: {id:?} }}"),
+            Self::UpdateLockTimeout { seconds } => {
+                write!(f, "UpdateLockTimeout {{ seconds: {seconds} }}")
+            }
+            // Everything else: variant name only.
+            other => f.write_str(other.variant_name()),
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -188,7 +287,7 @@ pub enum Event {
     OpenEntry { id: String },
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum Response {
     Ack,
     Error {
@@ -242,4 +341,91 @@ pub enum Response {
     TpmDiagnostics {
         checks: Vec<(String, bool, String)>,
     },
+    /// TPM dictionary-attack lockout status.
+    TpmDaStatus {
+        status: TpmDaStatus,
+    },
+}
+
+#[cfg(test)]
+mod debug_redaction_tests {
+    use super::*;
+
+    #[test]
+    fn action_debug_never_prints_secrets() {
+        let a = Action::Unlock { password: "hunter2-secret".to_string() };
+        assert_eq!(format!("{a:?}"), "Unlock");
+
+        let a = Action::UnlockWithPin { pin: "1234-secret".to_string() };
+        assert!(!format!("{a:?}").contains("1234-secret"));
+
+        let a = Action::SetupTpmPin {
+            master_password: "master-secret".to_string(),
+            pin: "pin-secret".to_string(),
+        };
+        let s = format!("{a:?}");
+        assert!(!s.contains("master-secret") && !s.contains("pin-secret"));
+
+        // Non-secret scalar (entry id) is allowed for debuggability.
+        let a = Action::GetPassword { id: "entry-123".to_string(), password: Some("x".into()) };
+        let s = format!("{a:?}");
+        assert!(s.contains("entry-123") && !s.contains("\"x\""));
+    }
+
+    #[test]
+    fn response_debug_never_prints_secrets() {
+        let r = Response::Password { password: "leaked-pw".to_string() };
+        assert!(!format!("{r:?}").contains("leaked-pw"));
+
+        let r = Response::Totp { code: "123456".to_string() };
+        assert!(!format!("{r:?}").contains("123456"));
+
+        // Error messages remain visible.
+        let r = Response::Error { message: "boom".to_string() };
+        assert!(format!("{r:?}").contains("boom"));
+    }
+}
+
+// Manual `Debug` that never prints secret payloads. `Password`, `Totp`, `Entry`,
+// and `Entries` carry decrypted secrets; the derived `Debug` would leak them into
+// logs. Non-secret variants (errors, versions, flags) print their useful fields.
+impl std::fmt::Debug for Response {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ack => f.write_str("Ack"),
+            Self::Error { message } => write!(f, "Error {{ message: {message:?} }}"),
+            Self::TwoFactorRequired { providers, .. } => {
+                write!(f, "TwoFactorRequired {{ providers: {providers:?}, token: <redacted> }}")
+            }
+            Self::NewDeviceVerificationRequired => f.write_str("NewDeviceVerificationRequired"),
+            Self::Config { needs_login, has_account, is_locked, sync_failed, .. } => write!(
+                f,
+                "Config {{ needs_login: {needs_login}, has_account: {has_account}, \
+                 is_locked: {is_locked}, sync_failed: {sync_failed} }}"
+            ),
+            Self::Entries { entries } => {
+                write!(f, "Entries {{ count: {}, <redacted> }}", entries.len())
+            }
+            Self::SidebarEntries { entries } => {
+                write!(f, "SidebarEntries {{ count: {} }}", entries.len())
+            }
+            Self::Entry { .. } => f.write_str("Entry { <redacted> }"),
+            Self::Password { .. } => f.write_str("Password { <redacted> }"),
+            Self::Totp { .. } => f.write_str("Totp { <redacted> }"),
+            Self::Version { version, protocol_version } => write!(
+                f,
+                "Version {{ version: {version:?}, protocol_version: {protocol_version:?} }}"
+            ),
+            Self::Event { event } => write!(f, "Event {{ event: {event:?} }}"),
+            Self::TpmStatus { available, configured, server_credentials } => write!(
+                f,
+                "TpmStatus {{ available: {available}, configured: {configured}, \
+                 server_credentials: {server_credentials} }}"
+            ),
+            Self::TpmDiagnostics { checks } => {
+                write!(f, "TpmDiagnostics {{ checks: {} }}", checks.len())
+            }
+            Self::TpmDaStatus { status } => write!(f, "TpmDaStatus {{ {status:?} }}"),
+        }
+    }
 }

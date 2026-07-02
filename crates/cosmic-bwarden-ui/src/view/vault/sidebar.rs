@@ -6,7 +6,16 @@ use crate::app::CosmicBWardenApp;
 use crate::message::{Message, View};
 use crate::fl;
 
-const FILTER_LABELS: [&str; 4] = ["All", "Logins", "Notes", "SSH Keys"];
+/// Localized filter dropdown labels, order-matched to `filter_to_idx` /
+/// `idx_to_filter` (All, Logins, Notes, SSH Keys).
+fn filter_labels() -> Vec<String> {
+    vec![
+        fl!("filter-all"),
+        fl!("filter-logins"),
+        fl!("filter-notes"),
+        fl!("filter-ssh-keys"),
+    ]
+}
 
 pub(crate) fn filter_to_idx(filter: &Option<EntryType>) -> usize {
     match filter {
@@ -48,7 +57,7 @@ impl CosmicBWardenApp {
 
         // Filter dropdown
         let filter_dropdown = cosmic::widget::dropdown(
-            &FILTER_LABELS[..],
+            filter_labels(),
             Some(filter_to_idx(&self.filter_type)),
             |idx| Message::FilterTypeChanged(idx_to_filter(idx)),
         ).width(Length::Fill);
@@ -58,7 +67,7 @@ impl CosmicBWardenApp {
         // Entry List
         let mut list = list_column();
         if self.entries.is_empty() {
-            list = list.add(container(text::body("No entries found")).padding(10));
+            list = list.add(container(text::body(fl!("no-entries-found"))).padding(10));
         } else {
             for entry in &self.entries {
                 let id = entry.id.clone();
@@ -76,7 +85,7 @@ impl CosmicBWardenApp {
         sidebar = sidebar.push(divider::horizontal::default());
 
         let mut top_row = cosmic::widget::row::with_capacity(2).spacing(10).align_y(Alignment::Center);
-        top_row = top_row.push(button::suggested("Add").on_press(Message::AddEntryRequested).width(Length::Fill));
+        top_row = top_row.push(button::suggested(fl!("add")).on_press(Message::AddEntryRequested).width(Length::Fill));
 
         let session_expired = self.sync_failed
             && self.error.as_deref().map(|e| e.contains("session token")).unwrap_or(false);
@@ -89,11 +98,11 @@ impl CosmicBWardenApp {
                 .center_y(Length::Fixed(32.0))
                 .into()
         } else if session_expired {
-            button::destructive("Session expired — log in").on_press(Message::LogoutClicked).into()
+            button::destructive(fl!("session-expired")).on_press(Message::LogoutClicked).into()
         } else if self.sync_failed {
-            button::destructive("⚠ Not synced").on_press(Message::SyncClicked).into()
+            button::destructive(fl!("not-synced")).on_press(Message::SyncClicked).into()
         } else {
-            button::standard("Sync").on_press(Message::SyncClicked).into()
+            button::standard(fl!("sync")).on_press(Message::SyncClicked).into()
         };
         top_row = top_row.push(sync_area);
         sidebar = sidebar.push(top_row);

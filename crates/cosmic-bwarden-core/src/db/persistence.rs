@@ -49,16 +49,28 @@ impl Db {
     }
 
     pub fn save(&self, server: &str, email: &str) -> Result<()> {
+        use std::os::unix::fs::OpenOptionsExt as _;
         let file = crate::dirs::db_file(server, email);
         if let Some(parent) = file.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let mut fh = std::fs::File::create(&file)?;
-        fh.write_all(
-            serde_json::to_string(self)
-                .map_err(|source| Error::Other(source.to_string()))?
-                .as_bytes(),
-        )?;
+        let json = serde_json::to_string(self)
+            .map_err(|source| Error::Other(source.to_string()))?;
+        // Write to a temp file with 0600 perms, then rename over the target so a
+        // crash mid-write can't corrupt or truncate the vault cache (which holds
+        // `protected_key`). The rename is atomic within the same directory.
+        let tmp = file.with_extension("json.tmp");
+        {
+            let mut fh = std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(&tmp)?;
+            fh.write_all(json.as_bytes())?;
+            fh.sync_all()?;
+        }
+        std::fs::rename(&tmp, &file)?;
         Ok(())
     }
 
@@ -67,13 +79,22 @@ impl Db {
         if let Some(parent) = file.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
-        let mut fh = tokio::fs::File::create(&file).await?;
-        fh.write_all(
-            serde_json::to_string(self)
-                .map_err(|source| Error::Other(source.to_string()))?
-                .as_bytes(),
-        )
-        .await?;
+        let json = serde_json::to_string(self)
+            .map_err(|source| Error::Other(source.to_string()))?;
+        // Temp-file + rename with 0600 perms (see `save`).
+        let tmp = file.with_extension("json.tmp");
+        {
+            let mut fh = tokio::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(&tmp)
+                .await?;
+            fh.write_all(json.as_bytes()).await?;
+            fh.sync_all().await?;
+        }
+        tokio::fs::rename(&tmp, &file).await?;
         Ok(())
     }
 

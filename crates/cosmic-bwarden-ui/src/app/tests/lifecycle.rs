@@ -406,6 +406,148 @@ fn test_settings_view_clicked_dispatches_tpm_check() {
     assert!(app.tpm_available);
 }
 
+#[test]
+fn test_master_password_unlock_offers_pin_reenable() {
+    // TPM present and a (possibly stale) PIN blob configured, but the user is on
+    // the master-password screen (e.g. after a PIN mismatch forced a fallback).
+    let mut app = CosmicBWardenApp::default();
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, false))));
+    app.show_pin_unlock = false; // fell back to master password
+    app.login_email = "user@example.com".to_string();
+    app.view = View::Unlock;
+
+    // The master-password unlock view renders the PIN (re-)enable field path.
+    let _ = app.view_auth();
+
+    // Typing a PIN then submitting master password marks the apply-pending flag.
+    let _ = app.update(Message::UnlockPinChanged("123456".to_string()));
+    assert_eq!(app.unlock_pin, "123456");
+    let _ = app.update(Message::UnlockPasswordChanged("masterpw".to_string()));
+    let _ = app.update(Message::UnlockSubmitted);
+    assert!(app.unlock_pin_apply_pending, "unlock should apply the PIN field");
+}
+
+#[test]
+fn test_unlock_pin_too_short_is_rejected() {
+    let mut app = CosmicBWardenApp::default();
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, false, false))));
+    let _ = app.update(Message::UnlockPinChanged("12".to_string()));
+    let _ = app.update(Message::UnlockPasswordChanged("masterpw".to_string()));
+    let _ = app.update(Message::UnlockSubmitted);
+    assert!(app.error.is_some(), "short PIN must be rejected before unlock");
+    assert!(!app.unlock_pin_apply_pending);
+}
+
+#[test]
+fn test_tpm_da_line_formatting() {
+    use cosmic_bwarden_core::protocol::TpmDaStatus;
+    let mut app = CosmicBWardenApp::default();
+
+    // Nothing fetched yet.
+    assert!(app.tpm_da_line().is_none());
+
+    // Unavailable TPM → no line.
+    app.tpm_da = Some(TpmDaStatus { available: false, ..Default::default() });
+    assert!(app.tpm_da_line().is_none());
+
+    // Normal case with remaining/max.
+    app.tpm_da = Some(TpmDaStatus {
+        available: true,
+        max_tries: Some(32),
+        lockout_counter: Some(3),
+        remaining: Some(29),
+        in_lockout: false,
+        recovery_interval_secs: Some(7200),
+    });
+    let line = app.tpm_da_line().unwrap();
+    assert!(line.contains("29 of 32"), "got: {line}");
+
+    // In lockout → mentions lockout and recovery time.
+    app.tpm_da = Some(TpmDaStatus {
+        available: true,
+        in_lockout: true,
+        recovery_interval_secs: Some(7200),
+        ..Default::default()
+    });
+    let line = app.tpm_da_line().unwrap();
+    assert!(line.to_lowercase().contains("locked out"), "got: {line}");
+    assert!(line.contains("2h"), "got: {line}");
+}
+
+#[test]
+fn test_enable_pin_resets_server_credentials_toggle() {
+    // Simulate a prior state where server credentials were on, then a fresh
+    // enable (TpmSetupResult Ok). Enabling resets all TPM stores, so the UI's
+    // server-credentials flag must return to false.
+    let mut app = CosmicBWardenApp::default();
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, true))));
+    assert!(app.tpm_server_credentials, "precondition: server creds on");
+
+    let _ = app.update(Message::TpmSetupResult(Ok(())));
+    assert!(app.tpm_configured);
+    assert!(
+        !app.tpm_server_credentials,
+        "enabling PIN must reset server credentials to off"
+    );
+}
+
+#[test]
+fn test_disable_then_enable_cycle_state() {
+    let mut app = CosmicBWardenApp::default();
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, true))));
+
+    // Disable clears configured + server creds and hides PIN unlock.
+    let _ = app.update(Message::TpmDisableResult(Ok(())));
+    assert!(!app.tpm_configured);
+    assert!(!app.show_pin_unlock);
+
+    // Re-enable: configured again, server creds fresh (off).
+    let _ = app.update(Message::TpmSetupResult(Ok(())));
+    assert!(app.tpm_configured);
+    assert!(!app.tpm_server_credentials);
+}
+
+#[tokio::test]
+async fn test_pin_incorrect_flag_lifecycle() {
+    let mut app = CosmicBWardenApp::default();
+    // Ready account so PinRequested actually prompts.
+    app.has_account = true;
+    app.config.email = Some("user@example.com".to_string());
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, false))));
+
+    // Fresh PIN prompt: counter hidden.
+    let _ = app.update(Message::EventReceived(
+        cosmic_bwarden_core::protocol::Event::PinRequested,
+    ));
+    assert!(!app.pin_incorrect, "counter hidden on fresh prompt");
+
+    // Wrong PIN: counter revealed.
+    let _ = app.update(Message::AppletPinResult(Err("TPM unseal failed".to_string())));
+    assert!(app.pin_incorrect, "counter revealed after wrong PIN");
+
+    // Switching to master password clears it.
+    let _ = app.update(Message::AppletUseMasterPasswordInstead);
+    assert!(!app.pin_incorrect);
+}
+
+#[test]
+fn test_da_status_received_updates_state() {
+    use cosmic_bwarden_core::protocol::TpmDaStatus;
+    let mut app = CosmicBWardenApp::default();
+    let status = TpmDaStatus { available: true, remaining: Some(10), max_tries: Some(32), ..Default::default() };
+    let _ = app.update(Message::TpmDaStatusReceived(Some(status)));
+    assert_eq!(app.tpm_da.as_ref().and_then(|d| d.remaining), Some(10));
+}
+
+#[test]
+fn test_apply_unlock_pin_noop_without_tpm() {
+    // No TPM: the PIN field is inert and produces no task, and is cleared.
+    let mut app = CosmicBWardenApp::default();
+    app.unlock_pin = "123456".to_string();
+    assert!(app.apply_unlock_pin_task().is_none());
+    assert!(app.unlock_pin.is_empty());
+}
+
 #[tokio::test]
 async fn test_applet_messages() {
     let mut app = CosmicBWardenApp::default();

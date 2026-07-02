@@ -46,6 +46,7 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
         Action::Unlock { password } => unlock::handle_unlock(password, state).await,
         Action::CheckTpm => tpm_pin::handle_check_tpm(state).await,
         Action::CheckTpmDiagnostics => tpm_pin::handle_check_tpm_diagnostics().await,
+        Action::GetTpmDaStatus => tpm_pin::handle_get_tpm_da_status().await,
         Action::SetupTpmPin { master_password, pin } => {
             tpm_pin::handle_setup_tpm_pin(master_password, pin, state).await
         }

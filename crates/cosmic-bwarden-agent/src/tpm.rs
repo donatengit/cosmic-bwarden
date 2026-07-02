@@ -13,23 +13,33 @@
 use anyhow::{Context as _, Result};
 use cosmic_bwarden_core::locked;
 use std::path::Path;
+use zeroize::Zeroize as _;
 use tss_esapi::{
     Context, TctiNameConf,
-    attributes::ObjectAttributesBuilder,
+    attributes::{ObjectAttributesBuilder, SessionAttributesBuilder},
+    constants::{PropertyTag, SessionType},
     interface_types::{
         algorithm::{HashingAlgorithm, PublicAlgorithm},
         reserved_handles::Hierarchy,
+        session_handles::PolicySession,
     },
     structures::{
-        Auth, Digest, KeyedHashScheme, Private, Public, PublicBuilder,
-        PublicKeyedHashParameters, SensitiveData,
-        SymmetricCipherParameters, SymmetricDefinitionObject,
+        Auth, Digest, KeyedHashScheme, PcrSelectionList, PcrSlot, Private, Public,
+        PublicBuilder, PublicKeyedHashParameters, SensitiveData,
+        SymmetricCipherParameters, SymmetricDefinition, SymmetricDefinitionObject,
     },
     traits::{Marshall, UnMarshall},
 };
 
+/// Sealed-blob format version. v2 binds the object to PCR{0,7} ∧ PolicyAuthValue.
+/// v1 (no policy) blobs cannot be unsealed by this code — the user must re-run PIN
+/// setup (also required after a firmware/Secure-Boot change invalidates the PCRs).
+const SEALED_BLOB_VERSION: u8 = 2;
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct SealedBlob {
+    #[serde(default)]
+    version: u8,
     out_private: Vec<u8>,
     out_public: Vec<u8>,
 }
@@ -61,6 +71,42 @@ pub async fn is_available() -> bool {
     open_context().is_ok()
 }
 
+/// TPMA_PERMANENT.inLockout bit.
+const TPMA_PERMANENT_IN_LOCKOUT: u32 = 0x0000_0200;
+
+/// Read the TPM's dictionary-attack (lockout) status. Uses `GetCapability`, which
+/// needs no authorization. Counters are TPM-global (shared by all DA-protected
+/// objects), self-heal over `recovery_interval_secs`, and reset on a successful
+/// authorization. Returns `available: false` if the TPM can't be opened.
+pub async fn da_status() -> cosmic_bwarden_core::protocol::TpmDaStatus {
+    use cosmic_bwarden_core::protocol::TpmDaStatus;
+    let mut ctx = match open_context() {
+        Ok(c) => c,
+        Err(_) => return TpmDaStatus::default(), // available: false
+    };
+    let get = |ctx: &mut Context, tag: PropertyTag| ctx.get_tpm_property(tag).ok().flatten();
+
+    let max_tries = get(&mut ctx, PropertyTag::MaxAuthFail);
+    let lockout_counter = get(&mut ctx, PropertyTag::LockoutCounter);
+    let recovery_interval_secs = get(&mut ctx, PropertyTag::LockoutInterval);
+    let in_lockout = get(&mut ctx, PropertyTag::Permanent)
+        .map(|p| p & TPMA_PERMANENT_IN_LOCKOUT != 0)
+        .unwrap_or(false);
+    let remaining = match (max_tries, lockout_counter) {
+        (Some(m), Some(c)) => Some(m.saturating_sub(c)),
+        _ => None,
+    };
+
+    TpmDaStatus {
+        available: true,
+        max_tries,
+        lockout_counter,
+        remaining,
+        in_lockout,
+        recovery_interval_secs,
+    }
+}
+
 /// AES-128-CFB symmetric cipher storage parent (same template as tss-esapi examples).
 /// Creating a primary key with this exact template always produces the same key
 /// (deterministic from the TPM's owner-hierarchy seed), so we never need to persist it.
@@ -88,33 +134,73 @@ fn primary_template() -> Result<Public> {
         .context("building primary key template")
 }
 
-/// Sealed-data-object template: KeyedHash/Null, user-auth protected, DA enabled.
-fn sealed_template(pin: &str) -> Result<(Public, Auth)> {
+/// PCR selection the sealed blobs are bound to: SHA-256 bank, PCR 0 (firmware /
+/// UEFI code) and PCR 7 (Secure Boot state). Booting different firmware or
+/// changing Secure Boot changes these, so the policy no longer satisfies and the
+/// blob cannot be unsealed — the intended anti-evil-maid property.
+fn pcr_selection_list() -> Result<PcrSelectionList> {
+    PcrSelectionList::builder()
+        .with_selection(HashingAlgorithm::Sha256, &[PcrSlot::Slot0, PcrSlot::Slot7])
+        .build()
+        .context("building PCR selection list")
+}
+
+/// Compute the authPolicy digest for "PolicyPCR(0,7) ∧ PolicyAuthValue" using a
+/// trial session. Sealing sets this as the object's authPolicy; unsealing must
+/// satisfy the same policy (correct PCRs) AND supply the PIN (auth value).
+fn compute_policy_digest(ctx: &mut Context) -> Result<Digest> {
+    let trial = ctx
+        .start_auth_session(
+            None,
+            None,
+            None,
+            SessionType::Trial,
+            SymmetricDefinition::AES_128_CFB,
+            HashingAlgorithm::Sha256,
+        )
+        .context("starting trial policy session")?
+        .ok_or_else(|| anyhow::anyhow!("TPM returned no trial session handle"))?;
+    let (attrs, mask) = SessionAttributesBuilder::new().build();
+    ctx.tr_sess_set_attributes(trial, attrs, mask)
+        .context("setting trial session attributes")?;
+
+    let policy_session = PolicySession::try_from(trial)
+        .context("converting trial session to policy session")?;
+    ctx.policy_pcr(policy_session, Digest::default(), pcr_selection_list()?)
+        .context("trial policy_pcr")?;
+    ctx.policy_auth_value(policy_session)
+        .context("trial policy_auth_value")?;
+    ctx.policy_get_digest(policy_session)
+        .context("reading trial policy digest")
+    // `trial` flushes when `ctx` drops (handle manager flushes on drop).
+}
+
+/// Sealed-data-object template bound to `policy_digest`. `userWithAuth=false` means
+/// the PIN (object auth value) is usable *only* through the policy, which also
+/// requires the PCRs to match. DA lockout stays enabled (no_da not set).
+fn sealed_template(policy_digest: Digest) -> Result<Public> {
     let attrs = ObjectAttributesBuilder::new()
         .with_fixed_tpm(true)
         .with_fixed_parent(true)
-        .with_st_clear(true)
-        .with_user_with_auth(true)
+        .with_st_clear(false)
+        .with_user_with_auth(false)
         // with_no_da NOT set → TPM enforces dictionary-attack lockout on wrong PINs
         .build()
         .context("building sealed object attributes")?;
 
-    let template = PublicBuilder::new()
+    PublicBuilder::new()
         .with_public_algorithm(PublicAlgorithm::KeyedHash)
         .with_name_hashing_algorithm(HashingAlgorithm::Sha256)
         .with_object_attributes(attrs)
         .with_keyed_hash_parameters(PublicKeyedHashParameters::new(KeyedHashScheme::Null))
         .with_keyed_hash_unique_identifier(Digest::default())
+        .with_auth_policy(policy_digest)
         .build()
-        .context("building sealed object template")?;
-
-    let auth = Auth::from_bytes(pin.as_bytes()).context("PIN too long for TPM auth")?;
-
-    Ok((template, auth))
+        .context("building sealed object template")
 }
 
-/// Seals arbitrary bytes under `pin` (DA-protected when pin is non-empty).
-/// Pass `pin = ""` for TPM-bound-only (no dictionary-attack protection).
+/// Seals arbitrary bytes bound to PCR{0,7} ∧ `pin` (PolicyAuthValue). Pass
+/// `pin = ""` for PCR-bound only (still requires matching PCRs, no PIN entropy).
 /// The sealed blob is written to `blob_path` with mode 0600.
 pub async fn seal_bytes(data: &[u8], pin: &str, blob_path: &Path) -> Result<()> {
     let mut ctx = open_context()?;
@@ -126,7 +212,9 @@ pub async fn seal_bytes(data: &[u8], pin: &str, blob_path: &Path) -> Result<()> 
         })
         .context("creating TPM primary key")?;
 
-    let (tmpl, pin_auth) = sealed_template(pin)?;
+    let policy_digest = compute_policy_digest(&mut ctx)?;
+    let tmpl = sealed_template(policy_digest)?;
+    let pin_auth = Auth::from_bytes(pin.as_bytes()).context("PIN too long for TPM auth")?;
     let sensitive_data = SensitiveData::try_from(data.to_vec())
         .context("data too large for TPM sensitive data")?;
 
@@ -145,42 +233,16 @@ pub async fn seal_bytes(data: &[u8], pin: &str, blob_path: &Path) -> Result<()> 
 
     let _ = ctx.flush_context(primary.key_handle.into());
 
-    let blob = SealedBlob {
-        out_private: result.out_private.marshall().context("marshalling TPM private")?,
-        out_public: result.out_public.marshall().context("marshalling TPM public")?,
-    };
-
-    let blob_bytes = postcard::to_allocvec(&blob).context("serializing TPM blob")?;
-
-    use std::os::unix::fs::OpenOptionsExt as _;
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(blob_path)
-        .and_then(|mut f| {
-            use std::io::Write as _;
-            f.write_all(&blob_bytes)
-        })
-        .context("writing TPM blob to disk")?;
-
-    log::info!("TPM: sealed {} bytes to {}", data.len(), blob_path.display());
+    write_blob(&result, blob_path)?;
+    log::info!("TPM: sealed {} bytes to {} (PCR-bound)", data.len(), blob_path.display());
     Ok(())
 }
 
-/// Unseals bytes from `blob_path` using `pin` (empty string = no PIN auth).
+/// Unseals bytes from `blob_path` using `pin`. Fails on wrong PIN (DA fault),
+/// changed PCRs (firmware/Secure-Boot change), or an unsupported blob version.
 pub async fn unseal_bytes(blob_path: &Path, pin: &str) -> Result<Vec<u8>> {
     let mut ctx = open_context()?;
-
-    let blob_bytes = std::fs::read(blob_path).context("reading TPM blob file")?;
-    let blob: SealedBlob =
-        postcard::from_bytes(&blob_bytes).context("deserializing TPM blob")?;
-
-    let private = Private::unmarshall(&blob.out_private)
-        .context("deserializing TPM private portion")?;
-    let public = Public::unmarshall(&blob.out_public)
-        .context("deserializing TPM public portion")?;
+    let (private, public) = read_blob(blob_path)?;
 
     let primary_tmpl = primary_template()?;
     let primary = ctx
@@ -195,134 +257,125 @@ pub async fn unseal_bytes(blob_path: &Path, pin: &str) -> Result<Vec<u8>> {
 
     let _ = ctx.flush_context(primary.key_handle.into());
 
-    let pin_auth = Auth::from_bytes(pin.as_bytes()).context("PIN too long for TPM auth")?;
-    ctx.tr_set_auth(obj_handle.into(), pin_auth)
-        .context("setting PIN auth on TPM object")?;
-
-    let sensitive = ctx
-        .execute_with_nullauth_session(|c| c.unseal(obj_handle.into()))
-        .context("TPM unseal — wrong PIN or DA lockout")?;
-
-    let _ = ctx.flush_context(obj_handle.into());
-
+    let sensitive = unseal_with_policy(&mut ctx, obj_handle.into(), pin)?;
     Ok(sensitive.as_bytes().to_vec())
 }
 
-/// Seals `vault_keys` (64 bytes) under `pin` (DA-protected by TPM).
-/// The sealed blob is written to `blob_path` with mode 0600.
+/// Seals `vault_keys` (64 bytes) bound to PCR{0,7} ∧ `pin`.
 pub async fn seal(vault_keys: &locked::Keys, pin: &str, blob_path: &Path) -> Result<()> {
-    let mut ctx = open_context()?;
-
-    // Create storage-parent primary key inside a null-auth HMAC session.
-    let primary_tmpl = primary_template()?;
-    let primary = ctx
-        .execute_with_nullauth_session(|c| {
-            c.create_primary(Hierarchy::Owner, primary_tmpl, None, None, None, None)
-        })
-        .context("creating TPM primary key")?;
-
-    let (tmpl, pin_auth) = sealed_template(pin)?;
-    // Seal only enc_key ‖ mac_key (exactly 64 bytes) — keys.data() may be
-    // longer due to PKCS7 padding left over from AES-CBC decryption in the
-    // locked::Vec buffer.
+    // Seal only enc_key ‖ mac_key (exactly 64 bytes) — keys.data() may be longer
+    // due to PKCS7 padding left over from AES-CBC decryption in the locked buffer.
     let mut key_material = std::vec::Vec::with_capacity(64);
     key_material.extend_from_slice(vault_keys.enc_key());
     key_material.extend_from_slice(vault_keys.mac_key());
-    let key_data = SensitiveData::try_from(key_material)
-        .context("vault keys too large for TPM sensitive data")?;
-
-    let result = ctx
-        .execute_with_nullauth_session(|c| {
-            c.create(
-                primary.key_handle,
-                tmpl,
-                Some(pin_auth),
-                Some(key_data),
-                None,
-                None,
-            )
-        })
-        .context("creating sealed TPM object")?;
-
-    let _ = ctx.flush_context(primary.key_handle.into());
-
-    let blob = SealedBlob {
-        out_private: result.out_private.marshall().context("marshalling TPM private")?,
-        out_public: result.out_public.marshall().context("marshalling TPM public")?,
-    };
-
-    let blob_bytes = postcard::to_allocvec(&blob).context("serializing TPM blob")?;
-
-    use std::os::unix::fs::OpenOptionsExt as _;
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(blob_path)
-        .and_then(|mut f| {
-            use std::io::Write as _;
-            f.write_all(&blob_bytes)
-        })
-        .context("writing TPM blob to disk")?;
-
+    let res = seal_bytes(&key_material, pin, blob_path).await;
+    key_material.zeroize();
+    res.context("sealing vault keys")?;
     log::info!("TPM: sealed vault keys to {}", blob_path.display());
     Ok(())
 }
 
 /// Unseals the vault keys stored in `blob_path` using `pin`.
-/// Fails if the PIN is wrong (TPM DA fault) or the blob is corrupt.
 pub async fn unseal(blob_path: &Path, pin: &str) -> Result<locked::Keys> {
-    let mut ctx = open_context()?;
-
-    let blob_bytes = std::fs::read(blob_path).context("reading TPM blob file")?;
-    let blob: SealedBlob =
-        postcard::from_bytes(&blob_bytes).context("deserializing TPM blob")?;
-
-    let private = Private::unmarshall(&blob.out_private)
-        .context("deserializing TPM private portion")?;
-    let public = Public::unmarshall(&blob.out_public)
-        .context("deserializing TPM public portion")?;
-
-    // Recreate the same deterministic parent key.
-    let primary_tmpl = primary_template()?;
-    let primary = ctx
-        .execute_with_nullauth_session(|c| {
-            c.create_primary(Hierarchy::Owner, primary_tmpl, None, None, None, None)
-        })
-        .context("recreating TPM primary key for unseal")?;
-
-    // Load the sealed object under the parent.
-    let obj_handle = ctx
-        .execute_with_nullauth_session(|c| c.load(primary.key_handle, private, public))
-        .context("loading sealed object into TPM")?;
-
-    // Parent no longer needed.
-    let _ = ctx.flush_context(primary.key_handle.into());
-
-    // Set the PIN as the auth value so the ESAPI includes it in the HMAC session.
-    let pin_auth = Auth::from_bytes(pin.as_bytes()).context("PIN too long for TPM auth")?;
-    ctx.tr_set_auth(obj_handle.into(), pin_auth)
-        .context("setting PIN auth on TPM object")?;
-
-    // Unseal — wrong PIN triggers TPM DA fault here.
-    let sensitive = ctx
-        .execute_with_nullauth_session(|c| c.unseal(obj_handle.into()))
-        .context("TPM unseal — wrong PIN or DA lockout")?;
-
-    let _ = ctx.flush_context(obj_handle.into());
-
-    // Copy unsealed bytes into locked (mlock'd) memory.
-    let raw = sensitive.as_bytes();
+    let raw = unseal_bytes(blob_path, pin).await?;
     anyhow::ensure!(
         raw.len() == 64,
         "TPM unsealed {} bytes; expected 64 (vault keys)",
         raw.len()
     );
 
+    // Copy unsealed bytes into locked (mlock'd) memory, then wipe the transient.
     let mut locked_vec = locked::Vec::new();
     locked_vec.extend(raw.iter().copied());
+    let mut raw = raw;
+    raw.zeroize();
     Ok(locked::Keys::new(locked_vec))
+}
+
+/// Unseal `obj_handle` under a PolicyPCR(0,7) ∧ PolicyAuthValue session with
+/// command/response parameter encryption, so the unsealed key is never exposed in
+/// the clear on the TPM bus (mitigates bus sniffing).
+fn unseal_with_policy(
+    ctx: &mut Context,
+    obj_handle: tss_esapi::handles::ObjectHandle,
+    pin: &str,
+) -> Result<SensitiveData> {
+    let session = ctx
+        .start_auth_session(
+            None,
+            None,
+            None,
+            SessionType::Policy,
+            SymmetricDefinition::AES_128_CFB,
+            HashingAlgorithm::Sha256,
+        )
+        .context("starting policy session for unseal")?
+        .ok_or_else(|| anyhow::anyhow!("TPM returned no policy session handle"))?;
+    let (attrs, mask) = SessionAttributesBuilder::new()
+        .with_decrypt(true)
+        .with_encrypt(true)
+        .build();
+    ctx.tr_sess_set_attributes(session, attrs, mask)
+        .context("setting policy session attributes")?;
+
+    let policy_session = PolicySession::try_from(session)
+        .context("converting auth session to policy session")?;
+    ctx.policy_pcr(policy_session, Digest::default(), pcr_selection_list()?)
+        .context("policy_pcr (PCR state changed? re-run PIN setup)")?;
+    ctx.policy_auth_value(policy_session)
+        .context("policy_auth_value")?;
+
+    let pin_auth = Auth::from_bytes(pin.as_bytes()).context("PIN too long for TPM auth")?;
+    ctx.tr_set_auth(obj_handle.into(), pin_auth)
+        .context("setting PIN auth on TPM object")?;
+
+    ctx.execute_with_session(Some(session), |c| c.unseal(obj_handle.into()))
+        .context("TPM unseal — wrong PIN, changed PCRs, or DA lockout")
+}
+
+/// Serialize a freshly created sealed object to disk (0600, versioned).
+fn write_blob(
+    result: &tss_esapi::structures::CreateKeyResult,
+    blob_path: &Path,
+) -> Result<()> {
+    let blob = SealedBlob {
+        version: SEALED_BLOB_VERSION,
+        out_private: result.out_private.marshall().context("marshalling TPM private")?,
+        out_public: result.out_public.marshall().context("marshalling TPM public")?,
+    };
+    let blob_bytes = postcard::to_allocvec(&blob).context("serializing TPM blob")?;
+
+    use std::os::unix::fs::OpenOptionsExt as _;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(blob_path)
+        .and_then(|mut f| {
+            use std::io::Write as _;
+            f.write_all(&blob_bytes)
+        })
+        .context("writing TPM blob to disk")?;
+    Ok(())
+}
+
+/// Read and version-check a sealed blob, returning its TPM private/public parts.
+fn read_blob(blob_path: &Path) -> Result<(Private, Public)> {
+    let blob_bytes = std::fs::read(blob_path).context("reading TPM blob file")?;
+    let blob: SealedBlob =
+        postcard::from_bytes(&blob_bytes).context("deserializing TPM blob")?;
+    anyhow::ensure!(
+        blob.version == SEALED_BLOB_VERSION,
+        "sealed blob version {} is not supported (expected {}); re-run PIN setup",
+        blob.version,
+        SEALED_BLOB_VERSION
+    );
+    let private = Private::unmarshall(&blob.out_private)
+        .context("deserializing TPM private portion")?;
+    let public = Public::unmarshall(&blob.out_public)
+        .context("deserializing TPM public portion")?;
+    Ok((private, public))
 }
 
 /// Deletes the sealed blob file, disabling PIN unlock for this account.

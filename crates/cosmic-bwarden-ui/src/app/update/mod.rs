@@ -35,6 +35,8 @@ impl CosmicBWardenApp {
             | Message::LoginSubmitted
             | Message::UnlockPasswordChanged(_)
             | Message::UnlockSubmitted
+            | Message::UnlockPinChanged(_)
+            | Message::UnlockPinRevealToggled
             | Message::AuthResult(_)
             | Message::LockClicked
             | Message::LockResult
@@ -103,6 +105,7 @@ impl CosmicBWardenApp {
             | Message::MainWindowPinChanged(_)
             | Message::MainWindowPinSubmitted
             | Message::TpmStatusReceived(_)
+            | Message::TpmDaStatusReceived(_)
             | Message::TpmDiagnosticsReceived(_)
             | Message::TpmSetupFormToggle
             | Message::TpmDisableFormToggle
@@ -149,6 +152,8 @@ impl CosmicBWardenApp {
                 self.editing_entry = None;
                 // Refresh TPM status every time settings opens — hardware
                 // state or group membership may have changed since startup.
+                // The dictionary-attack counter is fetched by TpmStatusReceived,
+                // but only once availability is confirmed (see lifecycle.rs).
                 lifecycle::check_tpm_task()
             }
             Message::VaultViewClicked => {

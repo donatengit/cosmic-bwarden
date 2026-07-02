@@ -28,6 +28,7 @@ async fn dispatch(action: Action, state: &Arc<Mutex<State>>) -> Response {
         | Action::Logout
         | Action::CheckTpm
         | Action::CheckTpmDiagnostics
+        | Action::GetTpmDaStatus
         | Action::SetupTpmPin { .. }
         | Action::SetupTpmPinFromUnlocked { .. }
         | Action::UnlockWithPin { .. }

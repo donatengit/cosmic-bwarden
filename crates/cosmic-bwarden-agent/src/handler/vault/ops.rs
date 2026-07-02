@@ -6,13 +6,26 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use totp_rs::{Algorithm, TOTP};
 
-pub async fn handle_get_totp(id: String, state: &Arc<Mutex<State>>) -> Response {
+pub async fn handle_get_totp(
+    id: String,
+    password: Option<String>,
+    state: &Arc<Mutex<State>>,
+) -> Response {
     let state_guard = state.lock().await;
     let entry = if let Some(db) = &state_guard.db {
         db.entries.iter().find(|e| e.id == id).cloned()
     } else {
         None
     };
+    // TOTP is an on-demand secret: enforce master-password reprompt just like
+    // GetPassword before releasing a code.
+    if let (Some(entry), Some(db)) = (&entry, &state_guard.db) {
+        if entry.master_password_reprompt() {
+            if let Some(err) = super::query::verify_reprompt(password, db, &state_guard) {
+                return err;
+            }
+        }
+    }
     let keys = state_guard.keys.clone();
     let org_keys = state_guard.org_keys.clone().unwrap_or_default();
     drop(state_guard);

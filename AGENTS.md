@@ -85,6 +85,18 @@ When a crate's main logic grows, decompose using these established patterns:
 - **When splitting**: prefer extracting into a sibling module (`mod foo;` in the parent) rather than a new crate unless the boundary is a genuine abstraction layer.
 - **Before adding to a file**: check its current line count. If it's above 200, consider whether the new code belongs in an existing or new sibling module instead.
 
+## Internationalization (UI)
+
+**Every user-facing string in `cosmic-bwarden-ui` must go through the `fl!` macro** — never a bare string literal in a widget (`text::body`, `button::*`, `secure_input`/`text_input` placeholders, `.title`/`.body`, dialog captions, dropdown entries). This is a review-blocking rule for the UI crate.
+
+- **Where strings live**: `crates/cosmic-bwarden-ui/i18n/en/cosmic_bwarden_ui.ftl` (the fallback locale). Add a kebab-case key there, then reference it with `fl!("my-key")`.
+- **Interpolation**: use Fluent placeables, e.g. `pin-min-chars = PIN (min { $count } characters)` called as `fl!("pin-min-chars", count = value)`. Do **not** build display strings with `format!`. Bind ambiguous numeric expressions (e.g. `a / b`) to a typed local first — `FluentValue` conversion can't infer the type inline. Add a `# comment` above the key documenting each `$arg`.
+- **Logic keys vs. display labels**: strings used as match/lookup keys (e.g. `EditFieldChanged`/`revealed_fields` field names in `view/vault/detail.rs`) must stay stable literals. Localize only their *display* via a mapping helper (`field_label`) — never the key itself.
+- **Not localized**: symbols/glyphs (`—`, `✅`, `…`), the version string, and runtime text already produced by the agent (diagnostics, agent error messages). Compact unit suffixes (`2h`, `90m`) are left numeric by design; only the words around them are keyed.
+- **Bidi isolation** is disabled in the loader (`set_use_isolating(false)`), so interpolated values render/compare without U+2068/U+2069 marks.
+- **PIN length**: the minimum is the single source `crate::MIN_PIN_LEN` (UI) mirrored by `tpm_pin::MIN_PIN_LEN` (agent). Keep them equal; captions/validation use the constant, never a hardcoded number.
+- `i18n_embed_fl::fl!` verifies message IDs against the fallback `.ftl` **at compile time** — a typo'd key fails the build, so `cargo check -p cosmic-bwarden-ui` is the guard.
+
 ## Tool Discipline
 
 - **Symbol lookup**: `grep_search` first, read full file only if needed.

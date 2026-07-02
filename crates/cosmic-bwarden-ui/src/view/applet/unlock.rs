@@ -38,11 +38,16 @@ pub fn view(app: &CosmicBWardenApp) -> Element<'_, Message> {
         let fallback_btn = button::text(fl!("use-master-password-instead"))
             .on_press(Message::AppletUseMasterPasswordInstead);
 
-        column::with_capacity(2)
+        let mut col = column::with_capacity(3)
             .spacing(5)
-            .push(pin_row)
-            .push(fallback_btn)
-            .into()
+            .push(pin_row);
+        // Show the attempts-remaining counter only after a wrong PIN.
+        if app.pin_incorrect {
+            if let Some(line) = app.tpm_da_line() {
+                col = col.push(cosmic::widget::text::caption(line));
+            }
+        }
+        col.push(fallback_btn).into()
     } else {
         let password_input = secure_input(
             fl!("locked-need-password"),
@@ -58,11 +63,39 @@ pub fn view(app: &CosmicBWardenApp) -> Element<'_, Message> {
         let submit_btn = button::icon(icon::from_name("changes-allow-symbolic"))
             .on_press(Message::AppletUnlockSubmitted);
 
-        row::with_capacity(2)
+        let password_row = row::with_capacity(2)
             .spacing(5)
             .align_y(Alignment::Center)
             .push(password_input)
-            .push(submit_btn)
-            .into()
+            .push(submit_btn);
+
+        // PIN (re-)enable field: lets the user re-establish PIN unlock after a TPM
+        // mismatch (or disable it) directly from the applet. Empty = disable.
+        if app.tpm_available {
+            let pin_input = secure_input(
+                fl!("pin-empty-to-disable"),
+                &app.unlock_pin,
+                Some(Message::UnlockPinRevealToggled),
+                !app.unlock_pin_revealed,
+            )
+            .on_input(Message::UnlockPinChanged)
+            .on_submit(|_| Message::AppletUnlockSubmitted)
+            .width(Length::Fill);
+
+            let note = if app.tpm_configured {
+                fl!("pin-reenable-note-short")
+            } else {
+                fl!("pin-optional-note-short")
+            };
+
+            column::with_capacity(3)
+                .spacing(5)
+                .push(password_row)
+                .push(pin_input)
+                .push(cosmic::widget::text::caption(note))
+                .into()
+        } else {
+            password_row.into()
+        }
     }
 }

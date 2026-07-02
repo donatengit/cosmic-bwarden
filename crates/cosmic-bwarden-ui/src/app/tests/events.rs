@@ -94,12 +94,41 @@ async fn test_unlock_requested_event_shows_unlock_view() {
     let mut app = CosmicBWardenApp::default();
     app.view = View::Vault;
     app.selected_entry_id = Some("1".to_string());
+    // Readiness: an account must be configured, otherwise unlocking is pointless.
+    app.has_account = true;
+    app.config.email = Some("user@example.com".to_string());
 
     let _ = app.update(Message::EventReceived(
         cosmic_bwarden_core::protocol::Event::UnlockRequested,
     ));
     assert_eq!(app.view, View::Unlock);
     assert!(app.selected_entry_id.is_none());
+}
+
+#[tokio::test]
+async fn test_unlock_requested_ignored_without_account() {
+    // No account/email configured — an unlock request must NOT force the unlock
+    // prompt (it couldn't succeed). The view stays put; config is re-queried.
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+    assert!(!app.unlock_prompt_ready());
+
+    let _ = app.update(Message::EventReceived(
+        cosmic_bwarden_core::protocol::Event::UnlockRequested,
+    ));
+    assert_eq!(app.view, View::Vault, "must not prompt unlock without an account");
+    assert!(!app.show_pin_unlock);
+}
+
+#[tokio::test]
+async fn test_pin_requested_ignored_without_account() {
+    let mut app = CosmicBWardenApp::default();
+    app.view = View::Vault;
+    let _ = app.update(Message::EventReceived(
+        cosmic_bwarden_core::protocol::Event::PinRequested,
+    ));
+    assert!(!app.show_pin_unlock, "no PIN prompt without a configured account");
+    assert_eq!(app.view, View::Vault);
 }
 
 #[tokio::test]

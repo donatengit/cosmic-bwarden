@@ -21,8 +21,22 @@ suffices instead.
    hierarchy seed using an **AES-128-CFB** template — the primary key is never
    stored anywhere; the TPM recreates it on demand.
 3. The 64-byte vault key material is sealed into a **KeyedHash/Null** object
-   protected by the PIN. Dictionary-attack (DA) lockout is enabled: too many
-   wrong PINs trigger a TPM-enforced delay counted in hardware.
+   whose auth policy is `PolicyPCR(SHA-256, {0,7}) ∧ PolicyAuthValue`. Unsealing
+   therefore requires **both** the PIN (auth value) **and** a matching boot state:
+   PCR 0 (firmware/UEFI code) and PCR 7 (Secure Boot state). `userWithAuth` is
+   false, so the PIN is only usable through this policy — it cannot be used to
+   authorize the object under a different boot state. Dictionary-attack (DA)
+   lockout is enabled: too many wrong PINs trigger a TPM-enforced delay counted in
+   hardware. The unseal uses a session with parameter encryption so the recovered
+   key is not exposed in the clear on the TPM bus.
+
+   **Consequence — firmware/Secure-Boot changes invalidate the blob.** A BIOS
+   update, enabling/disabling Secure Boot, or booting different firmware changes
+   PCR 0/7 so the policy no longer satisfies and the blob will not unseal. This is
+   the intended anti-evil-maid property. When it happens the agent falls back to
+   the master-password prompt; simply re-run PIN setup to reseal against the new
+   boot state. Sealed blobs are versioned (`v2`); blobs from before PCR binding
+   cannot be unsealed and must be re-created via PIN setup.
 4. The sealed blob is written to:
    ```
    ~/.local/share/cosmic-bwarden/tpm_sealed_<hex16>.bin
@@ -199,6 +213,13 @@ to see the same four-item report in the terminal.
   after a master password change.
 - **Machine binding**: the sealed blob is cryptographically tied to the specific
   TPM chip. Moving the blob file to another machine will not unseal it.
+- **Boot-state binding (PCR 0/7)**: the blob is bound to the firmware and Secure
+  Boot state at seal time. Booting other firmware/OS (e.g. from USB) to lift the
+  blob off disk will not unseal it, and a firmware/Secure-Boot change invalidates
+  the blob until you re-run PIN setup (see the sealing steps above).
+- **PIN policy**: the agent enforces a minimum PIN length (empty/too-short PINs
+  are rejected server-side, not just in the UI), since the sealed blob lives on
+  disk and a weak PIN is bounded only by DA lockout.
 - **Backup**: the blob file can be backed up but is useless without the original
   TPM hardware. Losing the blob (or the machine) requires re-running `tpm setup`
   on the same hardware after unlocking with the master password.

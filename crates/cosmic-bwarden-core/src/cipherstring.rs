@@ -32,7 +32,7 @@ impl CipherString {
         }
 
         let ty = parts[0].as_bytes();
-        if ty.len() != 1 {
+        if ty.len() != 1 || !ty[0].is_ascii_digit() {
             return Err(Error::UnimplementedCipherStringType {
                 ty: parts[0].to_string(),
             });
@@ -44,10 +44,13 @@ impl CipherString {
         match ty {
             2 => {
                 let parts: Vec<&str> = contents.split('|').collect();
-                if parts.len() < 2 || parts.len() > 3 {
+                // Bitwarden type 2 (AES-256-CBC-HMAC-SHA256) always carries a MAC.
+                // Reject MAC-less (2-part) cipherstrings: without authentication a
+                // malicious server could strip the MAC and exploit CBC malleability.
+                if parts.len() != 3 {
                     return Err(Error::InvalidCipherString {
                         reason: format!(
-                            "type 2 cipherstring with {} parts",
+                            "type 2 cipherstring with {} parts (expected 3: iv|ct|mac)",
                             parts.len()
                         ),
                     });
@@ -57,14 +60,10 @@ impl CipherString {
                     .map_err(|source| Error::InvalidBase64 { source })?;
                 let ciphertext = crate::base64::decode(parts[1])
                     .map_err(|source| Error::InvalidBase64 { source })?;
-                let mac = if parts.len() > 2 {
-                    Some(
-                        crate::base64::decode(parts[2])
-                            .map_err(|source| Error::InvalidBase64 { source })?,
-                    )
-                } else {
-                    None
-                };
+                let mac = Some(
+                    crate::base64::decode(parts[2])
+                        .map_err(|source| Error::InvalidBase64 { source })?,
+                );
 
                 Ok(Self::Symmetric {
                     iv,
@@ -252,6 +251,36 @@ fn random_iv() -> Vec<u8> {
     let mut rng = rand::rng();
     rng.fill_bytes(&mut iv);
     iv
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn type2_requires_mac() {
+        let iv = crate::base64::encode(&[0u8; 16]);
+        let ct = crate::base64::encode(&[0u8; 16]);
+        let mac = crate::base64::encode(&[0u8; 32]);
+
+        // 3-part (iv|ct|mac) is accepted.
+        assert!(CipherString::new(&format!("2.{iv}|{ct}|{mac}")).is_ok());
+
+        // 2-part (MAC stripped) is rejected — no unauthenticated CBC.
+        assert!(matches!(
+            CipherString::new(&format!("2.{iv}|{ct}")),
+            Err(Error::InvalidCipherString { .. })
+        ));
+    }
+
+    #[test]
+    fn non_digit_type_is_rejected_without_panic() {
+        // Must not panic on `b'x' - b'0'` underflow.
+        assert!(matches!(
+            CipherString::new("x.aQ=="),
+            Err(Error::UnimplementedCipherStringType { .. })
+        ));
+    }
 }
 
 fn pkcs7_unpad(b: &[u8]) -> Option<&[u8]> {

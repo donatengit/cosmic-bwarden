@@ -7,6 +7,37 @@ use cosmic_bwarden_core::protocol::Response;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+/// Minimum length for a TPM-unlock PIN. Short/empty PINs offer negligible
+/// protection: the sealed blob is on disk, so brute force is bounded only by TPM
+/// dictionary-attack lockout. Enforced in the agent, not just the UI.
+#[cfg(feature = "tpm")]
+const MIN_PIN_LEN: usize = 6;
+
+#[cfg(feature = "tpm")]
+fn validate_pin(pin: &str) -> Result<(), Response> {
+    if pin.chars().count() < MIN_PIN_LEN {
+        return Err(Response::Error {
+            message: format!("PIN must be at least {MIN_PIN_LEN} characters"),
+        });
+    }
+    Ok(())
+}
+
+/// Remove the TPM-sealed server-credentials (master-password-hash) blob for an
+/// account, if present. Enabling PIN unlock is a fresh start: the vault-key blob
+/// is overwritten by the new seal, but the separate server-credentials store must
+/// be cleared explicitly so a re-enable never inherits a stale one. Server
+/// credentials must then be re-enabled explicitly by the user.
+#[cfg(feature = "tpm")]
+fn reset_server_credentials_store(server: &str, email: &str) {
+    let hash_blob_path = cosmic_bwarden_core::dirs::tpm_hash_blob_file(server, email);
+    if hash_blob_path.exists() {
+        if let Err(e) = crate::tpm::clear(&hash_blob_path) {
+            log::error!("TPM enable: failed to clear stale server-credentials blob: {}", e);
+        }
+    }
+}
+
 /// Query whether the TPM is available and a sealed blob is configured.
 pub async fn handle_check_tpm(_state: &Arc<Mutex<State>>) -> Response {
     #[cfg(feature = "tpm")]
@@ -41,6 +72,9 @@ pub async fn handle_setup_tpm_pin(
 ) -> Response {
     #[cfg(feature = "tpm")]
     {
+        if let Err(e) = validate_pin(&pin) {
+            return e;
+        }
         if !crate::tpm::is_available().await {
             return Response::Error {
                 message: "TPM is not available on this system".to_string(),
@@ -133,9 +167,14 @@ pub async fn handle_setup_tpm_pin(
             return Response::Error { message: msg };
         }
 
+        // Fresh enable: reset all other TPM stores so re-enabling never inherits
+        // stale state (the vault-key blob was just overwritten by the seal above).
+        reset_server_credentials_store(&config.server_name(), &email);
+
         // Update config.
         let mut updated_config = config;
         updated_config.tpm_enabled = true;
+        updated_config.tpm_store_server_credentials = false;
         if let Err(e) = updated_config.save_legacy() {
             log::error!("TPM setup: failed to save config: {}", e);
         }
@@ -144,6 +183,7 @@ pub async fn handle_setup_tpm_pin(
         {
             let mut g = state.lock().await;
             g.tpm_configured = true;
+            g.tpm_server_credentials = false;
         }
 
         log::info!("TPM PIN unlock configured for {}", email);
@@ -373,6 +413,9 @@ pub async fn handle_setup_tpm_pin_from_unlocked(
 ) -> Response {
     #[cfg(feature = "tpm")]
     {
+        if let Err(e) = validate_pin(&pin) {
+            return e;
+        }
         if !crate::tpm::is_available().await {
             return Response::Error {
                 message: "TPM is not available on this system".to_string(),
@@ -416,8 +459,13 @@ pub async fn handle_setup_tpm_pin_from_unlocked(
             return Response::Error { message: msg };
         }
 
+        // Fresh enable: reset all other TPM stores so re-enabling never inherits
+        // stale state (the vault-key blob was just overwritten by the seal above).
+        reset_server_credentials_store(&config.server_name(), &email);
+
         let mut updated_config = config;
         updated_config.tpm_enabled = true;
+        updated_config.tpm_store_server_credentials = false;
         if let Err(e) = updated_config.save_legacy() {
             log::error!("TPM setup: failed to save config: {}", e);
         }
@@ -425,6 +473,7 @@ pub async fn handle_setup_tpm_pin_from_unlocked(
         {
             let mut g = state.lock().await;
             g.tpm_configured = true;
+            g.tpm_server_credentials = false;
         }
 
         log::info!("TPM PIN unlock configured for {} (from unlocked state)", email);
@@ -435,6 +484,22 @@ pub async fn handle_setup_tpm_pin_from_unlocked(
         let _ = (pin, state);
         Response::Error {
             message: "TPM support not compiled in this build".to_string(),
+        }
+    }
+}
+
+/// Return the TPM dictionary-attack lockout status (attempts remaining, etc).
+pub async fn handle_get_tpm_da_status() -> Response {
+    #[cfg(feature = "tpm")]
+    {
+        Response::TpmDaStatus {
+            status: crate::tpm::da_status().await,
+        }
+    }
+    #[cfg(not(feature = "tpm"))]
+    {
+        Response::TpmDaStatus {
+            status: cosmic_bwarden_core::protocol::TpmDaStatus::default(),
         }
     }
 }

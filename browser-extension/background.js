@@ -50,12 +50,13 @@ function sendToAgent(action) {
     });
 }
 
-// eTLD+1 extraction: strips www. prefix and takes last two labels.
+// Full registrable host (only a leading "www." is stripped). We deliberately do
+// NOT collapse to the last two labels: for "victim.co.uk" that yields "co.uk", so
+// the agent's substring search would surface every ".co.uk" entry. A proper fix
+// would consult the Public Suffix List; matching the full host is the safe choice.
 function extractDomain(url) {
     try {
-        const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
-        const parts = host.split('.');
-        return parts.length > 1 ? parts.slice(-2).join('.') : host;
+        return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
     } catch { return null; }
 }
 

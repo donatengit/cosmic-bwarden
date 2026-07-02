@@ -20,9 +20,13 @@ let currentTabDomain = null;
 // ── Domain helpers ────────────────────────────────────────────────────────────
 function extractDomain(url) {
     try {
-        const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
-        const parts = host.split('.');
-        return parts.length > 1 ? parts.slice(-2).join('.') : host;
+        // Use the full registrable host (only stripping a leading "www."), NOT the
+        // last two labels. Collapsing to the last two labels treats multi-part
+        // public suffixes wrong: for "victim.co.uk" it would yield "co.uk", so the
+        // agent's substring search would surface every ".co.uk" entry. A proper fix
+        // would consult the Public Suffix List; absent that, matching the full host
+        // is the safe choice.
+        return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
     } catch { return null; }
 }
 

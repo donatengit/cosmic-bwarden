@@ -4,6 +4,7 @@ use crate::app::tasks::{check_protocol_version, fetch_applet_search, fetch_apple
 use crate::fl;
 use crate::message::{Message, View};
 use crate::view::applet::{search, unlock};
+use crate::MIN_PIN_LEN;
 use cosmic::app::Task;
 use cosmic::iced::window;
 use cosmic::widget::text_input;
@@ -114,6 +115,10 @@ impl CosmicBWardenApp {
                 Some(Task::none())
             }
             Message::AppletUnlockSubmitted => {
+                if !self.unlock_pin.is_empty() && self.unlock_pin.chars().count() < MIN_PIN_LEN {
+                    self.applet_error = Some(fl!("pin-too-short", count = MIN_PIN_LEN));
+                    return Some(Task::none());
+                }
                 let password = self.applet_unlock_password.clone();
                 Some(Task::perform(
                     async move {
@@ -143,11 +148,19 @@ impl CosmicBWardenApp {
                         } else {
                             Some(self.applet_search_query.clone())
                         };
-                        return Some(fetch_applet_search(
+                        let mut tasks = vec![fetch_applet_search(
                             self.applet_search_id,
                             query,
                             only_pinned,
-                        ));
+                        )];
+                        // Apply the master-password-unlock PIN field: reseal against
+                        // the current TPM state (non-empty) or clear a stale PIN
+                        // blob (empty). AppletUnlockResult is reached only from a
+                        // master-password unlock, so no extra guard is needed.
+                        if let Some(task) = self.apply_unlock_pin_task() {
+                            tasks.push(task);
+                        }
+                        return Some(Task::batch(tasks));
                     }
                     Err(e) => self.applet_error = Some(e),
                 }
@@ -314,6 +327,7 @@ impl CosmicBWardenApp {
                         self.applet_error = None;
                         self.error = None;
                         self.show_pin_unlock = false;
+                        self.pin_incorrect = false;
                         self.view = View::Vault;
                         self.search_id += 1;
                         self.applet_search_id += 1;
@@ -335,12 +349,16 @@ impl CosmicBWardenApp {
                         self.applet_error = Some(e.clone());
                         self.error = Some(e);
                         self.view = View::Unlock;
+                        // A wrong PIN consumed a DA attempt — reveal and refresh
+                        // the attempts-remaining counter.
+                        self.pin_incorrect = true;
+                        Some(super::lifecycle::check_tpm_da_task())
                     }
                 }
-                Some(Task::none())
             }
             Message::AppletUseMasterPasswordInstead => {
                 self.show_pin_unlock = false;
+                self.pin_incorrect = false;
                 Some(Task::none())
             }
 
@@ -366,8 +384,8 @@ impl CosmicBWardenApp {
                 Some(Task::none())
             }
             Message::TpmSetupSubmitted => {
-                if self.tpm_setup_pin.len() < 6 {
-                    self.applet_error = Some("PIN must be at least 6 characters".to_string());
+                if self.tpm_setup_pin.chars().count() < MIN_PIN_LEN {
+                    self.applet_error = Some(fl!("pin-too-short", count = MIN_PIN_LEN));
                     return Some(Task::none());
                 }
                 let pin = self.tpm_setup_pin.clone();
@@ -393,8 +411,13 @@ impl CosmicBWardenApp {
                 match res {
                     Ok(()) => {
                         self.tpm_configured = true;
+                        // Enabling PIN resets all TPM stores server-side, so server
+                        // credentials start disabled again — reflect that here.
+                        self.tpm_server_credentials = false;
                         self.applet_error = None;
                         self.tpm_error = None;
+                        // Refresh the lockout status shown in the settings pane.
+                        return Some(super::lifecycle::check_tpm_da_task());
                     }
                     Err(e) => {
                         tracing::error!("TPM PIN setup failed: {}", e);
@@ -423,6 +446,8 @@ impl CosmicBWardenApp {
                         self.show_pin_unlock = false;
                         self.applet_error = None;
                         self.tpm_error = None;
+                        // Refresh the lockout status shown in the settings pane.
+                        return Some(super::lifecycle::check_tpm_da_task());
                     }
                     Err(e) => {
                         tracing::error!("TPM PIN disable failed: {}", e);

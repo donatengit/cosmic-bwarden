@@ -41,6 +41,9 @@ pub enum Message {
     // Unlock actions
     UnlockPasswordChanged(String),
     UnlockSubmitted,
+    /// PIN (re-)enable field on the master-password unlock view.
+    UnlockPinChanged(String),
+    UnlockPinRevealToggled,
 
     // Vault actions
     SearchChanged(String),
@@ -146,6 +149,7 @@ pub enum Message {
     MainWindowPinChanged(String),
     MainWindowPinSubmitted,
     TpmStatusReceived(Result<(bool, bool, bool), String>),
+    TpmDaStatusReceived(Option<cosmic_bwarden_core::protocol::TpmDaStatus>),
     TpmDiagnosticsReceived(Vec<(String, bool, String)>),
     TpmSetupFormToggle,
     TpmDisableFormToggle,

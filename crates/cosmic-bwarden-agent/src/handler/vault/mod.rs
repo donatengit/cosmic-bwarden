@@ -53,7 +53,7 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
                 r => r,
             }
         }
-        Action::GetTotp { id } => ops::handle_get_totp(id, state).await,
+        Action::GetTotp { id, password } => ops::handle_get_totp(id, password, state).await,
         Action::DeleteEntry { id } => ops::handle_delete_entry(id, state).await,
         Action::UpdateEntry { entry } => ops::handle_update_entry(entry, state).await,
         Action::CopyToClipboard { .. } => Response::Error {

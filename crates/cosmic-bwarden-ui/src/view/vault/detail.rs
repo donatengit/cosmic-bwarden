@@ -4,8 +4,29 @@ use cosmic::widget::{button, container, text, icon, settings as cosmic_settings,
 use cosmic_bwarden_core::db::{Entry, EntryData};
 use cosmic_bwarden_core::protocol::EntryType;
 use crate::app::CosmicBWardenApp;
+use crate::fl;
 use crate::message::Message;
 use crate::view::style::muted_text;
+
+/// Map a stable field *key* (used for edit-dispatch and reveal-state matching) to
+/// its localized *display* label. Unknown keys — e.g. user-defined custom field
+/// names — are shown verbatim. The key strings themselves must never be localized:
+/// `EditFieldChanged` and `revealed_fields` match on them exactly.
+fn field_label(key: &str) -> String {
+    match key {
+        "Username" => fl!("field-username"),
+        "Password" => fl!("field-password"),
+        "TOTP" => fl!("field-totp"),
+        "TOTP Seed" => fl!("field-totp-seed"),
+        "Private Key" => fl!("field-private-key"),
+        "Public Key" => fl!("field-public-key"),
+        "Card Number" => fl!("field-card-number"),
+        "Cardholder" => fl!("field-cardholder"),
+        "Brand" => fl!("field-brand"),
+        "Email" => fl!("field-email"),
+        other => other.to_string(),
+    }
+}
 
 impl CosmicBWardenApp {
     pub fn view_entry_details<'a>(&'a self, entry: &'a Entry) -> Element<'a, Message> {
@@ -21,7 +42,7 @@ impl CosmicBWardenApp {
                 Element::from(cosmic::widget::Space::new().width(Length::Fixed(40.0)))
             })
             .push(if is_editing {
-                Element::from(cosmic::widget::text_input::text_input("Name", &self.editing_entry.as_ref().unwrap().name)
+                Element::from(cosmic::widget::text_input::text_input(fl!("name"), &self.editing_entry.as_ref().unwrap().name)
                     .on_input(Message::EditNameChanged)
                     .width(Length::Fill))
             } else {
@@ -29,10 +50,10 @@ impl CosmicBWardenApp {
             })
             .push(if is_editing {
                 Element::from(cosmic::widget::row::with_capacity(2).spacing(5)
-                    .push(button::suggested("Save").on_press(Message::SaveEdit))
-                    .push(button::standard("Cancel").on_press(Message::CancelEdit)))
+                    .push(button::suggested(fl!("save")).on_press(Message::SaveEdit))
+                    .push(button::standard(fl!("cancel")).on_press(Message::CancelEdit)))
             } else {
-                Element::from(button::suggested("Edit").on_press(Message::EditEntry))
+                Element::from(button::suggested(fl!("edit")).on_press(Message::EditEntry))
             });
 
         let mut fields_col = cosmic::widget::column::with_capacity(5).spacing(10);
@@ -43,37 +64,37 @@ impl CosmicBWardenApp {
 
             if is_new {
                 let entry_type_selector = cosmic::widget::row::with_capacity(3).spacing(10)
-                    .push(button::standard("Login").on_press(Message::NewEntryTypeChanged(EntryType::Login)))
-                    .push(button::standard("Note").on_press(Message::NewEntryTypeChanged(EntryType::SecureNote)))
-                    .push(button::standard("SSH Key").on_press(Message::NewEntryTypeChanged(EntryType::SshKey)));
-                fields_col = fields_col.push(text::body("Entry Type"));
+                    .push(button::standard(fl!("entry-type-login")).on_press(Message::NewEntryTypeChanged(EntryType::Login)))
+                    .push(button::standard(fl!("entry-type-note")).on_press(Message::NewEntryTypeChanged(EntryType::SecureNote)))
+                    .push(button::standard(fl!("entry-type-ssh-key")).on_press(Message::NewEntryTypeChanged(EntryType::SshKey)));
+                fields_col = fields_col.push(text::body(fl!("entry-type")));
                 fields_col = fields_col.push(entry_type_selector);
                 fields_col = fields_col.push(divider::horizontal::default());
             }
 
             match &editing.data {
                 EntryData::Login { username, password, totp, .. } => {
-                    fields_col = fields_col.push(cosmic_settings::item("Username",
-                        cosmic::widget::text_input::text_input("Username", username.as_deref().unwrap_or(""))
+                    fields_col = fields_col.push(cosmic_settings::item(field_label("Username"),
+                        cosmic::widget::text_input::text_input(field_label("Username"), username.as_deref().unwrap_or(""))
                             .on_input(|v| Message::EditFieldChanged("Username".to_string(), v))));
 
-                    let pw_input = secure_input("Password", password.as_ref().map(|s| s.expose()).unwrap_or(""), Some(Message::ToggleEditPasswordReveal), !self.edit_password_revealed)
+                    let pw_input = secure_input(field_label("Password"), password.as_ref().map(|s| s.expose()).unwrap_or(""), Some(Message::ToggleEditPasswordReveal), !self.edit_password_revealed)
                             .on_input(|v| Message::EditFieldChanged("Password".to_string(), v));
 
-                    fields_col = fields_col.push(cosmic_settings::item("Password", pw_input));
+                    fields_col = fields_col.push(cosmic_settings::item(field_label("Password"), pw_input));
 
-                    let totp_input = cosmic::widget::text_input::text_input("TOTP Seed", totp.as_ref().map(|s| s.expose()).unwrap_or(""))
+                    let totp_input = cosmic::widget::text_input::text_input(field_label("TOTP Seed"), totp.as_ref().map(|s| s.expose()).unwrap_or(""))
                             .on_input(|v| Message::EditFieldChanged("TOTP".to_string(), v));
-                    fields_col = fields_col.push(cosmic_settings::item("TOTP Seed", totp_input));
+                    fields_col = fields_col.push(cosmic_settings::item(field_label("TOTP Seed"), totp_input));
                 }
                 EntryData::SshKey { private_key, public_key, .. } => {
-                    let pk_input = secure_input("Private Key", private_key.as_ref().map(|s| s.expose()).unwrap_or(""), Some(Message::ToggleEditPasswordReveal), !self.edit_password_revealed)
+                    let pk_input = secure_input(field_label("Private Key"), private_key.as_ref().map(|s| s.expose()).unwrap_or(""), Some(Message::ToggleEditPasswordReveal), !self.edit_password_revealed)
                             .on_input(|v| Message::EditFieldChanged("Private Key".to_string(), v));
 
-                    fields_col = fields_col.push(cosmic_settings::item("Private Key", pk_input));
+                    fields_col = fields_col.push(cosmic_settings::item(field_label("Private Key"), pk_input));
 
-                    fields_col = fields_col.push(cosmic_settings::item("Public Key",
-                        cosmic::widget::text_input::text_input("Public Key", public_key.as_deref().unwrap_or(""))
+                    fields_col = fields_col.push(cosmic_settings::item(field_label("Public Key"),
+                        cosmic::widget::text_input::text_input(field_label("Public Key"), public_key.as_deref().unwrap_or(""))
                             .on_input(|v| Message::EditFieldChanged("Public Key".to_string(), v))));
                 }
                 _ => {}
@@ -145,7 +166,7 @@ impl CosmicBWardenApp {
             col = col.push(fields_col);
         }
         col = col.push(divider::horizontal::default());
-        col = col.push(text::body("Notes"));
+        col = col.push(text::body(fl!("notes")));
 
         let notes_editor = cosmic::widget::text_editor(&self.notes_content)
             .on_action(Message::NotesAction)
@@ -164,7 +185,7 @@ impl CosmicBWardenApp {
                     .padding([6, 0])
                     .into()
             } else {
-                button::destructive("Delete Entry")
+                button::destructive(fl!("delete-entry"))
                     .on_press(Message::DeleteEntry(entry.id.clone()))
                     .width(Length::Fill)
                     .into()
@@ -173,7 +194,7 @@ impl CosmicBWardenApp {
         }
 
         outer = outer.push(
-            button::custom(text::caption(format!("ID: {}", entry.id)).class(muted_text()))
+            button::custom(text::caption(fl!("entry-id", id = entry.id.clone())).class(muted_text()))
                 .on_press(Message::CopyToClipboard(entry.id.clone()))
                 .class(cosmic::theme::Button::Text)
                 .padding([2, 0]),
@@ -187,7 +208,7 @@ impl CosmicBWardenApp {
         let is_revealed = self.revealed_fields.contains(&(entry_id.to_string(), label.to_string()));
 
         let mut row = cosmic::widget::row::with_capacity(3).spacing(10).align_y(Alignment::Center);
-        row = row.push(text::body(label).width(Length::Fixed(100.0)));
+        row = row.push(text::body(field_label(label)).width(Length::Fixed(100.0)));
 
         if is_password {
             let pw_input = secure_input("", value, Some(Message::ToggleRevealField(entry_id.to_string(), label.to_string())), !is_revealed)

@@ -211,7 +211,7 @@ async fn test_get_totp_from_login_entry() -> Result<()> {
     };
 
     // GetTotp on entry without TOTP must return Error, not panic
-    let res = client.send(Action::GetTotp { id: id.clone() }).await?;
+    let res = client.send(Action::GetTotp { id: id.clone(), password: None }).await?;
     assert!(
         matches!(res, Response::Error { .. }),
         "GetTotp on entry without TOTP must return Error"
@@ -232,7 +232,7 @@ async fn test_get_totp_from_login_entry() -> Result<()> {
     client.send(Action::Sync).await?;
 
     // GetTotp must return a 6-digit code
-    let res = client.send(Action::GetTotp { id: id.clone() }).await?;
+    let res = client.send(Action::GetTotp { id: id.clone(), password: None }).await?;
     if let Response::Totp { code } = res {
         assert_eq!(code.len(), 6, "TOTP code must be 6 digits, got: {}", code);
         assert!(
