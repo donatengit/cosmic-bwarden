@@ -183,7 +183,6 @@ pub async fn handle_setup_tpm_pin(
         {
             let mut g = state.lock().await;
             g.tpm_configured = true;
-            g.tpm_server_credentials = false;
         }
 
         log::info!("TPM PIN unlock configured for {}", email);
@@ -473,7 +472,6 @@ pub async fn handle_setup_tpm_pin_from_unlocked(
         {
             let mut g = state.lock().await;
             g.tpm_configured = true;
-            g.tpm_server_credentials = false;
         }
 
         log::info!("TPM PIN unlock configured for {} (from unlocked state)", email);
@@ -582,7 +580,6 @@ pub async fn handle_disable_tpm_pin(state: &Arc<Mutex<State>>) -> Response {
         {
             let mut g = state.lock().await;
             g.tpm_configured = false;
-            g.tpm_server_credentials = false;
         }
 
         log::info!("TPM PIN unlock disabled for {}", email);
@@ -660,11 +657,6 @@ pub async fn handle_enable_tpm_server_credentials(state: &Arc<Mutex<State>>) -> 
             log::error!("enable TPM server credentials: failed to save config: {}", e);
         }
 
-        {
-            let mut g = state.lock().await;
-            g.tpm_server_credentials = true;
-        }
-
         log::info!("TPM server credentials sealed for {}", email);
         Response::Ack
     }
@@ -717,11 +709,6 @@ pub async fn handle_disable_tpm_server_credentials(state: &Arc<Mutex<State>>) ->
         updated_config.tpm_store_server_credentials = false;
         if let Err(e) = updated_config.save_legacy() {
             log::error!("disable TPM server credentials: failed to save config: {}", e);
-        }
-
-        {
-            let mut g = state.lock().await;
-            g.tpm_server_credentials = false;
         }
 
         log::info!("TPM server credentials disabled for {}", email);

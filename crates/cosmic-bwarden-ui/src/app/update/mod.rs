@@ -156,10 +156,6 @@ impl CosmicBWardenApp {
                 // but only once availability is confirmed (see lifecycle.rs).
                 lifecycle::check_tpm_task()
             }
-            Message::VaultViewClicked => {
-                self.view = crate::message::View::Vault;
-                Task::none()
-            }
             Message::SettingsEditClicked => {
                 self.editing_config = Some(self.config.clone());
                 Task::none()

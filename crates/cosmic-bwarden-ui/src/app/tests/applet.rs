@@ -285,7 +285,7 @@ async fn test_applet_quit_menu_toggle_expands_and_collapses() {
 
 #[tokio::test]
 async fn test_applet_quit_menu_collapsed_renders() {
-    let (mut app, id) = popup_app(View::Vault);
+    let (app, id) = popup_app(View::Vault);
     // Collapsed by default
     let _ = app.view_window(id);
 }

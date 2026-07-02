@@ -99,7 +99,7 @@ async fn test_tpm_availability_check() -> Result<()> {
     drop(guard);
 
     match res {
-        Response::TpmStatus { available, configured: _ } => {
+        Response::TpmStatus { available, configured: _, server_credentials: _ } => {
             // With swtpm running, TPM should be available if agent has TPM support.
             // If agent lacks --features tpm, available == false is expected.
             eprintln!("[tpm-smoke] CheckTpm: available={}", available);

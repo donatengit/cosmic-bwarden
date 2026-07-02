@@ -25,9 +25,6 @@ pub struct State {
     /// True when a TPM sealed blob exists for the current account.
     /// Set on startup and updated by the tpm_pin handler.
     pub tpm_configured: bool,
-    /// True when a server-credentials blob (master_password_hash) is also sealed.
-    #[allow(dead_code)]
-    pub tpm_server_credentials: bool,
 }
 
 impl State {
@@ -46,7 +43,6 @@ impl State {
             sync_failed: false,
             last_sync_error: None,
             tpm_configured: false,
-            tpm_server_credentials: false,
         }
     }
 

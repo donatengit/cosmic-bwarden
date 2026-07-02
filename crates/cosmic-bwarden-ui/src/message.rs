@@ -112,7 +112,6 @@ pub enum Message {
     ToggleRevealField(String, String), // id, field
     ToggleMasterPasswordReveal,
     SettingsViewClicked,
-    VaultViewClicked,
 
     // Results
     AuthResult(Result<(), String>),

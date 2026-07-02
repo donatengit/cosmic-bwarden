@@ -5,30 +5,7 @@ use crate::message::View;
 use cosmic::Application;
 use cosmic::iced::window;
 use cosmic_bwarden_core::config::CosmicBWardenConfig;
-use cosmic_bwarden_core::db::{Entry, EntryData};
 use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
-
-fn create_test_entry(id: &str, name: &str) -> Entry {
-    Entry {
-        id: id.to_string(),
-        org_id: None,
-        folder: None,
-        folder_id: None,
-        name: name.to_string(),
-        data: EntryData::Login {
-            username: Some("old-user".to_string()),
-            password: Some("old-pass".to_string().into()),
-            totp: None,
-            uris: vec![],
-        },
-        fields: vec![],
-        notes: Some("old-notes".into()),
-        history: vec![],
-        key: None,
-        master_password_reprompt: cosmic_bwarden_core::api::CipherRepromptType::None,
-        favorite: false,
-    }
-}
 
 #[tokio::test]
 async fn test_applet_surface_isolation() {
@@ -285,9 +262,6 @@ fn test_settings_view_keeps_sidebar_entries() {
 
     // Settings is rendered as the right panel alongside the sidebar.
     let _ = app.view_window(window::Id::RESERVED);
-
-    let _ = app.update(Message::VaultViewClicked);
-    assert_eq!(app.view, View::Vault);
 }
 
 // ─── TPM state machine tests ─────────────────────────────────────────────────
@@ -556,8 +530,6 @@ async fn test_applet_messages() {
     let _ = app.update(Message::LockClicked);
     let _ = app.update(Message::LogoutClicked);
     let _ = app.update(Message::SyncClicked);
-    let _ = app.update(Message::VaultViewClicked);
-    assert_eq!(app.view, View::Vault);
 
     let _ = app.update(Message::SettingsViewClicked);
     assert_eq!(app.view, View::Settings);

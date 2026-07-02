@@ -32,14 +32,20 @@ tss-esapi = { version = "8.0.0-alpha.2", optional = true, features = ["generate-
 totp-rs = { version = "5.7.1", features = ["otpauth"] }
 zeroize = { workspace = true }
 
+[lib]
+name = "cosmic_bwarden_agent"
+path = "src/lib.rs"
+
 [[bin]]
 name = "cosmic-bwarden-agent"
 path = "src/main.rs"
 
-# TPM-enabled binary for E2E tests; produced by `cargo build -p cosmic-bwarden-agent --features tpm`
+# TPM-enabled binary for E2E tests; produced by `cargo build -p cosmic-bwarden-agent --features tpm`.
+# Distinct source path from the default bin so both share `lib.rs` without cargo's
+# "file present in multiple build targets" warning.
 [[bin]]
 name = "cosmic-bwarden-agent-tpm"
-path = "src/main.rs"
+path = "src/bin/cosmic-bwarden-agent-tpm.rs"
 required-features = ["tpm"]
 
 [features]

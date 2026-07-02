@@ -16,7 +16,7 @@
 //!     `cargo build -p cosmic-bwarden-agent --features tpm`
 //!   - Vaultwarden container accessible via Docker / Podman socket
 
-use crate::common::{register_user, TestEnv};
+use crate::common::TestEnv;
 use anyhow::Result;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use std::env;
@@ -159,7 +159,6 @@ pub fn tpm_agent_path() -> Option<PathBuf> {
 pub struct TpmTestEnv {
     pub inner: TestEnv,
     _swtpm: SwtpmGuard,
-    pub tcti: String,
 }
 
 impl TpmTestEnv {
@@ -199,7 +198,6 @@ impl TpmTestEnv {
         Ok(Some(TpmTestEnv {
             inner: env,
             _swtpm: swtpm,
-            tcti,
         }))
     }
 
