@@ -230,7 +230,7 @@ to see the same four-item report in the terminal.
 
 ## End-to-end test coverage
 
-`crates/cosmic-bwarden-tests/src/vault/tpm.rs` and `vault/tpm_lifecycle.rs`
+`crates/cosmic-bwarden-tests/src/vault/tpm.rs` and `src/tpm_lifecycle/`
 exercise the full flow against a live Vaultwarden container. They require a
 software TPM emulator (`swtpm`) in the test environment. Run with:
 

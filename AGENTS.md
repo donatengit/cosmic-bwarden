@@ -109,8 +109,8 @@ When a crate's main logic grows, decompose using these established patterns:
 Seals the 64-byte vault key (`enc_key_expanded ‖ mac_key_expanded`) in a TPM2 object protected by a user PIN and bound to PCR{0,7} (firmware + Secure Boot state).
 
 - **Agent**: `cargo check -p cosmic-bwarden-agent --features tpm`
-- **Module**: `crates/cosmic-bwarden-agent/src/tpm.rs` — seal/unseal/clear using `tss-esapi 8.0.0-alpha.2`
-- **Handler**: `crates/cosmic-bwarden-agent/src/handler/auth/tpm_pin.rs`
+- **Module**: `crates/cosmic-bwarden-agent/src/tpm/` — seal/unseal/clear using `tss-esapi 8.0.0-alpha.2` (`mod.rs` API, `policy.rs`, `blob.rs`, `ops.rs`)
+- **Handler**: `crates/cosmic-bwarden-agent/src/handler/auth/tpm_pin/` — per-concern handlers (`status`, `setup`, `unlock`, `disable`, `server_credentials`)
 - **State**: `tpm_configured` in agent `State`; `tpm_available`/`show_pin_unlock` in UI `CosmicBWardenApp`
 - **Blob storage**: `<data_dir>/tpm_sealed_<sha256hex16(server+email)>.bin` — per-account, persisted across reboots
 - **Graceful degradation**: if TPM hardware is absent at runtime, `is_available()` returns false, UI hides PIN controls
