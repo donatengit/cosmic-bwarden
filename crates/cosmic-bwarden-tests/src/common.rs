@@ -86,6 +86,15 @@ impl TestEnv {
     }
 }
 
+impl Drop for TestEnv {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.agent_process.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
 /// Like `setup_env` but does NOT start the agent process.
 /// The caller is responsible for starting the agent (possibly with a custom
 /// binary or extra environment variables) and assigning it to `env.agent_process`.
@@ -107,7 +116,10 @@ pub async fn setup_env_no_agent() -> Result<TestEnv> {
         .with_exposed_port(80.tcp())
         .with_env_var("SIGNUPS_ALLOWED", "true")
         .with_env_var("I_REALLY_WANT_VOLATILE_STORAGE", "true")
-        .with_env_var("EXPERIMENTAL_CLIENT_FEATURE_FLAGS", "ssh-key-vault-item,ssh-agent");
+        .with_env_var(
+            "EXPERIMENTAL_CLIENT_FEATURE_FLAGS",
+            "ssh-key-vault-item,ssh-agent",
+        );
 
     let container = node.start().await?;
     let host_port = container.get_host_port_ipv4(80).await?;
@@ -122,10 +134,22 @@ pub async fn setup_env_no_agent() -> Result<TestEnv> {
     let data_home = temp_path.join("data");
     let runtime_home = temp_path.join("runtime");
 
-    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&config_home)?;
-    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&cache_home)?;
-    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&data_home)?;
-    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&runtime_home)?;
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&config_home)?;
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&cache_home)?;
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&data_home)?;
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&runtime_home)?;
 
     let mut agent_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     agent_path.pop();
