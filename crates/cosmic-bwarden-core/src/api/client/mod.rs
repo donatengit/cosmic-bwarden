@@ -50,4 +50,23 @@ impl Client {
     pub(crate) fn api_url(&self, path: &str) -> String {
         format!("{}{}", self.base_url, path)
     }
+
+    /// Consume an unsuccessful HTTP response into `Error::RequestFailed`,
+    /// logging method, URL, status, and (truncated) body at `error` level.
+    /// Every non-2xx API response must go through here — the "no silent
+    /// failures" invariant: operators must see failed server calls in the
+    /// journal. Server error bodies are diagnostic messages, never secrets.
+    pub(crate) async fn request_failed(method: &str, res: reqwest::Response) -> Error {
+        let status = res.status().as_u16();
+        let url = res.url().clone();
+        let body: String = res
+            .text()
+            .await
+            .unwrap_or_default()
+            .chars()
+            .take(300)
+            .collect();
+        log::error!("API request failed: {method} {url} -> HTTP {status}: {body}");
+        Error::RequestFailed { status }
+    }
 }

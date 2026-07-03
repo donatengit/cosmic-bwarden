@@ -63,9 +63,7 @@ impl Client {
 
         match res.status() {
             reqwest::StatusCode::OK | reqwest::StatusCode::NO_CONTENT => Ok(()),
-            _ => Err(Error::RequestFailed {
-                status: res.status().as_u16(),
-            }),
+            _ => Err(Self::request_failed("POST", res).await),
         }
     }
 
@@ -128,9 +126,7 @@ impl Client {
                 let err: ConnectErrorRes = res.json_with_path().await?;
                 Err(map_connect_error(err))
             }
-            _ => Err(Error::RequestFailed {
-                status: res.status().as_u16(),
-            }),
+            _ => Err(Self::request_failed("POST", res).await),
         }
     }
 
@@ -160,9 +156,7 @@ impl Client {
                     login_res.key,
                 ))
             }
-            _ => Err(Error::RequestFailed {
-                status: res.status().as_u16(),
-            }),
+            _ => Err(Self::request_failed("POST", res).await),
         }
     }
 }

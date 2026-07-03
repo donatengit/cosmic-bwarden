@@ -49,7 +49,10 @@ struct Cli {
 /// support. Keeping the logic here (rather than in `main.rs`) lets both bins
 /// share one source file without tripping cargo's "file in multiple targets".
 pub async fn run() -> anyhow::Result<()> {
-    env_logger::init();
+    // Default to `info` when RUST_LOG is unset: env_logger's built-in default
+    // is `error` only, which hid every warn!-level failure (e.g. rejected
+    // server API calls) from journalctl under the systemd service.
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     let args = Cli::parse();
     

@@ -72,7 +72,7 @@ pub async fn handle_sync(state: &Arc<Mutex<State>>) -> Response {
                 g.sync_failed = true;
                 g.last_sync_error = Some(e.clone());
             }
-            log::warn!("sync failed: {}", e);
+            log::error!("sync failed (local and server state remain diverged): {}", e);
             Response::Error {
                 message: format!("sync failed: {}", e),
             }

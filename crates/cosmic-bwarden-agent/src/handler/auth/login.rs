@@ -108,7 +108,7 @@ pub async fn handle_login(
     let mut db = match cosmic_bwarden_core::db::Db::load(&config.server_name(), &email) {
         Ok(db) => db,
         Err(e) => {
-            log::warn!("could not load existing vault DB ({}); starting fresh — data may be lost if disk is full or permissions are wrong", e);
+            log::error!("could not load existing vault DB ({}); starting fresh — data may be lost if disk is full or permissions are wrong", e);
             cosmic_bwarden_core::db::Db::new()
         }
     };

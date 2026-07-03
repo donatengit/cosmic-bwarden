@@ -38,9 +38,7 @@ impl Client {
                 ))
             }
             reqwest::StatusCode::UNAUTHORIZED => Err(Error::RequestUnauthorized),
-            _ => Err(Error::RequestFailed {
-                status: res.status().as_u16(),
-            }),
+            _ => Err(Self::request_failed("GET", res).await),
         }
     }
 }
