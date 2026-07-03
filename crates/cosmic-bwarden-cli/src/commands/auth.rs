@@ -124,13 +124,17 @@ pub async fn handle_command(cli: &Cli, client: &AgentClient) -> Result<()> {
                 client.send(Action::CheckTpm).await
             {
                 eprintln!(
-                    "TPM2 available. Enter a PIN (min 6 chars) to enable PIN unlock, or leave empty to skip:"
+                    "TPM2 available. Enter a PIN (min {} chars) to enable PIN unlock, or leave empty to skip:",
+                    cosmic_bwarden_core::MIN_PIN_LEN
                 );
                 if let Ok(pin) = rpassword::prompt_password("PIN: ") {
                     let pin = pin.trim().to_string();
                     if !pin.is_empty() {
-                        if pin.len() < 6 {
-                            eprintln!("PIN must be at least 6 characters — skipping.");
+                        if pin.chars().count() < cosmic_bwarden_core::MIN_PIN_LEN {
+                            eprintln!(
+                                "PIN must be at least {} characters — skipping.",
+                                cosmic_bwarden_core::MIN_PIN_LEN
+                            );
                         } else {
                             let setup_res = client
                                 .send(Action::SetupTpmPinFromUnlocked { pin })

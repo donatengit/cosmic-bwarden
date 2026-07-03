@@ -27,10 +27,10 @@ struct Cli {
 
 extern crate tracing;
 
-/// Minimum PIN length for TPM-backed unlock. Enforced in the UI (input captions
-/// and submit validation) and, authoritatively, in the agent
-/// (`cosmic-bwarden-agent`'s `tpm_pin::MIN_PIN_LEN`). Keep the two in sync.
-pub(crate) const MIN_PIN_LEN: usize = 6;
+/// Minimum PIN length for TPM-backed unlock; single source in core. Used in
+/// input captions and submit validation; the agent enforces it
+/// authoritatively.
+pub(crate) const MIN_PIN_LEN: usize = cosmic_bwarden_core::MIN_PIN_LEN;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RunMode {

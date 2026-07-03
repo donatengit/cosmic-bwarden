@@ -29,11 +29,10 @@ pub use setup::{handle_setup_tpm_pin, handle_setup_tpm_pin_from_unlocked};
 pub use status::{handle_check_tpm, handle_check_tpm_diagnostics, handle_get_tpm_da_status};
 pub use unlock::handle_unlock_with_pin;
 
-/// Minimum length for a TPM-unlock PIN. Short/empty PINs offer negligible
-/// protection: the sealed blob is on disk, so brute force is bounded only by TPM
-/// dictionary-attack lockout. Enforced in the agent, not just the UI.
+/// Minimum length for a TPM-unlock PIN; single source in core. Enforced in
+/// the agent, not just the UI.
 #[cfg(feature = "tpm")]
-const MIN_PIN_LEN: usize = 6;
+const MIN_PIN_LEN: usize = cosmic_bwarden_core::MIN_PIN_LEN;
 
 #[cfg(feature = "tpm")]
 fn validate_pin(pin: &str) -> Result<(), Response> {

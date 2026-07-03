@@ -48,12 +48,15 @@ These must never regress. Treat violations as build-blocking bugs.
 - **Socket perms**: Create Unix sockets with mode `0600`.
 - **Persistent IPC connections**: The agent keeps client connections alive across multiple requests (one `tokio::spawn` per connected socket, inner `loop` for subsequent requests). Subscribe connections are long-lived; all others reuse the same socket until the client disconnects.
 - **Sensitive memory**: Use memory-locked storage for all key material and plaintext secrets.
-- **No silent failures**: Any operation that can fail and affect data availability, integrity, or security must log at `warn` or `error` level. Specifically:
+- **No silent failures**: Any operation that can fail and affect data availability, integrity, or security must log at `warn` or `error` level. **Anything that can corrupt or lose data logs `error!` — no exceptions.** Specifically:
+  - **Server API failures**: Every non-2xx API response goes through `Client::request_failed` (core, `api/client/mod.rs`), which logs `error!` with method, URL, status, and response body. Never construct `Error::RequestFailed` directly.
+  - **Failed vault mutations & sync**: A server rejection of add/update/delete/favorite, or a sync failure, must log `error!` at the handler — the optimistic local change is silently undone by the next sync, which is data loss from the user's perspective.
   - **Decryption**: Every `vault::decrypt` failure must log `warn!` with the entry ID and field name. Never use `.ok()` silently — a cipher string leaking into plaintext position caused a double-encryption incident.
   - **Vault DB persistence** (`db.save`): Log `error!` if save fails. Silent failure means in-memory and on-disk state diverge; data is lost on agent restart.
   - **Keyring operations** (`store_tokens`, `delete_tokens`): Log `error!` if they fail. Silent failure means tokens are lost across restarts or stale tokens survive logout.
   - **Write failures on IPC/browser-host sockets**: Log `error!` if a response cannot be delivered to a client.
-  - **Fallbacks from load errors**: If a fallback value is used after a load error (e.g. creating a fresh DB when disk load fails), log `warn!` with the error so operators know data may be at risk.
+  - **Fallbacks from load errors**: If a fallback value is used after a load error (e.g. creating a fresh DB when disk load fails), log `error!` with the underlying error — the fallback can shadow data loss.
+  - **Log visibility**: the agent defaults to `info`-level logging when `RUST_LOG` is unset (env_logger's built-in default of `error`-only hid warnings from journalctl). Don't rely on `RUST_LOG` being set in the systemd unit.
   - Use `let _ = expr` only for genuinely fire-and-forget side effects (e.g. removing a stale socket file before rebind) where the next operation will surface any real problem. Add a comment explaining why the error is intentionally discarded.
 
 ## Workflow
@@ -95,7 +98,7 @@ When a crate's main logic grows, decompose using these established patterns:
 - **Logic keys vs. display labels**: strings used as match/lookup keys (e.g. `EditFieldChanged`/`revealed_fields` field names in `view/vault/detail.rs`) must stay stable literals. Localize only their *display* via a mapping helper (`field_label`) — never the key itself.
 - **Not localized**: symbols/glyphs (`—`, `✅`, `…`), the version string, and runtime text already produced by the agent (diagnostics, agent error messages). Compact unit suffixes (`2h`, `90m`) are left numeric by design; only the words around them are keyed.
 - **Bidi isolation** is disabled in the loader (`set_use_isolating(false)`), so interpolated values render/compare without U+2068/U+2069 marks.
-- **PIN length**: the minimum is the single source `crate::MIN_PIN_LEN` (UI) mirrored by `tpm_pin::MIN_PIN_LEN` (agent). Keep them equal; captions/validation use the constant, never a hardcoded number.
+- **PIN length**: the single source is `cosmic_bwarden_core::MIN_PIN_LEN`; the UI (`crate::MIN_PIN_LEN`) and agent (`tpm_pin::MIN_PIN_LEN`) aliases and the CLI prompt all derive from it. Captions/validation use the constant, never a hardcoded number — a hardcoded "min 4" caption survived one bump already.
 - `i18n_embed_fl::fl!` verifies message IDs against the fallback `.ftl` **at compile time** — a typo'd key fails the build, so `cargo check -p cosmic-bwarden-ui` is the guard.
 
 ## Tool Discipline
