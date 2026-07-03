@@ -123,3 +123,62 @@ impl Identity {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::KdfType;
+
+    fn pw() -> locked::Password {
+        locked::Password::from_string("correct horse battery staple")
+    }
+
+    // Zero iterations would make PBKDF2/Argon2id degenerate; must be rejected
+    // before any key derivation runs.
+    #[test]
+    fn zero_iterations_rejected() {
+        let r = Identity::new("a@b.com", &pw(), KdfType::Pbkdf2, 0, None, None);
+        assert!(r.is_err(), "zero iterations must be rejected");
+    }
+
+    // A hostile/corrupt prelogin response must not drive unbounded memory
+    // allocation: Argon2id memory is clamped to Bitwarden's 16..=1024 MiB range.
+    #[test]
+    fn argon2id_rejects_memory_above_range() {
+        let r = Identity::new("a@b.com", &pw(), KdfType::Argon2id, 3, Some(4096), Some(4));
+        assert!(r.is_err(), "memory above 1024 MiB must be rejected");
+    }
+
+    #[test]
+    fn argon2id_rejects_memory_below_range() {
+        let r = Identity::new("a@b.com", &pw(), KdfType::Argon2id, 3, Some(8), Some(4));
+        assert!(r.is_err(), "memory below 16 MiB must be rejected");
+    }
+
+    #[test]
+    fn argon2id_rejects_parallelism_out_of_range() {
+        let r = Identity::new("a@b.com", &pw(), KdfType::Argon2id, 3, Some(64), Some(64));
+        assert!(r.is_err(), "parallelism above 16 must be rejected");
+    }
+
+    // Argon2id requires memory and parallelism; missing params must error, not panic.
+    #[test]
+    fn argon2id_requires_memory_and_parallelism() {
+        assert!(Identity::new("a@b.com", &pw(), KdfType::Argon2id, 3, None, Some(4)).is_err());
+        assert!(Identity::new("a@b.com", &pw(), KdfType::Argon2id, 3, Some(64), None).is_err());
+    }
+
+    // Valid params succeed and the email is normalized (trimmed + lowercased),
+    // which matters because the email is the KDF salt.
+    #[test]
+    fn valid_params_succeed_and_normalize_email() {
+        // Small, in-range params keep the test fast while exercising the happy path.
+        let id = Identity::new("  Foo@Bar.COM ", &pw(), KdfType::Argon2id, 3, Some(16), Some(1))
+            .expect("in-range Argon2id params should derive a key");
+        assert_eq!(id.email, "foo@bar.com");
+
+        let id2 = Identity::new("User@Example.com", &pw(), KdfType::Pbkdf2, 100, None, None)
+            .expect("PBKDF2 with valid iterations should succeed");
+        assert_eq!(id2.email, "user@example.com");
+    }
+}

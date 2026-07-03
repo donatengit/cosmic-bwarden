@@ -140,3 +140,50 @@ pub fn profile() -> String {
         _ => "cosmic-bwarden".to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A server/email containing path separators or traversal sequences must not
+    // steer the DB path outside the cache dir: the result must have the same
+    // number of path components as a benign input (i.e. exactly one filename is
+    // appended), with `/` percent-encoded rather than creating subdirectories.
+    #[test]
+    fn db_file_encodes_separators_preventing_traversal() {
+        let benign = db_file("https://vault.example", "user@example.com");
+        let evil = db_file("https://vault.example", "../../../../etc/passwd");
+
+        assert_eq!(
+            benign.components().count(),
+            evil.components().count(),
+            "malicious email must not add path components"
+        );
+
+        let name = evil.file_name().unwrap().to_str().unwrap();
+        assert!(name.contains("%2F"), "'/' must be percent-encoded: {name}");
+        assert!(
+            !evil.components().any(|c| c.as_os_str() == ".."),
+            "no `..` component may appear in the path: {evil:?}"
+        );
+    }
+
+    // ':' is both an INVALID_PATH char and the server/email delimiter, so it must
+    // be encoded within each field to avoid ambiguity and path issues.
+    #[test]
+    fn db_file_encodes_colon_in_fields() {
+        let p = db_file("host:8080", "a:b");
+        let name = p.file_name().unwrap().to_str().unwrap();
+        assert!(name.contains("host%3A8080"), "colon in server must be encoded: {name}");
+        assert!(name.contains("a%3Ab"), "colon in email must be encoded: {name}");
+    }
+
+    // '%' must itself be encoded, otherwise a crafted value could forge an encoded
+    // separator (e.g. a literal "%2F" in the input becoming a decoded '/').
+    #[test]
+    fn db_file_encodes_percent() {
+        let p = db_file("s", "a%2Fb");
+        let name = p.file_name().unwrap().to_str().unwrap();
+        assert!(name.contains("a%252Fb"), "literal '%' must be encoded: {name}");
+    }
+}
