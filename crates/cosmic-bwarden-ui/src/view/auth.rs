@@ -113,9 +113,7 @@ impl CosmicBWardenApp {
 
             // Show the attempts-remaining counter only after a wrong PIN.
             if self.pin_incorrect {
-                if let Some(line) = self.tpm_da_line() {
-                    pin_col = pin_col.push(text::caption(line).class(muted_text()));
-                }
+                pin_col = pin_col.push(text::caption(self.pin_feedback_line()).class(muted_text()));
             }
 
             if let Some(error) = &self.error {

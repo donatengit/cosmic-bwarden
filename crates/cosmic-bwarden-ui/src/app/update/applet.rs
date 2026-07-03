@@ -346,13 +346,24 @@ impl CosmicBWardenApp {
                         ]));
                     }
                     Err(e) => {
-                        self.applet_error = Some(e.clone());
-                        self.error = Some(e);
+                        tracing::error!("PIN unlock failed: {}", e);
                         self.view = View::Unlock;
-                        // A wrong PIN consumed a DA attempt — reveal and refresh
-                        // the attempts-remaining counter.
-                        self.pin_incorrect = true;
-                        Some(super::lifecycle::check_tpm_da_task())
+                        if e == cosmic_bwarden_core::protocol::ERR_TPM_UNSEAL_FAILED {
+                            // Wrong PIN / changed PCRs / DA lockout: the raw
+                            // message is log-only; the incorrect-PIN/attempts
+                            // caption is the feedback. A wrong PIN consumed a
+                            // DA attempt — reveal and refresh the counter.
+                            self.applet_error = None;
+                            self.error = None;
+                            self.pin_incorrect = true;
+                            Some(super::lifecycle::check_tpm_da_task())
+                        } else {
+                            // Environmental failure (agent/config/account) —
+                            // show it, don't mislabel it as a wrong PIN.
+                            self.applet_error = Some(e.clone());
+                            self.error = Some(e);
+                            Some(Task::none())
+                        }
                     }
                 }
             }

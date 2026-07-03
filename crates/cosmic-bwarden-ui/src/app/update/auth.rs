@@ -65,8 +65,38 @@ impl CosmicBWardenApp {
                             _ => Err("unexpected response".to_string()),
                         }
                     },
-                    |res| Action::App(Message::AuthResult(res)),
+                    |res| Action::App(Message::MainWindowPinResult(res)),
                 ))
+            }
+            Message::MainWindowPinResult(res) => {
+                self.auth_loading = false;
+                self.main_window_pin.zeroize();
+                match res {
+                    Ok(()) => {
+                        self.view = View::Vault;
+                        self.error = None;
+                        self.show_pin_unlock = false;
+                        self.pin_incorrect = false;
+                        Some(fetch_sidebar_entries(self.search_id, None, None, false))
+                    }
+                    Err(e) => {
+                        error!("PIN unlock failed: {}", e);
+                        if e == cosmic_bwarden_core::protocol::ERR_TPM_UNSEAL_FAILED {
+                            // Wrong PIN / changed PCRs / DA lockout: the raw
+                            // message is log-only; the incorrect-PIN/attempts
+                            // caption is the feedback. A wrong PIN consumed a
+                            // DA attempt — reveal and refresh the counter.
+                            self.error = None;
+                            self.pin_incorrect = true;
+                            Some(super::lifecycle::check_tpm_da_task())
+                        } else {
+                            // Environmental failure (agent/config/account) —
+                            // show it, don't mislabel it as a wrong PIN.
+                            self.error = Some(e);
+                            Some(Task::none())
+                        }
+                    }
+                }
             }
             Message::LoginSubmitted => {
                 // Validate PIN length before sending the login request.
@@ -210,12 +240,6 @@ impl CosmicBWardenApp {
                         }
                         if let Some(err) = &self.error {
                             error!("Auth failed: {}", err);
-                        }
-                        // A failed PIN unlock consumes a DA attempt — reveal and
-                        // refresh the counter shown on the PIN screen.
-                        if self.show_pin_unlock && self.tpm_available {
-                            self.pin_incorrect = true;
-                            return Some(super::lifecycle::check_tpm_da_task());
                         }
                     }
                 }

@@ -49,6 +49,12 @@ impl CosmicBWardenApp {
         }
     }
 
+    /// Caption shown under the PIN input after a failed attempt: the DA
+    /// attempts-remaining line when known, else a plain "Incorrect PIN".
+    pub fn pin_feedback_line(&self) -> String {
+        self.tpm_da_line().unwrap_or_else(|| fl!("pin-incorrect"))
+    }
+
     pub fn view_instance(&self, id: window::Id) -> Element<'_, Message> {
         let state = self.windows.get(&id);
 

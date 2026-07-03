@@ -495,9 +495,35 @@ async fn test_pin_incorrect_flag_lifecycle() {
     ));
     assert!(!app.pin_incorrect, "counter hidden on fresh prompt");
 
-    // Wrong PIN: counter revealed.
-    let _ = app.update(Message::AppletPinResult(Err("TPM unseal failed".to_string())));
+    let unseal_err = cosmic_bwarden_core::protocol::ERR_TPM_UNSEAL_FAILED.to_string();
+
+    // Wrong PIN: counter revealed; the unseal error is log-only, never shown.
+    let _ = app.update(Message::AppletPinResult(Err(unseal_err.clone())));
     assert!(app.pin_incorrect, "counter revealed after wrong PIN");
+    assert!(app.applet_error.is_none(), "unseal error must not be shown in the applet");
+    assert!(app.error.is_none(), "unseal error must not be shown in the main window");
+
+    // Main-window PIN unlock failure: same suppression via MainWindowPinResult.
+    let _ = app.update(Message::MainWindowPinResult(Err(unseal_err)));
+    assert!(app.pin_incorrect);
+    assert!(app.error.is_none(), "unseal error must not be shown on the PIN dialog");
+
+    // A non-unseal failure (agent down, config/account problem) is still
+    // surfaced, not mislabeled as a wrong PIN.
+    let _ = app.update(Message::AppletPinResult(Err("unexpected response".to_string())));
+    assert_eq!(app.applet_error.as_deref(), Some("unexpected response"));
+    let _ = app.update(Message::MainWindowPinResult(Err("failed to load config: x".to_string())));
+    assert_eq!(app.error.as_deref(), Some("failed to load config: x"));
+    app.applet_error = None;
+    app.error = None;
+
+    // A failed LOGIN while the PIN flags are still set keeps its error visible
+    // (regression: AuthResult must not be reclassified as a PIN failure).
+    app.show_pin_unlock = true;
+    app.tpm_available = true;
+    let _ = app.update(Message::AuthResult(Err("invalid password".to_string())));
+    assert_eq!(app.error.as_deref(), Some("invalid password"));
+    app.error = None;
 
     // Switching to master password clears it.
     let _ = app.update(Message::AppletUseMasterPasswordInstead);

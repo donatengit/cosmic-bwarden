@@ -147,6 +147,8 @@ pub enum Message {
     // Main-window PIN unlock (shown in View::Unlock when tpm_configured)
     MainWindowPinChanged(String),
     MainWindowPinSubmitted,
+    /// Result of a main-window PIN unlock attempt (mirror of `AppletPinResult`).
+    MainWindowPinResult(Result<(), String>),
     TpmStatusReceived(Result<(bool, bool, bool), String>),
     TpmDaStatusReceived(Option<cosmic_bwarden_core::protocol::TpmDaStatus>),
     TpmDiagnosticsReceived(Vec<(String, bool, String)>),

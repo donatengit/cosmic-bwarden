@@ -54,9 +54,12 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
         let vault_keys = match crate::tpm::unseal(&blob_path, &pin).await {
             Ok(k) => k,
             Err(e) => {
-                let msg = format!("TPM unseal failed: {:#}", e);
-                log::error!("{}", msg);
-                return Response::Error { message: msg };
+                // The full chain (wrong PIN / changed PCRs / DA lockout / TSS
+                // detail) is log-only; clients key on the stable short message.
+                log::error!("TPM unseal failed: {:#}", e);
+                return Response::Error {
+                    message: cosmic_bwarden_core::protocol::ERR_TPM_UNSEAL_FAILED.to_string(),
+                };
             }
         };
 

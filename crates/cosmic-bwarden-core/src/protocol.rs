@@ -287,6 +287,11 @@ pub enum Event {
     OpenEntry { id: String },
 }
 
+/// Stable message carried by `Response::Error` when the TPM refuses to unseal
+/// (wrong PIN, changed PCRs, or DA lockout). Clients compare against this exact
+/// string to show their own short feedback; the full error chain is log-only.
+pub const ERR_TPM_UNSEAL_FAILED: &str = "TPM unseal failed";
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum Response {
     Ack,

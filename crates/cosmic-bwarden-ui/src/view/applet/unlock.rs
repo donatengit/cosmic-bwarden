@@ -43,9 +43,7 @@ pub fn view(app: &CosmicBWardenApp) -> Element<'_, Message> {
             .push(pin_row);
         // Show the attempts-remaining counter only after a wrong PIN.
         if app.pin_incorrect {
-            if let Some(line) = app.tpm_da_line() {
-                col = col.push(cosmic::widget::text::caption(line));
-            }
+            col = col.push(cosmic::widget::text::caption(app.pin_feedback_line()));
         }
         col.push(fallback_btn).into()
     } else {

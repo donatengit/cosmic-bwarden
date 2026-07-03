@@ -104,6 +104,7 @@ impl CosmicBWardenApp {
             | Message::AppletUseMasterPasswordInstead
             | Message::MainWindowPinChanged(_)
             | Message::MainWindowPinSubmitted
+            | Message::MainWindowPinResult(_)
             | Message::TpmStatusReceived(_)
             | Message::TpmDaStatusReceived(_)
             | Message::TpmDiagnosticsReceived(_)

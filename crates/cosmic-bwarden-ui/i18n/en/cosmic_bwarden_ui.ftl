@@ -69,6 +69,7 @@ pin-reenable-note-short = Re-enable PIN unlock, or leave empty to turn it off.
 pin-optional-note-short = Optionally set a PIN for quick unlock — empty to skip.
 # { $count } is the minimum PIN length.
 pin-too-short = PIN must be at least { $count } characters
+pin-incorrect = Incorrect PIN
 pin-unlock-title = PIN Unlock (TPM 2.0)
 pin-unlock = PIN unlock
 new-pin = New PIN
