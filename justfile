@@ -185,19 +185,21 @@ test-unit:
     cargo test --quiet -p cosmic-bwarden-ui
 
 # 2. Agent & Protocol E2E Tests
+# Needs a container socket: Docker, or podman via `systemctl --user start podman.socket`
+# (the test harness auto-detects the podman user socket — no docker group required).
 test-agent:
     echo "--- 2. Agent & Protocol E2E Tests ---"
-    sg docker -c "cargo test --quiet -p cosmic-bwarden-tests --lib -- agent security vault pinned_ops --test-threads=1"
+    cargo test --quiet -p cosmic-bwarden-tests --lib -- agent security vault pinned_ops --test-threads=1
 
 # 3. CLI E2E Tests
 test-cli:
     echo "--- 3. CLI E2E Tests ---"
-    sg docker -c "cargo test --quiet -p cosmic-bwarden-tests --lib -- cli_lifecycle cli_secret_mask_test custom_fields_cli --test-threads=1"
+    cargo test --quiet -p cosmic-bwarden-tests --lib -- cli_lifecycle cli_secret_mask_test custom_fields_cli --test-threads=1
 
 # 4. UI E2E Tests
 test-ui:
     echo "--- 4. UI E2E Tests ---"
-    sg docker -c "cargo test --quiet -p cosmic-bwarden-tests --lib -- window_flow custom_fields_ui --test-threads=1"
+    cargo test --quiet -p cosmic-bwarden-tests --lib -- window_flow custom_fields_ui --test-threads=1
 
 # Run the agent and UI for testing
 run: build

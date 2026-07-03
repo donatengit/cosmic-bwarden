@@ -7,7 +7,8 @@ forge.
 ## Pre-publish (before making the repo public)
 
 - [ ] Scrub git history and working tree for secrets / machine-specific paths.
-- [ ] Review `docs/*_plan.md` scratch docs — keep or archive.
+- [x] Review `docs/*_plan.md` scratch docs — keep or archive. *(Done 2026-07: completed
+      plans moved to `docs/archive/`, see `docs/review/00_ground_truth.md` F3.)*
 - [ ] Add CI once on a forge (build + test + `clippy`). Note: warnings are
       already denied at build time via `[workspace.lints]`, so CI mainly needs to
       run the suite and clippy.
@@ -24,7 +25,7 @@ forge.
 ## Maintainability
 
 - [ ] **File-size refactoring** — several files exceed the 500-line hard limit in
-      `AGENTS.md`. Concrete split plan: [`docs/file_size_refactoring.md`](file_size_refactoring.md).
+      `AGENTS.md`. Concrete split plan: [`docs/archive/file_size_refactoring.md`](archive/file_size_refactoring.md).
 
 ## Test coverage
 

@@ -4,6 +4,7 @@
 
 Before building, ensure you have the following installed on your system:
 - **Rust Toolchain**: `rustc` and `cargo` (1.75.0 or later recommended).
+- **`just`** — the task runner used for all build/install/test orchestration (see `justfile`).
 - **System Dependencies** (for `libcosmic` and cryptography):
   - `libxkbcommon-dev`
   - `libwayland-dev`
@@ -11,6 +12,14 @@ Before building, ensure you have the following installed on your system:
   - `pkg-config`
   - `cmake`
   - `openssl` (or `pkg-config` for system-wide detection)
+- **For the Rust E2E test suite**: a container socket — either Docker, or podman with
+  `systemctl --user start podman.socket` (auto-detected by the test harness).
+- **For the browser extension**: `npm` (unit tests via vitest, E2E via Playwright).
+
+> The reference repositories checked in as git submodules (`bitwarden-official-clients`,
+> `libcosmic`, `cosmic_examples`, `rbw_reference`) are **not** build inputs — a plain
+> `git clone` without `--recurse-submodules` builds fine; `libcosmic` is fetched by Cargo
+> from GitHub.
 
 ## Building for Native Architecture
 
@@ -22,7 +31,7 @@ RUSTFLAGS="-C target-cpu=native" cargo build --release
 
 This will produce binaries in `target/release/`:
 - `cosmic-bwarden-agent`: The background daemon.
-- `cosmic-bwarden-ui`: The main GUI application and panel tray applet.
+- `cosmic-applet-bwarden`: The main GUI application and panel tray applet (built from the `cosmic-bwarden-ui` crate).
 - `cosmic-bwarden-cli`: The command-line interface.
 
 ## Running the Components
@@ -39,7 +48,7 @@ The agent must be running for the UI or CLI to function.
 The same binary handles both the main window and the applet tray.
 
 ```bash
-./target/release/cosmic-bwarden-ui
+./target/release/cosmic-applet-bwarden
 ```
 
 ### 3. CLI Usage
@@ -70,7 +79,7 @@ The `cosmic-bwarden-cli` provides a powerful interface for scripting and advance
 If you are running the COSMIC desktop, you can launch the applet to see it in your panel.
 
 ```bash
-./target/release/cosmic-bwarden-ui
+./target/release/cosmic-applet-bwarden
 ```
 
 ## Environment Variables
