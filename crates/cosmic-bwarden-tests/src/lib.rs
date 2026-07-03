@@ -27,6 +27,8 @@ mod security;
 #[cfg(test)]
 mod ssh_test_utils;
 #[cfg(test)]
+mod sync_persistence;
+#[cfg(test)]
 mod vault;
 #[cfg(test)]
 mod version;

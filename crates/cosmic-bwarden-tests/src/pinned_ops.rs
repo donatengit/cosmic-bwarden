@@ -277,12 +277,12 @@ async fn test_pinning_lifecycle() -> Result<()> {
 }
 
 /// After agent restart, `access_token`/`refresh_token` are lost
-/// (`#[serde(skip)]`).  Without the keyring feature (not enabled in the
-/// default test build), unlock-after-restart cannot recover tokens.  Any
-/// server operation through `with_refresh` must produce a clear "not logged
-/// in" error rather than panicking or returning a misleading message.
+/// (`#[serde(skip)]`). Unlock performs a silent re-auth with the freshly
+/// derived master-password hash, so server operations (PinEntry) must work
+/// again immediately after restart + unlock, and the change must survive a
+/// forced Sync.
 #[tokio::test]
-async fn test_pin_after_restart_unlock_without_tokens() -> Result<()> {
+async fn test_pin_after_restart_unlock_silent_reauth() -> Result<()> {
     let mut env = setup_env().await?;
     std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
 
@@ -353,20 +353,41 @@ async fn test_pin_after_restart_unlock_without_tokens() -> Result<()> {
         res
     );
 
-    // Trying a server operation (PinEntry) must produce a clear,
-    // non-crashing error because no access/refresh tokens are available.
-    let res = client.send(Action::PinEntry { id: target_id }).await?;
-    if let Response::Error { message } = res {
-        assert!(
-            message.contains("no API session token"),
-            "Expected 'no API session token' error, got: {}",
-            message
-        );
+    // Unlock silently re-authenticated, so a server operation (PinEntry)
+    // must succeed without an explicit re-login.
+    let res = client
+        .send(Action::PinEntry {
+            id: target_id.clone(),
+        })
+        .await?;
+    assert!(
+        matches!(res, Response::Ack),
+        "Expected Ack for pin after restart+unlock (silent re-auth), got {:?}",
+        res
+    );
+
+    // The favorite must have reached the server: a forced Sync replaces the
+    // local DB with server state, so the pin only survives if the server
+    // accepted it.
+    let res = client.send(Action::Sync).await?;
+    assert!(
+        matches!(res, Response::Ack),
+        "Expected Ack for sync, got {:?}",
+        res
+    );
+
+    let res = client
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: true,
+        })
+        .await?;
+    if let Response::SidebarEntries { entries } = res {
+        assert_eq!(entries.len(), 1, "Pin must survive forced Sync");
+        assert_eq!(entries[0].id, target_id);
     } else {
-        anyhow::bail!(
-            "Expected Error response for pin after restart+unlock, got {:?}",
-            res
-        );
+        anyhow::bail!("Expected sidebar entries after sync, got {:?}", res);
     }
 
     Ok(())

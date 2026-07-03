@@ -56,9 +56,7 @@ impl Client {
         match res.status() {
             reqwest::StatusCode::OK => Ok(()),
             reqwest::StatusCode::UNAUTHORIZED => Err(Error::RequestUnauthorized),
-            _ => Err(Error::RequestFailed {
-                status: res.status().as_u16(),
-            }),
+            _ => Err(Self::request_failed("POST", res).await),
         }
     }
 
@@ -103,9 +101,7 @@ impl Client {
         match res.status() {
             reqwest::StatusCode::OK => Ok(()),
             reqwest::StatusCode::UNAUTHORIZED => Err(Error::RequestUnauthorized),
-            _ => Err(Error::RequestFailed {
-                status: res.status().as_u16(),
-            }),
+            _ => Err(Self::request_failed("POST", res).await),
         }
     }
 
@@ -156,9 +152,7 @@ impl Client {
 
         match res.status() {
             reqwest::StatusCode::OK => Ok(()),
-            _ => Err(Error::RequestFailed {
-                status: res.status().as_u16(),
-            }),
+            _ => Err(Self::request_failed("POST", res).await),
         }
     }
 
@@ -223,9 +217,7 @@ impl Client {
 
         match res.status() {
             reqwest::StatusCode::OK => Ok(()),
-            _ => Err(Error::RequestFailed {
-                status: res.status().as_u16(),
-            }),
+            _ => Err(Self::request_failed("POST", res).await),
         }
     }
 
@@ -276,25 +268,32 @@ impl Client {
 
         match res.status() {
             reqwest::StatusCode::OK => Ok(()),
-            _ => Err(Error::RequestFailed {
-                status: res.status().as_u16(),
-            }),
+            _ => Err(Self::request_failed("PUT", res).await),
         }
     }
 
+    /// Toggle the favorite flag via `PUT /ciphers/{id}/partial`.
+    ///
+    /// The official server's `PUT /ciphers/{id}/favorite` route does not exist
+    /// on Vaultwarden (404), so we use the partial-update route both servers
+    /// implement. It sets folder and favorite together, so the caller must
+    /// supply the entry's current `folder_id` or the entry gets moved to
+    /// "no folder".
     pub async fn update_favorite(
         &self,
         access_token: &str,
         id: &str,
         favorite: bool,
+        folder_id: Option<&str>,
     ) -> Result<()> {
         let req = serde_json::json!({
-            "Favorite": favorite,
+            "folderId": folder_id,
+            "favorite": favorite,
         });
 
         let client = self.reqwest_client().await?;
         let res = client
-            .put(self.api_url(&format!("/ciphers/{id}/favorite")))
+            .put(self.api_url(&format!("/ciphers/{id}/partial")))
             .header("Authorization", format!("Bearer {access_token}"))
             .json(&req)
             .send()
@@ -303,9 +302,7 @@ impl Client {
 
         match res.status() {
             reqwest::StatusCode::OK | reqwest::StatusCode::NO_CONTENT => Ok(()),
-            _ => Err(Error::RequestFailed {
-                status: res.status().as_u16(),
-            }),
+            _ => Err(Self::request_failed("PUT", res).await),
         }
     }
 
@@ -320,9 +317,7 @@ impl Client {
 
         match res.status() {
             reqwest::StatusCode::OK | reqwest::StatusCode::NO_CONTENT => Ok(()),
-            _ => Err(Error::RequestFailed {
-                status: res.status().as_u16(),
-            }),
+            _ => Err(Self::request_failed("DELETE", res).await),
         }
     }
 }

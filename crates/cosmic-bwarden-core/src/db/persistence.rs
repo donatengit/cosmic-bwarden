@@ -113,9 +113,12 @@ impl Db {
         self.iterations.is_some() && self.kdf.is_some() && self.protected_key.is_some()
     }
 
+    /// Whether a full login (master password + server auth) is required.
+    /// Deliberately independent of session-token presence: tokens are zeroized
+    /// on lock and lost on agent restart, but unlock silently re-authenticates
+    /// with the derived master-password hash — so as long as account material
+    /// exists, the user only needs to unlock, never re-login.
     pub fn needs_login(&self) -> bool {
         !self.has_account()
-            || self.access_token.is_none()
-            || self.refresh_token.is_none()
     }
 }
