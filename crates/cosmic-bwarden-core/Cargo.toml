@@ -43,3 +43,6 @@ default = []
 # Useful when debugging Bitwarden API response drift; not needed in
 # production builds.
 debug-api = ["dep:serde_path_to_error"]
+
+[lints]
+workspace = true

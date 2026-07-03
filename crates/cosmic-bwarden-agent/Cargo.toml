@@ -53,3 +53,6 @@ default = ["browser-host"]
 keyring = ["dep:oo7"]
 browser-host = []
 tpm = ["dep:tss-esapi"]
+
+[lints]
+workspace = true

@@ -8,6 +8,15 @@ members = [
 ]
 resolver = "3"
 
+# Treat compiler warnings as build errors across all first-party crates. Applies
+# to every `cargo build/check/test` (each member opts in via `[lints] workspace =
+# true`). Git/registry dependencies (e.g. libcosmic) are automatically lint-capped
+# by Cargo, so this only gates our own code. Keep the tree warning-clean; if a
+# warning is genuinely unavoidable, use a narrowly-scoped `#[allow(...)]` with a
+# comment rather than relaxing this.
+[workspace.lints.rust]
+warnings = "deny"
+
 [workspace.dependencies]
 anyhow = "1.0.102"
 serde = { version = "1.0.228", features = ["derive"] }

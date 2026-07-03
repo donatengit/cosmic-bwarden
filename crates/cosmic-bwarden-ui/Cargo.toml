@@ -24,3 +24,6 @@ i18n-embed = { workspace = true }
 i18n-embed-fl = { workspace = true }
 rust-embed = { workspace = true }
 zeroize = { workspace = true }
+
+[lints]
+workspace = true
