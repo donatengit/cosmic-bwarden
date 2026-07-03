@@ -21,6 +21,7 @@ Start here, then go deeper as needed:
 - **Never circle back to a failed approach.** If a fix didn't work, note why and move forward.
 - **One responsibility per file.** If a file exceeds ~250 lines, it needs splitting.
 - **cargo check before cargo test.** Don't run expensive tests against code that won't compile.
+- **Never commit generated or temporary artifacts.** Build output, `node_modules`, test-runner results (`test-results/`, `playwright-report/`), coverage, and logs belong in `.gitignore`, never in a commit. If `git status` shows a generated path, add it to `.gitignore` rather than staging it (note: a slash-suffixed pattern matches directories only — drop the slash to also catch symlinks).
 
 ## Versioning
 

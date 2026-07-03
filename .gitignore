@@ -38,7 +38,18 @@ fuzz/target/
  
 # cargo-expand output
 *.expanded.rs
- 
+
+# Node / npm (browser-extension Playwright tests).
+# No trailing slash: also matches the `node_modules` symlink the Playwright
+# harness creates (a slash-suffixed pattern matches dirs only, not symlinks).
+node_modules
+
+# Playwright / test-runner output (any depth)
+test-results/
+playwright-report/
+.playwright/
+.last-run.json
+
 # Temporary files
 *.tmp
 *.log
