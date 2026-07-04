@@ -29,8 +29,10 @@ async fn test_version_response_format() -> anyhow::Result<()> {
                 version
             );
             assert_eq!(
-                version, protocol_version,
-                "protocol_version should equal app version when built together"
+                protocol_version,
+                cosmic_bwarden_core::PROTOCOL_VERSION,
+                "protocol_version is the independent wire-protocol constant, \
+                 not the build version"
             );
         }
         other => anyhow::bail!("Expected Version response, got: {:?}", other),

@@ -1,0 +1,41 @@
+# AUR package skeleton for cosmic-bwarden.
+# NOT yet publishable: the repo has no public remote (fill `url`/`source`
+# after first push) and no LICENSE file (blocker tracked in docs/roadmap.md,
+# pre-publish section). Validate with `makepkg --printsrcinfo` and a clean
+# chroot build once both exist.
+
+pkgname=cosmic-bwarden
+pkgver=2026.07.0
+pkgrel=1
+pkgdesc="Native Bitwarden/Vaultwarden client for the COSMIC desktop (agent, applet, CLI, SSH agent)"
+arch=(x86_64)
+url="https://github.com/OWNER/cosmic-bwarden" # TODO after first push
+license=(TODO) # blocker: no LICENSE in repo yet
+depends=(libxkbcommon wayland mesa)
+makedepends=(cargo just cmake pkgconf)
+optdepends=(
+  'tpm2-tss: PIN unlock sealed in the TPM'
+  'firefox: browser-extension native messaging host'
+)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP') # pin on first real release
+
+build() {
+  cd "$pkgname-$pkgver"
+  # RUSTFLAGS replaces .cargo/config.toml's prefer-dynamic (incompatible with
+  # the fat-LTO release profile); no target-cpu=native in distro packages.
+  RUSTFLAGS="" cargo build --release --locked
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 target/release/cosmic-bwarden-agent "$pkgdir/usr/bin/cosmic-bwarden-agent"
+  install -Dm755 target/release/cosmic-applet-bwarden "$pkgdir/usr/bin/cosmic-applet-bwarden"
+  install -Dm755 target/release/cosmic-bwarden-cli "$pkgdir/usr/bin/cosmic-bwarden-cli"
+  install -Dm644 crates/cosmic-bwarden-ui/resources/com.system76.CosmicBWarden.desktop \
+    "$pkgdir/usr/share/applications/com.system76.CosmicBWarden.desktop"
+  install -Dm644 packaging/com.system76.CosmicBWarden.ron \
+    "$pkgdir/usr/share/cosmic/applets/com.system76.CosmicBWarden.ron"
+  install -Dm644 packaging/cosmic-bwarden-agent.deb.service \
+    "$pkgdir/usr/lib/systemd/user/cosmic-bwarden-agent.service"
+}

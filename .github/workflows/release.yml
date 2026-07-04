@@ -1,0 +1,49 @@
+# Release automation: pushing a tag `vYYYY.MM.P` builds the .deb and the
+# browser-extension zip and attaches both to a draft GitHub release.
+# Versioning decision: docs/review/07_packaging.md — release tags are
+# calendar-based YYYY.MM.PATCH; the seconds-based build version stays a
+# build-info string only, and protocol compatibility rides the independent
+# core::PROTOCOL_VERSION constant.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: System deps (libcosmic)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxkbcommon-dev libwayland-dev libegl1-mesa-dev \
+            pkg-config cmake libssl-dev libtss2-dev zip
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release binaries
+        # Empty RUSTFLAGS drops .cargo/config.toml's prefer-dynamic (conflicts
+        # with fat LTO); no target-cpu=native for distributable artifacts.
+        run: RUSTFLAGS="" cargo build --release
+      - name: Build .deb
+        run: |
+          cargo install cargo-deb --locked
+          cargo deb -p cosmic-bwarden-ui --no-build
+      - name: Pack browser extension
+        run: |
+          cd browser-extension
+          zip -r ../target/cosmic-bwarden-extension.zip . \
+            -x "node_modules/*" -x "test-results/*" -x "*.test.js"
+      - name: Draft release with artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            target/debian/*.deb
+            target/cosmic-bwarden-extension.zip

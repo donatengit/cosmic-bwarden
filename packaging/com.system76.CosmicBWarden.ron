@@ -1,0 +1,6 @@
+(
+    name: "CosmicBWarden",
+    description: "Secure Bitwarden client for COSMIC",
+    identifier: "com.system76.CosmicBWarden",
+    icon: "password-manager-symbolic",
+)

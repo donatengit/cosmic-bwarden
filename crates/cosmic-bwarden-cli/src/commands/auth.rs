@@ -4,10 +4,13 @@ use anyhow::{Context, Result};
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action, Response};
 
+/// Compare the CLI's protocol version against the agent's. Both sides report
+/// `cosmic_bwarden_core::PROTOCOL_VERSION`, which is independent of the build
+/// version — differently-timed builds of the same protocol stay compatible.
 pub fn check_protocol_compatibility(local: &str, protocol: &str) -> Result<()> {
     if local != protocol {
         anyhow::bail!(
-            "Version mismatch! CLI (v{}) is incompatible with agent (protocol v{}).",
+            "Protocol mismatch! CLI (protocol v{}) is incompatible with agent (protocol v{}).",
             local,
             protocol,
         );
@@ -196,11 +199,13 @@ pub async fn handle_command(cli: &Cli, client: &AgentClient) -> Result<()> {
                 protocol_version,
             } = res
             {
-                let local = cosmic_bwarden_core::version();
-                println!("Local version:     {}", local);
+                println!("Local version:     {}", cosmic_bwarden_core::version());
                 println!("Agent version:     {}", agent_version);
                 println!("Protocol version:  {}", protocol_version);
-                check_protocol_compatibility(local, &protocol_version)?;
+                check_protocol_compatibility(
+                    cosmic_bwarden_core::PROTOCOL_VERSION,
+                    &protocol_version,
+                )?;
                 println!("Compatibility:     OK");
             } else {
                 anyhow::bail!("Unexpected response: {:?}", res);

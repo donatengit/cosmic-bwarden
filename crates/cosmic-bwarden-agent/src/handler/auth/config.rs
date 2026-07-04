@@ -5,10 +5,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub async fn handle_version() -> Response {
-    let version = cosmic_bwarden_core::version().to_string();
     Response::Version {
-        version: version.clone(),
-        protocol_version: version,
+        version: cosmic_bwarden_core::version().to_string(),
+        protocol_version: cosmic_bwarden_core::PROTOCOL_VERSION.to_string(),
     }
 }
 

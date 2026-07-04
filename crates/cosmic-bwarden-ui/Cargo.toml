@@ -8,6 +8,34 @@ description = "CosmicBWarden UI"
 name = "cosmic-applet-bwarden"
 path = "src/main.rs"
 
+# `cargo deb -p cosmic-bwarden-ui --no-build` packages the whole app (all three
+# release binaries + desktop entry + applet metadata + hardened systemd user
+# unit + icons). Build the workspace release binaries first (`just build`).
+# NOTE for Debian-host finalization: `depends` is a conservative manual list —
+# $auto needs dpkg tooling, absent on non-Debian dev machines. Verify with
+# `dpkg-shlibdeps` on a real Debian/Ubuntu host before publishing.
+[package.metadata.deb]
+name = "cosmic-bwarden"
+maintainer = "Donat Enikeev <donat@enikeev.net>"
+copyright = "2026, Donat Enikeev"
+extended-description = """\
+Native Bitwarden/Vaultwarden client for the COSMIC desktop: background agent \
+holding the vault in memory-locked storage, panel applet, CLI, SSH agent, and \
+browser-extension native host."""
+depends = "libc6, libxkbcommon0, libwayland-client0, libwayland-egl1, libegl1"
+section = "utils"
+priority = "optional"
+assets = [
+    ["../../target/release/cosmic-bwarden-agent", "usr/bin/", "755"],
+    ["../../target/release/cosmic-applet-bwarden", "usr/bin/", "755"],
+    ["../../target/release/cosmic-bwarden-cli", "usr/bin/", "755"],
+    ["resources/com.system76.CosmicBWarden.desktop", "usr/share/applications/", "644"],
+    ["../../packaging/com.system76.CosmicBWarden.ron", "usr/share/cosmic/applets/", "644"],
+    ["../../packaging/cosmic-bwarden-agent.deb.service", "usr/lib/systemd/user/cosmic-bwarden-agent.service", "644"],
+    ["../../icons/black.svg", "usr/share/cosmic-bwarden/icons/black.svg", "644"],
+    ["../../icons/white.svg", "usr/share/cosmic-bwarden/icons/white.svg", "644"],
+]
+
 [dependencies]
 cosmic-bwarden-core = { path = "../cosmic-bwarden-core" }
 anyhow = { workspace = true }

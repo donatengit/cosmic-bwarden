@@ -6,6 +6,17 @@ forge.
 
 ## Pre-publish (before making the repo public)
 
+- [ ] **Choose a license** — there is no LICENSE file and no `license` field in any
+      Cargo.toml: legally "all rights reserved". Blocks AUR, deb copyright, AMO review,
+      and contributions. GPL-3.0 is the COSMIC-ecosystem norm; owner's call.
+      (Phase 7, docs/review/07_packaging.md.)
+- [ ] **Finalize .deb depends on a Debian host** — `dpkg-shlibdeps` over the manual
+      list in `crates/cosmic-bwarden-ui/Cargo.toml [package.metadata.deb]`.
+- [ ] **PKGBUILD**: fill `url`/`source`/`license`, pin sha256, clean-chroot build
+      (`packaging/PKGBUILD`).
+- [ ] **Extension store prep**: Firefox-flavoured manifest (`background.scripts`
+      event page) alongside Chrome's `service_worker`; privacy policy; AMO
+      source-review notes. Submit early to reserve `cosmic-bwarden@8bit.com`.
 - [ ] **Rename the app ID out of System76's namespace** `[U4-1]` —
       `com.system76.CosmicBWarden` (desktop entry, applet .ron, StartupWMClass,
       `CONFIG_ID` in core) must become a namespace we control, e.g.

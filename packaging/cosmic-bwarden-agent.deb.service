@@ -1,0 +1,26 @@
+# Rendered copy of crates/cosmic-bwarden-agent/res/cosmic-bwarden-agent.service
+# for distro packages (binaries at /usr/bin). The justfile renders the
+# template at install time; packages need a static file. Keep the two in sync
+# — the hardening rationale lives in the template.
+
+[Unit]
+Description=Cosmic Bitwarden Agent
+
+[Service]
+ExecStart=/usr/bin/cosmic-bwarden-agent
+Restart=on-failure
+LimitCORE=0
+UMask=0077
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryDenyWriteExecute=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=default.target
