@@ -58,10 +58,17 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
 - [ ] **KDF off the runtime thread** `[A3-1]` — the agent is `current_thread`; Argon2id
       runs inline under the state lock, briefly blocking all IPC on unlock/reprompt. Wrap
       in `spawn_blocking` once Phase 6 sets the latency budget.
+- [ ] **Upgrade libcosmic to recent master** — the workspace is locked to commit
+      `8fa6a01d`; current master (`ee5d9659`+) has API changes that break the UI build
+      (~5 errors seen when the pin floated during the Phase 3 dedup attempt: E0061
+      arg-count changes, E0277/E0616/E0631). Plan: bump Cargo.lock deliberately, fix the
+      UI call sites, run the full UI test suite + `just restart-panel` smoke. Do this
+      before Phase 7 packaging so we ship against a current toolkit.
 - [ ] **cosmic-config double-compile** — the workspace pins libcosmic `branch = "master"`
       while its internal crates use the plain git URL, so cargo compiles `cosmic-config`
       (and its derive) twice. Dropping `branch` breaks the UI build (resolves a newer
-      commit); revisit when the libcosmic pin is next bumped.
+      commit); fold into the libcosmic upgrade above (dropping `branch = "master"` at
+      that point both unifies the source and picks up the new commit).
 
 ## Test coverage
 
