@@ -3,8 +3,6 @@
 #[cfg(feature = "tpm")]
 use crate::keyring;
 use crate::state::State;
-#[cfg(feature = "tpm")]
-use cosmic_bwarden_core::db::Secret;
 use cosmic_bwarden_core::protocol::Response;
 use std::sync::Arc;
 use tokio::sync::Mutex;
