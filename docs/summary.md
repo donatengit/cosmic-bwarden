@@ -15,7 +15,7 @@
 - **Master Password Reprompt**: Implements granular security for sensitive items, requiring master password verification for specifically marked entries.
 - **SSH Agent Integration**: Automatically serves SSH keys stored in your Bitwarden vault to the system's SSH agent.
 - **Browser Extension**: A high-performance, thin-client Firefox extension that provides seamless autofill and search capabilities, powered by the background agent.
-- **Tray Applet with Frequent Access**: A specialized panel applet provides quick access to your top-5 most frequently used passwords.
+- **Tray Applet with Quick Access**: A specialized panel applet with instant search and one-click copy; an empty query shows your favourites (results capped at 10).
 
 ## Architecture Overview
 

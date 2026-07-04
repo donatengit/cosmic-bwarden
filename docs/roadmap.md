@@ -6,10 +6,9 @@ forge.
 
 ## Pre-publish (before making the repo public)
 
-- [ ] **Choose a license** — there is no LICENSE file and no `license` field in any
-      Cargo.toml: legally "all rights reserved". Blocks AUR, deb copyright, AMO review,
-      and contributions. GPL-3.0 is the COSMIC-ecosystem norm; owner's call.
-      (Phase 7, docs/review/07_packaging.md.)
+- [x] **Choose a license** — *done 2026-07 (owner decision: GPL-3.0-only, matching the
+      COSMIC ecosystem)*: canonical `LICENSE` at repo root, `license = "GPL-3.0-only"`
+      in all five crates, PKGBUILD updated. (Phase 7/8.)
 - [ ] **Finalize .deb depends on a Debian host** — `dpkg-shlibdeps` over the manual
       list in `crates/cosmic-bwarden-ui/Cargo.toml [package.metadata.deb]`.
 - [ ] **PKGBUILD**: fill `url`/`source`/`license`, pin sha256, clean-chroot build
