@@ -155,7 +155,14 @@ impl CosmicBWardenApp {
         if let Some(err) = &self.tpm_error {
             col = col.add(
                 text::body(fl!("error-fmt", error = err.clone()))
-                    .class(cosmic::theme::Text::Color(cosmic::iced::Color::from_rgb(0.8, 0.1, 0.1))),
+                    // Theme's destructive color instead of a hardcoded red so the
+                    // error text tracks light/dark/high-contrast variants.
+                    .class(cosmic::theme::Text::Custom(|theme| {
+                        cosmic::iced::widget::text::Style {
+                            color: Some(theme.cosmic().destructive_text_color().into()),
+                            ..Default::default()
+                        }
+                    })),
             );
         }
 

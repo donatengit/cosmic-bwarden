@@ -6,6 +6,11 @@ forge.
 
 ## Pre-publish (before making the repo public)
 
+- [ ] **Rename the app ID out of System76's namespace** `[U4-1]` —
+      `com.system76.CosmicBWarden` (desktop entry, applet .ron, StartupWMClass,
+      `CONFIG_ID` in core) must become a namespace we control, e.g.
+      `io.github.<owner>.CosmicBWarden`, with a config migration for the old ID.
+      Blocks Flatpak/store publishing.
 - [ ] Scrub git history and working tree for secrets / machine-specific paths.
 - [x] Review `docs/*_plan.md` scratch docs — keep or archive. *(Done 2026-07: completed
       plans moved to `docs/archive/`, see `docs/review/00_ground_truth.md` F3.)*
@@ -69,6 +74,22 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
       (and its derive) twice. Dropping `branch` breaks the UI build (resolves a newer
       commit); fold into the libcosmic upgrade above (dropping `branch = "master"` at
       that point both unifies the source and picks up the new commit).
+
+## UX backlog (Phase 4 review — ranked in docs/review/04_cosmic_ux.md)
+
+- [ ] Clipboard auto-clear after copy (UI, applet, extension) `[P1-9]` — top parity gap.
+- [ ] TOTP code display/copy in UI+applet (agent's GetTotp already works).
+- [ ] Password generator (applet quick-gen + edit form).
+- [ ] Extension: re-check active tab's domain at fill time `[P1-8]`.
+- [ ] Folder/collection navigation in the vault window.
+- [ ] Replace emoji button icons (📂🔗🔑) with symbolic icons + tooltips `[U4-4]`.
+- [ ] Keyboard: Escape to dismiss, arrow-key list navigation, global shortcut `[U4-5]`.
+- [ ] Second locale to prove the Fluent pipeline `[U4-6]`.
+- [ ] Branded symbolic panel icon installed into the icon theme `[U4-7]`.
+- [ ] Read PrepareForSleep's bool arg; don't re-lock on resume `[U4-8]`.
+- [ ] Test stricter systemd sandboxing (ProtectHome + ReadWritePaths, ProtectSystem=strict,
+      SystemCallFilter) against keyring/TPM/network, then adopt.
+- [ ] Research: Wayland autotype; passkeys/FIDO2; attachments.
 
 ## Test coverage
 

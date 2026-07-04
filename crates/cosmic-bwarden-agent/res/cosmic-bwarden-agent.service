@@ -1,11 +1,33 @@
 [Unit]
 Description=Cosmic Bitwarden Agent
-After=network.target
 
 [Service]
 ExecStart=@BINDIR@/cosmic-bwarden-agent
 Restart=on-failure
+# Belt and braces with the in-process PR_SET_DUMPABLE(0).
 LimitCORE=0
+# Files the agent creates should never be group/world readable. db.save and
+# the sockets already chmod 0600 explicitly; this covers everything else
+# (device_id, config.json, TPM blobs).
+UMask=0077
+
+# --- Hardening -------------------------------------------------------------
+# Conservative set only: the agent needs $HOME (config/cache/data), the
+# runtime dir (sockets), the session bus (Secret Service keyring), the system
+# bus (logind lock events), the network (Bitwarden API), and /dev/tpmrm0 when
+# built with TPM support. ProtectHome/ProtectSystem=strict/SystemCallFilter
+# are deliberately omitted until tested against all of the above
+# (tracked in docs/roadmap.md).
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryDenyWriteExecute=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
 
 [Install]
 WantedBy=default.target

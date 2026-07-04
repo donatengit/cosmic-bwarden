@@ -1,48 +1,60 @@
 # Integration with COSMIC DE
 
-To properly integrate **cosmic-bwarden** with the COSMIC desktop environment, especially for the applet to appear in the panel rather than as a standalone window, you need to provide metadata and desktop files.
+How cosmic-bwarden registers with the COSMIC desktop. This documents what
+`just install` / `just user-install` actually do (the justfile is the source of
+truth).
 
-## 1. The Applet (`cosmic-bwarden-ui`)
+## Application ID
 
-COSMIC applets are discovered by the panel using metadata files.
+Everything keys off the ID **`com.system76.CosmicBWarden`** (desktop entry,
+applet metadata, `StartupWMClass`, `CONFIG_ID` in `core/src/config.rs`).
 
-### Metadata File
-Create a file at `/usr/share/cosmic/applets/org.cosmic-bwarden.applet.ron` (or in your local `~/.local/share/cosmic/applets/`):
+> ⚠️ Pre-publish task (see `docs/roadmap.md`): this squats System76's RDNN
+> namespace. Before public release the ID must move to a namespace we control
+> (e.g. `io.github.<owner>.CosmicBWarden`), with a config migration for
+> `CONFIG_ID`.
 
-```ron
-(
-    name: "cosmic-bwarden Applet",
-    description: "Quick access to frequent Bitwarden entries",
-    identifier: "org.cosmic-bwarden.applet",
-    icon: "password-manager-symbolic",
-)
+## What gets installed
+
+| Artifact | Source | Installed to |
+|---|---|---|
+| Applet/app binary `cosmic-applet-bwarden` | built from the `cosmic-bwarden-ui` crate | `{bin_dir}` |
+| Desktop entry | `crates/cosmic-bwarden-ui/resources/com.system76.CosmicBWarden.desktop` | `{apps_dir}` |
+| Applet metadata (`.ron`) | generated inline by the justfile | `{applets_dir}/com.system76.CosmicBWarden.ron` |
+| Agent systemd user unit | `crates/cosmic-bwarden-agent/res/cosmic-bwarden-agent.service` (hardened; `@BINDIR@` substituted) | `{systemd_user_dir}` |
+| Firefox native-messaging host | `tests/browser-extension/register_host.py` | `~/.mozilla/native-messaging-hosts/` |
+
+The desktop entry carries the applet markers COSMIC's panel looks for:
+`X-CosmicApplet=true`, `X-CosmicHoverPopup=Auto`, `OnlyShowIn=COSMIC;`, plus
+`NoDisplay` is *not* set so the app is also launchable as a normal window.
+
+## One binary, two modes
+
+`cosmic-applet-bwarden` runs as a **panel applet** when the panel launches it
+(`COSMIC_PANEL_NAME` is set in the environment) and as a **full application
+window** otherwise. "Open Vault Window" from the applet spawns a second
+instance with `COSMIC_BWARDEN_MODE=application` and `COSMIC_PANEL_NAME`
+removed. Both talk to the same `cosmic-bwarden-agent` over the Unix socket.
+
+## Panel icon
+
+The applet currently uses the theme icon `password-manager-symbolic`
+(`view/applet/mod.rs`). Branded symbolic icons (repo `icons/black.svg` /
+`white.svg`) are a tracked polish task — panel icons should be recolorable
+symbolic SVGs, not the PNG set (those serve the browser extension).
+
+## After installing
+
+```bash
+just enable-agent     # systemd --user enable + start cosmic-bwarden-agent
+just restart-panel    # restart the COSMIC panel so it discovers the applet
 ```
 
-### Desktop File
-Create a file at `/usr/share/applications/org.cosmic-bwarden.applet.desktop`:
+Then add the applet through COSMIC Settings → Desktop → Panel → Configure
+panel applets.
 
-```ini
-[Desktop Entry]
-Name=cosmic-bwarden Applet
-Exec=cosmic-bwarden-ui
-Icon=password-manager-symbolic
-Terminal=false
-Type=Application
-Categories=Utility;
-```
+## Custom servers & "Remember Me"
 
-## 2. Architecture: Why 2 Apps?
-
-In the COSMIC ecosystem:
-- **Applications** (`cosmic-bwarden-ui`) are full-featured windows for complex tasks (searching the whole vault, configuring settings).
-- **Applets** (`cosmic-bwarden-ui`) are minimalistic components that live inside the system panel.
-
-They are separate binaries because the COSMIC panel process "embeds" the applet. This design ensures that if an applet crashes, it doesn't take down the whole desktop, and the panel can manage applet lifecycle independently. Both connect to the `cosmic-bwarden-agent` background service, which keeps the vault unlocked in memory.
-
-## 3. Custom Servers
-
-The login screen now supports entering a custom server URL. This allows you to use `cosmic-bwarden` with official Bitwarden instances, self-hosted Vaultwarden instances, or custom enterprise installations.
-
-## 4. "Remember Me"
-
-Selecting "Remember Email" will persist your email address in `config.json` so you only need to enter your master password on subsequent launches.
+The login screen supports a custom server URL (official Bitwarden, Vaultwarden,
+or enterprise installs). "Remember Email" persists the email in `config.json`
+so later launches only prompt for the master password.
