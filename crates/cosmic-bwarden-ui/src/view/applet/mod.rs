@@ -9,11 +9,14 @@ use cosmic::iced::Length;
 use cosmic::widget::{button, container, icon, list_column, text, toaster};
 use cosmic::Element;
 
-/// Dedicated branded panel icon: a symbolic SVG embedded in the binary rather than
-/// looked up by name in the system icon theme, so it renders correctly without any
-/// install-time step (dev builds included) and is recolored to match the panel's
-/// light/dark foreground automatically (`icon_button_from_handle` handles that for
-/// any `Handle` marked `symbolic`).
+/// Dedicated branded panel icon: the repo's brand mark (`icons/black.svg`'s
+/// drawable content, design-tool export metadata stripped), embedded in the
+/// binary rather than looked up by name in the system icon theme, so it
+/// renders correctly without any install-time step (dev builds included). A
+/// single monochrome source is enough — no separate light/dark variant is
+/// needed, since `symbolic(true)` makes libcosmic discard the SVG's own paint
+/// and recolor the whole shape to the panel's foreground itself
+/// (`icon_button_from_handle` in `libcosmic/src/applet/mod.rs`).
 const APPLET_ICON_SVG: &[u8] =
     include_bytes!("../../../resources/icons/cosmic-bwarden-symbolic.svg");
 

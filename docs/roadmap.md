@@ -17,7 +17,7 @@ forge.
       event page) alongside Chrome's `service_worker`; privacy policy; AMO
       source-review notes. Submit early to reserve `cosmic-bwarden@8bit.com`.
 - [x] **Rename the app ID out of System76's namespace** `[U4-1]` — *done 2026-07*:
-      ID is now `com.enikeev.cosmic-bwarden` (desktop entry, applet .ron,
+      ID is now `com.enikeev.cosmic_bwarden` (desktop entry, applet .ron,
       `StartupWMClass`, `CONFIG_ID`/`APP_ID` in core/ui/agent). `config.json`
       needed no migration (keyed by `profile()`, not `CONFIG_ID` — see
       `docs/cosmic_integration.md`); pre-existing local keyring entries under the

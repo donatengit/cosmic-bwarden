@@ -35,11 +35,11 @@ install: build
     install -Dm755 target/release/cosmic-bwarden-cli {{bin_dir}}/cosmic-bwarden-cli
     
     echo "Installing desktop entry..."
-    install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic-bwarden.desktop {{apps_dir}}/com.enikeev.cosmic-bwarden.desktop
+    install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop {{apps_dir}}/com.enikeev.cosmic_bwarden.desktop
     
     echo "Installing COSMIC applet metadata..."
     mkdir -p {{applets_dir}}
-    echo '( name: "CosmicBWarden", description: "Secure Bitwarden client for COSMIC", identifier: "com.enikeev.cosmic-bwarden", icon: "password-manager-symbolic", )' > {{applets_dir}}/com.enikeev.cosmic-bwarden.ron
+    echo '( name: "CosmicBWarden", description: "Secure Bitwarden client for COSMIC", identifier: "com.enikeev.cosmic_bwarden", icon: "password-manager-symbolic", )' > {{applets_dir}}/com.enikeev.cosmic_bwarden.ron
 
     echo "Installing systemd user service..."
     mkdir -p {{systemd_user_dir}}
@@ -76,11 +76,11 @@ clean-install: uninstall build
     sudo install -Dm755 target/release/cosmic-bwarden-cli {{bin_dir}}/cosmic-bwarden-cli
 
     echo "Installing desktop entry..."
-    sudo install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic-bwarden.desktop {{apps_dir}}/com.enikeev.cosmic-bwarden.desktop
+    sudo install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop {{apps_dir}}/com.enikeev.cosmic_bwarden.desktop
 
     echo "Installing COSMIC applet metadata..."
     sudo mkdir -p {{applets_dir}}
-    sudo sh -c "echo '( name: \"CosmicBWarden\", description: \"Secure Bitwarden client for COSMIC\", identifier: \"com.enikeev.cosmic-bwarden\", icon: \"password-manager-symbolic\" )' > {{applets_dir}}/com.enikeev.cosmic-bwarden.ron"
+    sudo sh -c "echo '( name: \"CosmicBWarden\", description: \"Secure Bitwarden client for COSMIC\", identifier: \"com.enikeev.cosmic_bwarden\", icon: \"password-manager-symbolic\" )' > {{applets_dir}}/com.enikeev.cosmic_bwarden.ron"
 
     echo "Installing systemd user service..."
     sudo mkdir -p {{systemd_user_dir}}
@@ -115,7 +115,7 @@ user-install: build
     just uninstall
     echo "Installing desktop entry to local apps..."
     mkdir -p {{local_apps}}
-    install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic-bwarden.desktop {{local_apps}}/com.enikeev.cosmic-bwarden.desktop
+    install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop {{local_apps}}/com.enikeev.cosmic_bwarden.desktop
 
     echo "Installing binaries to user bin..."
     mkdir -p {{local_share}}/../bin
@@ -125,7 +125,7 @@ user-install: build
 
     echo "Installing COSMIC applet metadata to local applets..."
     mkdir -p {{local_applets}}
-    echo '( name: "CosmicBWarden", description: "Secure Bitwarden client for COSMIC", identifier: "com.enikeev.cosmic-bwarden", icon: "password-manager-symbolic", )' > {{local_applets}}/com.enikeev.cosmic-bwarden.ron
+    echo '( name: "CosmicBWarden", description: "Secure Bitwarden client for COSMIC", identifier: "com.enikeev.cosmic_bwarden", icon: "password-manager-symbolic", )' > {{local_applets}}/com.enikeev.cosmic_bwarden.ron
     echo "Registering Firefox native messaging host..."
     python3 tests/browser-extension/register_host.py \
         --agent-path {{local_share}}/../bin/cosmic-bwarden-agent \
@@ -152,21 +152,32 @@ uninstall:
     sudo rm -f {{bin_dir}}/cosmic-bwarden-agent
     sudo rm -f {{bin_dir}}/cosmic-applet-bwarden
     sudo rm -f {{bin_dir}}/cosmic-bwarden-cli
+    sudo rm -f {{apps_dir}}/com.enikeev.cosmic_bwarden.desktop
+    sudo rm -f {{applets_dir}}/com.enikeev.cosmic_bwarden.ron
+    sudo rm -f {{systemd_user_dir}}/cosmic-bwarden-agent.service
+    # Legacy app-ID / binary names (transitional cleanup across renames)
+    sudo rm -f {{apps_dir}}/com.system76.CosmicBWarden.desktop
+    sudo rm -f {{applets_dir}}/com.system76.CosmicBWarden.ron
+    sudo rm -f {{bin_dir}}/com.system76.CosmicBWarden
+    sudo rm -f {{bin_dir}}/cosmic-bwarden-ui
+    # cosmic-bwarden.enikeev.com had a hyphenated last segment for one commit;
+    # invalid as a D-Bus object path (only [A-Za-z0-9_] allowed), so it broke
+    # "Open Vault Window" (dbus_activation::subscription exits(1) on failure).
     sudo rm -f {{apps_dir}}/com.enikeev.cosmic-bwarden.desktop
     sudo rm -f {{applets_dir}}/com.enikeev.cosmic-bwarden.ron
-    sudo rm -f {{systemd_user_dir}}/cosmic-bwarden-agent.service
-    # Legacy binary names (transitional cleanup)
-    sudo rm -f {{bin_dir}}/com.enikeev.cosmic-bwarden
-    sudo rm -f {{bin_dir}}/cosmic-bwarden-ui
     echo "Uninstalling from local paths..."
-    rm -f {{local_apps}}/com.enikeev.cosmic-bwarden.desktop
-    rm -f {{local_applets}}/com.enikeev.cosmic-bwarden.ron
+    rm -f {{local_apps}}/com.enikeev.cosmic_bwarden.desktop
+    rm -f {{local_applets}}/com.enikeev.cosmic_bwarden.ron
     rm -f {{local_share}}/../bin/cosmic-bwarden-agent
     rm -f {{local_share}}/../bin/cosmic-applet-bwarden
     rm -f {{local_share}}/../bin/cosmic-bwarden-cli
-    # Legacy binary names (transitional cleanup)
-    rm -f {{local_share}}/../bin/com.enikeev.cosmic-bwarden
+    # Legacy app-ID / binary names (transitional cleanup across renames)
+    rm -f {{local_apps}}/com.system76.CosmicBWarden.desktop
+    rm -f {{local_applets}}/com.system76.CosmicBWarden.ron
+    rm -f {{local_share}}/../bin/com.system76.CosmicBWarden
     rm -f {{local_share}}/../bin/cosmic-bwarden-ui
+    rm -f {{local_apps}}/com.enikeev.cosmic-bwarden.desktop
+    rm -f {{local_applets}}/com.enikeev.cosmic-bwarden.ron
     echo "Removing Firefox native messaging host..."
     rm -f {{real_home}}/.mozilla/native-messaging-hosts/com.8bit.cosmic_bwarden.json
     rm -f {{real_home}}/.mozilla/native-messaging-hosts/cosmic-bwarden-browser-host.sh

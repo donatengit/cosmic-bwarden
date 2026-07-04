@@ -33,10 +33,10 @@ package() {
   install -Dm755 target/release/cosmic-bwarden-agent "$pkgdir/usr/bin/cosmic-bwarden-agent"
   install -Dm755 target/release/cosmic-applet-bwarden "$pkgdir/usr/bin/cosmic-applet-bwarden"
   install -Dm755 target/release/cosmic-bwarden-cli "$pkgdir/usr/bin/cosmic-bwarden-cli"
-  install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic-bwarden.desktop \
-    "$pkgdir/usr/share/applications/com.enikeev.cosmic-bwarden.desktop"
-  install -Dm644 packaging/com.enikeev.cosmic-bwarden.ron \
-    "$pkgdir/usr/share/cosmic/applets/com.enikeev.cosmic-bwarden.ron"
+  install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop \
+    "$pkgdir/usr/share/applications/com.enikeev.cosmic_bwarden.desktop"
+  install -Dm644 packaging/com.enikeev.cosmic_bwarden.ron \
+    "$pkgdir/usr/share/cosmic/applets/com.enikeev.cosmic_bwarden.ron"
   install -Dm644 packaging/cosmic-bwarden-agent.deb.service \
     "$pkgdir/usr/lib/systemd/user/cosmic-bwarden-agent.service"
 }

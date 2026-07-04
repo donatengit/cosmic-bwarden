@@ -54,6 +54,12 @@ pub async fn run() -> anyhow::Result<()> {
     // server API calls) from journalctl under the systemd service.
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
+    log::info!(
+        "cosmic-bwarden-agent starting: version={} protocol_version={}",
+        cosmic_bwarden_core::version(),
+        cosmic_bwarden_core::PROTOCOL_VERSION,
+    );
+
     let args = Cli::parse();
 
     // Apply CLI overrides to dirs early

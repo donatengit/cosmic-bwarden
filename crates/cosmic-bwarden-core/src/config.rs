@@ -2,7 +2,7 @@ use cosmic_config::{cosmic_config_derive::CosmicConfigEntry, CosmicConfigEntry};
 use std::io::{Read as _, Write as _};
 use tokio::io::AsyncReadExt as _;
 
-pub const CONFIG_ID: &str = "com.enikeev.cosmic-bwarden";
+pub const CONFIG_ID: &str = "com.enikeev.cosmic_bwarden";
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, CosmicConfigEntry)]
 #[version = 1]

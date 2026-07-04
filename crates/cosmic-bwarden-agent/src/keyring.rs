@@ -4,7 +4,7 @@ use oo7::dbus::Service;
 #[cfg(feature = "keyring")]
 const COLLECTION_LABEL: &str = "cosmic-bwarden";
 #[cfg(feature = "keyring")]
-const APP_ID: &str = "com.enikeev.cosmic-bwarden";
+const APP_ID: &str = "com.enikeev.cosmic_bwarden";
 
 pub async fn store_tokens(
     server: &str,

@@ -4,19 +4,26 @@ use cosmic::Action;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action as AgentAction, EntryType, Response};
 
+/// Compare against `cosmic_bwarden_core::PROTOCOL_VERSION`, not the build
+/// version string — the two are intentionally decoupled (differently-timed
+/// builds of the same protocol stay compatible), so comparing build versions
+/// here would report a mismatch unconditionally.
+fn protocol_mismatch(agent_protocol: &str) -> bool {
+    cosmic_bwarden_core::PROTOCOL_VERSION != agent_protocol
+}
+
 pub fn check_protocol_version() -> Task<Message> {
     Task::perform(
         async move {
-            let local = cosmic_bwarden_core::version().to_string();
             let agent = AgentClient::new();
             match agent.send(AgentAction::Version).await {
                 Ok(Response::Version {
                     protocol_version, ..
                 }) => {
-                    let mismatch = local != protocol_version;
+                    let mismatch = protocol_mismatch(&protocol_version);
                     if mismatch {
                         tracing::error!(
-                            local_version = %local,
+                            local_protocol = %cosmic_bwarden_core::PROTOCOL_VERSION,
                             agent_protocol = %protocol_version,
                             "Protocol version mismatch"
                         );
@@ -29,6 +36,32 @@ pub fn check_protocol_version() -> Task<Message> {
         },
         |res| Action::App(Message::ProtocolVersionCheck(res)),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn matching_protocol_version_is_not_a_mismatch() {
+        assert!(!protocol_mismatch(cosmic_bwarden_core::PROTOCOL_VERSION));
+    }
+
+    #[test]
+    fn differing_protocol_version_is_a_mismatch() {
+        assert!(protocol_mismatch("not-a-real-protocol-version"));
+    }
+
+    #[test]
+    fn build_version_string_is_not_compared_against_protocol_version() {
+        // Regression test: this used to compare the full build version string
+        // (e.g. "2026.07-319457-aea2ef7") against PROTOCOL_VERSION ("1"),
+        // which can never match — reporting a mismatch unconditionally
+        // regardless of actual compatibility.
+        let build_version = cosmic_bwarden_core::version();
+        assert_ne!(build_version, cosmic_bwarden_core::PROTOCOL_VERSION);
+        assert!(!protocol_mismatch(cosmic_bwarden_core::PROTOCOL_VERSION));
+    }
 }
 
 pub fn fetch_sidebar_entries(

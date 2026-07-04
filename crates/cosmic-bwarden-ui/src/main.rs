@@ -309,7 +309,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mode = detect_run_mode();
-    tracing::info!(?mode, "Starting CosmicBWarden UI");
+    tracing::info!(
+        ?mode,
+        version = %cosmic_bwarden_core::version(),
+        protocol_version = cosmic_bwarden_core::PROTOCOL_VERSION,
+        "Starting CosmicBWarden UI"
+    );
     localize::localize();
 
     match mode {

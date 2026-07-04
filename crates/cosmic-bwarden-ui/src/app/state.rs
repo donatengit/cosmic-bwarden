@@ -8,7 +8,35 @@ use std::collections::{HashMap, HashSet};
 
 use crate::message::{View, WindowState};
 
-pub const APP_ID: &str = "com.enikeev.cosmic-bwarden";
+/// libcosmic's `run_single_instance`/`dbus_activation` derive a D-Bus object
+/// path directly from this by replacing `.` with `/` — each dot-separated
+/// segment must therefore only contain `[A-Za-z0-9_]` (no hyphens; D-Bus
+/// object paths reject them). A hyphenated segment here made
+/// `conn.object_server().at(path, ...)` fail and `dbus_activation::subscription`
+/// call `std::process::exit(1)`, silently killing "Open Vault Window" — see
+/// `tests` below for the regression guard.
+pub const APP_ID: &str = "com.enikeev.cosmic_bwarden";
+
+#[cfg(test)]
+mod app_id_tests {
+    use super::APP_ID;
+
+    #[test]
+    fn app_id_is_a_valid_dbus_object_path_when_dot_replaced_with_slash() {
+        for segment in APP_ID.split('.') {
+            assert!(
+                !segment.is_empty()
+                    && segment
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '_'),
+                "APP_ID segment {segment:?} is not a valid D-Bus object path \
+                 segment (only [A-Za-z0-9_] allowed) — this breaks \
+                 run_single_instance/dbus_activation for the Application-mode \
+                 window (\"Open Vault Window\")"
+            );
+        }
+    }
+}
 
 pub struct CosmicBWardenApp {
     pub core: Core,
