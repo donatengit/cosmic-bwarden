@@ -114,7 +114,16 @@ pub async fn run() -> anyhow::Result<()> {
     }
 
     if let Some(parent) = socket_path.parent() {
-        std::fs::create_dir_all(parent)?;
+        // 0700 parent dir (matches ssh_agent.rs and dirs::make_all). A plain
+        // create_dir_all would use the umask default (0755) when
+        // COSMIC_BWARDEN_SOCKET points at a fresh directory, leaving the socket's
+        // directory world-traversable. The socket itself is 0600 + peer-cred, so
+        // this is defence in depth, but the two socket paths should be consistent.
+        use std::os::unix::fs::DirBuilderExt as _;
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(parent)?;
     }
 
     let listener = UnixListener::bind(&socket_path)?;

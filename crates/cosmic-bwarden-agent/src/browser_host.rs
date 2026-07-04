@@ -38,9 +38,12 @@ pub async fn run() -> anyhow::Result<()> {
         let action: Action = match serde_json::from_slice(&buf) {
             Ok(a) => a,
             Err(e) => {
+                // Log the serde error only — never the raw body. A near-miss
+                // message (valid-ish JSON carrying a password/pin that failed to
+                // match the Action schema) would otherwise leak verbatim into the
+                // journal under RUST_LOG=debug.
                 log::error!("Failed to deserialize action from JSON: {}", e);
-                log::debug!("Raw JSON: {}", String::from_utf8_lossy(&buf));
-                
+
                 let error_response = serde_json::json!({
                     "Error": { "message": format!("Invalid protocol message: {}", e) }
                 });

@@ -15,12 +15,29 @@ forge.
 
 ## Security / supply chain
 
-- [ ] **Dependency auditing** — add `cargo-deny` (advisories + license + bans) and
-      wire `cargo audit` into the build/CI. Priority because this is a password
+Items below tagged `[P1-n]` come from the Phase 1 security review
+(`docs/review/01_security.md`, 2026-07-04). No S0/S1 open; these are S2 hardening.
+
+- [ ] **Dependency auditing** `[P1-5]` — add `cargo-deny` (advisories + license + bans)
+      and wire `cargo audit` into the build/CI. Priority because this is a password
       manager and it pulls `tss-esapi 8.0.0-alpha.2` (an alpha crate handling key
       material). Track advisories against the whole tree, not just direct deps.
 - [ ] Pin/track the alpha `tss-esapi` version deliberately; revisit when a stable
       release lands.
+- [ ] **Enforce `https://` on `base_url`** `[P1-1]` — `config.rs` accepts any scheme and
+      appends `/api`; an `http://` server sends the master-password hash and bearer
+      tokens in cleartext. Require https except for loopback hosts
+      (`localhost`/`127.0.0.0/8`/`::1`); `warn!` on a non-loopback http fallback.
+- [ ] **Constant-time reprompt compare** `[P1-3]` — `handler/vault/query.rs:90` compares
+      the master-password hash with `!=`; use `subtle::ConstantTimeEq`. Bounded impact
+      (attacker is already same-UID) but cheap. (Was the prior pass's deferred item.)
+- [ ] **`mlock` session tokens** `[P1-4]` — access/refresh tokens and `protected_key`
+      live in a plain `String`-backed `Secret` (`db/models.rs`), so they can page to
+      swap. Move token storage onto `locked::Vec`, or document the residual as accepted
+      for encrypted-swap setups.
+- [ ] **Cap third-party log verbosity** `[P1-7]` — `reqwest`/`hyper`/`rustls` at
+      `RUST_LOG=trace` can emit `Authorization: Bearer` headers. Add a default filter that
+      caps those crates at `info`, and/or a warning in `docs/build_and_run.md`.
 
 ## Maintainability
 
