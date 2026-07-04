@@ -60,9 +60,18 @@ async fn test_event_locked_clears_entries_and_error() {
     ));
 
     assert_eq!(app.view, View::Unlock);
-    assert!(app.entries.is_empty(), "EventReceived(Locked) must clear sidebar entries");
-    assert!(app.all_entries.is_empty(), "EventReceived(Locked) must clear all_entries cache");
-    assert!(app.error.is_none(), "EventReceived(Locked) must clear app.error");
+    assert!(
+        app.entries.is_empty(),
+        "EventReceived(Locked) must clear sidebar entries"
+    );
+    assert!(
+        app.all_entries.is_empty(),
+        "EventReceived(Locked) must clear all_entries cache"
+    );
+    assert!(
+        app.error.is_none(),
+        "EventReceived(Locked) must clear app.error"
+    );
     assert!(app.selected_entry_id.is_none());
 }
 
@@ -93,7 +102,11 @@ async fn test_unlock_requested_ignored_without_account() {
     let _ = app.update(Message::EventReceived(
         cosmic_bwarden_core::protocol::Event::UnlockRequested,
     ));
-    assert_eq!(app.view, View::Vault, "must not prompt unlock without an account");
+    assert_eq!(
+        app.view,
+        View::Vault,
+        "must not prompt unlock without an account"
+    );
     assert!(!app.show_pin_unlock);
 }
 
@@ -104,7 +117,10 @@ async fn test_pin_requested_ignored_without_account() {
     let _ = app.update(Message::EventReceived(
         cosmic_bwarden_core::protocol::Event::PinRequested,
     ));
-    assert!(!app.show_pin_unlock, "no PIN prompt without a configured account");
+    assert!(
+        !app.show_pin_unlock,
+        "no PIN prompt without a configured account"
+    );
     assert_eq!(app.view, View::Vault);
 }
 
@@ -117,7 +133,9 @@ async fn test_open_entry_event_dispatches_select_entry_when_in_vault() {
     // In tests the runtime doesn't execute returned tasks, so we simulate the
     // two-step dispatch: OpenEntry → SelectEntry.
     let _ = app.update(Message::EventReceived(
-        cosmic_bwarden_core::protocol::Event::OpenEntry { id: "entry-42".to_string() },
+        cosmic_bwarden_core::protocol::Event::OpenEntry {
+            id: "entry-42".to_string(),
+        },
     ));
     // View must not have changed.
     assert_eq!(app.view, View::Vault);
@@ -134,7 +152,9 @@ async fn test_open_entry_event_stores_pending_when_not_in_vault() {
     assert_eq!(app.view, View::Loading);
 
     let _ = app.update(Message::EventReceived(
-        cosmic_bwarden_core::protocol::Event::OpenEntry { id: "entry-42".to_string() },
+        cosmic_bwarden_core::protocol::Event::OpenEntry {
+            id: "entry-42".to_string(),
+        },
     ));
     // Not in vault → stored for later, SelectEntry NOT dispatched yet
     assert!(app.selected_entry_id.is_none());

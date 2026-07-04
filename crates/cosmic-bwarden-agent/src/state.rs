@@ -54,16 +54,24 @@ impl State {
             let org_keys = self.org_keys.as_ref().unwrap_or(&empty_org_keys);
             let mut cache = Vec::with_capacity(db.entries.len());
             for entry in &db.entries {
-                let effective_keys = entry.org_id.as_ref()
+                let effective_keys = entry
+                    .org_id
+                    .as_ref()
                     .and_then(|id| org_keys.get(id))
                     .unwrap_or(keys);
 
                 let name = match cosmic_bwarden_core::vault::decrypt(
-                    &entry.name, effective_keys, entry.key.as_deref(),
+                    &entry.name,
+                    effective_keys,
+                    entry.key.as_deref(),
                 ) {
                     Ok(v) => v,
                     Err(e) => {
-                        log::warn!("sidebar cache: failed to decrypt name for entry {}: {}", entry.id, e);
+                        log::warn!(
+                            "sidebar cache: failed to decrypt name for entry {}: {}",
+                            entry.id,
+                            e
+                        );
                         entry.name.clone()
                     }
                 };
@@ -87,7 +95,12 @@ impl State {
                         let pk = public_key
                             .as_ref()
                             .and_then(|pk| {
-                                cosmic_bwarden_core::vault::decrypt(pk, effective_keys, entry.key.as_deref()).ok()
+                                cosmic_bwarden_core::vault::decrypt(
+                                    pk,
+                                    effective_keys,
+                                    entry.key.as_deref(),
+                                )
+                                .ok()
                             })
                             .or_else(|| {
                                 let empty_org_keys = HashMap::new();
@@ -140,8 +153,12 @@ impl State {
         // The rest of `db` (encrypted entries, protected keys) stays in memory
         // so the vault can be unlocked offline without a re-sync.
         if let Some(db) = &mut self.db {
-            if let Some(mut t) = db.access_token.take() { t.zeroize(); }
-            if let Some(mut t) = db.refresh_token.take() { t.zeroize(); }
+            if let Some(mut t) = db.access_token.take() {
+                t.zeroize();
+            }
+            if let Some(mut t) = db.refresh_token.take() {
+                t.zeroize();
+            }
         }
         self.broadcast(cosmic_bwarden_core::protocol::Event::Locked);
     }

@@ -1,5 +1,8 @@
 use crate::common::{register_user, setup_env};
-use crate::ssh_test_utils::{assert_permissions, assert_ssh_access, generate_ssh_keypair, start_sshd_container, wait_for_socket};
+use crate::ssh_test_utils::{
+    assert_permissions, assert_ssh_access, generate_ssh_keypair, start_sshd_container,
+    wait_for_socket,
+};
 use anyhow::Result;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action, Response};
@@ -9,7 +12,12 @@ use tokio::time::Duration;
 /// the vault, then proves the agent's `ssh-agent-socket` serves it
 /// (`request_identities`) and can sign a real OpenSSH handshake with it
 /// (`sign`) against a real `sshd` container.
-async fn run_signing_test(key_type: &str, bits: Option<u32>, email: &str, password: &str) -> Result<()> {
+async fn run_signing_test(
+    key_type: &str,
+    bits: Option<u32>,
+    email: &str,
+    password: &str,
+) -> Result<()> {
     let env = setup_env().await?;
     std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
 
@@ -68,10 +76,22 @@ async fn run_signing_test(key_type: &str, bits: Option<u32>, email: &str, passwo
 
 #[tokio::test]
 async fn test_ssh_agent_signs_real_ssh_connection_ed25519() -> Result<()> {
-    run_signing_test("ed25519", None, "ssh-agent-ed25519@example.com", "sshagentpassword123").await
+    run_signing_test(
+        "ed25519",
+        None,
+        "ssh-agent-ed25519@example.com",
+        "sshagentpassword123",
+    )
+    .await
 }
 
 #[tokio::test]
 async fn test_ssh_agent_signs_real_ssh_connection_rsa() -> Result<()> {
-    run_signing_test("rsa", Some(2048), "ssh-agent-rsa@example.com", "sshagentpassword123").await
+    run_signing_test(
+        "rsa",
+        Some(2048),
+        "ssh-agent-rsa@example.com",
+        "sshagentpassword123",
+    )
+    .await
 }

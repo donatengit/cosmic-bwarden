@@ -1,7 +1,7 @@
 use crate::app::CosmicBWardenApp;
 use crate::message::View;
-use cosmic::Application;
 use cosmic::widget;
+use cosmic::Application;
 use cosmic_bwarden_core::db::{Entry, EntryData};
 use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
 
@@ -77,7 +77,8 @@ fn note_entry(id: &str, name: &str) -> Entry {
 }
 
 fn select_entry(app: &mut CosmicBWardenApp, entry: Entry) {
-    app.notes_content = widget::text_editor::Content::with_text(entry.notes.as_deref().unwrap_or(""));
+    app.notes_content =
+        widget::text_editor::Content::with_text(entry.notes.as_deref().unwrap_or(""));
     app.selected_entry_id = Some(entry.id.clone());
     app.selected_entry = Some(entry);
 }

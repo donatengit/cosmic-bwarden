@@ -1,8 +1,8 @@
 use crate::app::CosmicBWardenApp;
 use crate::message::Message;
 use crate::message::View;
-use cosmic::Application;
 use cosmic::widget;
+use cosmic::Application;
 use cosmic_bwarden_core::db::{Entry, EntryData};
 use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
 
@@ -28,7 +28,13 @@ fn create_test_entry(id: &str, name: &str) -> Entry {
     }
 }
 
-fn sidebar(id: &str, name: &str, username: Option<&str>, ty: EntryType, pinned: bool) -> SidebarEntry {
+fn sidebar(
+    id: &str,
+    name: &str,
+    username: Option<&str>,
+    ty: EntryType,
+    pinned: bool,
+) -> SidebarEntry {
     SidebarEntry {
         id: id.to_string(),
         name: name.to_string(),
@@ -53,9 +59,19 @@ fn test_search_changed_filters_locally_no_ipc() {
     let _ = app.update(Message::SearchChanged("git".to_string()));
 
     assert_eq!(app.search_query, "git");
-    assert_eq!(app.search_id, initial_search_id, "SearchChanged must NOT trigger IPC fetch");
-    assert_eq!(app.entries.len(), 2, "filter should match GitHub and GitLab");
-    assert!(app.entries.iter().all(|e| e.name.to_lowercase().contains("git")));
+    assert_eq!(
+        app.search_id, initial_search_id,
+        "SearchChanged must NOT trigger IPC fetch"
+    );
+    assert_eq!(
+        app.entries.len(),
+        2,
+        "filter should match GitHub and GitLab"
+    );
+    assert!(app
+        .entries
+        .iter()
+        .all(|e| e.name.to_lowercase().contains("git")));
 }
 
 #[test]
@@ -63,7 +79,13 @@ fn test_search_changed_matches_username() {
     let mut app = CosmicBWardenApp::default();
     app.view = View::Vault;
     app.all_entries = vec![
-        sidebar("1", "GitHub", Some("alice@example.com"), EntryType::Login, false),
+        sidebar(
+            "1",
+            "GitHub",
+            Some("alice@example.com"),
+            EntryType::Login,
+            false,
+        ),
         sidebar("2", "AWS", Some("bob@corp.com"), EntryType::Login, false),
     ];
 
@@ -103,12 +125,19 @@ fn test_filter_type_changed_filters_locally_no_ipc() {
     let _ = app.update(Message::FilterTypeChanged(Some(EntryType::SshKey)));
 
     assert_eq!(app.filter_type, Some(EntryType::SshKey));
-    assert_eq!(app.search_id, initial_search_id, "FilterTypeChanged must NOT trigger IPC fetch");
+    assert_eq!(
+        app.search_id, initial_search_id,
+        "FilterTypeChanged must NOT trigger IPC fetch"
+    );
     assert_eq!(app.entries.len(), 1);
     assert_eq!(app.entries[0].id, "3");
 
     let _ = app.update(Message::FilterTypeChanged(None));
-    assert_eq!(app.entries.len(), 3, "clearing filter must show all entries");
+    assert_eq!(
+        app.entries.len(),
+        3,
+        "clearing filter must show all entries"
+    );
 }
 
 #[test]

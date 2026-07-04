@@ -99,13 +99,20 @@ fn test_toggle_search_pinned_filter() {
 
     let _ = app.update(Message::ToggleSearchPinned);
     assert!(app.search_only_pinned);
-    assert_eq!(app.search_id, initial_search_id, "ToggleSearchPinned must NOT trigger IPC fetch");
+    assert_eq!(
+        app.search_id, initial_search_id,
+        "ToggleSearchPinned must NOT trigger IPC fetch"
+    );
     assert_eq!(app.entries.len(), 1);
     assert_eq!(app.entries[0].id, "1");
 
     let _ = app.update(Message::ToggleSearchPinned);
     assert!(!app.search_only_pinned);
-    assert_eq!(app.entries.len(), 2, "unpinning filter must restore all entries");
+    assert_eq!(
+        app.entries.len(),
+        2,
+        "unpinning filter must restore all entries"
+    );
 }
 
 #[tokio::test]
@@ -117,7 +124,9 @@ async fn test_e2e_user_flow_login_and_add_note() {
 
     // 2. Receive config (needs login)
     let config = CosmicBWardenConfig::default();
-    let _ = app.update(Message::ConfigReceived(Ok((config, true, false, true, false))));
+    let _ = app.update(Message::ConfigReceived(Ok((
+        config, true, false, true, false,
+    ))));
     assert_eq!(app.view, View::Setup);
 
     // 3. User enters credentials
@@ -198,8 +207,14 @@ fn test_sync_result_ok_clears_sync_failed_immediately() {
 
     let _ = app.update(Message::SyncResult(Ok(())));
 
-    assert!(!app.sync_failed, "SyncResult(Ok) must clear sync_failed immediately");
-    assert!(app.error.is_none(), "SyncResult(Ok) must clear the error banner");
+    assert!(
+        !app.sync_failed,
+        "SyncResult(Ok) must clear sync_failed immediately"
+    );
+    assert!(
+        app.error.is_none(),
+        "SyncResult(Ok) must clear the error banner"
+    );
 }
 
 #[test]
@@ -235,8 +250,14 @@ fn test_entries_received_clears_stale_selected_entry() {
     ));
 
     assert_eq!(app.all_entries.len(), 1);
-    assert!(app.selected_entry_id.is_none(), "stale selection must be cleared");
-    assert!(app.selected_entry.is_none(), "stale detail panel must be cleared");
+    assert!(
+        app.selected_entry_id.is_none(),
+        "stale selection must be cleared"
+    );
+    assert!(
+        app.selected_entry.is_none(),
+        "stale detail panel must be cleared"
+    );
 }
 
 #[test]

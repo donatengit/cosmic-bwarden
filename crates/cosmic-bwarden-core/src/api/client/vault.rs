@@ -1,13 +1,18 @@
-use crate::error::{Error, Result};
-use crate::json::{DeserializeJsonWithPathAsync as _};
-use crate::api::models::*;
 use crate::api::client::Client;
+use crate::api::models::*;
+use crate::error::{Error, Result};
+use crate::json::DeserializeJsonWithPathAsync as _;
 
 impl Client {
     pub async fn sync(
         &self,
         access_token: &str,
-    ) -> Result<(String, Option<String>, std::collections::HashMap<String, String>, Vec<crate::db::Entry>)> {
+    ) -> Result<(
+        String,
+        Option<String>,
+        std::collections::HashMap<String, String>,
+        Vec<crate::db::Entry>,
+    )> {
         let client = self.reqwest_client().await?;
         let res = client
             .get(self.api_url("/sync"))

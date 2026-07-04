@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use crate::server::auth::with_refresh;
 use crate::state::State;
 use cosmic_bwarden_core::db::Secret;
-use crate::server::auth::with_refresh;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub async fn add_entry_on_server(
     state: &Arc<Mutex<State>>,
@@ -33,9 +33,7 @@ pub async fn add_entry_on_server(
 
     let (ty, u_enc, p_enc, priv_enc, pub_enc, card_payload, identity_payload) = match &entry.data {
         cosmic_bwarden_core::db::EntryData::Login {
-            username,
-            password,
-            ..
+            username, password, ..
         } => {
             let u_enc = if let Some(u) = username {
                 Some(
@@ -101,9 +99,12 @@ pub async fn add_entry_on_server(
             let encrypt = |s: &Option<String>| -> Result<Option<String>, String> {
                 if let Some(s) = s {
                     Ok(Some(
-                        cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(keys, s.as_bytes())
-                            .map_err(|e| e.to_string())?
-                            .to_string(),
+                        cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(
+                            keys,
+                            s.as_bytes(),
+                        )
+                        .map_err(|e| e.to_string())?
+                        .to_string(),
                     ))
                 } else {
                     Ok(None)
@@ -142,9 +143,12 @@ pub async fn add_entry_on_server(
             let encrypt = |s: &Option<String>| -> Result<Option<String>, String> {
                 if let Some(s) = s {
                     Ok(Some(
-                        cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(keys, s.as_bytes())
-                            .map_err(|e| e.to_string())?
-                            .to_string(),
+                        cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(
+                            keys,
+                            s.as_bytes(),
+                        )
+                        .map_err(|e| e.to_string())?
+                        .to_string(),
                     ))
                 } else {
                     Ok(None)
@@ -154,9 +158,12 @@ pub async fn add_entry_on_server(
             let encrypt_secret = |s: &Option<Secret>| -> Result<Option<String>, String> {
                 if let Some(s) = s {
                     Ok(Some(
-                        cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(keys, s.expose().as_bytes())
-                            .map_err(|e| e.to_string())?
-                            .to_string(),
+                        cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(
+                            keys,
+                            s.expose().as_bytes(),
+                        )
+                        .map_err(|e| e.to_string())?
+                        .to_string(),
                     ))
                 } else {
                     Ok(None)

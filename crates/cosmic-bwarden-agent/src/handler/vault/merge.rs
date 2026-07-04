@@ -54,10 +54,9 @@ pub fn merge_redacted_secrets(entry: &mut Entry, stored: &Entry) {
                 private_key: stored_private_key,
                 ..
             },
-        )
-            if private_key.is_none() => {
-                *private_key = stored_private_key.clone();
-            }
+        ) if private_key.is_none() => {
+            *private_key = stored_private_key.clone();
+        }
         _ => {}
     }
     for field in &mut entry.fields {
@@ -122,7 +121,11 @@ mod tests {
         merge_redacted_secrets(&mut edited, &stored);
         match &edited.data {
             EntryData::Login { password, .. } => {
-                assert_eq!(password.as_deref(), Some(""), "Some(\"\") must stay a clear");
+                assert_eq!(
+                    password.as_deref(),
+                    Some(""),
+                    "Some(\"\") must stay a clear"
+                );
             }
             _ => panic!("expected login"),
         }

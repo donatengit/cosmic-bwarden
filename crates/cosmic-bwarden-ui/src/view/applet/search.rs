@@ -1,10 +1,12 @@
-use cosmic::Element;
-use cosmic::iced::{Alignment, Length};
-use cosmic::widget::{button, column, container, icon, row, scrollable, search_input, secure_input, text, tooltip, Id};
 use crate::app::applet_search::{build_applet_rows, AppletRow, AppletRowKind};
 use crate::app::CosmicBWardenApp;
-use crate::message::Message;
 use crate::fl;
+use crate::message::Message;
+use cosmic::iced::{Alignment, Length};
+use cosmic::widget::{
+    button, column, container, icon, row, scrollable, search_input, secure_input, text, tooltip, Id,
+};
+use cosmic::Element;
 
 const RESULTS_SPACING: f32 = 5.0;
 const RESULT_ROW_HEIGHT: f32 = 50.0;
@@ -63,8 +65,12 @@ pub fn view(app: &CosmicBWardenApp) -> Element<'_, Message> {
 
 fn result_row_view(row_data: AppletRow) -> Element<'static, Message> {
     match row_data.kind {
-        AppletRowKind::Login { username, link } => login_row_view(row_data.id, row_data.label, username, link),
-        AppletRowKind::SecureNote | AppletRowKind::SshKey => secret_row_view(row_data.id, row_data.label),
+        AppletRowKind::Login { username, link } => {
+            login_row_view(row_data.id, row_data.label, username, link)
+        }
+        AppletRowKind::SecureNote | AppletRowKind::SshKey => {
+            secret_row_view(row_data.id, row_data.label)
+        }
     }
 }
 
@@ -77,7 +83,9 @@ fn login_row_view(
     let copy_id = id.clone();
     let label_btn = button::custom(text::body(label))
         .on_press_maybe(
-            username.is_some().then(|| Message::AppletCopyPrimary(copy_id)),
+            username
+                .is_some()
+                .then(|| Message::AppletCopyPrimary(copy_id)),
         )
         .width(Length::Fill)
         .class(cosmic::theme::Button::Text);
@@ -108,7 +116,13 @@ fn login_row_view(
         .spacing(4)
         .align_y(Alignment::Center)
         .push(label_el)
-        .push(row::with_capacity(3).spacing(2).push(vault_btn).push(link_btn).push(secret_btn))
+        .push(
+            row::with_capacity(3)
+                .spacing(2)
+                .push(vault_btn)
+                .push(link_btn)
+                .push(secret_btn),
+        )
         .into()
 }
 
@@ -132,7 +146,12 @@ fn secret_row_view(id: String, label: String) -> Element<'static, Message> {
         .spacing(4)
         .align_y(Alignment::Center)
         .push(label_btn)
-        .push(row::with_capacity(2).spacing(2).push(vault_btn).push(secret_btn))
+        .push(
+            row::with_capacity(2)
+                .spacing(2)
+                .push(vault_btn)
+                .push(secret_btn),
+        )
         .into()
 }
 
@@ -156,7 +175,13 @@ fn reprompt_row(app: &CosmicBWardenApp) -> Element<'_, Message> {
         .spacing(5)
         .align_y(Alignment::Center)
         .push(password_input)
-        .push(button::icon(icon::from_name("object-select-symbolic")).on_press(Message::AppletRepromptSubmitted))
-        .push(button::icon(icon::from_name("window-close-symbolic")).on_press(Message::AppletRepromptCancelled))
+        .push(
+            button::icon(icon::from_name("object-select-symbolic"))
+                .on_press(Message::AppletRepromptSubmitted),
+        )
+        .push(
+            button::icon(icon::from_name("window-close-symbolic"))
+                .on_press(Message::AppletRepromptCancelled),
+        )
         .into()
 }

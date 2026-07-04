@@ -74,8 +74,8 @@ pub(super) fn compute_policy_digest(ctx: &mut Context) -> Result<Digest> {
     ctx.tr_sess_set_attributes(trial, attrs, mask)
         .context("setting trial session attributes")?;
 
-    let policy_session = PolicySession::try_from(trial)
-        .context("converting trial session to policy session")?;
+    let policy_session =
+        PolicySession::try_from(trial).context("converting trial session to policy session")?;
     ctx.policy_pcr(policy_session, Digest::default(), pcr_selection_list()?)
         .context("trial policy_pcr")?;
     ctx.policy_auth_value(policy_session)

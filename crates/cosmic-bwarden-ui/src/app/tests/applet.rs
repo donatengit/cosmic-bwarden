@@ -1,7 +1,7 @@
 use crate::app::CosmicBWardenApp;
 use crate::message::{Message, View, WindowState};
-use cosmic::Application;
 use cosmic::iced::window;
+use cosmic::Application;
 use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
 
 fn popup_app(view: View) -> (CosmicBWardenApp, window::Id) {
@@ -62,7 +62,9 @@ async fn test_applet_reprompt_password_changed_and_cancelled() {
     let mut app = CosmicBWardenApp::default();
     app.applet_reprompt_id = Some("entry-1".to_string());
 
-    let _ = app.update(Message::AppletRepromptPasswordChanged("hunter2".to_string()));
+    let _ = app.update(Message::AppletRepromptPasswordChanged(
+        "hunter2".to_string(),
+    ));
     assert_eq!(app.applet_reprompt_password, "hunter2");
 
     let _ = app.update(Message::AppletRepromptCancelled);
@@ -91,7 +93,9 @@ async fn test_applet_unlock_result_error_keeps_unlock_view() {
     app.view = View::Unlock;
     app.applet_unlock_password = "hunter2".to_string();
 
-    let _ = app.update(Message::AppletUnlockResult(Err("invalid password".to_string())));
+    let _ = app.update(Message::AppletUnlockResult(Err(
+        "invalid password".to_string()
+    )));
 
     assert_eq!(app.view, View::Unlock);
     assert!(app.applet_unlock_password.is_empty());
@@ -102,7 +106,10 @@ async fn test_applet_unlock_result_error_keeps_unlock_view() {
 async fn test_applet_search_results_received_ignores_agent_locked_error() {
     let mut app = CosmicBWardenApp::default();
 
-    let _ = app.update(Message::AppletSearchResultsReceived(app.applet_search_id, Err("agent is locked".to_string())));
+    let _ = app.update(Message::AppletSearchResultsReceived(
+        app.applet_search_id,
+        Err("agent is locked".to_string()),
+    ));
 
     assert!(app.applet_error.is_none());
 }
@@ -440,4 +447,3 @@ async fn test_applet_open_link_does_not_crash() {
     let _ = app.update(Message::AppletOpenLink("https://example.com".to_string()));
     assert!(app.applet_error.is_none());
 }
-

@@ -126,8 +126,7 @@ pub fn diagnostics() -> Vec<(String, bool, String)> {
     checks.push((
         "Agent can open /dev/tpmrm0".to_string(),
         tpmrm0_accessible,
-        "Add user to 'tss' group: sudo usermod -aG tss $USER, then log out and back in"
-            .to_string(),
+        "Add user to 'tss' group: sudo usermod -aG tss $USER, then log out and back in".to_string(),
     ));
 
     let context_ok = open_context().is_ok();

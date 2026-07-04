@@ -48,17 +48,33 @@ async fn test_login_with_uris() -> Result<()> {
     client.send(Action::Sync).await?;
 
     let res = client
-        .send(Action::GetSidebarEntries { query: None, entry_type: None, only_pinned: false })
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: false,
+        })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
-        entries.iter().find(|e| e.name == "URI Site").expect("entry not found").id.clone()
+        entries
+            .iter()
+            .find(|e| e.name == "URI Site")
+            .expect("entry not found")
+            .id
+            .clone()
     } else {
         anyhow::bail!("Expected SidebarEntries");
     };
 
     // 2. Add URIs via update
-    let res = client.send(Action::GetEntry { id: id.clone(), password: None }).await?;
-    let mut entry = if let Response::Entry { entry } = res { entry } else {
+    let res = client
+        .send(Action::GetEntry {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
+    let mut entry = if let Response::Entry { entry } = res {
+        entry
+    } else {
         anyhow::bail!("Expected Entry");
     };
 
@@ -79,7 +95,12 @@ async fn test_login_with_uris() -> Result<()> {
     client.send(Action::Sync).await?;
 
     // 3. Verify URIs persisted
-    let res = client.send(Action::GetEntry { id: id.clone(), password: None }).await?;
+    let res = client
+        .send(Action::GetEntry {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
     if let Response::Entry { entry } = res {
         if let EntryData::Login { uris, .. } = &entry.data {
             assert_eq!(uris.len(), 2, "Must have 2 URIs after update");
@@ -144,15 +165,29 @@ async fn test_custom_fields_all_types() -> Result<()> {
     client.send(Action::Sync).await?;
 
     let res = client
-        .send(Action::GetSidebarEntries { query: None, entry_type: None, only_pinned: false })
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: false,
+        })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
-        entries.iter().find(|e| e.name == "Fields Entry").expect("not found").id.clone()
+        entries
+            .iter()
+            .find(|e| e.name == "Fields Entry")
+            .expect("not found")
+            .id
+            .clone()
     } else {
         anyhow::bail!("Expected SidebarEntries");
     };
 
-    let res = client.send(Action::GetEntry { id: id.clone(), password: None }).await?;
+    let res = client
+        .send(Action::GetEntry {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
     if let Response::Entry { entry } = res {
         let tf = entry.get_field("TextField").expect("TextField missing");
         assert_eq!(tf.ty, Some(cosmic_bwarden_core::api::FieldType::Text));
@@ -202,24 +237,45 @@ async fn test_get_totp_from_login_entry() -> Result<()> {
     client.send(Action::Sync).await?;
 
     let res = client
-        .send(Action::GetSidebarEntries { query: None, entry_type: None, only_pinned: false })
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: false,
+        })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
-        entries.iter().find(|e| e.name == "TOTP Site").expect("not found").id.clone()
+        entries
+            .iter()
+            .find(|e| e.name == "TOTP Site")
+            .expect("not found")
+            .id
+            .clone()
     } else {
         anyhow::bail!("Expected SidebarEntries");
     };
 
     // GetTotp on entry without TOTP must return Error, not panic
-    let res = client.send(Action::GetTotp { id: id.clone(), password: None }).await?;
+    let res = client
+        .send(Action::GetTotp {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
     assert!(
         matches!(res, Response::Error { .. }),
         "GetTotp on entry without TOTP must return Error"
     );
 
     // Add a valid base32 TOTP secret via update (JBSWY3DPEHPK3PXP = "Hello World!")
-    let res = client.send(Action::GetEntry { id: id.clone(), password: None }).await?;
-    let mut entry = if let Response::Entry { entry } = res { entry } else {
+    let res = client
+        .send(Action::GetEntry {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
+    let mut entry = if let Response::Entry { entry } = res {
+        entry
+    } else {
         anyhow::bail!("Expected Entry");
     };
 
@@ -232,7 +288,12 @@ async fn test_get_totp_from_login_entry() -> Result<()> {
     client.send(Action::Sync).await?;
 
     // GetTotp must return a 6-digit code
-    let res = client.send(Action::GetTotp { id: id.clone(), password: None }).await?;
+    let res = client
+        .send(Action::GetTotp {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
     if let Response::Totp { code } = res {
         assert_eq!(code.len(), 6, "TOTP code must be 6 digits, got: {}", code);
         assert!(

@@ -53,19 +53,44 @@ async fn test_card_full_update() -> Result<()> {
 
     // 2. Verify all fields
     let res = client
-        .send(Action::GetSidebarEntries { query: None, entry_type: None, only_pinned: false })
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: false,
+        })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
-        entries.iter().find(|e| e.name == "My Credit Card").expect("card not found").id.clone()
+        entries
+            .iter()
+            .find(|e| e.name == "My Credit Card")
+            .expect("card not found")
+            .id
+            .clone()
     } else {
         anyhow::bail!("Expected SidebarEntries");
     };
 
-    let res = client.send(Action::GetEntry { id: id.clone(), password: None }).await?;
+    let res = client
+        .send(Action::GetEntry {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
     let mut entry = if let Response::Entry { entry } = res {
-        if let EntryData::Card { cardholder_name, number, brand, exp_month, exp_year, code } = &entry.data {
+        if let EntryData::Card {
+            cardholder_name,
+            number,
+            brand,
+            exp_month,
+            exp_year,
+            code,
+        } = &entry.data
+        {
             assert_eq!(cardholder_name.as_deref(), Some("Alice Smith"));
-            assert_eq!(number.as_ref().map(|n| n.expose()), Some("4111111111111111"));
+            assert_eq!(
+                number.as_ref().map(|n| n.expose()),
+                Some("4111111111111111")
+            );
             assert_eq!(brand.as_deref(), Some("Visa"));
             assert_eq!(exp_month.as_deref(), Some("06"));
             assert_eq!(exp_year.as_deref(), Some("2028"));
@@ -73,7 +98,10 @@ async fn test_card_full_update() -> Result<()> {
         } else {
             anyhow::bail!("Expected Card data");
         }
-        assert_eq!(entry.notes.as_ref().map(|n| n.expose()), Some("Primary card"));
+        assert_eq!(
+            entry.notes.as_ref().map(|n| n.expose()),
+            Some("Primary card")
+        );
         entry
     } else {
         anyhow::bail!("Expected Entry");
@@ -82,8 +110,12 @@ async fn test_card_full_update() -> Result<()> {
     // 3. Update every field
     entry.name = "Updated Credit Card".to_string();
     if let EntryData::Card {
-        ref mut cardholder_name, ref mut number, ref mut brand,
-        ref mut exp_month, ref mut exp_year, ref mut code,
+        ref mut cardholder_name,
+        ref mut number,
+        ref mut brand,
+        ref mut exp_month,
+        ref mut exp_year,
+        ref mut code,
     } = entry.data
     {
         *cardholder_name = Some("Bob Jones".to_string());
@@ -101,12 +133,28 @@ async fn test_card_full_update() -> Result<()> {
     client.send(Action::Sync).await?;
 
     // 4. Verify all updates persisted
-    let res = client.send(Action::GetEntry { id: id.clone(), password: None }).await?;
+    let res = client
+        .send(Action::GetEntry {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
     if let Response::Entry { entry } = res {
         assert_eq!(entry.name, "Updated Credit Card");
-        if let EntryData::Card { cardholder_name, number, brand, exp_month, exp_year, code } = &entry.data {
+        if let EntryData::Card {
+            cardholder_name,
+            number,
+            brand,
+            exp_month,
+            exp_year,
+            code,
+        } = &entry.data
+        {
             assert_eq!(cardholder_name.as_deref(), Some("Bob Jones"));
-            assert_eq!(number.as_ref().map(|n| n.expose()), Some("5500005555555559"));
+            assert_eq!(
+                number.as_ref().map(|n| n.expose()),
+                Some("5500005555555559")
+            );
             assert_eq!(brand.as_deref(), Some("Mastercard"));
             assert_eq!(exp_month.as_deref(), Some("12"));
             assert_eq!(exp_year.as_deref(), Some("2030"));
@@ -114,7 +162,10 @@ async fn test_card_full_update() -> Result<()> {
         } else {
             anyhow::bail!("Expected Card data after update");
         }
-        assert_eq!(entry.notes.as_ref().map(|n| n.expose()), Some("Updated card notes"));
+        assert_eq!(
+            entry.notes.as_ref().map(|n| n.expose()),
+            Some("Updated card notes")
+        );
     } else {
         anyhow::bail!("Expected Entry after update");
     }
@@ -160,17 +211,38 @@ async fn test_identity_full_update() -> Result<()> {
 
     // 2. Get and verify initial fields
     let res = client
-        .send(Action::GetSidebarEntries { query: None, entry_type: None, only_pinned: false })
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: false,
+        })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
-        entries.iter().find(|e| e.name == "My Identity").expect("identity not found").id.clone()
+        entries
+            .iter()
+            .find(|e| e.name == "My Identity")
+            .expect("identity not found")
+            .id
+            .clone()
     } else {
         anyhow::bail!("Expected SidebarEntries");
     };
 
-    let res = client.send(Action::GetEntry { id: id.clone(), password: None }).await?;
+    let res = client
+        .send(Action::GetEntry {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
     let mut entry = if let Response::Entry { entry } = res {
-        if let EntryData::Identity { first_name, last_name, email, city, .. } = &entry.data {
+        if let EntryData::Identity {
+            first_name,
+            last_name,
+            email,
+            city,
+            ..
+        } = &entry.data
+        {
             assert_eq!(first_name.as_deref(), Some("Jane"));
             assert_eq!(last_name.as_deref(), Some("Doe"));
             assert_eq!(email.as_deref(), Some("jane.doe@example.com"));
@@ -186,11 +258,23 @@ async fn test_identity_full_update() -> Result<()> {
     // 3. Update ALL identity fields including extended ones not set on create
     entry.name = "Updated Identity".to_string();
     if let EntryData::Identity {
-        ref mut title, ref mut first_name, ref mut middle_name, ref mut last_name,
-        ref mut address1, ref mut address2, ref mut address3,
-        ref mut city, ref mut state, ref mut postal_code, ref mut country,
-        ref mut phone, ref mut email,
-        ref mut ssn, ref mut license_number, ref mut passport_number, ref mut username,
+        ref mut title,
+        ref mut first_name,
+        ref mut middle_name,
+        ref mut last_name,
+        ref mut address1,
+        ref mut address2,
+        ref mut address3,
+        ref mut city,
+        ref mut state,
+        ref mut postal_code,
+        ref mut country,
+        ref mut phone,
+        ref mut email,
+        ref mut ssn,
+        ref mut license_number,
+        ref mut passport_number,
+        ref mut username,
     } = entry.data
     {
         *title = Some("Dr.".to_string());
@@ -219,14 +303,32 @@ async fn test_identity_full_update() -> Result<()> {
     client.send(Action::Sync).await?;
 
     // 4. Verify every field persisted correctly
-    let res = client.send(Action::GetEntry { id: id.clone(), password: None }).await?;
+    let res = client
+        .send(Action::GetEntry {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
     if let Response::Entry { entry } = res {
         assert_eq!(entry.name, "Updated Identity");
         if let EntryData::Identity {
-            title, first_name, middle_name, last_name,
-            address1, address2, address3, city, state,
-            postal_code, country, phone, email,
-            ssn, license_number, passport_number, username,
+            title,
+            first_name,
+            middle_name,
+            last_name,
+            address1,
+            address2,
+            address3,
+            city,
+            state,
+            postal_code,
+            country,
+            phone,
+            email,
+            ssn,
+            license_number,
+            passport_number,
+            username,
         } = &entry.data
         {
             assert_eq!(title.as_deref(), Some("Dr."));
@@ -249,7 +351,10 @@ async fn test_identity_full_update() -> Result<()> {
         } else {
             anyhow::bail!("Expected Identity data after update");
         }
-        assert_eq!(entry.notes.as_ref().map(|n| n.expose()), Some("Updated identity"));
+        assert_eq!(
+            entry.notes.as_ref().map(|n| n.expose()),
+            Some("Updated identity")
+        );
     } else {
         anyhow::bail!("Expected Entry after update");
     }

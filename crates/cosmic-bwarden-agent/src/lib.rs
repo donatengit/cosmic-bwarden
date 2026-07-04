@@ -11,18 +11,18 @@ mod tpm;
 #[cfg(feature = "browser-host")]
 mod browser_host;
 
+use clap::Parser;
 use cosmic_bwarden_core::protocol::{Action, Response};
 use handler::handle_request;
 use logind::listen_to_logind;
 use ssh_agent::SshAgent;
 use state::State;
-use timeout::AutolockTimer;
+use std::path::PathBuf;
 use std::sync::Arc;
+use timeout::AutolockTimer;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
 use tokio::sync::Mutex;
-use clap::Parser;
-use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(author, version = cosmic_bwarden_core::version(), about = "cosmic-bwarden-agent: Secure background agent")]
@@ -55,7 +55,7 @@ pub async fn run() -> anyhow::Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     let args = Cli::parse();
-    
+
     // Apply CLI overrides to dirs early
     if let Some(config_path) = &args.config {
         cosmic_bwarden_core::dirs::set_config_override(config_path.clone());
@@ -68,8 +68,9 @@ pub async fn run() -> anyhow::Result<()> {
     }
 
     // Load configuration to check for additional overrides
-    let config = cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy().unwrap_or_default();
-    
+    let config =
+        cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy().unwrap_or_default();
+
     // Config overrides apply ONLY if CLI/Env was not set
     if args.socket.is_none() && std::env::var("COSMIC_BWARDEN_SOCKET").is_err() {
         if let Some(path) = config.socket_path {
@@ -154,9 +155,8 @@ pub async fn run() -> anyhow::Result<()> {
         if let Ok(cfg) = cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
             if cfg.tpm_enabled {
                 if let Some(email) = &cfg.email {
-                    let blob_path = cosmic_bwarden_core::dirs::tpm_blob_file(
-                        &cfg.server_name(), email,
-                    );
+                    let blob_path =
+                        cosmic_bwarden_core::dirs::tpm_blob_file(&cfg.server_name(), email);
                     state_guard.tpm_configured = blob_path.exists();
                 }
             }
@@ -231,7 +231,7 @@ pub async fn run() -> anyhow::Result<()> {
                         Ok(req) => {
                             log::debug!("Parsed request: {:?}", req);
                             req
-                        },
+                        }
                         Err(e) => {
                             log::error!("failed to deserialize request: {}", e);
                             let response = Response::Error {
@@ -247,14 +247,15 @@ pub async fn run() -> anyhow::Result<()> {
 
                     let is_subscribe = matches!(request, Action::Subscribe);
                     // Actions that should NOT reset the inactivity timer.
-                    let is_non_activity = matches!(&request,
+                    let is_non_activity = matches!(
+                        &request,
                         Action::Lock
-                        | Action::Logout
-                        | Action::Quit
-                        | Action::Subscribe
-                        | Action::Version
-                        | Action::GetConfig
-                        | Action::UpdateLockTimeout { .. }
+                            | Action::Logout
+                            | Action::Quit
+                            | Action::Subscribe
+                            | Action::Version
+                            | Action::GetConfig
+                            | Action::UpdateLockTimeout { .. }
                     );
                     // UpdateLockTimeout is handled here; all other actions go to dispatch.
                     let response = if let Action::UpdateLockTimeout { seconds } = request {
@@ -295,9 +296,8 @@ pub async fn run() -> anyhow::Result<()> {
                             // (covers the case where the vault window wasn't open yet
                             // when SetPendingEntry was called).
                             if let Some(id) = state_guard.pending_entry_id.take() {
-                                let _ = tx.send(
-                                    cosmic_bwarden_core::protocol::Event::OpenEntry { id },
-                                );
+                                let _ =
+                                    tx.send(cosmic_bwarden_core::protocol::Event::OpenEntry { id });
                             }
                             state_guard.subscribers.push(tx);
                         }

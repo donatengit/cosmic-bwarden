@@ -1,9 +1,7 @@
 use crate::error::{Error, Result};
 use crate::locked;
 
-use aes::cipher::{
-    BlockDecryptMut as _, BlockEncryptMut as _, KeyIvInit as _,
-};
+use aes::cipher::{BlockDecryptMut as _, BlockEncryptMut as _, KeyIvInit as _};
 use hmac::Mac as _;
 use pkcs8::DecodePrivateKey as _;
 use rand::RngCore as _;
@@ -81,26 +79,18 @@ impl CipherString {
                 if ty < 6 {
                     Err(Error::TooOldCipherStringType { ty: ty.to_string() })
                 } else {
-                    Err(Error::UnimplementedCipherStringType {
-                        ty: ty.to_string(),
-                    })
+                    Err(Error::UnimplementedCipherStringType { ty: ty.to_string() })
                 }
             }
         }
     }
 
-    pub fn encrypt_symmetric(
-        keys: &locked::Keys,
-        plaintext: &[u8],
-    ) -> Result<Self> {
+    pub fn encrypt_symmetric(keys: &locked::Keys, plaintext: &[u8]) -> Result<Self> {
         let iv = random_iv();
 
-        let cipher = cbc::Encryptor::<aes::Aes256>::new(
-            keys.enc_key().into(),
-            iv.as_slice().into(),
-        );
-        let ciphertext =
-            cipher.encrypt_padded_vec_mut::<block_padding::Pkcs7>(plaintext);
+        let cipher =
+            cbc::Encryptor::<aes::Aes256>::new(keys.enc_key().into(), iv.as_slice().into());
+        let ciphertext = cipher.encrypt_padded_vec_mut::<block_padding::Pkcs7>(plaintext);
 
         let mut digest = hmac::Hmac::<sha2::Sha256>::new_from_slice(keys.mac_key())
             .map_err(|source| Error::CreateHmac { source })?;
@@ -137,16 +127,12 @@ impl CipherString {
                 .map_err(|source| Error::Decrypt { source })
         } else {
             Err(Error::InvalidCipherString {
-                reason: "found an asymmetric cipherstring, expecting symmetric"
-                    .to_string(),
+                reason: "found an asymmetric cipherstring, expecting symmetric".to_string(),
             })
         }
     }
 
-    pub fn decrypt_locked_symmetric(
-        &self,
-        keys: &locked::Keys,
-    ) -> Result<locked::Vec> {
+    pub fn decrypt_locked_symmetric(&self, keys: &locked::Keys) -> Result<locked::Vec> {
         if let Self::Symmetric {
             iv,
             ciphertext,
@@ -155,20 +141,14 @@ impl CipherString {
         {
             let mut res = locked::Vec::new();
             res.extend(ciphertext.iter().copied());
-            let cipher = decrypt_common_symmetric(
-                keys,
-                iv,
-                ciphertext,
-                mac.as_deref(),
-            )?;
+            let cipher = decrypt_common_symmetric(keys, iv, ciphertext, mac.as_deref())?;
             cipher
                 .decrypt_padded_mut::<block_padding::Pkcs7>(res.data_mut())
                 .map_err(|source| Error::Decrypt { source })?;
             Ok(res)
         } else {
             Err(Error::InvalidCipherString {
-                reason: "found an asymmetric cipherstring, expecting symmetric"
-                    .to_string(),
+                reason: "found an asymmetric cipherstring, expecting symmetric".to_string(),
             })
         }
     }
@@ -193,8 +173,7 @@ impl CipherString {
             Ok(res)
         } else {
             Err(Error::InvalidCipherString {
-                reason: "found a symmetric cipherstring, expecting asymmetric"
-                    .to_string(),
+                reason: "found a symmetric cipherstring, expecting asymmetric".to_string(),
             })
         }
     }
@@ -292,8 +271,21 @@ mod tests {
 
         // Structured near-misses first — the historically dangerous shapes.
         for s in [
-            "", ".", "..", "2.", "2.|", "2.||", "2.|||", "4.", "6.", "9.x",
-            "2.!!|??|##", "22.a|b|c", "-1.a", "\u{0}.\u{0}", "2.a|b|c|d",
+            "",
+            ".",
+            "..",
+            "2.",
+            "2.|",
+            "2.||",
+            "2.|||",
+            "4.",
+            "6.",
+            "9.x",
+            "2.!!|??|##",
+            "22.a|b|c",
+            "-1.a",
+            "\u{0}.\u{0}",
+            "2.a|b|c|d",
         ] {
             let _ = CipherString::new(s);
         }

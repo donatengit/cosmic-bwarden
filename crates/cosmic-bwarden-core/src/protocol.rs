@@ -288,7 +288,9 @@ pub enum Event {
     /// should show a PIN field instead of a full master-password prompt.
     PinRequested,
     /// Requests the vault window to open and navigate to a specific entry.
-    OpenEntry { id: String },
+    OpenEntry {
+        id: String,
+    },
 }
 
 /// Stable message carried by `Response::Error` when the TPM refuses to unseal
@@ -364,10 +366,14 @@ mod debug_redaction_tests {
 
     #[test]
     fn action_debug_never_prints_secrets() {
-        let a = Action::Unlock { password: "hunter2-secret".to_string() };
+        let a = Action::Unlock {
+            password: "hunter2-secret".to_string(),
+        };
         assert_eq!(format!("{a:?}"), "Unlock");
 
-        let a = Action::UnlockWithPin { pin: "1234-secret".to_string() };
+        let a = Action::UnlockWithPin {
+            pin: "1234-secret".to_string(),
+        };
         assert!(!format!("{a:?}").contains("1234-secret"));
 
         let a = Action::SetupTpmPin {
@@ -378,21 +384,30 @@ mod debug_redaction_tests {
         assert!(!s.contains("master-secret") && !s.contains("pin-secret"));
 
         // Non-secret scalar (entry id) is allowed for debuggability.
-        let a = Action::GetPassword { id: "entry-123".to_string(), password: Some("x".into()) };
+        let a = Action::GetPassword {
+            id: "entry-123".to_string(),
+            password: Some("x".into()),
+        };
         let s = format!("{a:?}");
         assert!(s.contains("entry-123") && !s.contains("\"x\""));
     }
 
     #[test]
     fn response_debug_never_prints_secrets() {
-        let r = Response::Password { password: "leaked-pw".to_string() };
+        let r = Response::Password {
+            password: "leaked-pw".to_string(),
+        };
         assert!(!format!("{r:?}").contains("leaked-pw"));
 
-        let r = Response::Totp { code: "123456".to_string() };
+        let r = Response::Totp {
+            code: "123456".to_string(),
+        };
         assert!(!format!("{r:?}").contains("123456"));
 
         // Error messages remain visible.
-        let r = Response::Error { message: "boom".to_string() };
+        let r = Response::Error {
+            message: "boom".to_string(),
+        };
         assert!(format!("{r:?}").contains("boom"));
     }
 
@@ -427,10 +442,19 @@ impl std::fmt::Debug for Response {
             Self::Ack => f.write_str("Ack"),
             Self::Error { message } => write!(f, "Error {{ message: {message:?} }}"),
             Self::TwoFactorRequired { providers, .. } => {
-                write!(f, "TwoFactorRequired {{ providers: {providers:?}, token: <redacted> }}")
+                write!(
+                    f,
+                    "TwoFactorRequired {{ providers: {providers:?}, token: <redacted> }}"
+                )
             }
             Self::NewDeviceVerificationRequired => f.write_str("NewDeviceVerificationRequired"),
-            Self::Config { needs_login, has_account, is_locked, sync_failed, .. } => write!(
+            Self::Config {
+                needs_login,
+                has_account,
+                is_locked,
+                sync_failed,
+                ..
+            } => write!(
                 f,
                 "Config {{ needs_login: {needs_login}, has_account: {has_account}, \
                  is_locked: {is_locked}, sync_failed: {sync_failed} }}"
@@ -444,12 +468,19 @@ impl std::fmt::Debug for Response {
             Self::Entry { .. } => f.write_str("Entry { <redacted> }"),
             Self::Password { .. } => f.write_str("Password { <redacted> }"),
             Self::Totp { .. } => f.write_str("Totp { <redacted> }"),
-            Self::Version { version, protocol_version } => write!(
+            Self::Version {
+                version,
+                protocol_version,
+            } => write!(
                 f,
                 "Version {{ version: {version:?}, protocol_version: {protocol_version:?} }}"
             ),
             Self::Event { event } => write!(f, "Event {{ event: {event:?} }}"),
-            Self::TpmStatus { available, configured, server_credentials } => write!(
+            Self::TpmStatus {
+                available,
+                configured,
+                server_credentials,
+            } => write!(
                 f,
                 "TpmStatus {{ available: {available}, configured: {configured}, \
                  server_credentials: {server_credentials} }}"

@@ -54,9 +54,10 @@ async fn dispatch(action: Action, state: &Arc<Mutex<State>>) -> Response {
         | Action::AddIdentity { .. }
         | Action::AddSshKey { .. } => vault::handle_request(action, state).await,
         // Subscription / control actions
-        Action::Subscribe | Action::Quit | Action::SetPendingEntry { .. } | Action::RequestUnlock => {
-            subscription_handler::handle_request(action, state).await
-        }
+        Action::Subscribe
+        | Action::Quit
+        | Action::SetPendingEntry { .. }
+        | Action::RequestUnlock => subscription_handler::handle_request(action, state).await,
         // Intercepted in main.rs before reaching dispatch
         Action::UpdateLockTimeout { .. } => Response::Ack,
     }

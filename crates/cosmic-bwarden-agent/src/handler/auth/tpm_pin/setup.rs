@@ -100,8 +100,7 @@ pub async fn handle_setup_tpm_pin(
         }
 
         // Seal the identity keys into the TPM.
-        let blob_path =
-            cosmic_bwarden_core::dirs::tpm_blob_file(&config.server_name(), &email);
+        let blob_path = cosmic_bwarden_core::dirs::tpm_blob_file(&config.server_name(), &email);
 
         if let Err(e) = crate::tpm::seal(&identity.keys, &pin, &blob_path).await {
             let msg = format!("TPM seal failed: {:#}", e);
@@ -208,7 +207,10 @@ pub async fn handle_setup_tpm_pin_from_unlocked(
             g.tpm_configured = true;
         }
 
-        log::info!("TPM PIN unlock configured for {} (from unlocked state)", email);
+        log::info!(
+            "TPM PIN unlock configured for {} (from unlocked state)",
+            email
+        );
         Response::Ack
     }
     #[cfg(not(feature = "tpm"))]

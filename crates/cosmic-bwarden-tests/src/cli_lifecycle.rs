@@ -12,7 +12,8 @@ async fn test_cli_lifecycle() -> Result<()> {
     register_user(&env.vault_url, email, password).await?;
 
     // 2. Login
-    let output = env.cli_cmd()
+    let output = env
+        .cli_cmd()
         .arg("login")
         .arg(email)
         .arg("--server")
@@ -27,7 +28,8 @@ async fn test_cli_lifecycle() -> Result<()> {
     );
 
     // 3. Add entry
-    let output = env.cli_cmd()
+    let output = env
+        .cli_cmd()
         .arg("add")
         .arg("CLISite")
         .arg("username=cliuser")
@@ -40,9 +42,7 @@ async fn test_cli_lifecycle() -> Result<()> {
     );
 
     // 4. Sync
-    let output = env.cli_cmd()
-        .arg("sync")
-        .output()?;
+    let output = env.cli_cmd().arg("sync").output()?;
     assert!(
         output.status.success(),
         "CLI sync failed: {}",
@@ -50,19 +50,13 @@ async fn test_cli_lifecycle() -> Result<()> {
     );
 
     // 5. List
-    let output = env.cli_cmd()
-        .arg("ls")
-        .output()?;
+    let output = env.cli_cmd().arg("ls").output()?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("CLISite"));
 
     // 6. Get
-    let output = env.cli_cmd()
-        .arg("get")
-        .arg("CLISite")
-        .arg("-S")
-        .output()?;
+    let output = env.cli_cmd().arg("get").arg("CLISite").arg("-S").output()?;
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("clipass123"));
@@ -78,7 +72,8 @@ async fn test_cli_extended_features() -> Result<()> {
     let password = "extpassword123";
 
     // 1. Register user via CLI
-    let output = env.cli_cmd()
+    let output = env
+        .cli_cmd()
         .arg("register")
         .arg(email)
         .arg("--server")
@@ -93,7 +88,8 @@ async fn test_cli_extended_features() -> Result<()> {
     );
 
     // 2. Login
-    let output = env.cli_cmd()
+    let output = env
+        .cli_cmd()
         .arg("login")
         .arg(email)
         .arg("--server")
@@ -108,7 +104,8 @@ async fn test_cli_extended_features() -> Result<()> {
     );
 
     // 3. Add Secure Note (using add instead of add-note to avoid type 2 issues)
-    let output = env.cli_cmd()
+    let output = env
+        .cli_cmd()
         .arg("add")
         .arg("MyNote")
         .arg("notes=This is a secret note")
@@ -121,17 +118,11 @@ async fn test_cli_extended_features() -> Result<()> {
     );
 
     // 4. Sync
-    let output = env.cli_cmd()
-        .arg("sync")
-        .output()?;
+    let output = env.cli_cmd().arg("sync").output()?;
     assert!(output.status.success());
 
     // 5. Verify Note
-    let output = env.cli_cmd()
-        .arg("get")
-        .arg("MyNote")
-        .arg("-S")
-        .output()?;
+    let output = env.cli_cmd().arg("get").arg("MyNote").arg("-S").output()?;
     assert!(
         output.status.success(),
         "CLI get MyNote failed: {}",

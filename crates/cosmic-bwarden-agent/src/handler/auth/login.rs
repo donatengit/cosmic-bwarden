@@ -179,7 +179,11 @@ pub async fn handle_login(
             state_guard.rebuild_sidebar_cache();
 
             state_guard.broadcast(Event::Unlocked);
-            log::info!("login: {} authenticated (server: {})", email, config.server_name());
+            log::info!(
+                "login: {} authenticated (server: {})",
+                email,
+                config.server_name()
+            );
             Response::Ack
         }
         Err(e) => Response::Error {

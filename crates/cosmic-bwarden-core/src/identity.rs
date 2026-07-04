@@ -20,8 +20,9 @@ impl Identity {
     ) -> Result<Self> {
         let email = email.trim().to_lowercase();
 
-        let iterations = std::num::NonZeroU32::new(iterations)
-            .ok_or(Error::Other("KDF iterations must be greater than zero".to_string()))?;
+        let iterations = std::num::NonZeroU32::new(iterations).ok_or(Error::Other(
+            "KDF iterations must be greater than zero".to_string(),
+        ))?;
 
         let mut keys = locked::Vec::new();
         keys.extend(std::iter::repeat_n(0, 64));
@@ -68,13 +69,8 @@ impl Identity {
                     Error::Other("Argon2id memory parameter overflow".to_string())
                 })?;
 
-                let params = argon2::Params::new(
-                    mem_kib,
-                    iterations.get(),
-                    parallelism,
-                    Some(32),
-                )
-                .map_err(|e| Error::Other(format!("invalid Argon2id parameters: {e}")))?;
+                let params = argon2::Params::new(mem_kib, iterations.get(), parallelism, Some(32))
+                    .map_err(|e| Error::Other(format!("invalid Argon2id parameters: {e}")))?;
                 let argon2_config = argon2::Argon2::new(
                     argon2::Algorithm::Argon2id,
                     argon2::Version::V0x13,
@@ -102,7 +98,7 @@ impl Identity {
 
         let hkdf = hkdf::Hkdf::<sha2::Sha256>::from_prk(&keys.data()[0..32])
             .map_err(|_| Error::Other("failed to expand with hkdf".to_string()))?;
-        
+
         let mut enc_key_expanded = [0u8; 32];
         hkdf.expand(b"enc", &mut enc_key_expanded)
             .map_err(|_| Error::Other("failed to expand enc key with hkdf".to_string()))?;
@@ -173,8 +169,15 @@ mod tests {
     #[test]
     fn valid_params_succeed_and_normalize_email() {
         // Small, in-range params keep the test fast while exercising the happy path.
-        let id = Identity::new("  Foo@Bar.COM ", &pw(), KdfType::Argon2id, 3, Some(16), Some(1))
-            .expect("in-range Argon2id params should derive a key");
+        let id = Identity::new(
+            "  Foo@Bar.COM ",
+            &pw(),
+            KdfType::Argon2id,
+            3,
+            Some(16),
+            Some(1),
+        )
+        .expect("in-range Argon2id params should derive a key");
         assert_eq!(id.email, "foo@bar.com");
 
         let id2 = Identity::new("User@Example.com", &pw(), KdfType::Pbkdf2, 100, None, None)

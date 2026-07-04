@@ -82,7 +82,10 @@ pub async fn handle_delete_entry(id: String, state: &Arc<Mutex<State>>) -> Respo
                 g.sync_failed = true;
                 g.last_sync_error = Some(e.clone());
             }
-            log::error!("delete entry failed on server (local delete will be undone by next sync): {}", e);
+            log::error!(
+                "delete entry failed on server (local delete will be undone by next sync): {}",
+                e
+            );
             Response::Error {
                 message: format!("delete failed: {}", e),
             }
@@ -108,9 +111,18 @@ pub async fn handle_update_entry(mut entry: Entry, state: &Arc<Mutex<State>>) ->
     }
     // Keep SSH key custom fields in sync with entry.data so the plaintext fallback
     // path in decrypt() always returns the latest values.
-    if let cosmic_bwarden_core::db::EntryData::SshKey { private_key, public_key, .. } = &entry.data.clone() {
+    if let cosmic_bwarden_core::db::EntryData::SshKey {
+        private_key,
+        public_key,
+        ..
+    } = &entry.data.clone()
+    {
         if let Some(pk) = private_key {
-            entry.set_field("private_key", pk.expose(), cosmic_bwarden_core::api::FieldType::Hidden);
+            entry.set_field(
+                "private_key",
+                pk.expose(),
+                cosmic_bwarden_core::api::FieldType::Hidden,
+            );
         }
         if let Some(pk) = public_key {
             entry.set_field("public_key", pk, cosmic_bwarden_core::api::FieldType::Text);
@@ -137,7 +149,10 @@ pub async fn handle_update_entry(mut entry: Entry, state: &Arc<Mutex<State>>) ->
                     g.sync_failed = true;
                     g.last_sync_error = Some(e.to_string());
                 }
-                log::error!("update entry failed on server (local edit will be undone by next sync): {}", e);
+                log::error!(
+                    "update entry failed on server (local edit will be undone by next sync): {}",
+                    e
+                );
                 Response::Error {
                     message: format!("failed to update entry on server: {}", e),
                 }
@@ -223,7 +238,10 @@ async fn set_favorite(id: String, favorite: bool, state: &Arc<Mutex<State>>) -> 
 
     match res {
         Ok(()) => {
-            state.lock().await.broadcast(cosmic_bwarden_core::protocol::Event::VaultChanged);
+            state
+                .lock()
+                .await
+                .broadcast(cosmic_bwarden_core::protocol::Event::VaultChanged);
             Response::Ack
         }
         Err(e) => {
@@ -232,7 +250,10 @@ async fn set_favorite(id: String, favorite: bool, state: &Arc<Mutex<State>>) -> 
                 g.sync_failed = true;
                 g.last_sync_error = Some(e.clone());
             }
-            log::error!("update favorite failed on server (local change will be undone by next sync): {}", e);
+            log::error!(
+                "update favorite failed on server (local change will be undone by next sync): {}",
+                e
+            );
             Response::Error {
                 message: format!("failed to update favorite on server: {}", e),
             }
@@ -461,7 +482,10 @@ async fn add_entry_to_server(entry: Entry, state: &Arc<Mutex<State>>) -> Respons
                     g.sync_failed = true;
                     g.last_sync_error = Some(e.to_string());
                 }
-                log::error!("add entry failed on server (entry will disappear on next sync): {}", e);
+                log::error!(
+                    "add entry failed on server (entry will disappear on next sync): {}",
+                    e
+                );
                 Response::Error {
                     message: format!("add failed: {}", e),
                 }

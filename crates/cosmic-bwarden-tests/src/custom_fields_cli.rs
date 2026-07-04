@@ -27,7 +27,8 @@ async fn test_custom_fields_cli() -> Result<()> {
         .await?;
 
     // 1. Add entry with custom fields via CLI
-    let output = env.cli_cmd()
+    let output = env
+        .cli_cmd()
         .arg("add")
         .arg("FieldEntry")
         .arg("username=user1")
@@ -80,10 +81,7 @@ async fn test_custom_fields_cli() -> Result<()> {
     assert_eq!(f2.ty, Some(cosmic_bwarden_core::api::FieldType::Hidden));
 
     // 3. Test CLI output masking
-    let output = env.cli_cmd()
-        .arg("get")
-        .arg("FieldEntry")
-        .output()?;
+    let output = env.cli_cmd().arg("get").arg("FieldEntry").output()?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("MyText: Value1"));
@@ -91,7 +89,8 @@ async fn test_custom_fields_cli() -> Result<()> {
     assert!(!stdout.contains("SecretValue"));
 
     // 4. Edit field via CLI
-    let output = env.cli_cmd()
+    let output = env
+        .cli_cmd()
         .arg("edit")
         .arg("FieldEntry")
         .arg("--field")

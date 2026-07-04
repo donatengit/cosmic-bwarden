@@ -62,7 +62,9 @@ pub enum Error {
 
     #[cfg(feature = "debug-api")]
     #[error("json error at {}: {}", .source.path(), .source.inner())]
-    Json { source: serde_path_to_error::Error<serde_json::Error> },
+    Json {
+        source: serde_path_to_error::Error<serde_json::Error>,
+    },
 
     #[cfg(not(feature = "debug-api"))]
     #[error("json error: {source}")]

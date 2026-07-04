@@ -99,7 +99,11 @@ async fn test_tpm_full_lifecycle() -> Result<()> {
     // ── 9. Lock and unlock again — idempotent ───────────────────────────
     lock(&env).await?;
     let ok_pin2 = unlock_with_pin(&env, PIN).await?;
-    assert!(matches!(ok_pin2, Response::Ack), "second PIN unlock failed: {:?}", ok_pin2);
+    assert!(
+        matches!(ok_pin2, Response::Ack),
+        "second PIN unlock failed: {:?}",
+        ok_pin2
+    );
     assert_vault_accessible(&env).await?;
 
     // ── 10. DisableTpmPin (vault is unlocked — no password needed) ──────────

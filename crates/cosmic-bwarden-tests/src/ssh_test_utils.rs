@@ -43,7 +43,9 @@ pub fn generate_ssh_keypair(
 /// Starts a real `sshd` container with `authorized_public_key` as the only
 /// authorized key for `testuser`, password auth disabled. Returns the
 /// container with port 2222 exposed once it accepts TCP connections.
-pub async fn start_sshd_container(authorized_public_key: &str) -> Result<ContainerAsync<GenericImage>> {
+pub async fn start_sshd_container(
+    authorized_public_key: &str,
+) -> Result<ContainerAsync<GenericImage>> {
     let image = GenericImage::new("linuxserver/openssh-server", "latest")
         .with_wait_for(WaitFor::seconds(8))
         .with_exposed_port(2222.tcp())
@@ -74,7 +76,11 @@ pub async fn wait_for_socket(path: &Path, timeout: Duration) -> Result<()> {
     let start = std::time::Instant::now();
     while !path.exists() {
         if start.elapsed() > timeout {
-            anyhow::bail!("socket {} did not appear within {:?}", path.display(), timeout);
+            anyhow::bail!(
+                "socket {} did not appear within {:?}",
+                path.display(),
+                timeout
+            );
         }
         sleep(Duration::from_millis(100)).await;
     }

@@ -1,6 +1,6 @@
+use cosmic_config::{cosmic_config_derive::CosmicConfigEntry, CosmicConfigEntry};
 use std::io::{Read as _, Write as _};
 use tokio::io::AsyncReadExt as _;
-use cosmic_config::{CosmicConfigEntry, cosmic_config_derive::CosmicConfigEntry};
 
 pub const CONFIG_ID: &str = "com.system76.CosmicBWarden";
 
@@ -107,49 +107,66 @@ impl CosmicBWardenConfig {
     }
 
     pub fn base_url(&self) -> String {
-        self.base_url.as_ref().filter(|s| !s.is_empty()).map_or_else(
-            || "https://api.bitwarden.com".to_string(),
-            |url| {
-                let clean_url = url.trim_end_matches('/');
-                if clean_url == "https://api.bitwarden.eu" {
-                    "https://api.bitwarden.eu".to_string()
-                } else {
-                    format!("{clean_url}/api")
-                }
-            },
-        )
+        self.base_url
+            .as_ref()
+            .filter(|s| !s.is_empty())
+            .map_or_else(
+                || "https://api.bitwarden.com".to_string(),
+                |url| {
+                    let clean_url = url.trim_end_matches('/');
+                    if clean_url == "https://api.bitwarden.eu" {
+                        "https://api.bitwarden.eu".to_string()
+                    } else {
+                        format!("{clean_url}/api")
+                    }
+                },
+            )
     }
 
     pub fn identity_url(&self) -> String {
-        self.identity_url.as_ref().filter(|s| !s.is_empty()).cloned().unwrap_or_else(|| {
-            self.base_url.as_ref().filter(|s| !s.is_empty()).map_or_else(
-                || "https://identity.bitwarden.com".to_string(),
-                |url| {
-                    let clean_url = url.trim_end_matches('/');
-                    if clean_url == "https://api.bitwarden.eu" {
-                        "https://identity.bitwarden.eu".to_string()
-                    } else {
-                        format!("{clean_url}/identity")
-                    }
-                },
-            )
-        })
+        self.identity_url
+            .as_ref()
+            .filter(|s| !s.is_empty())
+            .cloned()
+            .unwrap_or_else(|| {
+                self.base_url
+                    .as_ref()
+                    .filter(|s| !s.is_empty())
+                    .map_or_else(
+                        || "https://identity.bitwarden.com".to_string(),
+                        |url| {
+                            let clean_url = url.trim_end_matches('/');
+                            if clean_url == "https://api.bitwarden.eu" {
+                                "https://identity.bitwarden.eu".to_string()
+                            } else {
+                                format!("{clean_url}/identity")
+                            }
+                        },
+                    )
+            })
     }
 
     pub fn ui_url(&self) -> String {
-        self.ui_url.as_ref().filter(|s| !s.is_empty()).cloned().unwrap_or_else(|| {
-            self.base_url.as_ref().filter(|s| !s.is_empty()).map_or_else(
-                || "https://vault.bitwarden.com".to_string(),
-                |url| {
-                    let clean_url = url.trim_end_matches('/');
-                    if clean_url == "https://api.bitwarden.eu" {
-                        "https://vault.bitwarden.eu".to_string()
-                    } else {
-                        clean_url.to_string()
-                    }
-                },
-            )
-        })
+        self.ui_url
+            .as_ref()
+            .filter(|s| !s.is_empty())
+            .cloned()
+            .unwrap_or_else(|| {
+                self.base_url
+                    .as_ref()
+                    .filter(|s| !s.is_empty())
+                    .map_or_else(
+                        || "https://vault.bitwarden.com".to_string(),
+                        |url| {
+                            let clean_url = url.trim_end_matches('/');
+                            if clean_url == "https://api.bitwarden.eu" {
+                                "https://vault.bitwarden.eu".to_string()
+                            } else {
+                                clean_url.to_string()
+                            }
+                        },
+                    )
+            })
     }
 
     pub async fn device_id(&self) -> crate::error::Result<String> {

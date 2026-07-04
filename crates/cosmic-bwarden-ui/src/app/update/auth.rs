@@ -1,12 +1,12 @@
-use cosmic::app::Task;
-use cosmic::Action;
-use cosmic_bwarden_core::agent_client::AgentClient;
-use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
 use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::fetch_sidebar_entries;
 use crate::fl;
 use crate::message::{Message, View};
 use crate::MIN_PIN_LEN;
+use cosmic::app::Task;
+use cosmic::Action;
+use cosmic_bwarden_core::agent_client::AgentClient;
+use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
 use tracing::error;
 use zeroize::Zeroize;
 
@@ -100,7 +100,10 @@ impl CosmicBWardenApp {
             }
             Message::LoginSubmitted => {
                 // Validate PIN length before sending the login request.
-                if self.login_pin_enabled && !self.login_pin.is_empty() && self.login_pin.chars().count() < MIN_PIN_LEN {
+                if self.login_pin_enabled
+                    && !self.login_pin.is_empty()
+                    && self.login_pin.chars().count() < MIN_PIN_LEN
+                {
                     self.error = Some(fl!("pin-too-short", count = MIN_PIN_LEN));
                     return Some(Task::none());
                 }
@@ -185,7 +188,8 @@ impl CosmicBWardenApp {
                         self.error = None;
                         self.pin_incorrect = false;
 
-                        let mut tasks = vec![fetch_sidebar_entries(self.search_id, None, None, false)];
+                        let mut tasks =
+                            vec![fetch_sidebar_entries(self.search_id, None, None, false)];
 
                         // Master-password unlock that showed the PIN (re-)enable
                         // field: reseal the PIN (non-empty) or remove a stale PIN

@@ -2,8 +2,7 @@ use zeroize::Zeroize as _;
 
 const LEN: usize = 4096;
 
-static REGION_LOCK_WORKS: std::sync::OnceLock<bool> =
-    std::sync::OnceLock::new();
+static REGION_LOCK_WORKS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
 
 /// RAII guard that `mlock`s a memory region for its lifetime, `munlock`ing
 /// it on drop. Replaces the `region` crate, which is a thin wrapper around

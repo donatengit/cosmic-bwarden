@@ -75,7 +75,12 @@ pub(super) fn verify_reprompt(
     let iterations = db.iterations.unwrap_or(100_000);
 
     let identity = match cosmic_bwarden_core::identity::Identity::new(
-        email, &pw, kdf, iterations, db.memory, db.parallelism,
+        email,
+        &pw,
+        kdf,
+        iterations,
+        db.memory,
+        db.parallelism,
     ) {
         Ok(id) => id,
         Err(e) => {
@@ -175,7 +180,7 @@ pub async fn handle_get_entries(
                 match (et, &entry.data) {
                     (EntryType::Login, cosmic_bwarden_core::db::EntryData::Login { .. }) => (),
                     (EntryType::Card, cosmic_bwarden_core::db::EntryData::Card { .. }) => (),
-                    (EntryType::Identity, cosmic_bwarden_core::db::EntryData::Identity { .. }) => (),
+                    (EntryType::Identity, cosmic_bwarden_core::db::EntryData::Identity { .. }) => {}
                     (EntryType::SecureNote, cosmic_bwarden_core::db::EntryData::SecureNote) => (),
                     (EntryType::SshKey, cosmic_bwarden_core::db::EntryData::SshKey { .. }) => (),
                     _ => continue,
@@ -198,8 +203,7 @@ pub async fn handle_get_entries(
                         return true;
                     }
                     if let cosmic_bwarden_core::db::EntryData::Login {
-                        username: Some(u),
-                        ..
+                        username: Some(u), ..
                     } = &e.data
                     {
                         if u.to_lowercase().contains(&q) {

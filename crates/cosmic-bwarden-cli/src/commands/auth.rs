@@ -1,6 +1,6 @@
-use anyhow::{Context, Result};
 use crate::args::{Cli, Commands};
 use crate::output::handle_response;
+use anyhow::{Context, Result};
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action, Response};
 
@@ -120,8 +120,11 @@ pub async fn handle_command(cli: &Cli, client: &AgentClient) -> Result<()> {
             println!("Logged in successfully");
 
             // Offer PIN unlock setup if TPM2 is available and not yet configured.
-            if let Ok(Response::TpmStatus { available: true, configured: false, .. }) =
-                client.send(Action::CheckTpm).await
+            if let Ok(Response::TpmStatus {
+                available: true,
+                configured: false,
+                ..
+            }) = client.send(Action::CheckTpm).await
             {
                 eprintln!(
                     "TPM2 available. Enter a PIN (min {} chars) to enable PIN unlock, or leave empty to skip:",
@@ -219,8 +222,7 @@ mod tests {
 
     #[test]
     fn test_version_mismatch_error() {
-        let err =
-            check_protocol_compatibility("2026.06-100-abc", "0.0.0-fake").unwrap_err();
+        let err = check_protocol_compatibility("2026.06-100-abc", "0.0.0-fake").unwrap_err();
         assert!(err.to_string().contains("Version mismatch"));
     }
 }

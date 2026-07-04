@@ -73,7 +73,11 @@ async fn test_tpm_pin_survives_logout_login() -> Result<()> {
 
     // Logout clears in-memory keys but must NOT delete the blob.
     let logout_res = client.send(Action::Logout).await?;
-    assert!(matches!(logout_res, Response::Ack), "Logout failed: {:?}", logout_res);
+    assert!(
+        matches!(logout_res, Response::Ack),
+        "Logout failed: {:?}",
+        logout_res
+    );
 
     // Re-login with master password.
     let re_login = client
@@ -88,7 +92,11 @@ async fn test_tpm_pin_survives_logout_login() -> Result<()> {
             device_verification_code: None,
         })
         .await?;
-    assert!(matches!(re_login, Response::Ack), "re-login failed: {:?}", re_login);
+    assert!(
+        matches!(re_login, Response::Ack),
+        "re-login failed: {:?}",
+        re_login
+    );
 
     // Blob should still be present → configured=true.
     assert_tpm_status(&env, true, true).await?;
@@ -96,7 +104,11 @@ async fn test_tpm_pin_survives_logout_login() -> Result<()> {
     // Lock and unlock via PIN — should still work.
     lock(&env).await?;
     let pin_res = unlock_with_pin(&env, PIN).await?;
-    assert!(matches!(pin_res, Response::Ack), "PIN unlock after re-login failed: {:?}", pin_res);
+    assert!(
+        matches!(pin_res, Response::Ack),
+        "PIN unlock after re-login failed: {:?}",
+        pin_res
+    );
     assert_vault_accessible(&env).await?;
 
     Ok(())

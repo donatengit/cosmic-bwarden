@@ -55,10 +55,7 @@ impl CosmicBWardenApp {
 
         content = match self.view {
             View::Vault | View::Settings => content.add(search::view(self)),
-            View::Setup => content.add(
-                container(text::body(fl!("not-configured")))
-                    .padding(10),
-            ),
+            View::Setup => content.add(container(text::body(fl!("not-configured"))).padding(10)),
             _ => content.add(unlock::view(self)),
         };
 

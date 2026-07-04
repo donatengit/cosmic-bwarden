@@ -1,5 +1,7 @@
 use crate::common::{lock_unlock_cycle, logout_login_cycle, register_user, setup_env, TestEnv};
-use crate::ssh_test_utils::{assert_ssh_access, generate_ssh_keypair, start_sshd_container, wait_for_socket};
+use crate::ssh_test_utils::{
+    assert_ssh_access, generate_ssh_keypair, start_sshd_container, wait_for_socket,
+};
 use anyhow::Result;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action, Response};
@@ -81,7 +83,8 @@ async fn setup_with_ssh_key(email: &str, password: &str) -> Result<LifecycleEnv>
 /// method enabled).
 #[tokio::test]
 async fn test_ssh_agent_locked_refuses_signing() -> Result<()> {
-    let lifecycle = setup_with_ssh_key("ssh-agent-locked@example.com", "sshagentpassword123").await?;
+    let lifecycle =
+        setup_with_ssh_key("ssh-agent-locked@example.com", "sshagentpassword123").await?;
 
     assert_ssh_access(&lifecycle.sock, lifecycle.ssh_port, "testuser", true)?;
 

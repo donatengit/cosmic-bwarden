@@ -6,7 +6,12 @@ const COLLECTION_LABEL: &str = "cosmic-bwarden";
 #[cfg(feature = "keyring")]
 const APP_ID: &str = "com.system76.CosmicBWarden";
 
-pub async fn store_tokens(server: &str, email: &str, access_token: &str, refresh_token: &str) -> anyhow::Result<()> {
+pub async fn store_tokens(
+    server: &str,
+    email: &str,
+    access_token: &str,
+    refresh_token: &str,
+) -> anyhow::Result<()> {
     #[cfg(feature = "keyring")]
     {
         let service = Service::new().await?;
@@ -21,14 +26,16 @@ pub async fn store_tokens(server: &str, email: &str, access_token: &str, refresh
         attributes.insert("email", email);
 
         let secret = format!("{}:{}", access_token, refresh_token);
-        
-        collection.create_item(
-            &format!("Bitwarden Session for {} ({})", email, server),
-            &attributes,
-            secret.as_bytes(),
-            true,
-            "text/plain",
-        ).await?;
+
+        collection
+            .create_item(
+                &format!("Bitwarden Session for {} ({})", email, server),
+                &attributes,
+                secret.as_bytes(),
+                true,
+                "text/plain",
+            )
+            .await?;
         Ok(())
     }
     #[cfg(not(feature = "keyring"))]
@@ -43,7 +50,7 @@ pub async fn get_tokens(server: &str, email: &str) -> anyhow::Result<Option<(Str
     {
         let service = Service::new().await?;
         let collection = service.default_collection().await?;
-        
+
         let mut attributes = std::collections::HashMap::new();
         attributes.insert("app_id", APP_ID);
         attributes.insert("server", server);
@@ -71,7 +78,7 @@ pub async fn delete_tokens(server: &str, email: &str) -> anyhow::Result<()> {
     {
         let service = Service::new().await?;
         let collection = service.default_collection().await?;
-        
+
         let mut attributes = std::collections::HashMap::new();
         attributes.insert("app_id", APP_ID);
         attributes.insert("server", server);

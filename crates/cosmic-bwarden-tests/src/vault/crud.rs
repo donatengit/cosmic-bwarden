@@ -1,4 +1,4 @@
-use crate::common::{register_user, setup_env, lock_unlock_cycle, logout_login_cycle};
+use crate::common::{lock_unlock_cycle, logout_login_cycle, register_user, setup_env};
 use anyhow::Result;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action, Response};

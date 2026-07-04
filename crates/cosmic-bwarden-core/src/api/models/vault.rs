@@ -113,16 +113,19 @@ impl SyncResCipher {
                     username: login.and_then(|l| l.username.clone()),
                     password: login.and_then(|l| l.password.clone().map(Into::into)),
                     totp: login.and_then(|l| l.totp.clone().map(Into::into)),
-                    uris: login.and_then(|l| l.uris.as_ref()).map_or_else(std::vec::Vec::new, |uris| {
-                        uris.iter()
-                            .filter_map(|uri| {
-                                uri.uri.clone().map(|s| crate::db::Uri {
-                                    uri: s,
-                                    match_type: uri.match_type,
+                    uris: login.and_then(|l| l.uris.as_ref()).map_or_else(
+                        std::vec::Vec::new,
+                        |uris| {
+                            uris.iter()
+                                .filter_map(|uri| {
+                                    uri.uri.clone().map(|s| crate::db::Uri {
+                                        uri: s,
+                                        match_type: uri.match_type,
+                                    })
                                 })
-                            })
-                            .collect()
-                    }),
+                                .collect()
+                        },
+                    ),
                 }
             }
             2 => crate::db::EntryData::SecureNote,
@@ -304,7 +307,6 @@ pub struct CipherField {
     pub linked_id: Option<LinkedIdType>,
 }
 
-
 #[derive(serde::Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CiphersPostReq {
@@ -344,13 +346,7 @@ pub(crate) struct CiphersPutReq {
 }
 
 #[derive(
-    serde_repr::Serialize_repr,
-    serde_repr::Deserialize_repr,
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
+    serde_repr::Serialize_repr, serde_repr::Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq,
 )]
 #[repr(u16)]
 pub enum FieldType {
@@ -361,13 +357,7 @@ pub enum FieldType {
 }
 
 #[derive(
-    serde_repr::Serialize_repr,
-    serde_repr::Deserialize_repr,
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
+    serde_repr::Serialize_repr, serde_repr::Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq,
 )]
 #[repr(u16)]
 pub enum LinkedIdType {

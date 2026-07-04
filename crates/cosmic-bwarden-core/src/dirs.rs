@@ -22,17 +22,25 @@ pub fn make_all() -> Result<()> {
     Ok(())
 }
 
-fn create_dir_all_with_permissions(
-    path: &std::path::Path,
-    mode: u32,
-) -> Result<()> {
+fn create_dir_all_with_permissions(path: &std::path::Path, mode: u32) -> Result<()> {
     std::fs::DirBuilder::new()
         .recursive(true)
         .mode(mode)
         .create(path)
-        .map_err(|source| Error::Other(format!("failed to create directory {}: {}", path.display(), source)))?;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
-        .map_err(|source| Error::Other(format!("failed to set permissions on {}: {}", path.display(), source)))?;
+        .map_err(|source| {
+            Error::Other(format!(
+                "failed to create directory {}: {}",
+                path.display(),
+                source
+            ))
+        })?;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).map_err(|source| {
+        Error::Other(format!(
+            "failed to set permissions on {}: {}",
+            path.display(),
+            source
+        ))
+    })?;
     Ok(())
 }
 
@@ -46,14 +54,10 @@ const INVALID_PATH: &percent_encoding::AsciiSet =
     &percent_encoding::CONTROLS.add(b'/').add(b'%').add(b':');
 
 pub fn db_file(server: &str, email: &str) -> std::path::PathBuf {
-    let server =
-        percent_encoding::percent_encode(server.as_bytes(), INVALID_PATH)
-            .to_string();
+    let server = percent_encoding::percent_encode(server.as_bytes(), INVALID_PATH).to_string();
     // Encode the email too — an address containing '/' or ".." must not be able
     // to steer the cache path outside the cache dir.
-    let email =
-        percent_encoding::percent_encode(email.as_bytes(), INVALID_PATH)
-            .to_string();
+    let email = percent_encoding::percent_encode(email.as_bytes(), INVALID_PATH).to_string();
     cache_dir().join(format!("{server}:{email}.json"))
 }
 
@@ -100,26 +104,22 @@ pub fn ssh_agent_socket_file() -> std::path::PathBuf {
 }
 
 fn config_dir() -> std::path::PathBuf {
-    let project_dirs =
-        directories::ProjectDirs::from("", "", &profile()).unwrap();
+    let project_dirs = directories::ProjectDirs::from("", "", &profile()).unwrap();
     project_dirs.config_dir().to_path_buf()
 }
 
 pub fn cache_dir() -> std::path::PathBuf {
-    let project_dirs =
-        directories::ProjectDirs::from("", "", &profile()).unwrap();
+    let project_dirs = directories::ProjectDirs::from("", "", &profile()).unwrap();
     project_dirs.cache_dir().to_path_buf()
 }
 
 fn data_dir() -> std::path::PathBuf {
-    let project_dirs =
-        directories::ProjectDirs::from("", "", &profile()).unwrap();
+    let project_dirs = directories::ProjectDirs::from("", "", &profile()).unwrap();
     project_dirs.data_dir().to_path_buf()
 }
 
 fn runtime_dir() -> std::path::PathBuf {
-    let project_dirs =
-        directories::ProjectDirs::from("", "", &profile()).unwrap();
+    let project_dirs = directories::ProjectDirs::from("", "", &profile()).unwrap();
     project_dirs.runtime_dir().map_or_else(
         || {
             format!(
@@ -174,8 +174,14 @@ mod tests {
     fn db_file_encodes_colon_in_fields() {
         let p = db_file("host:8080", "a:b");
         let name = p.file_name().unwrap().to_str().unwrap();
-        assert!(name.contains("host%3A8080"), "colon in server must be encoded: {name}");
-        assert!(name.contains("a%3Ab"), "colon in email must be encoded: {name}");
+        assert!(
+            name.contains("host%3A8080"),
+            "colon in server must be encoded: {name}"
+        );
+        assert!(
+            name.contains("a%3Ab"),
+            "colon in email must be encoded: {name}"
+        );
     }
 
     // '%' must itself be encoded, otherwise a crafted value could forge an encoded
@@ -184,6 +190,9 @@ mod tests {
     fn db_file_encodes_percent() {
         let p = db_file("s", "a%2Fb");
         let name = p.file_name().unwrap().to_str().unwrap();
-        assert!(name.contains("a%252Fb"), "literal '%' must be encoded: {name}");
+        assert!(
+            name.contains("a%252Fb"),
+            "literal '%' must be encoded: {name}"
+        );
     }
 }

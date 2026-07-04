@@ -47,7 +47,11 @@ async fn test_pin_unlock_without_server_credentials_sync_fails() -> Result<()> {
     // PIN unlock: no keyring (persist_session=false), no in-memory token (cleared
     // by lock), no hash blob → vault is locally accessible but server ops fail.
     let ok = unlock_with_pin(&env, PIN).await?;
-    assert!(matches!(ok, Response::Ack), "PIN unlock should succeed: {:?}", ok);
+    assert!(
+        matches!(ok, Response::Ack),
+        "PIN unlock should succeed: {:?}",
+        ok
+    );
 
     // Local vault access works (symmetric keys unsealed from TPM).
     assert_vault_accessible(&env).await?;
@@ -116,7 +120,11 @@ async fn test_pin_unlock_with_server_credentials_sync_succeeds() -> Result<()> {
     // PIN unlock: hash blob unsealed → master_password_hash restored →
     // silent re-auth → new session token obtained inside handle_unlock_with_pin.
     let ok = unlock_with_pin(&env, PIN).await?;
-    assert!(matches!(ok, Response::Ack), "PIN unlock should succeed: {:?}", ok);
+    assert!(
+        matches!(ok, Response::Ack),
+        "PIN unlock should succeed: {:?}",
+        ok
+    );
 
     // Local vault access works.
     assert_vault_accessible(&env).await?;
@@ -163,7 +171,11 @@ async fn test_enable_server_credentials_rejected_after_pin_only_unlock() -> Resu
     // Lock and re-unlock with PIN — no hash blob → master_password_hash stays None.
     lock(&env).await?;
     let ok = unlock_with_pin(&env, PIN).await?;
-    assert!(matches!(ok, Response::Ack), "PIN unlock should succeed: {:?}", ok);
+    assert!(
+        matches!(ok, Response::Ack),
+        "PIN unlock should succeed: {:?}",
+        ok
+    );
     assert_vault_accessible(&env).await?;
 
     // Try to enable server credentials — should fail: master_password_hash not in memory.
@@ -207,7 +219,11 @@ async fn test_disable_pin_removes_server_credentials_blob() -> Result<()> {
     assert!(matches!(s, Response::Ack), "setup_pin failed: {:?}", s);
 
     let e = enable_server_credentials(&env).await?;
-    assert!(matches!(e, Response::Ack), "enable_server_credentials failed: {:?}", e);
+    assert!(
+        matches!(e, Response::Ack),
+        "enable_server_credentials failed: {:?}",
+        e
+    );
 
     // Both blobs must exist.
     assert_tpm_status(&env, true, true).await?;
@@ -232,17 +248,29 @@ async fn test_disable_pin_removes_server_credentials_blob() -> Result<()> {
             password: PASSWORD.to_string(),
         })
         .await?;
-    assert!(matches!(uw, Response::Ack), "password unlock failed: {:?}", uw);
+    assert!(
+        matches!(uw, Response::Ack),
+        "password unlock failed: {:?}",
+        uw
+    );
 
     let e2 = enable_server_credentials(&env).await?;
-    assert!(matches!(e2, Response::Ack), "second enable failed: {:?}", e2);
+    assert!(
+        matches!(e2, Response::Ack),
+        "second enable failed: {:?}",
+        e2
+    );
     assert_server_credentials(&env, true).await?;
 
     // Disable only server credentials; PIN should remain.
     let dc = disable_server_credentials(&env).await?;
-    assert!(matches!(dc, Response::Ack), "disable_server_credentials failed: {:?}", dc);
+    assert!(
+        matches!(dc, Response::Ack),
+        "disable_server_credentials failed: {:?}",
+        dc
+    );
 
-    assert_tpm_status(&env, true, true).await?;   // PIN still configured
+    assert_tpm_status(&env, true, true).await?; // PIN still configured
     assert_server_credentials(&env, false).await?; // hash blob gone
 
     Ok(())

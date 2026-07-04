@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use crate::cipherstring::CipherString;
-    use crate::locked;
-    use crate::db::{Entry, EntryData, Uri};
-    use crate::protocol::Action;
     use crate::api;
+    use crate::cipherstring::CipherString;
+    use crate::db::{Entry, EntryData, Uri};
+    use crate::locked;
+    use crate::protocol::Action;
 
     #[test]
     fn test_postcard_action() {
@@ -36,7 +36,10 @@ mod tests {
                 username: Some("user".to_string()),
                 password: Some("pass".into()),
                 totp: None,
-                uris: vec![Uri { uri: "http://test".to_string(), match_type: None }],
+                uris: vec![Uri {
+                    uri: "http://test".to_string(),
+                    match_type: None,
+                }],
             },
             fields: vec![],
             notes: None,
@@ -54,7 +57,7 @@ mod tests {
         let mut key_data = locked::Vec::new();
         key_data.extend([0u8; 64].iter().copied());
         let keys = locked::Keys::new(key_data);
-        
+
         let test_strings = vec![
             "simple ascii",
             "special characters: !@#$%^&*()_+",

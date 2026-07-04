@@ -9,8 +9,7 @@ impl DeserializeJsonWithPath for String {
         #[cfg(feature = "debug-api")]
         {
             let jd = &mut serde_json::Deserializer::from_str(&self);
-            serde_path_to_error::deserialize(jd)
-                .map_err(|source| Error::Json { source })
+            serde_path_to_error::deserialize(jd).map_err(|source| Error::Json { source })
         }
         #[cfg(not(feature = "debug-api"))]
         {
@@ -21,15 +20,11 @@ impl DeserializeJsonWithPath for String {
 
 pub trait DeserializeJsonWithPathAsync {
     #[allow(async_fn_in_trait)]
-    async fn json_with_path<T: serde::de::DeserializeOwned>(
-        self,
-    ) -> Result<T>;
+    async fn json_with_path<T: serde::de::DeserializeOwned>(self) -> Result<T>;
 }
 
 impl DeserializeJsonWithPathAsync for reqwest::Response {
-    async fn json_with_path<T: serde::de::DeserializeOwned>(
-        self,
-    ) -> Result<T> {
+    async fn json_with_path<T: serde::de::DeserializeOwned>(self) -> Result<T> {
         let bytes = self
             .bytes()
             .await
@@ -37,8 +32,7 @@ impl DeserializeJsonWithPathAsync for reqwest::Response {
         #[cfg(feature = "debug-api")]
         {
             let jd = &mut serde_json::Deserializer::from_slice(&bytes);
-            serde_path_to_error::deserialize(jd)
-                .map_err(|source| Error::Json { source })
+            serde_path_to_error::deserialize(jd).map_err(|source| Error::Json { source })
         }
         #[cfg(not(feature = "debug-api"))]
         {

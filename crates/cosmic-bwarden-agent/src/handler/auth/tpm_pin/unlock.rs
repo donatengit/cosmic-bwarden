@@ -44,8 +44,7 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
             };
         }
 
-        let blob_path =
-            cosmic_bwarden_core::dirs::tpm_blob_file(&config.server_name(), &email);
+        let blob_path = cosmic_bwarden_core::dirs::tpm_blob_file(&config.server_name(), &email);
         let hash_blob_path =
             cosmic_bwarden_core::dirs::tpm_hash_blob_file(&config.server_name(), &email);
 
@@ -73,7 +72,10 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
                     Some(cosmic_bwarden_core::locked::PasswordHash::new(locked_vec))
                 }
                 Err(e) => {
-                    log::warn!("pin unlock: could not unseal server credentials from TPM: {}", e);
+                    log::warn!(
+                        "pin unlock: could not unseal server credentials from TPM: {}",
+                        e
+                    );
                     None
                 }
             }
@@ -175,8 +177,15 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
                 match config.device_id().await {
                     Ok(device_id) => {
                         match client
-                            .login(&email, &device_id, &master_password_hash,
-                                   None, None, None, None)
+                            .login(
+                                &email,
+                                &device_id,
+                                &master_password_hash,
+                                None,
+                                None,
+                                None,
+                                None,
+                            )
                             .await
                         {
                             Ok((access_token, refresh_token, _protected_key)) => {
@@ -185,14 +194,21 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
                                     let mut g = state.lock().await;
                                     if let Some(db) = &mut g.db {
                                         db.access_token = Some(Secret::from(access_token.clone()));
-                                        db.refresh_token = refresh_token.as_ref().map(|rt| Secret::from(rt.clone()));
+                                        db.refresh_token = refresh_token
+                                            .as_ref()
+                                            .map(|rt| Secret::from(rt.clone()));
                                     }
                                 }
                                 if config.persist_session {
                                     if let Some(rt) = &refresh_token {
                                         if let Err(e) = keyring::store_tokens(
-                                            &config.server_name(), &email, &access_token, rt,
-                                        ).await {
+                                            &config.server_name(),
+                                            &email,
+                                            &access_token,
+                                            rt,
+                                        )
+                                        .await
+                                        {
                                             log::error!("pin unlock: failed to store refreshed tokens in keyring: {}", e);
                                         }
                                     }
@@ -203,7 +219,10 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
                             }
                         }
                     }
-                    Err(e) => log::warn!("pin unlock: could not obtain device_id for silent re-auth: {}", e),
+                    Err(e) => log::warn!(
+                        "pin unlock: could not obtain device_id for silent re-auth: {}",
+                        e
+                    ),
                 }
             }
         }

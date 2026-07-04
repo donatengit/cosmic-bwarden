@@ -216,7 +216,10 @@ pub async fn wait_for_socket(path: &Path, timeout: Duration) -> Result<()> {
     let deadline = tokio::time::Instant::now() + timeout;
     while !path.exists() {
         if tokio::time::Instant::now() >= deadline {
-            anyhow::bail!("agent socket {} not created within {timeout:?}", path.display());
+            anyhow::bail!(
+                "agent socket {} not created within {timeout:?}",
+                path.display()
+            );
         }
         sleep(Duration::from_millis(50)).await;
     }

@@ -50,7 +50,8 @@ fn start_swtpm() -> Option<(SwtpmGuard, PathBuf)> {
     // Initialize TPM state
     let init_status = Command::new("swtpm_setup")
         .args([
-            "--tpmstate", state_dir.path().to_str()?,
+            "--tpmstate",
+            state_dir.path().to_str()?,
             "--tpm2",
             "--createek",
         ])
@@ -65,22 +66,39 @@ fn start_swtpm() -> Option<(SwtpmGuard, PathBuf)> {
     let swtpm = Command::new("swtpm")
         .args([
             "socket",
-            "--tpmstate", &format!("dir={}", state_dir.path().display()),
-            "--ctrl", &format!("type=unixio,path={}", socket_path.display()),
+            "--tpmstate",
+            &format!("dir={}", state_dir.path().display()),
+            "--ctrl",
+            &format!("type=unixio,path={}", socket_path.display()),
             "--tpm2",
-            "--server", &format!("type=unixio,path={}", socket_path.with_extension("server").display()),
-            "--flags", "not-need-init,startup-clear",
-            "--log", "level=0",
+            "--server",
+            &format!(
+                "type=unixio,path={}",
+                socket_path.with_extension("server").display()
+            ),
+            "--flags",
+            "not-need-init,startup-clear",
+            "--log",
+            "level=0",
         ])
         .spawn()
         .ok()?;
 
-    Some((SwtpmGuard { swtpm, _state_dir: state_dir }, socket_path))
+    Some((
+        SwtpmGuard {
+            swtpm,
+            _state_dir: state_dir,
+        },
+        socket_path,
+    ))
 }
 
 /// Returns the TCTI string for swtpm given the server socket path.
 fn swtpm_tcti(socket_path: &PathBuf) -> String {
-    format!("swtpm:path={}", socket_path.with_extension("server").display())
+    format!(
+        "swtpm:path={}",
+        socket_path.with_extension("server").display()
+    )
 }
 
 #[tokio::test]
@@ -99,7 +117,11 @@ async fn test_tpm_availability_check() -> Result<()> {
     drop(guard);
 
     match res {
-        Response::TpmStatus { available, configured: _, server_credentials: _ } => {
+        Response::TpmStatus {
+            available,
+            configured: _,
+            server_credentials: _,
+        } => {
             // With swtpm running, TPM should be available if agent has TPM support.
             // If agent lacks --features tpm, available == false is expected.
             eprintln!("[tpm-smoke] CheckTpm: available={}", available);
@@ -168,7 +190,9 @@ async fn test_tpm_pin_setup_and_unlock() -> Result<()> {
 
     // Unlock with PIN
     let unlock_res = client
-        .send(Action::UnlockWithPin { pin: PIN.to_string() })
+        .send(Action::UnlockWithPin {
+            pin: PIN.to_string(),
+        })
         .await?;
     anyhow::ensure!(
         matches!(unlock_res, Response::Ack),
@@ -242,7 +266,9 @@ async fn test_tpm_wrong_pin_rejected() -> Result<()> {
 
     // Wrong PIN
     let res = client
-        .send(Action::UnlockWithPin { pin: "9999".to_string() })
+        .send(Action::UnlockWithPin {
+            pin: "9999".to_string(),
+        })
         .await?;
 
     assert!(

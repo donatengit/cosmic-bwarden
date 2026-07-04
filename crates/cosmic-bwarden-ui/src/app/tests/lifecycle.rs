@@ -1,9 +1,9 @@
-use crate::message::WindowState;
 use crate::app::CosmicBWardenApp;
 use crate::message::Message;
 use crate::message::View;
-use cosmic::Application;
+use crate::message::WindowState;
 use cosmic::iced::window;
+use cosmic::Application;
 use cosmic_bwarden_core::config::CosmicBWardenConfig;
 use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
 
@@ -112,15 +112,29 @@ async fn test_config_received_routes_by_has_account_not_needs_login() {
     // are lost (they're #[serde(skip)]), so needs_login stays true even once the
     // vault is unlocked. has_account (protected_key on disk) is what should drive
     // routing, not needs_login.
-    let _ = app.update(Message::ConfigReceived(Ok((config.clone(), true, true, false, false))));
+    let _ = app.update(Message::ConfigReceived(Ok((
+        config.clone(),
+        true,
+        true,
+        false,
+        false,
+    ))));
     assert_eq!(app.view, View::Vault);
 
     // Locked but with an account on disk -> Unlock, not Setup.
-    let _ = app.update(Message::ConfigReceived(Ok((config.clone(), true, true, true, false))));
+    let _ = app.update(Message::ConfigReceived(Ok((
+        config.clone(),
+        true,
+        true,
+        true,
+        false,
+    ))));
     assert_eq!(app.view, View::Unlock);
 
     // No account on disk at all -> Setup, regardless of is_locked.
-    let _ = app.update(Message::ConfigReceived(Ok((config, true, false, false, false))));
+    let _ = app.update(Message::ConfigReceived(Ok((
+        config, true, false, false, false,
+    ))));
     assert_eq!(app.view, View::Setup);
 }
 
@@ -182,11 +196,23 @@ fn test_entries_received_locked_clears_without_setting_error() {
     app.all_entries = vec![entry.clone()];
     app.entries = vec![entry];
 
-    let _ = app.update(Message::EntriesReceived(3, Err("agent is locked".to_string())));
+    let _ = app.update(Message::EntriesReceived(
+        3,
+        Err("agent is locked".to_string()),
+    ));
 
-    assert!(app.entries.is_empty(), "entries must be cleared on locked error");
-    assert!(app.all_entries.is_empty(), "all_entries must be cleared on locked error");
-    assert!(app.error.is_none(), "agent-is-locked must not set app.error");
+    assert!(
+        app.entries.is_empty(),
+        "entries must be cleared on locked error"
+    );
+    assert!(
+        app.all_entries.is_empty(),
+        "all_entries must be cleared on locked error"
+    );
+    assert!(
+        app.error.is_none(),
+        "agent-is-locked must not set app.error"
+    );
 }
 
 #[test]
@@ -217,9 +243,20 @@ fn test_entries_received_populates_all_entries_and_applies_active_filter() {
 
     let _ = app.update(Message::EntriesReceived(5, Ok(entries.clone())));
 
-    assert_eq!(app.all_entries.len(), 2, "all_entries must hold the full unfiltered list");
-    assert_eq!(app.entries.len(), 1, "entries must be the filter-applied subset");
-    assert_eq!(app.entries[0].id, "1", "only GitHub matches the 'git' query");
+    assert_eq!(
+        app.all_entries.len(),
+        2,
+        "all_entries must hold the full unfiltered list"
+    );
+    assert_eq!(
+        app.entries.len(),
+        1,
+        "entries must be the filter-applied subset"
+    );
+    assert_eq!(
+        app.entries[0].id, "1",
+        "only GitHub matches the 'git' query"
+    );
     assert!(app.error.is_none());
 }
 
@@ -239,8 +276,14 @@ fn test_entries_received_stale_id_ignored() {
 
     let _ = app.update(Message::EntriesReceived(4, Ok(entries)));
 
-    assert!(app.all_entries.is_empty(), "stale EntriesReceived must not touch all_entries");
-    assert!(app.entries.is_empty(), "stale EntriesReceived must not touch entries");
+    assert!(
+        app.all_entries.is_empty(),
+        "stale EntriesReceived must not touch all_entries"
+    );
+    assert!(
+        app.entries.is_empty(),
+        "stale EntriesReceived must not touch entries"
+    );
 }
 
 #[test]
@@ -319,7 +362,10 @@ fn test_tpm_status_received_available_and_configured() {
     assert!(app.tpm_status_known);
     assert!(app.tpm_available);
     assert!(app.tpm_configured);
-    assert!(app.show_pin_unlock, "PIN unlock must be enabled when configured");
+    assert!(
+        app.show_pin_unlock,
+        "PIN unlock must be enabled when configured"
+    );
 
     let _ = app.view_settings();
 }
@@ -330,7 +376,9 @@ fn test_tpm_status_known_set_on_error_response() {
     // hide the section — the Err path must not set tpm_status_known, so the
     // "Checking…" state persists rather than flipping to "not accessible".
     let mut app = CosmicBWardenApp::default();
-    let _ = app.update(Message::TpmStatusReceived(Err("agent unreachable".to_string())));
+    let _ = app.update(Message::TpmStatusReceived(Err(
+        "agent unreachable".to_string()
+    )));
     // Err → tpm_status_known stays false; user sees "Checking…" not "not accessible".
     assert!(!app.tpm_status_known);
 }
@@ -346,13 +394,16 @@ fn test_config_received_unlocked_sets_tpm_check_pending() {
     let _ = app.update(Message::ConfigReceived(Ok((
         CosmicBWardenConfig::default(),
         false,
-        true,   // has_account
-        false,  // is_locked = false → vault open path
+        true,  // has_account
+        false, // is_locked = false → vault open path
         false,
     ))));
 
     assert_eq!(app.view, View::Vault);
-    assert!(app.search_id > prev_search_id, "entry fetch must be triggered");
+    assert!(
+        app.search_id > prev_search_id,
+        "entry fetch must be triggered"
+    );
     // tpm_status_known is still false — the async check_tpm_task has been
     // dispatched but TpmStatusReceived hasn't arrived yet.
     assert!(!app.tpm_status_known);
@@ -398,7 +449,10 @@ fn test_master_password_unlock_offers_pin_reenable() {
     assert_eq!(app.unlock_pin, "123456");
     let _ = app.update(Message::UnlockPasswordChanged("masterpw".to_string()));
     let _ = app.update(Message::UnlockSubmitted);
-    assert!(app.unlock_pin_apply_pending, "unlock should apply the PIN field");
+    assert!(
+        app.unlock_pin_apply_pending,
+        "unlock should apply the PIN field"
+    );
 }
 
 #[test]
@@ -408,7 +462,10 @@ fn test_unlock_pin_too_short_is_rejected() {
     let _ = app.update(Message::UnlockPinChanged("12".to_string()));
     let _ = app.update(Message::UnlockPasswordChanged("masterpw".to_string()));
     let _ = app.update(Message::UnlockSubmitted);
-    assert!(app.error.is_some(), "short PIN must be rejected before unlock");
+    assert!(
+        app.error.is_some(),
+        "short PIN must be rejected before unlock"
+    );
     assert!(!app.unlock_pin_apply_pending);
 }
 
@@ -421,7 +478,10 @@ fn test_tpm_da_line_formatting() {
     assert!(app.tpm_da_line().is_none());
 
     // Unavailable TPM → no line.
-    app.tpm_da = Some(TpmDaStatus { available: false, ..Default::default() });
+    app.tpm_da = Some(TpmDaStatus {
+        available: false,
+        ..Default::default()
+    });
     assert!(app.tpm_da_line().is_none());
 
     // Normal case with remaining/max.
@@ -500,19 +560,32 @@ async fn test_pin_incorrect_flag_lifecycle() {
     // Wrong PIN: counter revealed; the unseal error is log-only, never shown.
     let _ = app.update(Message::AppletPinResult(Err(unseal_err.clone())));
     assert!(app.pin_incorrect, "counter revealed after wrong PIN");
-    assert!(app.applet_error.is_none(), "unseal error must not be shown in the applet");
-    assert!(app.error.is_none(), "unseal error must not be shown in the main window");
+    assert!(
+        app.applet_error.is_none(),
+        "unseal error must not be shown in the applet"
+    );
+    assert!(
+        app.error.is_none(),
+        "unseal error must not be shown in the main window"
+    );
 
     // Main-window PIN unlock failure: same suppression via MainWindowPinResult.
     let _ = app.update(Message::MainWindowPinResult(Err(unseal_err)));
     assert!(app.pin_incorrect);
-    assert!(app.error.is_none(), "unseal error must not be shown on the PIN dialog");
+    assert!(
+        app.error.is_none(),
+        "unseal error must not be shown on the PIN dialog"
+    );
 
     // A non-unseal failure (agent down, config/account problem) is still
     // surfaced, not mislabeled as a wrong PIN.
-    let _ = app.update(Message::AppletPinResult(Err("unexpected response".to_string())));
+    let _ = app.update(Message::AppletPinResult(Err(
+        "unexpected response".to_string()
+    )));
     assert_eq!(app.applet_error.as_deref(), Some("unexpected response"));
-    let _ = app.update(Message::MainWindowPinResult(Err("failed to load config: x".to_string())));
+    let _ = app.update(Message::MainWindowPinResult(Err(
+        "failed to load config: x".to_string(),
+    )));
     assert_eq!(app.error.as_deref(), Some("failed to load config: x"));
     app.applet_error = None;
     app.error = None;
@@ -534,7 +607,12 @@ async fn test_pin_incorrect_flag_lifecycle() {
 fn test_da_status_received_updates_state() {
     use cosmic_bwarden_core::protocol::TpmDaStatus;
     let mut app = CosmicBWardenApp::default();
-    let status = TpmDaStatus { available: true, remaining: Some(10), max_tries: Some(32), ..Default::default() };
+    let status = TpmDaStatus {
+        available: true,
+        remaining: Some(10),
+        max_tries: Some(32),
+        ..Default::default()
+    };
     let _ = app.update(Message::TpmDaStatusReceived(Some(status)));
     assert_eq!(app.tpm_da.as_ref().and_then(|d| d.remaining), Some(10));
 }

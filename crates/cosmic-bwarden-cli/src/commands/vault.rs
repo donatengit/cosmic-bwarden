@@ -1,10 +1,10 @@
-use anyhow::Result;
 use crate::args::{Cli, Commands};
 use crate::output::{handle_response, output_entry};
 use crate::utils::resolve_id;
+use anyhow::Result;
 use cosmic_bwarden_core::agent_client::AgentClient;
+use cosmic_bwarden_core::db::{Field, Secret};
 use cosmic_bwarden_core::protocol::{Action, EntryType as ProtocolEntryType, Response};
-use cosmic_bwarden_core::db::{Secret, Field};
 
 pub async fn handle_command(
     cli: &Cli,
@@ -50,8 +50,7 @@ pub async fn handle_command(
                     for entry in entries {
                         let info = match &entry.data {
                             cosmic_bwarden_core::db::EntryData::Login {
-                                username: Some(u),
-                                ..
+                                username: Some(u), ..
                             } => format!(" ({})", u),
                             _ => String::new(),
                         };
@@ -119,12 +118,7 @@ pub async fn handle_command(
                     }
                 } else {
                     let id = resolve_id(client, id_or_name, entry_type).await?;
-                    let res = client
-                        .send(Action::GetEntry {
-                            id,
-                            password: None,
-                        })
-                        .await?;
+                    let res = client.send(Action::GetEntry { id, password: None }).await?;
 
                     let entry = match res {
                         Response::Entry { entry } => entry,
@@ -149,8 +143,7 @@ pub async fn handle_command(
                     for entry in entries {
                         let user = match &entry.data {
                             cosmic_bwarden_core::db::EntryData::Login {
-                                username: Some(u),
-                                ..
+                                username: Some(u), ..
                             } => format!(" ({})", u),
                             _ => String::new(),
                         };
@@ -168,7 +161,7 @@ pub async fn handle_command(
             secret_field,
         } => {
             let t = entry_type.unwrap_or(ProtocolEntryType::Login);
-            
+
             let mut username = None;
             let mut password = None;
             let mut notes = None;
@@ -181,7 +174,9 @@ pub async fn handle_command(
                         "username" | "user" => username = Some(v.to_string()),
                         "password" | "pass" => password = Some(Secret::from(v.to_string())),
                         "notes" | "note" => notes = Some(Secret::from(v.to_string())),
-                        "private_key" | "private" => private_key = Some(Secret::from(v.to_string())),
+                        "private_key" | "private" => {
+                            private_key = Some(Secret::from(v.to_string()))
+                        }
                         "public_key" | "public" => public_key = Some(v.to_string()),
                         _ => (),
                     }
@@ -212,30 +207,37 @@ pub async fn handle_command(
 
             let res = match t {
                 ProtocolEntryType::Login => {
-                    client.send(Action::AddEntry {
-                        name: name.clone(),
-                        entry_type: t,
-                        username,
-                        password,
-                        notes,
-                        fields,
-                    }).await?
+                    client
+                        .send(Action::AddEntry {
+                            name: name.clone(),
+                            entry_type: t,
+                            username,
+                            password,
+                            notes,
+                            fields,
+                        })
+                        .await?
                 }
                 ProtocolEntryType::SecureNote => {
-                    client.send(Action::AddSecureNote {
-                        name: name.clone(),
-                        notes: notes.unwrap_or_else(|| Secret::from("".to_string())),
-                        fields,
-                    }).await?
+                    client
+                        .send(Action::AddSecureNote {
+                            name: name.clone(),
+                            notes: notes.unwrap_or_else(|| Secret::from("".to_string())),
+                            fields,
+                        })
+                        .await?
                 }
                 ProtocolEntryType::SshKey => {
-                    client.send(Action::AddSshKey {
-                        name: name.clone(),
-                        private_key: private_key.unwrap_or_else(|| Secret::from("".to_string())),
-                        public_key,
-                        notes,
-                        fields,
-                    }).await?
+                    client
+                        .send(Action::AddSshKey {
+                            name: name.clone(),
+                            private_key: private_key
+                                .unwrap_or_else(|| Secret::from("".to_string())),
+                            public_key,
+                            notes,
+                            fields,
+                        })
+                        .await?
                 }
                 _ => anyhow::bail!("Unsupported entry type for 'add'"),
             };
@@ -268,17 +270,16 @@ pub async fn handle_command(
                 if let Some((k, v)) = arg.split_once('=') {
                     match k {
                         "name" => entry.name = v.to_string(),
-                        "notes" | "note" => {
-                            entry.notes = Some(Secret::from(v.to_string()))
-                        }
+                        "notes" | "note" => entry.notes = Some(Secret::from(v.to_string())),
                         _ => match &mut entry.data {
                             cosmic_bwarden_core::db::EntryData::Login {
-                                username, password, ..
+                                username,
+                                password,
+                                ..
                             } => match k {
                                 "username" | "user" => *username = Some(v.to_string()),
                                 "password" | "pass" => {
-                                    *password =
-                                        Some(Secret::from(v.to_string()))
+                                    *password = Some(Secret::from(v.to_string()))
                                 }
                                 _ => (),
                             },
@@ -288,8 +289,7 @@ pub async fn handle_command(
                                 ..
                             } => match k {
                                 "private_key" | "private" => {
-                                    *private_key =
-                                        Some(Secret::from(v.to_string()))
+                                    *private_key = Some(Secret::from(v.to_string()))
                                 }
                                 "public_key" | "public" => *public_key = Some(v.to_string()),
                                 _ => (),
@@ -311,11 +311,7 @@ pub async fn handle_command(
                 }
             }
 
-            let res = client
-                .send(Action::UpdateEntry {
-                    entry,
-                })
-                .await?;
+            let res = client.send(Action::UpdateEntry { entry }).await?;
             handle_response(res)?;
             println!("Entry updated successfully");
         }

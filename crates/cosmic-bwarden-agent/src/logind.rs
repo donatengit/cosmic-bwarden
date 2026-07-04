@@ -1,6 +1,6 @@
+use crate::state::State;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use crate::state::State;
 use tokio_stream::StreamExt;
 use zbus::MatchRule;
 
@@ -32,8 +32,10 @@ pub async fn listen_to_logind(state: Arc<Mutex<State>>) -> zbus::Result<()> {
     ] {
         let rule = MatchRule::builder()
             .msg_type(zbus::message::Type::Signal)
-            .interface(interface).expect("valid interface name")
-            .member(member).expect("valid member name")
+            .interface(interface)
+            .expect("valid interface name")
+            .member(member)
+            .expect("valid member name")
             .build();
         proxy.add_match_rule(rule).await?;
     }
@@ -49,8 +51,8 @@ pub async fn listen_to_logind(state: Arc<Mutex<State>>) -> zbus::Result<()> {
 
                 let iface = interface.map(|i| i.as_str());
                 let mbr = member.map(|m| m.as_str());
-                let should_lock =
-                    (iface == Some("org.freedesktop.login1.Session") && mbr == Some("Lock"))
+                let should_lock = (iface == Some("org.freedesktop.login1.Session")
+                    && mbr == Some("Lock"))
                     || (iface == Some("org.freedesktop.login1.Manager")
                         && (mbr == Some("PrepareForShutdown") || mbr == Some("PrepareForSleep")));
                 if should_lock {
@@ -60,10 +62,12 @@ pub async fn listen_to_logind(state: Arc<Mutex<State>>) -> zbus::Result<()> {
                         Some("PrepareForSleep") => "system sleep/suspend",
                         _ => "logind signal",
                     };
-                    log::info!("vault locked: {} (signal: {}/{})",
+                    log::info!(
+                        "vault locked: {} (signal: {}/{})",
                         reason,
                         iface.unwrap_or("?"),
-                        mbr.unwrap_or("?"));
+                        mbr.unwrap_or("?")
+                    );
                     let mut state_guard = state.lock().await;
                     state_guard.lock();
                 }

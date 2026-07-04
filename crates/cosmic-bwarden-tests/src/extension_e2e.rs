@@ -1,11 +1,11 @@
 use crate::common::{setup_env, TestEnv};
-use thirtyfour::prelude::*;
+use serde_json::json;
+use std::io::{Read, Write};
 use std::process::Command;
 use tempfile::tempdir;
-use zip::write::SimpleFileOptions;
-use std::io::{Read, Write};
+use thirtyfour::prelude::*;
 use tokio::time::{sleep, Duration};
-use serde_json::json;
+use zip::write::SimpleFileOptions;
 
 struct BrowserTest {
     driver: WebDriver,
@@ -16,9 +16,12 @@ struct BrowserTest {
 
 impl BrowserTest {
     async fn setup(env: &TestEnv) -> anyhow::Result<Self> {
-        let project_root = std::env::current_dir()?.parent()
-            .ok_or_else(|| anyhow::anyhow!("no parent"))?.parent()
-            .ok_or_else(|| anyhow::anyhow!("no grandparent"))?.to_path_buf();
+        let project_root = std::env::current_dir()?
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("no parent"))?
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("no grandparent"))?
+            .to_path_buf();
         let agent_bin = project_root.join("target/debug/cosmic-bwarden-agent");
         let ext_dir = project_root.join("browser-extension");
 
@@ -26,9 +29,11 @@ impl BrowserTest {
         let manifest_dir = test_home.path().join(".mozilla/native-messaging-hosts");
         std::fs::create_dir_all(&manifest_dir)?;
 
-        let wrapper_path = test_home.path().join("cosmic-bwarden-browser-host-wrapper.sh");
+        let wrapper_path = test_home
+            .path()
+            .join("cosmic-bwarden-browser-host-wrapper.sh");
         let log_path = test_home.path().join("browser-host.log");
-        
+
         let config_home = env._temp_dir.path().join("config");
         let cache_home = env._temp_dir.path().join("cache");
         let data_home = env._temp_dir.path().join("data");
@@ -53,7 +58,7 @@ impl BrowserTest {
             log = log_path.display()
         );
         std::fs::write(&wrapper_path, wrapper_content)?;
-        
+
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -68,14 +73,18 @@ impl BrowserTest {
             "type": "stdio",
             "allowed_extensions": ["cosmic-bwarden@8bit.com"]
         });
-        std::fs::write(manifest_dir.join(format!("{}.json", host_name)), serde_json::to_string_pretty(&manifest_content)?)?;
+        std::fs::write(
+            manifest_dir.join(format!("{}.json", host_name)),
+            serde_json::to_string_pretty(&manifest_content)?,
+        )?;
 
         // Package extension
         let xpi_path = test_home.path().join("extension.xpi");
         {
             let file = std::fs::File::create(&xpi_path)?;
             let mut zip = zip::ZipWriter::new(file);
-            let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+            let options =
+                SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
             for entry in walkdir::WalkDir::new(&ext_dir) {
                 let entry = entry?;
@@ -111,7 +120,8 @@ impl BrowserTest {
         }
 
         let geckodriver = Command::new("geckodriver")
-            .arg("--port").arg("4444")
+            .arg("--port")
+            .arg("4444")
             .env("HOME", test_home.path())
             .spawn()?;
 
@@ -126,7 +136,11 @@ impl BrowserTest {
         // Install extension
         let session_id = driver.session_id().await?;
         let client = reqwest::Client::new();
-        client.post(format!("http://localhost:4444/session/{}/moz/addon/install", session_id))
+        client
+            .post(format!(
+                "http://localhost:4444/session/{}/moz/addon/install",
+                session_id
+            ))
             .json(&json!({ "path": xpi_path.to_str().unwrap(), "temporary": true }))
             .send()
             .await?;
@@ -140,30 +154,42 @@ impl BrowserTest {
                 driver.switch_to_window(win).await?;
                 let url = driver.current_url().await?;
                 if url.to_string().contains("example.com/?uuid=") {
-                    uuid = url.query().and_then(|q| q.split('=').nth(1)).map(|s| s.to_string());
+                    uuid = url
+                        .query()
+                        .and_then(|q| q.split('=').nth(1))
+                        .map(|s| s.to_string());
                     break;
                 }
             }
-            if uuid.is_some() { break; }
+            if uuid.is_some() {
+                break;
+            }
         }
-        
+
         let uuid = uuid.ok_or_else(|| anyhow::anyhow!("Failed to discover extension UUID"))?;
         let extension_url = format!("moz-extension://{}/popup/popup.html", uuid);
 
-        Ok(Self { driver, geckodriver, test_home, extension_url })
+        Ok(Self {
+            driver,
+            geckodriver,
+            test_home,
+            extension_url,
+        })
     }
 
     async fn open_popup(&self) -> anyhow::Result<()> {
         self.driver.goto(&self.extension_url).await?;
         sleep(Duration::from_secs(1)).await;
-        self.driver.execute(
-            "window.mockClipboard = ''; \
+        self.driver
+            .execute(
+                "window.mockClipboard = ''; \
              navigator.clipboard = { \
                  writeText: (t) => { window.mockClipboard = t; return Promise.resolve(); }, \
                  readText: () => Promise.resolve(window.mockClipboard) \
-             };", 
-            vec![]
-        ).await?;
+             };",
+                vec![],
+            )
+            .await?;
         Ok(())
     }
 
@@ -181,35 +207,54 @@ async fn test_extension_full_lifecycle_persistence() -> anyhow::Result<()> {
 
     // 1. Initial State: Should show "Vault is locked" or "Not logged in"
     bt.open_popup().await?;
-    
+
     let mut status_text = String::new();
     for _ in 0..20 {
-        status_text = bt.driver.execute("return document.getElementById('status').textContent;", vec![])
-            .await?.convert::<String>()?.to_lowercase();
-            
-        if !status_text.is_empty() && status_text != "loading..." { break; }
+        status_text = bt
+            .driver
+            .execute(
+                "return document.getElementById('status').textContent;",
+                vec![],
+            )
+            .await?
+            .convert::<String>()?
+            .to_lowercase();
+
+        if !status_text.is_empty() && status_text != "loading..." {
+            break;
+        }
         sleep(Duration::from_millis(500)).await;
     }
 
-    if !(status_text.contains("locked") || status_text.contains("logged in") || status_text.contains("communicat")) {
+    if !(status_text.contains("locked")
+        || status_text.contains("logged in")
+        || status_text.contains("communicat"))
+    {
         println!("Page Source (Initial):\n{}", bt.driver.source().await?);
         panic!("Unexpected initial status text: '{}'", status_text);
     }
 
     // 2. Unlock via Agent directly
-    let client = cosmic_bwarden_core::agent_client::AgentClient::new_with_socket(env.socket_path.clone());
+    let client =
+        cosmic_bwarden_core::agent_client::AgentClient::new_with_socket(env.socket_path.clone());
     crate::common::register_user(&env.vault_url, "test@example.com", "password123").await?;
-    client.send(cosmic_bwarden_core::protocol::Action::Login {
-        email: "test@example.com".to_string(),
-        password: "password123".to_string(),
-        server_url: Some(env.vault_url.clone()),
-        remember_me: true,
-        two_factor_token: None,
-        two_factor_provider: None,
-        two_factor_code: None,
-        device_verification_code: None,
-    }).await?;
-    client.send(cosmic_bwarden_core::protocol::Action::Unlock { password: "password123".to_string() }).await?;
+    client
+        .send(cosmic_bwarden_core::protocol::Action::Login {
+            email: "test@example.com".to_string(),
+            password: "password123".to_string(),
+            server_url: Some(env.vault_url.clone()),
+            remember_me: true,
+            two_factor_token: None,
+            two_factor_provider: None,
+            two_factor_code: None,
+            device_verification_code: None,
+        })
+        .await?;
+    client
+        .send(cosmic_bwarden_core::protocol::Action::Unlock {
+            password: "password123".to_string(),
+        })
+        .await?;
 
     // 3. Verify Popup Unlocked
     bt.open_popup().await?;
@@ -218,77 +263,179 @@ async fn test_extension_full_lifecycle_persistence() -> anyhow::Result<()> {
     let results_text = results.text().await?;
     if !results_text.contains("No entries found") {
         println!("Page Source (Unlocked):\n{}", bt.driver.source().await?);
-        panic!("Results text doesn't contain 'No entries found': '{}'", results_text);
+        panic!(
+            "Results text doesn't contain 'No entries found': '{}'",
+            results_text
+        );
     }
 
     // 4. Add Entry
-    bt.driver.query(By::Id("add-btn")).first().await?.click().await?;
-    bt.driver.query(By::Id("edit-name")).first().await?.send_keys("Full Login").await?;
-    bt.driver.query(By::Id("f-username")).first().await?.send_keys("myuser").await?;
-    bt.driver.query(By::Id("f-password")).first().await?.send_keys("mypassword").await?;
-    bt.driver.query(By::Id("f-totp")).first().await?.send_keys("JBSWY3DPEHPK3PXP").await?;
-    bt.driver.query(By::Id("edit-notes")).first().await?.send_keys("Sensitive notes").await?;
-    bt.driver.query(By::Id("save-btn")).first().await?.click().await?;
-    
+    bt.driver
+        .query(By::Id("add-btn"))
+        .first()
+        .await?
+        .click()
+        .await?;
+    bt.driver
+        .query(By::Id("edit-name"))
+        .first()
+        .await?
+        .send_keys("Full Login")
+        .await?;
+    bt.driver
+        .query(By::Id("f-username"))
+        .first()
+        .await?
+        .send_keys("myuser")
+        .await?;
+    bt.driver
+        .query(By::Id("f-password"))
+        .first()
+        .await?
+        .send_keys("mypassword")
+        .await?;
+    bt.driver
+        .query(By::Id("f-totp"))
+        .first()
+        .await?
+        .send_keys("JBSWY3DPEHPK3PXP")
+        .await?;
+    bt.driver
+        .query(By::Id("edit-notes"))
+        .first()
+        .await?
+        .send_keys("Sensitive notes")
+        .await?;
+    bt.driver
+        .query(By::Id("save-btn"))
+        .first()
+        .await?
+        .click()
+        .await?;
+
     sleep(Duration::from_secs(2)).await;
 
     // 5. Persistence Cycle: Lock/Unlock
-    client.send(cosmic_bwarden_core::protocol::Action::Lock).await?;
+    client
+        .send(cosmic_bwarden_core::protocol::Action::Lock)
+        .await?;
     bt.open_popup().await?;
-    
+
     let mut status_text = String::new();
     for _ in 0..10 {
-        status_text = bt.driver.execute("return document.getElementById('status').textContent;", vec![])
-            .await?.convert::<String>()?.to_lowercase();
-        if status_text.contains("locked") { break; }
+        status_text = bt
+            .driver
+            .execute(
+                "return document.getElementById('status').textContent;",
+                vec![],
+            )
+            .await?
+            .convert::<String>()?
+            .to_lowercase();
+        if status_text.contains("locked") {
+            break;
+        }
         sleep(Duration::from_millis(500)).await;
     }
     assert!(status_text.contains("locked"));
-    
-    client.send(cosmic_bwarden_core::protocol::Action::Unlock { password: "password123".to_string() }).await?;
+
+    client
+        .send(cosmic_bwarden_core::protocol::Action::Unlock {
+            password: "password123".to_string(),
+        })
+        .await?;
     bt.open_popup().await?;
     sleep(Duration::from_secs(2)).await;
-    
+
     // 6. Verify Entry and Fields
-    bt.driver.query(By::XPath("//div[contains(text(), 'Full Login')]")).first().await?.click().await?;
-    let detail = bt.driver.query(By::Id("detail-content")).first().await?.text().await?;
+    bt.driver
+        .query(By::XPath("//div[contains(text(), 'Full Login')]"))
+        .first()
+        .await?
+        .click()
+        .await?;
+    let detail = bt
+        .driver
+        .query(By::Id("detail-content"))
+        .first()
+        .await?
+        .text()
+        .await?;
     assert!(detail.contains("myuser"));
     assert!(detail.contains("Sensitive notes"));
 
     // 7. Verify Copy functionality
-    bt.driver.query(By::XPath("//button[text()='Copy']")).first().await?.click().await?;
-    let clipboard = bt.driver.execute("return window.mockClipboard;", vec![]).await?.convert::<String>()?;
+    bt.driver
+        .query(By::XPath("//button[text()='Copy']"))
+        .first()
+        .await?
+        .click()
+        .await?;
+    let clipboard = bt
+        .driver
+        .execute("return window.mockClipboard;", vec![])
+        .await?
+        .convert::<String>()?;
     assert_eq!(clipboard, "mypassword");
 
     // 8. Logout/Login Persistence
-    client.send(cosmic_bwarden_core::protocol::Action::Logout).await?;
+    client
+        .send(cosmic_bwarden_core::protocol::Action::Logout)
+        .await?;
     bt.open_popup().await?;
-    
+
     let mut status_text = String::new();
     for _ in 0..10 {
-        status_text = bt.driver.execute("return document.getElementById('status').textContent;", vec![])
-            .await?.convert::<String>()?.to_lowercase();
-        if status_text.contains("not logged in") { break; }
+        status_text = bt
+            .driver
+            .execute(
+                "return document.getElementById('status').textContent;",
+                vec![],
+            )
+            .await?
+            .convert::<String>()?
+            .to_lowercase();
+        if status_text.contains("not logged in") {
+            break;
+        }
         sleep(Duration::from_millis(500)).await;
     }
     assert!(status_text.contains("not logged in"));
 
-    client.send(cosmic_bwarden_core::protocol::Action::Login {
-        email: "test@example.com".to_string(),
-        password: "password123".to_string(),
-        server_url: Some(env.vault_url.clone()),
-        remember_me: true,
-        two_factor_token: None,
-        two_factor_provider: None,
-        two_factor_code: None,
-        device_verification_code: None,
-    }).await?;
-    client.send(cosmic_bwarden_core::protocol::Action::Unlock { password: "password123".to_string() }).await?;
+    client
+        .send(cosmic_bwarden_core::protocol::Action::Login {
+            email: "test@example.com".to_string(),
+            password: "password123".to_string(),
+            server_url: Some(env.vault_url.clone()),
+            remember_me: true,
+            two_factor_token: None,
+            two_factor_provider: None,
+            two_factor_code: None,
+            device_verification_code: None,
+        })
+        .await?;
+    client
+        .send(cosmic_bwarden_core::protocol::Action::Unlock {
+            password: "password123".to_string(),
+        })
+        .await?;
 
     bt.open_popup().await?;
     sleep(Duration::from_secs(2)).await;
-    bt.driver.query(By::XPath("//div[contains(text(), 'Full Login')]")).first().await?.click().await?;
-    assert!(bt.driver.query(By::Id("detail-content")).first().await?.text().await?.contains("myuser"));
+    bt.driver
+        .query(By::XPath("//div[contains(text(), 'Full Login')]"))
+        .first()
+        .await?
+        .click()
+        .await?;
+    assert!(bt
+        .driver
+        .query(By::Id("detail-content"))
+        .first()
+        .await?
+        .text()
+        .await?
+        .contains("myuser"));
 
     bt.cleanup().await?;
     Ok(())

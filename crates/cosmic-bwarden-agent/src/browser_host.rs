@@ -34,7 +34,7 @@ pub async fn run() -> anyhow::Result<()> {
             log::error!("Failed to read message body: {}", e);
             return Err(e.into());
         }
-        
+
         let action: Action = match serde_json::from_slice(&buf) {
             Ok(a) => a,
             Err(e) => {
@@ -49,7 +49,9 @@ pub async fn run() -> anyhow::Result<()> {
                 });
                 let response_json = serde_json::to_vec(&error_response)?;
                 let len = response_json.len() as u32;
-                if let Err(e) = stdout.write_all(&len.to_le_bytes()).await
+                if let Err(e) = stdout
+                    .write_all(&len.to_le_bytes())
+                    .await
                     .and(stdout.write_all(&response_json).await)
                     .and(stdout.flush().await)
                 {
@@ -58,9 +60,9 @@ pub async fn run() -> anyhow::Result<()> {
                 continue;
             }
         };
-        
+
         log::debug!("Forwarding action to agent: {:?}", action);
-        
+
         // Send to agent
         match client.send(action).await {
             Ok(response) => {
@@ -88,7 +90,9 @@ pub async fn run() -> anyhow::Result<()> {
                 });
                 let response_json = serde_json::to_vec(&error_response)?;
                 let len = response_json.len() as u32;
-                if let Err(e) = stdout.write_all(&len.to_le_bytes()).await
+                if let Err(e) = stdout
+                    .write_all(&len.to_le_bytes())
+                    .await
                     .and(stdout.write_all(&response_json).await)
                     .and(stdout.flush().await)
                 {

@@ -1,10 +1,10 @@
 use crate::state::State;
+use signature::{RandomizedSigner as _, SignatureEncoding as _, Signer as _};
 use ssh_agent_lib::agent::{Agent, Session};
 use ssh_agent_lib::proto::{Extension, Identity};
 use ssh_agent_lib::ssh_key::{PrivateKey, PublicKey, Signature};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use signature::{Signer as _, RandomizedSigner as _, SignatureEncoding as _};
 
 const SSH_AGENT_RSA_SHA2_256: u32 = 2;
 const SSH_AGENT_RSA_SHA2_512: u32 = 4;
@@ -24,7 +24,10 @@ impl Agent<tokio::net::UnixListener> for SshAgentFactory {
         let authorized = match socket.peer_cred() {
             Ok(cred) if cred.uid() == my_uid => true,
             Ok(cred) => {
-                log::warn!("ssh-agent: rejected connection from unauthorized UID: {}", cred.uid());
+                log::warn!(
+                    "ssh-agent: rejected connection from unauthorized UID: {}",
+                    cred.uid()
+                );
                 false
             }
             Err(e) => {
@@ -49,7 +52,10 @@ pub struct SshAgent {
 
 impl SshAgent {
     pub fn new(state: Arc<Mutex<State>>) -> Self {
-        Self { state, authorized: true }
+        Self {
+            state,
+            authorized: true,
+        }
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
@@ -59,7 +65,10 @@ impl SshAgent {
         if let Some(parent) = socket.parent() {
             // 0700 parent dir (matches dirs::make_all); default create_dir_all
             // would use 0755 when the socket path is overridden to a fresh dir.
-            let _ = std::fs::DirBuilder::new().recursive(true).mode(0o700).create(parent);
+            let _ = std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(parent);
         }
 
         let listener = tokio::net::UnixListener::bind(&socket)?;
@@ -96,7 +105,10 @@ impl ssh_agent_lib::agent::Session for SshAgent {
 
         let mut identities = Vec::new();
         for entry in &db.entries {
-            if !matches!(entry.data, cosmic_bwarden_core::db::EntryData::SshKey { .. }) {
+            if !matches!(
+                entry.data,
+                cosmic_bwarden_core::db::EntryData::SshKey { .. }
+            ) {
                 continue;
             }
             // Vaultwarden's sync response leaves the SSH-key cipher
@@ -104,7 +116,11 @@ impl ssh_agent_lib::agent::Session for SshAgent {
             // "public_key"/"private_key" custom fields where the real
             // (encrypted) values actually live.
             let decrypted = entry.decrypt(keys, org_keys);
-            if let cosmic_bwarden_core::db::EntryData::SshKey { public_key: Some(pk_str), .. } = &decrypted.data {
+            if let cosmic_bwarden_core::db::EntryData::SshKey {
+                public_key: Some(pk_str),
+                ..
+            } = &decrypted.data
+            {
                 if let Ok(pk) = pk_str.parse::<PublicKey>() {
                     identities.push(Identity {
                         pubkey: pk.key_data().clone(),
@@ -138,11 +154,15 @@ impl ssh_agent_lib::agent::Session for SshAgent {
         let mut state = self.state.lock().await;
         let Some(db) = &state.db else {
             state.request_unlock();
-            return Err(ssh_agent_lib::error::AgentError::other(cosmic_bwarden_core::error::Error::Other("agent is locked".to_string())));
+            return Err(ssh_agent_lib::error::AgentError::other(
+                cosmic_bwarden_core::error::Error::Other("agent is locked".to_string()),
+            ));
         };
         let Some(keys) = &state.keys else {
             state.request_unlock();
-            return Err(ssh_agent_lib::error::AgentError::other(cosmic_bwarden_core::error::Error::Other("agent is locked".to_string())));
+            return Err(ssh_agent_lib::error::AgentError::other(
+                cosmic_bwarden_core::error::Error::Other("agent is locked".to_string()),
+            ));
         };
         let empty_org_keys = std::collections::HashMap::new();
         let org_keys = state.org_keys.as_ref().unwrap_or(&empty_org_keys);
@@ -151,14 +171,22 @@ impl ssh_agent_lib::agent::Session for SshAgent {
         let req_bytes = req_pubkey.to_bytes();
 
         for entry in &db.entries {
-            if !matches!(entry.data, cosmic_bwarden_core::db::EntryData::SshKey { .. }) {
+            if !matches!(
+                entry.data,
+                cosmic_bwarden_core::db::EntryData::SshKey { .. }
+            ) {
                 continue;
             }
             // See comment in `request_identities`: decrypt via the entry's
             // fallback-field-aware `decrypt()` rather than the raw
             // (often-empty) SSH-key cipher sub-data.
             let decrypted = entry.decrypt(keys, org_keys);
-            if let cosmic_bwarden_core::db::EntryData::SshKey { private_key: Some(sk), public_key: Some(pk_str), .. } = &decrypted.data {
+            if let cosmic_bwarden_core::db::EntryData::SshKey {
+                private_key: Some(sk),
+                public_key: Some(pk_str),
+                ..
+            } = &decrypted.data
+            {
                 if let Ok(pk) = pk_str.parse::<PublicKey>() {
                     if pk.to_bytes() == req_bytes {
                         let sk = PrivateKey::from_openssh(sk.expose())
@@ -170,7 +198,9 @@ impl ssh_agent_lib::agent::Session for SshAgent {
             }
         }
 
-        Err(ssh_agent_lib::error::AgentError::other(cosmic_bwarden_core::error::Error::Other("no matching key found".to_string())))
+        Err(ssh_agent_lib::error::AgentError::other(
+            cosmic_bwarden_core::error::Error::Other("no matching key found".to_string()),
+        ))
     }
 }
 
@@ -180,10 +210,9 @@ fn sign_with_key(
     flags: u32,
 ) -> Result<Signature, ssh_agent_lib::error::AgentError> {
     match private_key.key_data() {
-        ssh_agent_lib::ssh_key::private::KeypairData::Ed25519(key) => {
-            key.try_sign(data)
-                .map_err(ssh_agent_lib::error::AgentError::other)
-        }
+        ssh_agent_lib::ssh_key::private::KeypairData::Ed25519(key) => key
+            .try_sign(data)
+            .map_err(ssh_agent_lib::error::AgentError::other),
         ssh_agent_lib::ssh_key::private::KeypairData::Rsa(key) => {
             let p = rsa::BigUint::from_bytes_be(key.private.p.as_bytes());
             let q = rsa::BigUint::from_bytes_be(key.private.q.as_bytes());
@@ -198,17 +227,20 @@ fn sign_with_key(
 
             let (algorithm, sig_bytes) = if flags & SSH_AGENT_RSA_SHA2_512 != 0 {
                 let signing_key = rsa::pkcs1v15::SigningKey::<sha2::Sha512>::new(rsa_key);
-                let signature = signing_key.try_sign_with_rng(&mut rng, data)
+                let signature = signing_key
+                    .try_sign_with_rng(&mut rng, data)
                     .map_err(ssh_agent_lib::error::AgentError::other)?;
                 ("rsa-sha2-512", signature.to_vec())
             } else if flags & SSH_AGENT_RSA_SHA2_256 != 0 {
                 let signing_key = rsa::pkcs1v15::SigningKey::<sha2::Sha256>::new(rsa_key);
-                let signature = signing_key.try_sign_with_rng(&mut rng, data)
+                let signature = signing_key
+                    .try_sign_with_rng(&mut rng, data)
                     .map_err(ssh_agent_lib::error::AgentError::other)?;
                 ("rsa-sha2-256", signature.to_vec())
             } else {
                 let signing_key = rsa::pkcs1v15::SigningKey::<sha1::Sha1>::new_unprefixed(rsa_key);
-                let signature = signing_key.try_sign_with_rng(&mut rng, data)
+                let signature = signing_key
+                    .try_sign_with_rng(&mut rng, data)
                     .map_err(ssh_agent_lib::error::AgentError::other)?;
                 ("ssh-rsa", signature.to_vec())
             };
@@ -217,8 +249,11 @@ fn sign_with_key(
                 ssh_agent_lib::ssh_key::Algorithm::new(algorithm)
                     .map_err(ssh_agent_lib::error::AgentError::other)?,
                 sig_bytes,
-            ).map_err(ssh_agent_lib::error::AgentError::other)?)
+            )
+            .map_err(ssh_agent_lib::error::AgentError::other)?)
         }
-        other => Err(ssh_agent_lib::error::AgentError::other(cosmic_bwarden_core::error::Error::Other(format!("unsupported key type: {:?}", other)))),
+        other => Err(ssh_agent_lib::error::AgentError::other(
+            cosmic_bwarden_core::error::Error::Other(format!("unsupported key type: {:?}", other)),
+        )),
     }
 }

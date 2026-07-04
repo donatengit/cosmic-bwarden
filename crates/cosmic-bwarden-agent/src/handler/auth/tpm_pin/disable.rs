@@ -46,7 +46,8 @@ pub async fn handle_disable_tpm_pin(state: &Arc<Mutex<State>>) -> Response {
         }
         // Also remove the server-credentials blob — it was sealed with the same PIN
         // and is meaningless without the vault keys blob.
-        let hash_blob_path = cosmic_bwarden_core::dirs::tpm_hash_blob_file(&config.server_name(), &email);
+        let hash_blob_path =
+            cosmic_bwarden_core::dirs::tpm_hash_blob_file(&config.server_name(), &email);
         if hash_blob_path.exists() {
             if let Err(e) = crate::tpm::clear(&hash_blob_path) {
                 log::error!("TPM clear (server credentials) failed: {}", e);

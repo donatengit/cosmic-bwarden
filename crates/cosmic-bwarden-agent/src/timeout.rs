@@ -67,7 +67,10 @@ impl AutolockTimer {
             if now_secs().saturating_sub(last) >= timeout {
                 let mut s = state.lock().await;
                 if s.keys.is_some() {
-                    log::info!("autolock: no activity for {} seconds, locking vault", timeout);
+                    log::info!(
+                        "autolock: no activity for {} seconds, locking vault",
+                        timeout
+                    );
                     s.lock();
                 }
             }

@@ -5,10 +5,7 @@ use cosmic_bwarden_core::protocol::{Event, Response};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-pub async fn handle_unlock(
-    password: String,
-    state: &Arc<Mutex<State>>,
-) -> Response {
+pub async fn handle_unlock(password: String, state: &Arc<Mutex<State>>) -> Response {
     let config = match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
         Ok(c) => c,
         Err(e) => {
@@ -121,7 +118,11 @@ pub async fn handle_unlock(
                 state_guard.db = Some(db);
                 state_guard.rebuild_sidebar_cache();
                 state_guard.broadcast(Event::Unlocked);
-                log::info!("vault unlocked via master password for {} (server: {})", email, config.server_name());
+                log::info!(
+                    "vault unlocked via master password for {} (server: {})",
+                    email,
+                    config.server_name()
+                );
                 needs_reauth
             };
 
@@ -138,8 +139,15 @@ pub async fn handle_unlock(
                 match config.device_id().await {
                     Ok(device_id) => {
                         match client
-                            .login(email, &device_id, &master_password_hash,
-                                   None, None, None, None)
+                            .login(
+                                email,
+                                &device_id,
+                                &master_password_hash,
+                                None,
+                                None,
+                                None,
+                                None,
+                            )
                             .await
                         {
                             Ok((access_token, refresh_token, _protected_key)) => {
@@ -148,15 +156,25 @@ pub async fn handle_unlock(
                                     let mut g = state.lock().await;
                                     if let Some(db) = &mut g.db {
                                         db.access_token = Some(Secret::from(access_token.clone()));
-                                        db.refresh_token = refresh_token.as_ref().map(|rt| Secret::from(rt.clone()));
+                                        db.refresh_token = refresh_token
+                                            .as_ref()
+                                            .map(|rt| Secret::from(rt.clone()));
                                     }
                                 }
                                 if config.persist_session {
                                     if let Some(rt) = &refresh_token {
                                         if let Err(e) = keyring::store_tokens(
-                                            &config.server_name(), email, &access_token, rt,
-                                        ).await {
-                                            log::error!("failed to store refreshed tokens in keyring: {}", e);
+                                            &config.server_name(),
+                                            email,
+                                            &access_token,
+                                            rt,
+                                        )
+                                        .await
+                                        {
+                                            log::error!(
+                                                "failed to store refreshed tokens in keyring: {}",
+                                                e
+                                            );
                                         }
                                     }
                                 }
@@ -165,11 +183,17 @@ pub async fn handle_unlock(
                                 // Server may be unreachable or require 2FA — the vault
                                 // is still usable locally; sync will fail until the user
                                 // logs out and logs back in.
-                                log::warn!("unlock: silent re-auth failed (sync will be unavailable): {}", e);
+                                log::warn!(
+                                    "unlock: silent re-auth failed (sync will be unavailable): {}",
+                                    e
+                                );
                             }
                         }
                     }
-                    Err(e) => log::warn!("unlock: could not obtain device_id for silent re-auth: {}", e),
+                    Err(e) => log::warn!(
+                        "unlock: could not obtain device_id for silent re-auth: {}",
+                        e
+                    ),
                 }
             }
 

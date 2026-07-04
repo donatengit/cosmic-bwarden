@@ -1,14 +1,14 @@
 use crate::common::setup_env;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::Action;
-use std::process::Command;
 use std::path::PathBuf;
+use std::process::Command;
 use tokio::time::{sleep, Duration};
 
 #[tokio::test]
 async fn test_cli_socket_override() -> anyhow::Result<()> {
     let env = setup_env().await?;
-    
+
     let socket = env.socket_path.clone();
     assert!(socket.exists());
 
@@ -57,9 +57,12 @@ async fn test_config_socket_override() -> anyhow::Result<()> {
             break;
         }
     }
-    
+
     let _ = child.kill();
-    assert!(success, "Agent should have created the socket specified in the config file");
+    assert!(
+        success,
+        "Agent should have created the socket specified in the config file"
+    );
 
     Ok(())
 }
@@ -97,9 +100,15 @@ async fn test_override_priority() -> anyhow::Result<()> {
             break;
         }
     }
-    
-    assert!(cli_success, "Agent should have created the socket specified in CLI, overriding config");
-    assert!(!config_socket.exists(), "Agent should NOT have created the socket specified in config when CLI override is present");
+
+    assert!(
+        cli_success,
+        "Agent should have created the socket specified in CLI, overriding config"
+    );
+    assert!(
+        !config_socket.exists(),
+        "Agent should NOT have created the socket specified in config when CLI override is present"
+    );
 
     let _ = child.kill();
     Ok(())

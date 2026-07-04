@@ -79,7 +79,11 @@ async fn test_password_unlock_coexists_with_tpm() -> Result<()> {
     // Lock and unlock with master password (not PIN)
     lock(&env).await?;
     let pw = unlock_with_password(&env, PASSWORD).await?;
-    assert!(matches!(pw, Response::Ack), "password unlock failed while TPM configured: {:?}", pw);
+    assert!(
+        matches!(pw, Response::Ack),
+        "password unlock failed while TPM configured: {:?}",
+        pw
+    );
     assert_vault_accessible(&env).await?;
 
     // Lock and unlock with PIN
@@ -132,7 +136,11 @@ async fn test_tpm_setup_is_idempotent() -> Result<()> {
 
     // New PIN works
     let new = unlock_with_pin(&env, NEW_PIN).await?;
-    assert!(matches!(new, Response::Ack), "new PIN should work: {:?}", new);
+    assert!(
+        matches!(new, Response::Ack),
+        "new PIN should work: {:?}",
+        new
+    );
 
     Ok(())
 }

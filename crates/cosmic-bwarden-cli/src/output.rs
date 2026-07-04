@@ -22,9 +22,7 @@ pub fn output_entry(entry: &Entry, fields_str: &str, show_secrets: bool) -> Resu
 
     match &entry.data {
         cosmic_bwarden_core::db::EntryData::Login {
-            username,
-            password,
-            ..
+            username, password, ..
         } => {
             if all_fields || requested_fields.contains("type") {
                 println!("Type: Login");

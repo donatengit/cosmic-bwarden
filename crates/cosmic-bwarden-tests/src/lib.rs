@@ -10,16 +10,14 @@ mod cli_lifecycle;
 mod common;
 #[cfg(all(test, feature = "tpm-smoke"))]
 mod common_tpm;
-#[cfg(all(test, feature = "tpm-smoke"))]
-mod tpm_lifecycle;
 #[cfg(test)]
 mod custom_fields_cli;
-#[cfg(test)]
-mod ipc_hardening;
 #[cfg(test)]
 mod custom_fields_ui;
 #[cfg(all(test, feature = "browser-e2e"))]
 mod extension_e2e;
+#[cfg(test)]
+mod ipc_hardening;
 #[cfg(test)]
 mod paths;
 #[cfg(test)]
@@ -30,6 +28,8 @@ mod security;
 mod ssh_test_utils;
 #[cfg(test)]
 mod sync_persistence;
+#[cfg(all(test, feature = "tpm-smoke"))]
+mod tpm_lifecycle;
 #[cfg(test)]
 mod vault;
 #[cfg(test)]

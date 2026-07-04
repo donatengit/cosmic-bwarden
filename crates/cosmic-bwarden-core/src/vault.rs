@@ -50,7 +50,9 @@ pub fn unlock_from_keys<S: std::hash::BuildHasher>(
     let vault_keys = match protected_key.decrypt_locked_symmetric(identity_keys) {
         Ok(master_keys) => locked::Keys::new(master_keys),
         Err(Error::InvalidMac) => {
-            return Err(Error::Other("Password is incorrect. Try again.".to_string()))
+            return Err(Error::Other(
+                "Password is incorrect. Try again.".to_string(),
+            ))
         }
         Err(e) => return Err(e),
     };
@@ -73,14 +75,15 @@ pub fn unlock<S: std::hash::BuildHasher>(
     protected_org_keys: &HashMap<String, String, S>,
 ) -> Result<(locked::Keys, HashMap<String, locked::Keys>)> {
     let identity = Identity::new(email, password, kdf, iterations, memory, parallelism)?;
-    unlock_from_keys(&identity.keys, protected_key, protected_private_key, protected_org_keys)
+    unlock_from_keys(
+        &identity.keys,
+        protected_key,
+        protected_private_key,
+        protected_org_keys,
+    )
 }
 
-pub fn decrypt(
-    cipherstring: &str,
-    keys: &locked::Keys,
-    entry_key: Option<&str>,
-) -> Result<String> {
+pub fn decrypt(cipherstring: &str, keys: &locked::Keys, entry_key: Option<&str>) -> Result<String> {
     let cipher = CipherString::new(cipherstring)?;
     let entry_key = if let Some(ek) = entry_key {
         let ek_cipher = CipherString::new(ek)?;
@@ -90,5 +93,6 @@ pub fn decrypt(
     };
 
     let plaintext = cipher.decrypt_symmetric(keys, entry_key.as_ref())?;
-    String::from_utf8(plaintext).map_err(|e| Error::Other(format!("invalid utf8 in decrypted secret: {}", e)))
+    String::from_utf8(plaintext)
+        .map_err(|e| Error::Other(format!("invalid utf8 in decrypted secret: {}", e)))
 }

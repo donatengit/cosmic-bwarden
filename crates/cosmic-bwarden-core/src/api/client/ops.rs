@@ -1,6 +1,6 @@
-use crate::error::{Error, Result};
-use crate::api::models::*;
 use crate::api::client::Client;
+use crate::api::models::*;
+use crate::error::{Error, Result};
 
 impl Client {
     // Mirrors the Bitwarden endpoint's flat payload; a params struct is tracked

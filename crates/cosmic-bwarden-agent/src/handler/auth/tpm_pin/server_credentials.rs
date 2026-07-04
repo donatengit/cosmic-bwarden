@@ -66,7 +66,10 @@ pub async fn handle_enable_tpm_server_credentials(state: &Arc<Mutex<State>>) -> 
         let mut updated_config = config;
         updated_config.tpm_store_server_credentials = true;
         if let Err(e) = updated_config.save_legacy() {
-            log::error!("enable TPM server credentials: failed to save config: {}", e);
+            log::error!(
+                "enable TPM server credentials: failed to save config: {}",
+                e
+            );
         }
 
         log::info!("TPM server credentials sealed for {}", email);
@@ -106,7 +109,8 @@ pub async fn handle_disable_tpm_server_credentials(state: &Arc<Mutex<State>>) ->
             let g = state.lock().await;
             if g.keys.is_none() {
                 return Response::Error {
-                    message: "vault is locked — unlock first before changing this setting".to_string(),
+                    message: "vault is locked — unlock first before changing this setting"
+                        .to_string(),
                 };
             }
         }
@@ -120,7 +124,10 @@ pub async fn handle_disable_tpm_server_credentials(state: &Arc<Mutex<State>>) ->
         let mut updated_config = config;
         updated_config.tpm_store_server_credentials = false;
         if let Err(e) = updated_config.save_legacy() {
-            log::error!("disable TPM server credentials: failed to save config: {}", e);
+            log::error!(
+                "disable TPM server credentials: failed to save config: {}",
+                e
+            );
         }
 
         log::info!("TPM server credentials disabled for {}", email);

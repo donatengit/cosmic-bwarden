@@ -85,8 +85,12 @@ impl CosmicBWardenApp {
                 cosmic::widget::dialog()
                     .title(fl!("delete-entry-title"))
                     .body(fl!("confirm-delete"))
-                    .primary_action(button::destructive(fl!("delete")).on_press(Message::ConfirmDelete))
-                    .secondary_action(button::standard(fl!("cancel")).on_press(Message::CancelDelete))
+                    .primary_action(
+                        button::destructive(fl!("delete")).on_press(Message::ConfirmDelete),
+                    )
+                    .secondary_action(
+                        button::standard(fl!("cancel")).on_press(Message::CancelDelete),
+                    )
                     .width(Length::Fixed(400.0))
                     .into(),
             )
@@ -109,8 +113,12 @@ impl CosmicBWardenApp {
                     .title(fl!("master-password-required"))
                     .body(fl!("enter-master-password"))
                     .control(col)
-                    .primary_action(button::suggested(fl!("verify")).on_press(Message::SubmitReprompt))
-                    .secondary_action(button::standard(fl!("cancel")).on_press(Message::CancelReprompt))
+                    .primary_action(
+                        button::suggested(fl!("verify")).on_press(Message::SubmitReprompt),
+                    )
+                    .secondary_action(
+                        button::standard(fl!("cancel")).on_press(Message::CancelReprompt),
+                    )
                     .width(Length::Fixed(400.0))
                     .into(),
             )

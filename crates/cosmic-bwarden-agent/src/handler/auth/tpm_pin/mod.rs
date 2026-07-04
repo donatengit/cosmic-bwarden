@@ -57,7 +57,10 @@ fn reset_server_credentials_store(server: &str, email: &str) {
     let hash_blob_path = cosmic_bwarden_core::dirs::tpm_hash_blob_file(server, email);
     if hash_blob_path.exists() {
         if let Err(e) = crate::tpm::clear(&hash_blob_path) {
-            log::error!("TPM enable: failed to clear stale server-credentials blob: {}", e);
+            log::error!(
+                "TPM enable: failed to clear stale server-credentials blob: {}",
+                e
+            );
         }
     }
 }

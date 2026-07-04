@@ -4,7 +4,9 @@ use crate::message::Message;
 use crate::view::style::muted_text;
 use crate::MIN_PIN_LEN;
 use cosmic::iced::{Alignment, Length};
-use cosmic::widget::{button, container, list_column, row, settings as cosmic_settings, secure_input, slider, text};
+use cosmic::widget::{
+    button, container, list_column, row, secure_input, settings as cosmic_settings, slider, text,
+};
 use cosmic::Element;
 
 const LOCK_MIN: u32 = 5;
@@ -30,14 +32,17 @@ impl CosmicBWardenApp {
             ));
 
             {
-                let minutes = (config.lock_timeout / 60).clamp(
-                    LOCK_MIN as u64, LOCK_MAX as u64,
-                ) as u32;
+                let minutes =
+                    (config.lock_timeout / 60).clamp(LOCK_MIN as u64, LOCK_MAX as u64) as u32;
                 col = col.add(cosmic_settings::item(
                     fl!("autolock-minutes", minutes = minutes),
-                    slider(LOCK_MIN..=LOCK_MAX, minutes, Message::SettingsLockTimeoutChanged)
-                        .step(LOCK_STEP)
-                        .width(Length::Fixed(300.0)),
+                    slider(
+                        LOCK_MIN..=LOCK_MAX,
+                        minutes,
+                        Message::SettingsLockTimeoutChanged,
+                    )
+                    .step(LOCK_STEP)
+                    .width(Length::Fixed(300.0)),
                 ));
             }
         } else {
@@ -47,11 +52,20 @@ impl CosmicBWardenApp {
             ));
             col = col.add(cosmic_settings::item(
                 fl!("server-label"),
-                text::body(config.base_url.as_deref().map(|s| s.to_string()).unwrap_or_else(|| fl!("bitwarden-cloud"))),
+                text::body(
+                    config
+                        .base_url
+                        .as_deref()
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| fl!("bitwarden-cloud")),
+                ),
             ));
             let lock_minutes = config.lock_timeout / 60;
             let lock_label = fl!("minutes-fmt", minutes = lock_minutes);
-            col = col.add(cosmic_settings::item(fl!("auto-lock"), text::body(lock_label)));
+            col = col.add(cosmic_settings::item(
+                fl!("auto-lock"),
+                text::body(lock_label),
+            ));
         }
 
         let header = cosmic::widget::row::with_capacity(2)
@@ -63,7 +77,10 @@ impl CosmicBWardenApp {
                     row::with_capacity(2)
                         .spacing(5)
                         .push(button::suggested(fl!("save")).on_press(Message::SettingsSaveClicked))
-                        .push(button::standard(fl!("cancel")).on_press(Message::SettingsCancelClicked)),
+                        .push(
+                            button::standard(fl!("cancel"))
+                                .on_press(Message::SettingsCancelClicked),
+                        ),
                 )
             } else {
                 button::suggested(fl!("edit"))
@@ -142,7 +159,11 @@ impl CosmicBWardenApp {
                 Message::TpmDisableFormToggle
             }
         });
-        let status_label = if tpm_toggle_state { fl!("status-active") } else { fl!("status-not-configured") };
+        let status_label = if tpm_toggle_state {
+            fl!("status-active")
+        } else {
+            fl!("status-not-configured")
+        };
         col = col.add(cosmic_settings::item(
             fl!("pin-unlock"),
             row::with_capacity(2)
@@ -178,20 +199,25 @@ impl CosmicBWardenApp {
             col = col.add(
                 row::with_capacity(2)
                     .spacing(5)
-                    .push(button::destructive(fl!("disable-pin-unlock")).on_press(Message::TpmDisableSubmitted))
+                    .push(
+                        button::destructive(fl!("disable-pin-unlock"))
+                            .on_press(Message::TpmDisableSubmitted),
+                    )
                     .push(button::standard(fl!("cancel")).on_press(Message::TpmDisableFormToggle)),
             );
         } else if !self.tpm_configured && self.show_tpm_setup_form {
             // Setup form: only needs the new PIN (vault is already unlocked).
-            let pin = secure_input(fl!("new-pin-min-chars", count = MIN_PIN_LEN), &self.tpm_setup_pin, Some(Message::TpmSetupPinRevealToggled), !self.tpm_setup_pin_revealed)
-                .on_input(Message::TpmSetupPinChanged)
-                .on_submit(|_| Message::TpmSetupSubmitted)
-                .width(Length::Fixed(300.0));
+            let pin = secure_input(
+                fl!("new-pin-min-chars", count = MIN_PIN_LEN),
+                &self.tpm_setup_pin,
+                Some(Message::TpmSetupPinRevealToggled),
+                !self.tpm_setup_pin_revealed,
+            )
+            .on_input(Message::TpmSetupPinChanged)
+            .on_submit(|_| Message::TpmSetupSubmitted)
+            .width(Length::Fixed(300.0));
             col = col.add(cosmic_settings::item(fl!("new-pin"), pin));
-            col = col.add(
-                text::caption(fl!("pin-tpm-note-settings"))
-                    .class(muted_text()),
-            );
+            col = col.add(text::caption(fl!("pin-tpm-note-settings")).class(muted_text()));
             col = col.add(
                 row::with_capacity(2)
                     .spacing(5)
@@ -208,10 +234,7 @@ impl CosmicBWardenApp {
                 fl!("store-hashed-password-tpm"),
                 creds_toggle,
             ));
-            col = col.add(
-                text::caption(fl!("store-hashed-password-tpm-note"))
-                .class(muted_text()),
-            );
+            col = col.add(text::caption(fl!("store-hashed-password-tpm-note")).class(muted_text()));
         }
 
         col.into()

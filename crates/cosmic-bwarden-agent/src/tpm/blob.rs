@@ -24,8 +24,14 @@ struct SealedBlob {
 pub(super) fn write_blob(result: &CreateKeyResult, blob_path: &Path) -> Result<()> {
     let blob = SealedBlob {
         version: SEALED_BLOB_VERSION,
-        out_private: result.out_private.marshall().context("marshalling TPM private")?,
-        out_public: result.out_public.marshall().context("marshalling TPM public")?,
+        out_private: result
+            .out_private
+            .marshall()
+            .context("marshalling TPM private")?,
+        out_public: result
+            .out_public
+            .marshall()
+            .context("marshalling TPM public")?,
     };
     let blob_bytes = postcard::to_allocvec(&blob).context("serializing TPM blob")?;
 
@@ -47,17 +53,16 @@ pub(super) fn write_blob(result: &CreateKeyResult, blob_path: &Path) -> Result<(
 /// Read and version-check a sealed blob, returning its TPM private/public parts.
 pub(super) fn read_blob(blob_path: &Path) -> Result<(Private, Public)> {
     let blob_bytes = std::fs::read(blob_path).context("reading TPM blob file")?;
-    let blob: SealedBlob =
-        postcard::from_bytes(&blob_bytes).context("deserializing TPM blob")?;
+    let blob: SealedBlob = postcard::from_bytes(&blob_bytes).context("deserializing TPM blob")?;
     anyhow::ensure!(
         blob.version == SEALED_BLOB_VERSION,
         "sealed blob version {} is not supported (expected {}); re-run PIN setup",
         blob.version,
         SEALED_BLOB_VERSION
     );
-    let private = Private::unmarshall(&blob.out_private)
-        .context("deserializing TPM private portion")?;
-    let public = Public::unmarshall(&blob.out_public)
-        .context("deserializing TPM public portion")?;
+    let private =
+        Private::unmarshall(&blob.out_private).context("deserializing TPM private portion")?;
+    let public =
+        Public::unmarshall(&blob.out_public).context("deserializing TPM public portion")?;
     Ok((private, public))
 }

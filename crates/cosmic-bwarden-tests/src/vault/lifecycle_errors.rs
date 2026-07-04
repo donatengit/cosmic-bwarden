@@ -33,8 +33,14 @@ fn set_config_base_url(config_path: &Path, url: &str) -> Result<()> {
     let raw = std::fs::read_to_string(config_path)?;
     let mut val: serde_json::Value = serde_json::from_str(&raw)?;
     if let Some(obj) = val.as_object_mut() {
-        obj.insert("base_url".to_string(), serde_json::Value::String(url.to_string()));
-        obj.insert("identity_url".to_string(), serde_json::Value::String(format!("{}/identity", url)));
+        obj.insert(
+            "base_url".to_string(),
+            serde_json::Value::String(url.to_string()),
+        );
+        obj.insert(
+            "identity_url".to_string(),
+            serde_json::Value::String(format!("{}/identity", url)),
+        );
     }
     std::fs::write(config_path, serde_json::to_string_pretty(&val)?)?;
     Ok(())
@@ -42,14 +48,18 @@ fn set_config_base_url(config_path: &Path, url: &str) -> Result<()> {
 
 fn assert_sync_failed(res: &Response) {
     match res {
-        Response::Config { sync_failed: true, .. } => {}
+        Response::Config {
+            sync_failed: true, ..
+        } => {}
         other => panic!("Expected Config {{ sync_failed: true }}, got: {:?}", other),
     }
 }
 
 fn assert_sync_ok(res: &Response) {
     match res {
-        Response::Config { sync_failed: false, .. } => {}
+        Response::Config {
+            sync_failed: false, ..
+        } => {}
         other => panic!("Expected Config {{ sync_failed: false }}, got: {:?}", other),
     }
 }
@@ -80,10 +90,19 @@ async fn test_delete_fails_gracefully_when_backend_unavailable() -> Result<()> {
     client.send(Action::Sync).await?;
 
     let res = client
-        .send(Action::GetSidebarEntries { query: None, entry_type: None, only_pinned: false })
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: false,
+        })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
-        entries.iter().find(|e| e.name == "To Delete").expect("entry not found").id.clone()
+        entries
+            .iter()
+            .find(|e| e.name == "To Delete")
+            .expect("entry not found")
+            .id
+            .clone()
     } else {
         anyhow::bail!("Expected SidebarEntries");
     };
@@ -115,7 +134,10 @@ async fn test_delete_fails_gracefully_when_backend_unavailable() -> Result<()> {
 
     // The entry still exists on the server (delete failed), so sync should succeed
     let res = client.send(Action::Sync).await?;
-    assert!(matches!(res, Response::Ack), "Sync after restore must succeed");
+    assert!(
+        matches!(res, Response::Ack),
+        "Sync after restore must succeed"
+    );
 
     let res = client.send(Action::GetConfig).await?;
     assert_sync_ok(&res);
@@ -204,16 +226,32 @@ async fn test_update_fails_gracefully_when_backend_unavailable() -> Result<()> {
     client.send(Action::Sync).await?;
 
     let res = client
-        .send(Action::GetSidebarEntries { query: None, entry_type: None, only_pinned: false })
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: false,
+        })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
-        entries.iter().find(|e| e.name == "Fails Update").expect("not found").id.clone()
+        entries
+            .iter()
+            .find(|e| e.name == "Fails Update")
+            .expect("not found")
+            .id
+            .clone()
     } else {
         anyhow::bail!("Expected SidebarEntries");
     };
 
-    let res = client.send(Action::GetEntry { id: id.clone(), password: None }).await?;
-    let mut entry = if let Response::Entry { entry } = res { entry } else {
+    let res = client
+        .send(Action::GetEntry {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
+    let mut entry = if let Response::Entry { entry } = res {
+        entry
+    } else {
         anyhow::bail!("Expected Entry");
     };
     entry.name = "Should Not Reach Server".to_string();
@@ -286,7 +324,10 @@ async fn test_sync_fails_sets_flag_recovery_clears_it() -> Result<()> {
     sleep(Duration::from_millis(100)).await;
 
     let res = client.send(Action::Sync).await?;
-    assert!(matches!(res, Response::Ack), "Sync after restore must succeed");
+    assert!(
+        matches!(res, Response::Ack),
+        "Sync after restore must succeed"
+    );
 
     let res = client.send(Action::GetConfig).await?;
     assert_sync_ok(&res);
@@ -320,8 +361,15 @@ async fn test_sync_failed_clears_on_lock() -> Result<()> {
 
     let res = client.send(Action::GetConfig).await?;
     match res {
-        Response::Config { sync_failed: false, is_locked: true, .. } => {}
-        other => panic!("Expected Config {{ sync_failed: false, is_locked: true }}, got: {:?}", other),
+        Response::Config {
+            sync_failed: false,
+            is_locked: true,
+            ..
+        } => {}
+        other => panic!(
+            "Expected Config {{ sync_failed: false, is_locked: true }}, got: {:?}",
+            other
+        ),
     }
 
     Ok(())

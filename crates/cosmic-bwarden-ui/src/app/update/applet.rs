@@ -1,6 +1,8 @@
 use crate::app::applet_search;
 use crate::app::state::CosmicBWardenApp;
-use crate::app::tasks::{check_protocol_version, fetch_applet_search, fetch_applet_secret, fetch_sidebar_entries};
+use crate::app::tasks::{
+    check_protocol_version, fetch_applet_search, fetch_applet_secret, fetch_sidebar_entries,
+};
 use crate::fl;
 use crate::message::{Message, View};
 use crate::view::applet::{search, unlock};
@@ -223,15 +225,13 @@ impl CosmicBWardenApp {
                 Some(Task::none())
             }
             Message::AppletCopySecret(id) => Some(fetch_applet_secret(id, None)),
-            Message::AppletOpenInVault(id) => {
-                Some(Task::perform(
-                    async move {
-                        let agent = AgentClient::new();
-                        let _ = agent.send(AgentAction::SetPendingEntry { id }).await;
-                    },
-                    |_| Action::App(Message::OpenVaultRequested),
-                ))
-            }
+            Message::AppletOpenInVault(id) => Some(Task::perform(
+                async move {
+                    let agent = AgentClient::new();
+                    let _ = agent.send(AgentAction::SetPendingEntry { id }).await;
+                },
+                |_| Action::App(Message::OpenVaultRequested),
+            )),
             Message::AppletOpenLink(uri) => {
                 let _ = std::process::Command::new("xdg-open").arg(&uri).spawn();
                 Some(Task::none())
@@ -526,7 +526,11 @@ impl CosmicBWardenApp {
             |res| cosmic::Action::App(Message::ConfigReceived(res)),
         ));
 
-        tasks.push(fetch_applet_search(self.applet_search_id, query, only_pinned));
+        tasks.push(fetch_applet_search(
+            self.applet_search_id,
+            query,
+            only_pinned,
+        ));
 
         let popup_task = Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(
             cosmic::surface::action::app_popup::<CosmicBWardenApp>(

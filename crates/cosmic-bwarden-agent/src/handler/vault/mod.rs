@@ -1,7 +1,7 @@
-pub mod sync;
-pub mod query;
-pub mod ops;
 pub mod merge;
+pub mod ops;
+pub mod query;
+pub mod sync;
 mod totp;
 
 use crate::state::State;
@@ -12,12 +12,16 @@ use tokio::sync::Mutex;
 pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Response {
     match action {
         Action::Sync => sync::handle_sync(state).await,
-        Action::GetEntries { query, entry_type, only_pinned } => {
-            query::handle_get_entries(query, entry_type, only_pinned, state).await
-        }
-        Action::GetSidebarEntries { query, entry_type, only_pinned } => {
-            query::handle_get_sidebar_entries(query, entry_type, only_pinned, state).await
-        }
+        Action::GetEntries {
+            query,
+            entry_type,
+            only_pinned,
+        } => query::handle_get_entries(query, entry_type, only_pinned, state).await,
+        Action::GetSidebarEntries {
+            query,
+            entry_type,
+            only_pinned,
+        } => query::handle_get_sidebar_entries(query, entry_type, only_pinned, state).await,
         Action::GetEntry { id, password } => query::handle_get_entry(id, password, state).await,
         Action::GetEntryMeta { id } => query::handle_get_entry_meta(id, state).await,
         Action::GetPassword { id, password } => {
@@ -34,16 +38,14 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
                         cosmic_bwarden_core::db::EntryData::Card {
                             number: Some(n), ..
                         } => n.expose().to_string(),
-                        cosmic_bwarden_core::db::EntryData::SecureNote => {
-                            match &entry.notes {
-                                Some(n) => n.expose().to_string(),
-                                None => {
-                                    return Response::Error {
-                                        message: "entry has no notes".to_string(),
-                                    }
+                        cosmic_bwarden_core::db::EntryData::SecureNote => match &entry.notes {
+                            Some(n) => n.expose().to_string(),
+                            None => {
+                                return Response::Error {
+                                    message: "entry has no notes".to_string(),
                                 }
                             }
-                        }
+                        },
                         _ => {
                             return Response::Error {
                                 message: "entry has no password".to_string(),
@@ -70,7 +72,9 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
             password,
             notes,
             fields,
-        } => ops::handle_add_entry(name, entry_type, username, password, notes, fields, state).await,
+        } => {
+            ops::handle_add_entry(name, entry_type, username, password, notes, fields, state).await
+        }
         Action::AddSecureNote {
             name,
             notes,
@@ -93,9 +97,7 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
             public_key,
             notes,
             fields,
-        } => {
-            ops::handle_add_ssh_key(name, private_key, public_key, notes, fields, state).await
-        }
+        } => ops::handle_add_ssh_key(name, private_key, public_key, notes, fields, state).await,
         Action::AddCard {
             name,
             cardholder_name,

@@ -17,8 +17,7 @@ use totp_rs::{Algorithm, Secret, TOTP};
 /// apps accept them — rejecting those would break working accounts.
 fn build(secret: &str) -> Result<TOTP, String> {
     if secret.starts_with("otpauth://") {
-        return TOTP::from_url_unchecked(secret)
-            .map_err(|e| format!("Invalid otpauth URL: {e}"));
+        return TOTP::from_url_unchecked(secret).map_err(|e| format!("Invalid otpauth URL: {e}"));
     }
     // Bare seed: base32, case-insensitive, often displayed in space-separated
     // groups of four. Normalize, then decode to raw key bytes.

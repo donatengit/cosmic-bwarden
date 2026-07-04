@@ -1,9 +1,9 @@
-use cosmic::Element;
+use crate::app::CosmicBWardenApp;
+use crate::fl;
+use crate::message::{Message, View};
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{button, container, icon, row, text, tooltip};
-use crate::app::CosmicBWardenApp;
-use crate::message::{Message, View};
-use crate::fl;
+use cosmic::Element;
 
 /// Top header row: "Open Vault" (or "⚠ Not synced" in red) + Lock|Logout icon buttons.
 pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
@@ -24,17 +24,26 @@ pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
     let mut action_row = row::with_capacity(3).spacing(0).align_y(Alignment::Center);
 
     if app.sync_failed && is_unlocked {
-        let session_expired = app.error.as_deref()
+        let session_expired = app
+            .error
+            .as_deref()
             .map(|e| e.contains("session token"))
             .unwrap_or(false);
         let (icon_name, tooltip_label, action) = if session_expired {
-            ("dialog-password-symbolic", "Session expired — click to log in again", Message::LogoutClicked)
+            (
+                "dialog-password-symbolic",
+                "Session expired — click to log in again",
+                Message::LogoutClicked,
+            )
         } else {
-            ("network-error-symbolic", "Not synced — click to retry", Message::SyncClicked)
+            (
+                "network-error-symbolic",
+                "Not synced — click to retry",
+                Message::SyncClicked,
+            )
         };
         let not_synced_btn = tooltip(
-            button::icon(icon::from_name(icon_name))
-                .on_press(action),
+            button::icon(icon::from_name(icon_name)).on_press(action),
             text::caption(tooltip_label),
             tooltip::Position::Bottom,
         );
@@ -52,8 +61,7 @@ pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
     }
 
     let logout_btn = tooltip(
-        button::icon(icon::from_name("system-log-out-symbolic"))
-            .on_press(Message::LogoutClicked),
+        button::icon(icon::from_name("system-log-out-symbolic")).on_press(Message::LogoutClicked),
         text::caption(fl!("logout")),
         tooltip::Position::Bottom,
     );
@@ -77,12 +85,10 @@ pub fn quit_footer(app: &CosmicBWardenApp) -> Vec<Element<'static, Message>> {
         format!("▸ {}", fl!("quit"))
     };
 
-    let mut items: Vec<Element<'static, Message>> = vec![
-        button::text(label)
-            .on_press(Message::AppletQuitMenuToggle)
-            .width(Length::Fill)
-            .into(),
-    ];
+    let mut items: Vec<Element<'static, Message>> = vec![button::text(label)
+        .on_press(Message::AppletQuitMenuToggle)
+        .width(Length::Fill)
+        .into()];
 
     if app.applet_quit_expanded {
         if is_unlocked {

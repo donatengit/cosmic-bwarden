@@ -1,7 +1,7 @@
-use crate::error::{Error, Result};
-use crate::json::{DeserializeJsonWithPathAsync as _};
-use crate::api::models::*;
 use crate::api::client::{Client, DEVICE_TYPE};
+use crate::api::models::*;
+use crate::error::{Error, Result};
+use crate::json::DeserializeJsonWithPathAsync as _;
 
 impl Client {
     pub async fn prelogin(&self, email: &str) -> Result<(KdfType, u32, Option<u32>, Option<u32>)> {
@@ -49,7 +49,7 @@ impl Client {
             .send()
             .await
             .map_err(|source| Error::Reqwest { source })?;
-        
+
         let res = if res.status() == reqwest::StatusCode::NOT_FOUND {
             client
                 .post(self.api_url("/accounts/register"))

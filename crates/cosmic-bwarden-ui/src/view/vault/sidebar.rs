@@ -1,10 +1,10 @@
-use cosmic::Element;
+use crate::app::CosmicBWardenApp;
+use crate::fl;
+use crate::message::{Message, View};
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{button, container, divider, icon, list_column, text};
+use cosmic::Element;
 use cosmic_bwarden_core::protocol::EntryType;
-use crate::app::CosmicBWardenApp;
-use crate::message::{Message, View};
-use crate::fl;
 
 /// Localized filter dropdown labels, order-matched to `filter_to_idx` /
 /// `idx_to_filter` (All, Logins, Notes, SSH Keys).
@@ -47,20 +47,29 @@ impl CosmicBWardenApp {
             .on_input(Message::SearchChanged)
             .width(Length::Fill);
 
-        let star_icon = if self.search_only_pinned { "starred-symbolic" } else { "non-starred-symbolic" };
-        let star_btn = button::icon(icon::from_name(star_icon))
-            .on_press(Message::ToggleSearchPinned);
+        let star_icon = if self.search_only_pinned {
+            "starred-symbolic"
+        } else {
+            "non-starred-symbolic"
+        };
+        let star_btn =
+            button::icon(icon::from_name(star_icon)).on_press(Message::ToggleSearchPinned);
 
-        sidebar = sidebar.push(cosmic::widget::row::with_capacity(2).spacing(5).align_y(Alignment::Center)
-            .push(search_bar)
-            .push(star_btn));
+        sidebar = sidebar.push(
+            cosmic::widget::row::with_capacity(2)
+                .spacing(5)
+                .align_y(Alignment::Center)
+                .push(search_bar)
+                .push(star_btn),
+        );
 
         // Filter dropdown
         let filter_dropdown = cosmic::widget::dropdown(
             filter_labels(),
             Some(filter_to_idx(&self.filter_type)),
             |idx| Message::FilterTypeChanged(idx_to_filter(idx)),
-        ).width(Length::Fill);
+        )
+        .width(Length::Fill);
         sidebar = sidebar.push(filter_dropdown);
         sidebar = sidebar.push(divider::horizontal::default());
 
@@ -72,7 +81,9 @@ impl CosmicBWardenApp {
             for entry in &self.entries {
                 let id = entry.id.clone();
                 let is_selected = self.selected_entry_id.as_deref() == Some(&id);
-                let mut btn = button::text(&entry.name).on_press(Message::SelectEntry(id)).width(Length::Fill);
+                let mut btn = button::text(&entry.name)
+                    .on_press(Message::SelectEntry(id))
+                    .width(Length::Fill);
                 if is_selected {
                     btn = btn.class(cosmic::theme::Button::Suggested);
                 }
@@ -84,11 +95,21 @@ impl CosmicBWardenApp {
         // Bottom Actions
         sidebar = sidebar.push(divider::horizontal::default());
 
-        let mut top_row = cosmic::widget::row::with_capacity(2).spacing(10).align_y(Alignment::Center);
-        top_row = top_row.push(button::suggested(fl!("add")).on_press(Message::AddEntryRequested).width(Length::Fill));
+        let mut top_row = cosmic::widget::row::with_capacity(2)
+            .spacing(10)
+            .align_y(Alignment::Center);
+        top_row = top_row.push(
+            button::suggested(fl!("add"))
+                .on_press(Message::AddEntryRequested)
+                .width(Length::Fill),
+        );
 
         let session_expired = self.sync_failed
-            && self.error.as_deref().map(|e| e.contains("session token")).unwrap_or(false);
+            && self
+                .error
+                .as_deref()
+                .map(|e| e.contains("session token"))
+                .unwrap_or(false);
 
         let sync_area: cosmic::Element<Message> = if self.syncing {
             // Show a small spinner while the sync request is in flight so the
@@ -98,11 +119,17 @@ impl CosmicBWardenApp {
                 .center_y(Length::Fixed(32.0))
                 .into()
         } else if session_expired {
-            button::destructive(fl!("session-expired")).on_press(Message::LogoutClicked).into()
+            button::destructive(fl!("session-expired"))
+                .on_press(Message::LogoutClicked)
+                .into()
         } else if self.sync_failed {
-            button::destructive(fl!("not-synced")).on_press(Message::SyncClicked).into()
+            button::destructive(fl!("not-synced"))
+                .on_press(Message::SyncClicked)
+                .into()
         } else {
-            button::standard(fl!("sync")).on_press(Message::SyncClicked).into()
+            button::standard(fl!("sync"))
+                .on_press(Message::SyncClicked)
+                .into()
         };
         top_row = top_row.push(sync_area);
         sidebar = sidebar.push(top_row);
@@ -114,11 +141,22 @@ impl CosmicBWardenApp {
             }
         }
 
-        let mut bottom_row = cosmic::widget::row::with_capacity(3).spacing(10).align_y(Alignment::Center);
-        let settings_btn = if self.view == View::Settings { button::suggested(fl!("settings")) } else { button::standard(fl!("settings")) };
-        bottom_row = bottom_row.push(settings_btn.on_press(Message::SettingsViewClicked).width(Length::Fill));
+        let mut bottom_row = cosmic::widget::row::with_capacity(3)
+            .spacing(10)
+            .align_y(Alignment::Center);
+        let settings_btn = if self.view == View::Settings {
+            button::suggested(fl!("settings"))
+        } else {
+            button::standard(fl!("settings"))
+        };
+        bottom_row = bottom_row.push(
+            settings_btn
+                .on_press(Message::SettingsViewClicked)
+                .width(Length::Fill),
+        );
         bottom_row = bottom_row.push(button::standard(fl!("lock")).on_press(Message::LockClicked));
-        bottom_row = bottom_row.push(button::standard(fl!("logout")).on_press(Message::LogoutClicked));
+        bottom_row =
+            bottom_row.push(button::standard(fl!("logout")).on_press(Message::LogoutClicked));
         sidebar = sidebar.push(bottom_row);
 
         sidebar.into()

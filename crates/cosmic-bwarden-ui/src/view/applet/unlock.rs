@@ -1,9 +1,9 @@
-use cosmic::Element;
+use crate::app::CosmicBWardenApp;
+use crate::fl;
+use crate::message::Message;
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{button, column, icon, row, secure_input, Id};
-use crate::app::CosmicBWardenApp;
-use crate::message::Message;
-use crate::fl;
+use cosmic::Element;
 
 pub fn password_input_id() -> Id {
     Id::new("applet-unlock-password")
@@ -38,9 +38,7 @@ pub fn view(app: &CosmicBWardenApp) -> Element<'_, Message> {
         let fallback_btn = button::text(fl!("use-master-password-instead"))
             .on_press(Message::AppletUseMasterPasswordInstead);
 
-        let mut col = column::with_capacity(3)
-            .spacing(5)
-            .push(pin_row);
+        let mut col = column::with_capacity(3).spacing(5).push(pin_row);
         // Show the attempts-remaining counter only after a wrong PIN.
         if app.pin_incorrect {
             col = col.push(cosmic::widget::text::caption(app.pin_feedback_line()));

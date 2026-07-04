@@ -49,27 +49,56 @@ async fn test_ssh_key_full_crud() -> Result<()> {
 
     // 2. Read via sidebar (check type + public key)
     let res = client
-        .send(Action::GetSidebarEntries { query: None, entry_type: None, only_pinned: false })
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: false,
+        })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
-        let e = entries.iter().find(|e| e.name == "My SSH Key").expect("SSH key not found");
+        let e = entries
+            .iter()
+            .find(|e| e.name == "My SSH Key")
+            .expect("SSH key not found");
         assert_eq!(e.entry_type, EntryType::SshKey);
-        assert_eq!(e.public_key.as_deref(), Some("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test@host"));
+        assert_eq!(
+            e.public_key.as_deref(),
+            Some("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test@host")
+        );
         e.id.clone()
     } else {
         anyhow::bail!("Expected SidebarEntries");
     };
 
     // 3. Read full entry — verify private key and notes
-    let res = client.send(Action::GetEntry { id: id.clone(), password: None }).await?;
+    let res = client
+        .send(Action::GetEntry {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
     let mut entry = if let Response::Entry { entry } = res {
-        if let EntryData::SshKey { private_key, public_key, .. } = &entry.data {
-            assert!(private_key.as_ref().map(|k| k.expose().contains("FAKEKEYDATA")).unwrap_or(false));
-            assert_eq!(public_key.as_deref(), Some("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test@host"));
+        if let EntryData::SshKey {
+            private_key,
+            public_key,
+            ..
+        } = &entry.data
+        {
+            assert!(private_key
+                .as_ref()
+                .map(|k| k.expose().contains("FAKEKEYDATA"))
+                .unwrap_or(false));
+            assert_eq!(
+                public_key.as_deref(),
+                Some("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test@host")
+            );
         } else {
             anyhow::bail!("Expected SshKey data");
         }
-        assert_eq!(entry.notes.as_ref().map(|n| n.expose()), Some("SSH key for test"));
+        assert_eq!(
+            entry.notes.as_ref().map(|n| n.expose()),
+            Some("SSH key for test")
+        );
         entry
     } else {
         anyhow::bail!("Expected Entry response");
@@ -77,7 +106,10 @@ async fn test_ssh_key_full_crud() -> Result<()> {
 
     // 4. Update — rename and change public key
     entry.name = "Updated SSH Key".to_string();
-    if let EntryData::SshKey { ref mut public_key, .. } = entry.data {
+    if let EntryData::SshKey {
+        ref mut public_key, ..
+    } = entry.data
+    {
         *public_key = Some("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI updated@host".to_string());
     }
     let res = client.send(Action::UpdateEntry { entry }).await?;
@@ -85,11 +117,19 @@ async fn test_ssh_key_full_crud() -> Result<()> {
 
     client.send(Action::Sync).await?;
 
-    let res = client.send(Action::GetEntry { id: id.clone(), password: None }).await?;
+    let res = client
+        .send(Action::GetEntry {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
     if let Response::Entry { entry } = res {
         assert_eq!(entry.name, "Updated SSH Key");
         if let EntryData::SshKey { public_key, .. } = &entry.data {
-            assert_eq!(public_key.as_deref(), Some("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI updated@host"));
+            assert_eq!(
+                public_key.as_deref(),
+                Some("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI updated@host")
+            );
         }
     } else {
         anyhow::bail!("Expected Entry after update");
@@ -100,10 +140,17 @@ async fn test_ssh_key_full_crud() -> Result<()> {
     client.send(Action::Sync).await?;
 
     let res = client
-        .send(Action::GetSidebarEntries { query: None, entry_type: None, only_pinned: false })
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: false,
+        })
         .await?;
     if let Response::SidebarEntries { entries } = res {
-        assert!(!entries.iter().any(|e| e.id == id), "SSH key must be gone after delete");
+        assert!(
+            !entries.iter().any(|e| e.id == id),
+            "SSH key must be gone after delete"
+        );
     }
 
     Ok(())
@@ -129,16 +176,26 @@ async fn test_secure_note_full_crud() -> Result<()> {
             fields: Vec::new(),
         })
         .await?;
-    assert!(matches!(res, Response::Ack), "AddSecureNote must return Ack");
+    assert!(
+        matches!(res, Response::Ack),
+        "AddSecureNote must return Ack"
+    );
 
     client.send(Action::Sync).await?;
 
     // 2. Verify in sidebar
     let res = client
-        .send(Action::GetSidebarEntries { query: None, entry_type: None, only_pinned: false })
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: false,
+        })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
-        let e = entries.iter().find(|e| e.name == "My Secure Note").expect("note not found");
+        let e = entries
+            .iter()
+            .find(|e| e.name == "My Secure Note")
+            .expect("note not found");
         assert_eq!(e.entry_type, EntryType::SecureNote);
         e.id.clone()
     } else {
@@ -146,7 +203,12 @@ async fn test_secure_note_full_crud() -> Result<()> {
     };
 
     // 3. Read content via GetPassword (returns notes field for SecureNote)
-    let res = client.send(Action::GetPassword { id: id.clone(), password: None }).await?;
+    let res = client
+        .send(Action::GetPassword {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
     if let Response::Password { password: content } = res {
         assert_eq!(content, "Initial secret content");
     } else {
@@ -154,10 +216,18 @@ async fn test_secure_note_full_crud() -> Result<()> {
     }
 
     // 4. Update content
-    let res = client.send(Action::GetEntry { id: id.clone(), password: None }).await?;
+    let res = client
+        .send(Action::GetEntry {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
     let mut entry = if let Response::Entry { entry } = res {
         assert!(matches!(entry.data, EntryData::SecureNote));
-        assert_eq!(entry.notes.as_ref().map(|n| n.expose()), Some("Initial secret content"));
+        assert_eq!(
+            entry.notes.as_ref().map(|n| n.expose()),
+            Some("Initial secret content")
+        );
         entry
     } else {
         anyhow::bail!("Expected Entry");
@@ -169,7 +239,12 @@ async fn test_secure_note_full_crud() -> Result<()> {
 
     client.send(Action::Sync).await?;
 
-    let res = client.send(Action::GetPassword { id: id.clone(), password: None }).await?;
+    let res = client
+        .send(Action::GetPassword {
+            id: id.clone(),
+            password: None,
+        })
+        .await?;
     if let Response::Password { password: content } = res {
         assert_eq!(content, "Updated secret content");
     } else {
@@ -181,7 +256,11 @@ async fn test_secure_note_full_crud() -> Result<()> {
     client.send(Action::Sync).await?;
 
     let res = client
-        .send(Action::GetSidebarEntries { query: None, entry_type: None, only_pinned: false })
+        .send(Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: false,
+        })
         .await?;
     if let Response::SidebarEntries { entries } = res {
         assert!(!entries.iter().any(|e| e.id == id));

@@ -44,9 +44,19 @@ async fn tpm_seal_unseal_round_trip() {
     assert!(path.exists(), "blob file was not created");
 
     // ── correct PIN → full key recovery ──
-    let unsealed = unseal(&path, pin).await.expect("unseal with correct PIN failed");
-    assert_eq!(unsealed.enc_key(), keys.enc_key(), "enc_key mismatch after round-trip");
-    assert_eq!(unsealed.mac_key(), keys.mac_key(), "mac_key mismatch after round-trip");
+    let unsealed = unseal(&path, pin)
+        .await
+        .expect("unseal with correct PIN failed");
+    assert_eq!(
+        unsealed.enc_key(),
+        keys.enc_key(),
+        "enc_key mismatch after round-trip"
+    );
+    assert_eq!(
+        unsealed.mac_key(),
+        keys.mac_key(),
+        "mac_key mismatch after round-trip"
+    );
 
     // ── wrong PIN → rejected ──
     let wrong = unseal(&path, wrong_pin).await;
@@ -54,7 +64,8 @@ async fn tpm_seal_unseal_round_trip() {
 
     // ── correct PIN still works after one wrong attempt ──
     // (TPM DA lockout triggers only after many consecutive failures)
-    let after_wrong = unseal(&path, pin).await
+    let after_wrong = unseal(&path, pin)
+        .await
         .expect("correct PIN should still work after one wrong attempt");
     assert_eq!(after_wrong.enc_key(), keys.enc_key());
     assert_eq!(after_wrong.mac_key(), keys.mac_key());
@@ -65,7 +76,10 @@ async fn tpm_seal_unseal_round_trip() {
 
     // ── unseal after clear → file-not-found ──
     let after_clear = unseal(&path, pin).await;
-    assert!(after_clear.is_err(), "unseal after clear should fail with missing file");
+    assert!(
+        after_clear.is_err(),
+        "unseal after clear should fail with missing file"
+    );
 }
 
 /// Two independent accounts with different PINs can coexist: sealing one
@@ -81,14 +95,26 @@ async fn tpm_seal_two_independent_accounts() {
     let keys_a = make_test_keys(0x11, 0x22);
     let keys_b = make_test_keys(0x33, 0x44);
 
-    seal(&keys_a, "pinForA", &path_a).await.expect("seal A failed");
-    seal(&keys_b, "pinForB", &path_b).await.expect("seal B failed");
+    seal(&keys_a, "pinForA", &path_a)
+        .await
+        .expect("seal A failed");
+    seal(&keys_b, "pinForB", &path_b)
+        .await
+        .expect("seal B failed");
 
     let u_a = unseal(&path_a, "pinForA").await.expect("unseal A failed");
     let u_b = unseal(&path_b, "pinForB").await.expect("unseal B failed");
 
-    assert_eq!(u_a.enc_key(), keys_a.enc_key(), "account A enc_key corrupted");
-    assert_eq!(u_b.enc_key(), keys_b.enc_key(), "account B enc_key corrupted");
+    assert_eq!(
+        u_a.enc_key(),
+        keys_a.enc_key(),
+        "account A enc_key corrupted"
+    );
+    assert_eq!(
+        u_b.enc_key(),
+        keys_b.enc_key(),
+        "account B enc_key corrupted"
+    );
 
     // Cross-PIN: B's PIN rejects A's blob
     let cross = unseal(&path_a, "pinForB").await;
@@ -107,15 +133,21 @@ async fn tpm_reseal_replaces_old_blob() {
 
     let keys = make_test_keys(0xCC, 0xDD);
 
-    seal(&keys, "oldpin", &path).await.expect("first seal failed");
-    seal(&keys, "newpin", &path).await.expect("second seal (re-seal) failed");
+    seal(&keys, "oldpin", &path)
+        .await
+        .expect("first seal failed");
+    seal(&keys, "newpin", &path)
+        .await
+        .expect("second seal (re-seal) failed");
 
     // Old PIN no longer works
     let old = unseal(&path, "oldpin").await;
     assert!(old.is_err(), "old PIN should be rejected after re-seal");
 
     // New PIN works
-    let new = unseal(&path, "newpin").await.expect("new PIN should work after re-seal");
+    let new = unseal(&path, "newpin")
+        .await
+        .expect("new PIN should work after re-seal");
     assert_eq!(new.enc_key(), keys.enc_key());
     assert_eq!(new.mac_key(), keys.mac_key());
 
@@ -133,6 +165,11 @@ async fn tpm_availability_and_diagnostics() {
     let checks = diagnostics();
     assert_eq!(checks.len(), 4, "expected exactly 4 diagnostic checks");
     for (label, passed, hint) in &checks {
-        println!("  [{}] {} — {}", if *passed { "OK  " } else { "FAIL" }, label, hint);
+        println!(
+            "  [{}] {} — {}",
+            if *passed { "OK  " } else { "FAIL" },
+            label,
+            hint
+        );
     }
 }

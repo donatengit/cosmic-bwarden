@@ -4,7 +4,10 @@ pub const APPLET_SEARCH_LIMIT: usize = 10;
 pub const APPLET_LABEL_MAX_LEN: usize = 28;
 
 pub enum AppletRowKind {
-    Login { username: Option<String>, link: Option<String> },
+    Login {
+        username: Option<String>,
+        link: Option<String>,
+    },
     SecureNote,
     SshKey,
 }
@@ -150,8 +153,14 @@ mod tests {
 
     #[test]
     fn extract_domain_label_strips_protocol_and_path() {
-        assert_eq!(extract_domain_label("https://account.facebook.com/login"), "facebook.com");
-        assert_eq!(extract_domain_label("http://www.example.co.uk/path"), "co.uk");
+        assert_eq!(
+            extract_domain_label("https://account.facebook.com/login"),
+            "facebook.com"
+        );
+        assert_eq!(
+            extract_domain_label("http://www.example.co.uk/path"),
+            "co.uk"
+        );
     }
 
     #[test]
@@ -186,7 +195,9 @@ mod tests {
         e.name = "account.facebook.com".to_string();
         let rows = build_applet_rows(&[e]);
         // bare hostname → https:// prepended so xdg-open treats it as a URL
-        assert!(matches!(&rows[0].kind, AppletRowKind::Login { link: Some(l), .. } if l == "https://account.facebook.com"));
+        assert!(
+            matches!(&rows[0].kind, AppletRowKind::Login { link: Some(l), .. } if l == "https://account.facebook.com")
+        );
     }
 
     #[test]
@@ -194,7 +205,9 @@ mod tests {
         let mut e = entry("1", EntryType::Login);
         e.name = "https://account.facebook.com/login".to_string();
         let rows = build_applet_rows(&[e]);
-        assert!(matches!(&rows[0].kind, AppletRowKind::Login { link: Some(l), .. } if l == "https://account.facebook.com/login"));
+        assert!(
+            matches!(&rows[0].kind, AppletRowKind::Login { link: Some(l), .. } if l == "https://account.facebook.com/login")
+        );
     }
 
     #[test]
@@ -202,15 +215,15 @@ mod tests {
         let mut e = entry("1", EntryType::Login);
         e.name = "My Facebook".to_string();
         let rows = build_applet_rows(&[e]);
-        assert!(matches!(&rows[0].kind, AppletRowKind::Login { link: None, .. }));
+        assert!(matches!(
+            &rows[0].kind,
+            AppletRowKind::Login { link: None, .. }
+        ));
     }
 
     #[test]
     fn build_applet_rows_drops_card_and_identity() {
-        let entries = vec![
-            entry("1", EntryType::Card),
-            entry("2", EntryType::Identity),
-        ];
+        let entries = vec![entry("1", EntryType::Card), entry("2", EntryType::Identity)];
         assert!(build_applet_rows(&entries).is_empty());
     }
 
@@ -222,7 +235,9 @@ mod tests {
         let rows = build_applet_rows(&[e]);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].label, "My Site");
-        assert!(matches!(&rows[0].kind, AppletRowKind::Login { username: Some(u), .. } if u == "alice"));
+        assert!(
+            matches!(&rows[0].kind, AppletRowKind::Login { username: Some(u), .. } if u == "alice")
+        );
     }
 
     #[test]

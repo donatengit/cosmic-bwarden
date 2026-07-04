@@ -92,7 +92,11 @@ pub async fn handle_logout(state: &Arc<Mutex<State>>) -> Response {
             log::error!("failed to clear vault DB on logout: {}", e);
         }
     }
-    log::info!("logout: {} logged out (server: {})", config.email.as_deref().unwrap_or("unknown"), config.server_name());
+    log::info!(
+        "logout: {} logged out (server: {})",
+        config.email.as_deref().unwrap_or("unknown"),
+        config.server_name()
+    );
     let mut state_guard = state.lock().await;
     state_guard.lock();
     // Clear in-memory DB so the next GetConfig loads the empty on-disk

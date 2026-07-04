@@ -1,9 +1,9 @@
+use crate::api;
+use crate::db::models::*;
+use crate::error::{Error, Result};
 use std::collections::HashMap;
 use std::io::{Read as _, Write as _};
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
-use crate::api;
-use crate::error::{Error, Result};
-use crate::db::models::*;
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Debug)]
 pub struct Db {
@@ -54,8 +54,8 @@ impl Db {
         if let Some(parent) = file.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let json = serde_json::to_string(self)
-            .map_err(|source| Error::Other(source.to_string()))?;
+        let json =
+            serde_json::to_string(self).map_err(|source| Error::Other(source.to_string()))?;
         // Write to a temp file with 0600 perms, then rename over the target so a
         // crash mid-write can't corrupt or truncate the vault cache (which holds
         // `protected_key`). The rename is atomic within the same directory.
@@ -79,8 +79,8 @@ impl Db {
         if let Some(parent) = file.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
-        let json = serde_json::to_string(self)
-            .map_err(|source| Error::Other(source.to_string()))?;
+        let json =
+            serde_json::to_string(self).map_err(|source| Error::Other(source.to_string()))?;
         // Temp-file + rename with 0600 perms (see `save`).
         let tmp = file.with_extension("json.tmp");
         {

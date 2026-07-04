@@ -3,18 +3,17 @@
 use anyhow::{Context as _, Result};
 use cosmic_bwarden_core::locked;
 use std::path::Path;
-use zeroize::Zeroize as _;
 use tss_esapi::{
     attributes::SessionAttributesBuilder,
     constants::SessionType,
     handles::ObjectHandle,
     interface_types::{
-        algorithm::HashingAlgorithm, reserved_handles::Hierarchy,
-        session_handles::PolicySession,
+        algorithm::HashingAlgorithm, reserved_handles::Hierarchy, session_handles::PolicySession,
     },
     structures::{Auth, Digest, SensitiveData, SymmetricDefinition},
     Context,
 };
+use zeroize::Zeroize as _;
 
 use super::blob::{read_blob, write_blob};
 use super::open_context;
@@ -36,8 +35,8 @@ pub async fn seal_bytes(data: &[u8], pin: &str, blob_path: &Path) -> Result<()> 
     let policy_digest = compute_policy_digest(&mut ctx)?;
     let tmpl = sealed_template(policy_digest)?;
     let pin_auth = Auth::from_bytes(pin.as_bytes()).context("PIN too long for TPM auth")?;
-    let sensitive_data = SensitiveData::try_from(data.to_vec())
-        .context("data too large for TPM sensitive data")?;
+    let sensitive_data =
+        SensitiveData::try_from(data.to_vec()).context("data too large for TPM sensitive data")?;
 
     let result = ctx
         .execute_with_nullauth_session(|c| {
@@ -55,7 +54,11 @@ pub async fn seal_bytes(data: &[u8], pin: &str, blob_path: &Path) -> Result<()> 
     let _ = ctx.flush_context(primary.key_handle.into());
 
     write_blob(&result, blob_path)?;
-    log::info!("TPM: sealed {} bytes to {} (PCR-bound)", data.len(), blob_path.display());
+    log::info!(
+        "TPM: sealed {} bytes to {} (PCR-bound)",
+        data.len(),
+        blob_path.display()
+    );
     Ok(())
 }
 
@@ -116,7 +119,11 @@ pub async fn unseal(blob_path: &Path, pin: &str) -> Result<locked::Keys> {
 /// Unseal `obj_handle` under a PolicyPCR(0,7) ∧ PolicyAuthValue session with
 /// command/response parameter encryption, so the unsealed key is never exposed in
 /// the clear on the TPM bus (mitigates bus sniffing).
-fn unseal_with_policy(ctx: &mut Context, obj_handle: ObjectHandle, pin: &str) -> Result<SensitiveData> {
+fn unseal_with_policy(
+    ctx: &mut Context,
+    obj_handle: ObjectHandle,
+    pin: &str,
+) -> Result<SensitiveData> {
     let session = ctx
         .start_auth_session(
             None,
@@ -135,8 +142,8 @@ fn unseal_with_policy(ctx: &mut Context, obj_handle: ObjectHandle, pin: &str) ->
     ctx.tr_sess_set_attributes(session, attrs, mask)
         .context("setting policy session attributes")?;
 
-    let policy_session = PolicySession::try_from(session)
-        .context("converting auth session to policy session")?;
+    let policy_session =
+        PolicySession::try_from(session).context("converting auth session to policy session")?;
     ctx.policy_pcr(policy_session, Digest::default(), pcr_selection_list()?)
         .context("policy_pcr (PCR state changed? re-run PIN setup)")?;
     ctx.policy_auth_value(policy_session)

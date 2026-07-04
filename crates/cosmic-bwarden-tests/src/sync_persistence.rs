@@ -130,11 +130,18 @@ async fn test_all_modifications_survive_forced_sync() -> Result<()> {
     edited.notes = Some("note-b".into());
     edited.fields[0].value = Some("value-b".into());
     let res = client.send(Action::UpdateEntry { entry: edited }).await?;
-    assert!(matches!(res, Response::Ack), "UpdateEntry failed: {:?}", res);
+    assert!(
+        matches!(res, Response::Ack),
+        "UpdateEntry failed: {:?}",
+        res
+    );
     forced_sync(&client).await?;
 
     let entry = get_entry(&client, &id).await?;
-    assert_eq!(entry.name, "Persist Login v2", "name edit must survive Sync");
+    assert_eq!(
+        entry.name, "Persist Login v2",
+        "name edit must survive Sync"
+    );
     match &entry.data {
         EntryData::Login {
             username, password, ..
@@ -181,7 +188,11 @@ async fn test_all_modifications_survive_forced_sync() -> Result<()> {
 
     // --- Delete: must survive Sync ---
     let res = client.send(Action::DeleteEntry { id: id.clone() }).await?;
-    assert!(matches!(res, Response::Ack), "DeleteEntry failed: {:?}", res);
+    assert!(
+        matches!(res, Response::Ack),
+        "DeleteEntry failed: {:?}",
+        res
+    );
     forced_sync(&client).await?;
 
     let res = client

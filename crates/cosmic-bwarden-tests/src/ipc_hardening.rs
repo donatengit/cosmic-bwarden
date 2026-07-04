@@ -49,7 +49,10 @@ async fn spawn_bare_agent() -> Result<BareAgent> {
         .arg(&ssh_socket_path)
         .arg("--config")
         .arg(base.join("config/config.json"))
-        .env("COSMIC_BWARDEN_PROFILE", format!("test-{}", uuid::Uuid::new_v4()))
+        .env(
+            "COSMIC_BWARDEN_PROFILE",
+            format!("test-{}", uuid::Uuid::new_v4()),
+        )
         .env("XDG_CONFIG_HOME", base.join("config"))
         .env("XDG_CACHE_HOME", base.join("cache"))
         .env("XDG_DATA_HOME", base.join("data"))
@@ -76,7 +79,13 @@ async fn test_socket_file_modes() -> Result<()> {
 
     for sock in [&agent.socket_path, &agent.ssh_socket_path] {
         let mode = std::fs::metadata(sock)?.permissions().mode() & 0o777;
-        assert_eq!(mode, 0o600, "{} must be 0600, got {:o}", sock.display(), mode);
+        assert_eq!(
+            mode,
+            0o600,
+            "{} must be 0600, got {:o}",
+            sock.display(),
+            mode
+        );
     }
     let parent = agent.socket_path.parent().unwrap();
     let dir_mode = std::fs::metadata(parent)?.permissions().mode() & 0o777;
@@ -98,15 +107,23 @@ async fn test_oversized_request_is_rejected() -> Result<()> {
     // Agent must drop the connection (EOF) rather than wait for 9 MiB.
     let mut buf = [0u8; 16];
     let n = tokio::time::timeout(Duration::from_secs(5), stream.read(&mut buf)).await??;
-    assert_eq!(n, 0, "expected EOF after oversized length prefix, got {n} bytes");
+    assert_eq!(
+        n, 0,
+        "expected EOF after oversized length prefix, got {n} bytes"
+    );
 
     // And the agent itself must still be alive and serving new connections.
     let mut stream2 = tokio::net::UnixStream::connect(&agent.socket_path).await?;
     let garbage = [0xFFu8; 8];
-    stream2.write_all(&(garbage.len() as u32).to_le_bytes()).await?;
+    stream2
+        .write_all(&(garbage.len() as u32).to_le_bytes())
+        .await?;
     stream2.write_all(&garbage).await?;
     let n = tokio::time::timeout(Duration::from_secs(5), stream2.read(&mut buf)).await??;
-    assert!(n > 0, "agent should answer (with an error) after surviving the oversized request");
+    assert!(
+        n > 0,
+        "agent should answer (with an error) after surviving the oversized request"
+    );
 
     Ok(())
 }
@@ -119,19 +136,27 @@ async fn test_garbage_request_gets_error_response() -> Result<()> {
 
     let mut stream = tokio::net::UnixStream::connect(&agent.socket_path).await?;
     let garbage = [0xABu8; 32];
-    stream.write_all(&(garbage.len() as u32).to_le_bytes()).await?;
+    stream
+        .write_all(&(garbage.len() as u32).to_le_bytes())
+        .await?;
     stream.write_all(&garbage).await?;
 
     let mut len_buf = [0u8; 4];
     tokio::time::timeout(Duration::from_secs(5), stream.read_exact(&mut len_buf)).await??;
     let len = u32::from_le_bytes(len_buf) as usize;
-    assert!(len > 0 && len < 64 * 1024, "implausible response length {len}");
+    assert!(
+        len > 0 && len < 64 * 1024,
+        "implausible response length {len}"
+    );
     let mut body = vec![0u8; len];
     tokio::time::timeout(Duration::from_secs(5), stream.read_exact(&mut body)).await??;
 
     let response: cosmic_bwarden_core::protocol::Response = postcard::from_bytes(&body)?;
     assert!(
-        matches!(response, cosmic_bwarden_core::protocol::Response::Error { .. }),
+        matches!(
+            response,
+            cosmic_bwarden_core::protocol::Response::Error { .. }
+        ),
         "expected Error response to garbage request, got {response:?}"
     );
 

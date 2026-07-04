@@ -8,10 +8,8 @@ use tokio::sync::Mutex;
 pub async fn handle_sync(state: &Arc<Mutex<State>>) -> Response {
     let res = with_refresh(state, |at| async move {
         let config = cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy()?;
-        let client = cosmic_bwarden_core::api::Client::new(
-            &config.base_url(),
-            &config.identity_url(),
-        );
+        let client =
+            cosmic_bwarden_core::api::Client::new(&config.base_url(), &config.identity_url());
         client.sync(&at).await
     })
     .await;
@@ -19,14 +17,18 @@ pub async fn handle_sync(state: &Arc<Mutex<State>>) -> Response {
     match res {
         Ok((protected_key, protected_private_key, protected_org_keys, entries)) => {
             let mut state_guard = state.lock().await;
-            
+
             let pinned_ids: std::collections::HashSet<String> = entries
                 .iter()
                 .filter(|e| e.favorite)
                 .map(|e| e.id.clone())
                 .collect();
 
-            let State { db, pinned_ids: state_pinned_ids, .. } = &mut *state_guard;
+            let State {
+                db,
+                pinned_ids: state_pinned_ids,
+                ..
+            } = &mut *state_guard;
 
             if let Some(db) = db {
                 db.protected_key = Some(Secret::from(protected_key));
@@ -36,7 +38,7 @@ pub async fn handle_sync(state: &Arc<Mutex<State>>) -> Response {
                     .map(|(k, v)| (k, Secret::from(v)))
                     .collect();
                 db.entries = entries;
-                
+
                 let config = match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
                     Ok(c) => c,
                     Err(e) => {
@@ -72,7 +74,10 @@ pub async fn handle_sync(state: &Arc<Mutex<State>>) -> Response {
                 g.sync_failed = true;
                 g.last_sync_error = Some(e.clone());
             }
-            log::error!("sync failed (local and server state remain diverged): {}", e);
+            log::error!(
+                "sync failed (local and server state remain diverged): {}",
+                e
+            );
             Response::Error {
                 message: format!("sync failed: {}", e),
             }

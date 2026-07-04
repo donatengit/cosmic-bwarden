@@ -15,8 +15,7 @@ pub async fn handle_register(
         ..Default::default()
     };
 
-    let client =
-        cosmic_bwarden_core::api::Client::new(&config.base_url(), &config.identity_url());
+    let client = cosmic_bwarden_core::api::Client::new(&config.base_url(), &config.identity_url());
 
     let mut pw_vec = cosmic_bwarden_core::locked::Vec::new();
     pw_vec.extend(password.as_bytes().iter().copied());
@@ -42,18 +41,17 @@ pub async fn handle_register(
         }
     };
 
-    let protected_key =
-        match cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(
-            &identity.keys,
-            identity.keys.data(),
-        ) {
-            Ok(cs) => cs.to_string(),
-            Err(e) => {
-                return Response::Error {
-                    message: format!("encryption failed: {}", e),
-                };
-            }
-        };
+    let protected_key = match cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(
+        &identity.keys,
+        identity.keys.data(),
+    ) {
+        Ok(cs) => cs.to_string(),
+        Err(e) => {
+            return Response::Error {
+                message: format!("encryption failed: {}", e),
+            };
+        }
+    };
 
     match client
         .register(

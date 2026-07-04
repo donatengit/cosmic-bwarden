@@ -41,7 +41,11 @@ pub(super) async fn assert_tpm_status(
 ) -> Result<()> {
     let res = env.client().send(Action::CheckTpm).await?;
     match res {
-        Response::TpmStatus { available, configured, .. } => {
+        Response::TpmStatus {
+            available,
+            configured,
+            ..
+        } => {
             assert_eq!(available, expect_available, "tpm_available mismatch");
             assert_eq!(configured, expect_configured, "tpm_configured mismatch");
         }
@@ -88,15 +92,15 @@ pub(super) async fn assert_vault_locked(env: &TpmTestEnv) -> Result<()> {
 
 pub(super) async fn lock(env: &TpmTestEnv) -> Result<()> {
     let res = env.client().send(Action::Lock).await?;
-    assert!(
-        matches!(res, Response::Ack),
-        "Lock failed: {:?}",
-        res
-    );
+    assert!(matches!(res, Response::Ack), "Lock failed: {:?}", res);
     Ok(())
 }
 
-pub(super) async fn setup_pin(env: &TpmTestEnv, master_password: &str, pin: &str) -> Result<Response> {
+pub(super) async fn setup_pin(
+    env: &TpmTestEnv,
+    master_password: &str,
+    pin: &str,
+) -> Result<Response> {
     env.client()
         .send(Action::SetupTpmPin {
             master_password: master_password.to_string(),
@@ -108,7 +112,9 @@ pub(super) async fn setup_pin(env: &TpmTestEnv, master_password: &str, pin: &str
 
 pub(super) async fn unlock_with_pin(env: &TpmTestEnv, pin: &str) -> Result<Response> {
     env.client()
-        .send(Action::UnlockWithPin { pin: pin.to_string() })
+        .send(Action::UnlockWithPin {
+            pin: pin.to_string(),
+        })
         .await
         .map_err(Into::into)
 }
@@ -122,7 +128,9 @@ pub(super) async fn disable_pin(env: &TpmTestEnv) -> Result<Response> {
 
 pub(super) async fn unlock_with_password(env: &TpmTestEnv, password: &str) -> Result<Response> {
     env.client()
-        .send(Action::Unlock { password: password.to_string() })
+        .send(Action::Unlock {
+            password: password.to_string(),
+        })
         .await
         .map_err(Into::into)
 }
@@ -145,7 +153,9 @@ pub(super) async fn disable_server_credentials(env: &TpmTestEnv) -> Result<Respo
 pub(super) async fn assert_server_credentials(env: &TpmTestEnv, expect: bool) -> Result<()> {
     let res = env.client().send(Action::CheckTpm).await?;
     match res {
-        Response::TpmStatus { server_credentials, .. } => {
+        Response::TpmStatus {
+            server_credentials, ..
+        } => {
             assert_eq!(
                 server_credentials, expect,
                 "server_credentials mismatch (expected {})",

@@ -13,9 +13,11 @@ pub(super) fn check_tpm_task() -> Task<Message> {
         async {
             let agent = AgentClient::new();
             match agent.send(AgentAction::CheckTpm).await {
-                Ok(Response::TpmStatus { available, configured, server_credentials }) => {
-                    Ok((available, configured, server_credentials))
-                }
+                Ok(Response::TpmStatus {
+                    available,
+                    configured,
+                    server_credentials,
+                }) => Ok((available, configured, server_credentials)),
                 Ok(Response::Error { message }) => Err(message),
                 _ => Err("unexpected response to CheckTpm".to_string()),
             }
@@ -30,9 +32,13 @@ pub(super) fn fetch_config_task() -> Task<Message> {
         async {
             let agent = AgentClient::new();
             match agent.send(AgentAction::GetConfig).await {
-                Ok(Response::Config { config, needs_login, has_account, is_locked, sync_failed }) => {
-                    Ok((config, needs_login, has_account, is_locked, sync_failed))
-                }
+                Ok(Response::Config {
+                    config,
+                    needs_login,
+                    has_account,
+                    is_locked,
+                    sync_failed,
+                }) => Ok((config, needs_login, has_account, is_locked, sync_failed)),
                 Ok(Response::Error { message }) => Err(message),
                 _ => Err("unexpected response".to_string()),
             }
@@ -64,7 +70,11 @@ impl CosmicBWardenApp {
     /// unlock is pointless — the user needs to log in instead.
     pub(crate) fn unlock_prompt_ready(&self) -> bool {
         self.has_account
-            && self.config.email.as_deref().is_some_and(|e| !e.trim().is_empty())
+            && self
+                .config
+                .email
+                .as_deref()
+                .is_some_and(|e| !e.trim().is_empty())
     }
 
     pub fn update_lifecycle(&mut self, message: Message) -> Option<Task<Message>> {

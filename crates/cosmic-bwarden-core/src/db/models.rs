@@ -29,7 +29,11 @@ impl Entry {
     }
 
     pub fn set_field(&mut self, name: &str, value: &str, ty: api::FieldType) {
-        if let Some(field) = self.fields.iter_mut().find(|f| f.name.as_deref() == Some(name)) {
+        if let Some(field) = self
+            .fields
+            .iter_mut()
+            .find(|f| f.name.as_deref() == Some(name))
+        {
             field.value = Some(Secret::from(value.to_string()));
             field.ty = Some(ty);
         } else {
@@ -46,8 +50,16 @@ impl Entry {
         self.fields.retain(|f| f.name.as_deref() != Some(name));
     }
 
-    pub fn decrypt(&self, keys: &crate::locked::Keys, org_keys: &HashMap<String, crate::locked::Keys>) -> Self {
-        let keys = self.org_id.as_ref().and_then(|id| org_keys.get(id)).unwrap_or(keys);
+    pub fn decrypt(
+        &self,
+        keys: &crate::locked::Keys,
+        org_keys: &HashMap<String, crate::locked::Keys>,
+    ) -> Self {
+        let keys = self
+            .org_id
+            .as_ref()
+            .and_then(|id| org_keys.get(id))
+            .unwrap_or(keys);
         let id = &self.id;
         let entry_key = self.key.as_deref();
 
@@ -67,59 +79,150 @@ impl Entry {
 
         let mut decrypted = self.clone();
 
-        if let Some(v) = d(&self.name, "name") { decrypted.name = v; }
+        if let Some(v) = d(&self.name, "name") {
+            decrypted.name = v;
+        }
         if let Some(notes) = &self.notes {
-            if let Some(v) = ds(notes.expose(), "notes") { decrypted.notes = Some(v); }
+            if let Some(v) = ds(notes.expose(), "notes") {
+                decrypted.notes = Some(v);
+            }
         }
 
         match &mut decrypted.data {
-            EntryData::Login { username, password, totp, uris } => {
-                if let Some(u) = username.as_deref() { *username = d(u, "username"); }
-                if let Some(p) = password.as_ref() { *password = ds(p.expose(), "password"); }
-                if let Some(t) = totp.as_ref() { *totp = ds(t.expose(), "totp"); }
+            EntryData::Login {
+                username,
+                password,
+                totp,
+                uris,
+            } => {
+                if let Some(u) = username.as_deref() {
+                    *username = d(u, "username");
+                }
+                if let Some(p) = password.as_ref() {
+                    *password = ds(p.expose(), "password");
+                }
+                if let Some(t) = totp.as_ref() {
+                    *totp = ds(t.expose(), "totp");
+                }
                 for uri in uris.iter_mut() {
                     if let Some(plain) = d(&uri.uri, "uri") {
                         uri.uri = plain;
                     }
                 }
             }
-            EntryData::Card { cardholder_name, number, brand, exp_month, exp_year, code } => {
-                if let Some(v) = cardholder_name.as_deref() { *cardholder_name = d(v, "cardholder_name"); }
-                if let Some(v) = number.as_ref() { *number = ds(v.expose(), "number"); }
-                if let Some(v) = brand.as_deref() { *brand = d(v, "brand"); }
-                if let Some(v) = exp_month.as_deref() { *exp_month = d(v, "exp_month"); }
-                if let Some(v) = exp_year.as_deref() { *exp_year = d(v, "exp_year"); }
-                if let Some(v) = code.as_ref() { *code = ds(v.expose(), "code"); }
+            EntryData::Card {
+                cardholder_name,
+                number,
+                brand,
+                exp_month,
+                exp_year,
+                code,
+            } => {
+                if let Some(v) = cardholder_name.as_deref() {
+                    *cardholder_name = d(v, "cardholder_name");
+                }
+                if let Some(v) = number.as_ref() {
+                    *number = ds(v.expose(), "number");
+                }
+                if let Some(v) = brand.as_deref() {
+                    *brand = d(v, "brand");
+                }
+                if let Some(v) = exp_month.as_deref() {
+                    *exp_month = d(v, "exp_month");
+                }
+                if let Some(v) = exp_year.as_deref() {
+                    *exp_year = d(v, "exp_year");
+                }
+                if let Some(v) = code.as_ref() {
+                    *code = ds(v.expose(), "code");
+                }
             }
             EntryData::Identity {
-                title, first_name, middle_name, last_name,
-                address1, address2, address3, city, state,
-                postal_code, country, phone, email,
-                ssn, license_number, passport_number, username,
+                title,
+                first_name,
+                middle_name,
+                last_name,
+                address1,
+                address2,
+                address3,
+                city,
+                state,
+                postal_code,
+                country,
+                phone,
+                email,
+                ssn,
+                license_number,
+                passport_number,
+                username,
             } => {
-                if let Some(v) = title.as_deref() { *title = d(v, "title"); }
-                if let Some(v) = first_name.as_deref() { *first_name = d(v, "first_name"); }
-                if let Some(v) = middle_name.as_deref() { *middle_name = d(v, "middle_name"); }
-                if let Some(v) = last_name.as_deref() { *last_name = d(v, "last_name"); }
-                if let Some(v) = address1.as_deref() { *address1 = d(v, "address1"); }
-                if let Some(v) = address2.as_deref() { *address2 = d(v, "address2"); }
-                if let Some(v) = address3.as_deref() { *address3 = d(v, "address3"); }
-                if let Some(v) = city.as_deref() { *city = d(v, "city"); }
-                if let Some(v) = state.as_deref() { *state = d(v, "state"); }
-                if let Some(v) = postal_code.as_deref() { *postal_code = d(v, "postal_code"); }
-                if let Some(v) = country.as_deref() { *country = d(v, "country"); }
-                if let Some(v) = phone.as_deref() { *phone = d(v, "phone"); }
-                if let Some(v) = email.as_deref() { *email = d(v, "email"); }
-                if let Some(v) = ssn.as_deref() { *ssn = d(v, "ssn"); }
-                if let Some(v) = license_number.as_deref() { *license_number = d(v, "license_number"); }
-                if let Some(v) = passport_number.as_deref() { *passport_number = d(v, "passport_number"); }
-                if let Some(v) = username.as_deref() { *username = d(v, "username"); }
+                if let Some(v) = title.as_deref() {
+                    *title = d(v, "title");
+                }
+                if let Some(v) = first_name.as_deref() {
+                    *first_name = d(v, "first_name");
+                }
+                if let Some(v) = middle_name.as_deref() {
+                    *middle_name = d(v, "middle_name");
+                }
+                if let Some(v) = last_name.as_deref() {
+                    *last_name = d(v, "last_name");
+                }
+                if let Some(v) = address1.as_deref() {
+                    *address1 = d(v, "address1");
+                }
+                if let Some(v) = address2.as_deref() {
+                    *address2 = d(v, "address2");
+                }
+                if let Some(v) = address3.as_deref() {
+                    *address3 = d(v, "address3");
+                }
+                if let Some(v) = city.as_deref() {
+                    *city = d(v, "city");
+                }
+                if let Some(v) = state.as_deref() {
+                    *state = d(v, "state");
+                }
+                if let Some(v) = postal_code.as_deref() {
+                    *postal_code = d(v, "postal_code");
+                }
+                if let Some(v) = country.as_deref() {
+                    *country = d(v, "country");
+                }
+                if let Some(v) = phone.as_deref() {
+                    *phone = d(v, "phone");
+                }
+                if let Some(v) = email.as_deref() {
+                    *email = d(v, "email");
+                }
+                if let Some(v) = ssn.as_deref() {
+                    *ssn = d(v, "ssn");
+                }
+                if let Some(v) = license_number.as_deref() {
+                    *license_number = d(v, "license_number");
+                }
+                if let Some(v) = passport_number.as_deref() {
+                    *passport_number = d(v, "passport_number");
+                }
+                if let Some(v) = username.as_deref() {
+                    *username = d(v, "username");
+                }
             }
             EntryData::SecureNote => {}
-            EntryData::SshKey { private_key, public_key, fingerprint } => {
-                if let Some(v) = private_key.as_ref() { *private_key = ds(v.expose(), "private_key"); }
-                if let Some(v) = public_key.as_deref() { *public_key = d(v, "public_key"); }
-                if let Some(v) = fingerprint.as_deref() { *fingerprint = d(v, "fingerprint"); }
+            EntryData::SshKey {
+                private_key,
+                public_key,
+                fingerprint,
+            } => {
+                if let Some(v) = private_key.as_ref() {
+                    *private_key = ds(v.expose(), "private_key");
+                }
+                if let Some(v) = public_key.as_deref() {
+                    *public_key = d(v, "public_key");
+                }
+                if let Some(v) = fingerprint.as_deref() {
+                    *fingerprint = d(v, "fingerprint");
+                }
             }
         }
 

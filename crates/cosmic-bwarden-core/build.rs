@@ -12,7 +12,7 @@ fn get_year_month_seconds_passed(epoch_secs: u64) -> (u32, u32, u64) {
             break;
         }
     }
-    
+
     let is_leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
     let mut month = 1;
     let days_in_months = [
@@ -29,7 +29,7 @@ fn get_year_month_seconds_passed(epoch_secs: u64) -> (u32, u32, u64) {
         30,
         31,
     ];
-    
+
     for &days in &days_in_months {
         let secs_in_month = days * 24 * 3600;
         if seconds_left >= secs_in_month {
@@ -39,7 +39,7 @@ fn get_year_month_seconds_passed(epoch_secs: u64) -> (u32, u32, u64) {
             break;
         }
     }
-    
+
     (year, month, seconds_left)
 }
 
@@ -57,10 +57,10 @@ fn main() {
 
     let target_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
     let version_file = target_dir.join("build_version.txt");
-    
+
     let mut use_existing = false;
     let mut version_str = String::new();
-    
+
     if let Ok(metadata) = std::fs::metadata(&version_file) {
         if let Ok(modified) = metadata.modified() {
             if let Ok(elapsed) = modified.elapsed() {
@@ -74,32 +74,34 @@ fn main() {
             }
         }
     }
-    
+
     if !use_existing {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
         let (year, month, secs_passed) = get_year_month_seconds_passed(now);
-        
+
         let git_id = std::process::Command::new("git")
             .args(["rev-parse", "--short", "HEAD"])
             .output()
             .ok()
             .and_then(|out| {
                 if out.status.success() {
-                    String::from_utf8(out.stdout).ok().map(|s| s.trim().to_string())
+                    String::from_utf8(out.stdout)
+                        .ok()
+                        .map(|s| s.trim().to_string())
                 } else {
                     None
                 }
             })
             .unwrap_or_else(|| "unknown".to_string());
-            
+
         version_str = format!("{}.{:02}-{}-{}", year, month, secs_passed, git_id);
-        
+
         let _ = std::fs::create_dir_all(&target_dir);
         let _ = std::fs::write(&version_file, &version_str);
     }
-    
+
     println!("cargo:rustc-env=COSMIC_BWARDEN_VERSION={}", version_str);
 }

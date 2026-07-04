@@ -13,21 +13,42 @@ pub async fn handle_check_tpm(_state: &Arc<Mutex<State>>) -> Response {
         let (configured, server_credentials) = {
             let config = match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
                 Ok(c) => c,
-                Err(_) => return Response::TpmStatus { available, configured: false, server_credentials: false },
+                Err(_) => {
+                    return Response::TpmStatus {
+                        available,
+                        configured: false,
+                        server_credentials: false,
+                    }
+                }
             };
             let email = match config.email.as_deref() {
                 Some(e) => e,
-                None => return Response::TpmStatus { available, configured: false, server_credentials: false },
+                None => {
+                    return Response::TpmStatus {
+                        available,
+                        configured: false,
+                        server_credentials: false,
+                    }
+                }
             };
             let blob_path = cosmic_bwarden_core::dirs::tpm_blob_file(&config.server_name(), email);
-            let hash_blob_path = cosmic_bwarden_core::dirs::tpm_hash_blob_file(&config.server_name(), email);
+            let hash_blob_path =
+                cosmic_bwarden_core::dirs::tpm_hash_blob_file(&config.server_name(), email);
             (blob_path.exists(), hash_blob_path.exists())
         };
-        Response::TpmStatus { available, configured, server_credentials }
+        Response::TpmStatus {
+            available,
+            configured,
+            server_credentials,
+        }
     }
     #[cfg(not(feature = "tpm"))]
     {
-        Response::TpmStatus { available: false, configured: false, server_credentials: false }
+        Response::TpmStatus {
+            available: false,
+            configured: false,
+            server_credentials: false,
+        }
     }
 }
 

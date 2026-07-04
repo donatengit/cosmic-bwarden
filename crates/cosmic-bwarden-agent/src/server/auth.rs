@@ -1,8 +1,8 @@
+use crate::keyring;
+use crate::state::State;
+use cosmic_bwarden_core::db::Secret;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use crate::state::State;
-use crate::keyring;
-use cosmic_bwarden_core::db::Secret;
 
 /// True when an API error means the access token was rejected (HTTP 401) and a
 /// refresh should be attempted. The API client returns 401s in two shapes —
@@ -50,7 +50,9 @@ where
         (
             db.access_token
                 .as_ref()
-                .ok_or("no API session token — please logout and log in again to restore server sync")?
+                .ok_or(
+                    "no API session token — please logout and log in again to restore server sync",
+                )?
                 .expose()
                 .to_string(),
             db.refresh_token
@@ -80,14 +82,21 @@ where
 
                             if config.persist_session {
                                 if let Some(email) = config.email.as_deref() {
-                                    if let (Some(at), Some(rt)) = (db.access_token.as_ref(), db.refresh_token.as_ref()) {
+                                    if let (Some(at), Some(rt)) =
+                                        (db.access_token.as_ref(), db.refresh_token.as_ref())
+                                    {
                                         if let Err(e) = keyring::store_tokens(
                                             &config.server_name(),
                                             email,
                                             at.expose(),
                                             rt.expose(),
-                                        ).await {
-                                            log::error!("failed to persist refreshed tokens to keyring: {}", e);
+                                        )
+                                        .await
+                                        {
+                                            log::error!(
+                                                "failed to persist refreshed tokens to keyring: {}",
+                                                e
+                                            );
                                         }
                                     }
                                 } else {
@@ -97,7 +106,10 @@ where
 
                             if let Some(email) = config.email.as_deref() {
                                 if let Err(e) = db.save(&config.server_name(), email) {
-                                    log::error!("failed to save vault DB after token refresh: {}", e);
+                                    log::error!(
+                                        "failed to save vault DB after token refresh: {}",
+                                        e
+                                    );
                                 }
                             } else {
                                 log::error!("cannot save vault DB after token refresh: email not set in config");

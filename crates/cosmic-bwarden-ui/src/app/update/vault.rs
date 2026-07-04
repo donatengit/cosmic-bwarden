@@ -1,11 +1,11 @@
-use cosmic::app::Task;
-use cosmic::Action;
-use cosmic_bwarden_core::protocol::{Action as AgentAction, Response, EntryType, SidebarEntry};
-use cosmic_bwarden_core::agent_client::AgentClient;
-use cosmic_bwarden_core::db::{Entry, EntryData, Secret};
-use crate::message::{Message, View};
 use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::fetch_sidebar_entries;
+use crate::message::{Message, View};
+use cosmic::app::Task;
+use cosmic::Action;
+use cosmic_bwarden_core::agent_client::AgentClient;
+use cosmic_bwarden_core::db::{Entry, EntryData, Secret};
+use cosmic_bwarden_core::protocol::{Action as AgentAction, EntryType, Response, SidebarEntry};
 use zeroize::Zeroize;
 
 fn apply_local_filter(
@@ -31,7 +31,10 @@ fn apply_local_filter(
             if e.name.to_lowercase().contains(&q) {
                 return true;
             }
-            e.username.as_ref().map(|u| u.to_lowercase().contains(&q)).unwrap_or(false)
+            e.username
+                .as_ref()
+                .map(|u| u.to_lowercase().contains(&q))
+                .unwrap_or(false)
         })
         .cloned()
         .collect()
@@ -42,12 +45,22 @@ impl CosmicBWardenApp {
         match message {
             Message::SearchChanged(q) => {
                 self.search_query = q;
-                self.entries = apply_local_filter(&self.all_entries, &self.search_query, self.filter_type.as_ref(), self.search_only_pinned);
+                self.entries = apply_local_filter(
+                    &self.all_entries,
+                    &self.search_query,
+                    self.filter_type.as_ref(),
+                    self.search_only_pinned,
+                );
                 Some(Task::none())
             }
             Message::FilterTypeChanged(t) => {
                 self.filter_type = t;
-                self.entries = apply_local_filter(&self.all_entries, &self.search_query, self.filter_type.as_ref(), self.search_only_pinned);
+                self.entries = apply_local_filter(
+                    &self.all_entries,
+                    &self.search_query,
+                    self.filter_type.as_ref(),
+                    self.search_only_pinned,
+                );
                 Some(Task::none())
             }
             Message::SelectEntry(id) => {
@@ -55,19 +68,27 @@ impl CosmicBWardenApp {
                 self.selected_entry = None;
                 self.editing_entry = None;
                 self.view = View::Vault;
-                Some(Task::perform(async move {
-                    let agent = AgentClient::new();
-                    match agent.send(AgentAction::GetEntry { id, password: None }).await {
-                        Ok(Response::Entry { entry }) => Ok(entry),
-                        Ok(Response::Error { message }) => Err(message),
-                        _ => Err("unexpected response".to_string()),
-                    }
-                }, |res| Action::App(Message::EntryReceived(res))))
+                Some(Task::perform(
+                    async move {
+                        let agent = AgentClient::new();
+                        match agent
+                            .send(AgentAction::GetEntry { id, password: None })
+                            .await
+                        {
+                            Ok(Response::Entry { entry }) => Ok(entry),
+                            Ok(Response::Error { message }) => Err(message),
+                            _ => Err("unexpected response".to_string()),
+                        }
+                    },
+                    |res| Action::App(Message::EntryReceived(res)),
+                ))
             }
             Message::EntryReceived(res) => {
                 match res {
                     Ok(entry) => {
-                        self.notes_content = cosmic::widget::text_editor::Content::with_text(entry.notes.as_deref().unwrap_or(""));
+                        self.notes_content = cosmic::widget::text_editor::Content::with_text(
+                            entry.notes.as_deref().unwrap_or(""),
+                        );
                         self.selected_entry = Some(entry);
                         self.show_reprompt = None;
                         self.reprompt_password.zeroize();
@@ -118,7 +139,9 @@ impl CosmicBWardenApp {
             Message::EditEntry => {
                 if let Some(entry) = &self.selected_entry {
                     self.editing_entry = Some(entry.clone());
-                    self.notes_content = cosmic::widget::text_editor::Content::with_text(entry.notes.as_deref().unwrap_or(""));
+                    self.notes_content = cosmic::widget::text_editor::Content::with_text(
+                        entry.notes.as_deref().unwrap_or(""),
+                    );
                     self.edit_password_revealed = false;
                 }
                 Some(Task::none())
@@ -126,7 +149,10 @@ impl CosmicBWardenApp {
             Message::CancelEdit => {
                 self.editing_entry = None;
                 self.notes_content = cosmic::widget::text_editor::Content::with_text(
-                    self.selected_entry.as_ref().and_then(|e| e.notes.as_deref()).unwrap_or("")
+                    self.selected_entry
+                        .as_ref()
+                        .and_then(|e| e.notes.as_deref())
+                        .unwrap_or(""),
                 );
                 Some(Task::none())
             }
@@ -137,52 +163,59 @@ impl CosmicBWardenApp {
                             entry.notes = None;
                         }
                     }
-                    Some(Task::perform(async move {
-                        let agent = AgentClient::new();
-                        match agent.send(AgentAction::UpdateEntry { entry }).await {
-                            Ok(Response::Ack) => Ok(()),
-                            Ok(Response::Error { message }) => Err(message),
-                            _ => Err("unexpected response".to_string()),
-                        }
-                    }, |res| Action::App(Message::SaveEditResult(res))))
+                    Some(Task::perform(
+                        async move {
+                            let agent = AgentClient::new();
+                            match agent.send(AgentAction::UpdateEntry { entry }).await {
+                                Ok(Response::Ack) => Ok(()),
+                                Ok(Response::Error { message }) => Err(message),
+                                _ => Err("unexpected response".to_string()),
+                            }
+                        },
+                        |res| Action::App(Message::SaveEditResult(res)),
+                    ))
                 } else {
                     Some(Task::none())
                 }
             }
-            Message::SaveEditResult(res) => {
-                match res {
-                    Ok(()) => {
-                        let id = self.selected_entry_id.clone();
-                        self.editing_entry = None;
-                        self.search_id += 1;
-                        let sidebar_task = fetch_sidebar_entries(self.search_id, None, None, false);
-                        if let Some(id) = id {
-                            Some(Task::batch(vec![
-                                sidebar_task,
-                                Task::done(Action::App(Message::SelectEntry(id))),
-                            ]))
-                        } else {
-                            Some(sidebar_task)
-                        }
-                    }
-                    Err(e) => {
-                        self.sync_failed = true;
-                        self.error = Some(e);
-                        Some(Task::none())
+            Message::SaveEditResult(res) => match res {
+                Ok(()) => {
+                    let id = self.selected_entry_id.clone();
+                    self.editing_entry = None;
+                    self.search_id += 1;
+                    let sidebar_task = fetch_sidebar_entries(self.search_id, None, None, false);
+                    if let Some(id) = id {
+                        Some(Task::batch(vec![
+                            sidebar_task,
+                            Task::done(Action::App(Message::SelectEntry(id))),
+                        ]))
+                    } else {
+                        Some(sidebar_task)
                     }
                 }
-            }
+                Err(e) => {
+                    self.sync_failed = true;
+                    self.error = Some(e);
+                    Some(Task::none())
+                }
+            },
             Message::EditFieldChanged(field, value) => {
                 if let Some(entry) = &mut self.editing_entry {
                     match &mut entry.data {
-                        EntryData::Login { username, password, .. } => {
+                        EntryData::Login {
+                            username, password, ..
+                        } => {
                             if field == "Username" {
                                 *username = Some(value.clone());
                             } else if field == "Password" {
                                 *password = Some(value.clone().into());
                             }
                         }
-                        EntryData::SshKey { private_key, public_key, fingerprint } => {
+                        EntryData::SshKey {
+                            private_key,
+                            public_key,
+                            fingerprint,
+                        } => {
                             if field == "Private Key" {
                                 *private_key = Some(value.clone().into());
                             } else if field == "Public Key" {
@@ -191,7 +224,12 @@ impl CosmicBWardenApp {
                                 *fingerprint = Some(value.clone());
                             }
                         }
-                        EntryData::Card { number, cardholder_name, brand, .. } => {
+                        EntryData::Card {
+                            number,
+                            cardholder_name,
+                            brand,
+                            ..
+                        } => {
                             if field == "Card Number" {
                                 *number = Some(value.clone().into());
                             } else if field == "Cardholder" {
@@ -200,7 +238,9 @@ impl CosmicBWardenApp {
                                 *brand = Some(value.clone());
                             }
                         }
-                        EntryData::Identity { username, email, .. } => {
+                        EntryData::Identity {
+                            username, email, ..
+                        } => {
                             if field == "Username" {
                                 *username = Some(value.clone());
                             } else if field == "Email" {
@@ -209,9 +249,13 @@ impl CosmicBWardenApp {
                         }
                         EntryData::SecureNote => {}
                     }
-                    
+
                     // Also check custom fields
-                    if let Some(f) = entry.fields.iter_mut().find(|f| f.name.as_deref() == Some(&field)) {
+                    if let Some(f) = entry
+                        .fields
+                        .iter_mut()
+                        .find(|f| f.name.as_deref() == Some(&field))
+                    {
                         f.value = Some(value.into());
                     }
                 }
@@ -237,14 +281,17 @@ impl CosmicBWardenApp {
             Message::ConfirmDelete => {
                 self.deleting = true;
                 if let Some(id) = self.show_delete_confirm.take() {
-                    Some(Task::perform(async move {
-                        let agent = AgentClient::new();
-                        match agent.send(AgentAction::DeleteEntry { id }).await {
-                            Ok(Response::Ack) => Ok(()),
-                            Ok(Response::Error { message }) => Err(message),
-                            _ => Err("unexpected response".to_string()),
-                        }
-                    }, |res| Action::App(Message::DeleteEntryResult(res))))
+                    Some(Task::perform(
+                        async move {
+                            let agent = AgentClient::new();
+                            match agent.send(AgentAction::DeleteEntry { id }).await {
+                                Ok(Response::Ack) => Ok(()),
+                                Ok(Response::Error { message }) => Err(message),
+                                _ => Err("unexpected response".to_string()),
+                            }
+                        },
+                        |res| Action::App(Message::DeleteEntryResult(res)),
+                    ))
                 } else {
                     Some(Task::none())
                 }
@@ -278,7 +325,12 @@ impl CosmicBWardenApp {
                             // the cache after mutations. Re-apply the local filter so
                             // the displayed list stays consistent with the search bar.
                             self.all_entries = entries;
-                            self.entries = apply_local_filter(&self.all_entries, &self.search_query, self.filter_type.as_ref(), self.search_only_pinned);
+                            self.entries = apply_local_filter(
+                                &self.all_entries,
+                                &self.search_query,
+                                self.filter_type.as_ref(),
+                                self.search_only_pinned,
+                            );
                             self.error = None;
                             // If the selected entry was deleted on the server but the
                             // previous sync failed (leaving it visible in the stale
@@ -302,14 +354,17 @@ impl CosmicBWardenApp {
             }
             Message::SyncClicked => {
                 self.syncing = true;
-                Some(Task::perform(async {
-                    let agent = AgentClient::new();
-                    match agent.send(AgentAction::Sync).await {
-                        Ok(Response::Ack) => Ok(()),
-                        Ok(Response::Error { message }) => Err(message),
-                        _ => Err("unexpected response".to_string()),
-                    }
-                }, |res| Action::App(Message::SyncResult(res))))
+                Some(Task::perform(
+                    async {
+                        let agent = AgentClient::new();
+                        match agent.send(AgentAction::Sync).await {
+                            Ok(Response::Ack) => Ok(()),
+                            Ok(Response::Error { message }) => Err(message),
+                            _ => Err("unexpected response".to_string()),
+                        }
+                    },
+                    |res| Action::App(Message::SyncResult(res)),
+                ))
             }
             Message::SyncResult(res) => {
                 self.syncing = false;
@@ -322,9 +377,12 @@ impl CosmicBWardenApp {
                         self.sync_failed = false;
                         self.error = None;
                         self.search_id += 1;
-                        Some(Task::batch(vec![
-                            fetch_sidebar_entries(self.search_id, None, None, false),
-                        ]))
+                        Some(Task::batch(vec![fetch_sidebar_entries(
+                            self.search_id,
+                            None,
+                            None,
+                            false,
+                        )]))
                     }
                     Err(e) => {
                         self.sync_failed = true;
@@ -339,7 +397,7 @@ impl CosmicBWardenApp {
                     entry.is_pinned = !entry.is_pinned;
                     is_pinned = entry.is_pinned;
                 }
-                
+
                 // If it's the selected entry, update it too
                 if let Some(entry) = &mut self.selected_entry {
                     if entry.id == id {
@@ -352,15 +410,23 @@ impl CosmicBWardenApp {
                 } else {
                     AgentAction::UnpinEntry { id: id.clone() }
                 };
-                
-                Some(Task::perform(async move {
-                    let agent = AgentClient::new();
-                    let _ = agent.send(action).await;
-                }, |_| Action::None))
+
+                Some(Task::perform(
+                    async move {
+                        let agent = AgentClient::new();
+                        let _ = agent.send(action).await;
+                    },
+                    |_| Action::None,
+                ))
             }
             Message::ToggleSearchPinned => {
                 self.search_only_pinned = !self.search_only_pinned;
-                self.entries = apply_local_filter(&self.all_entries, &self.search_query, self.filter_type.as_ref(), self.search_only_pinned);
+                self.entries = apply_local_filter(
+                    &self.all_entries,
+                    &self.search_query,
+                    self.filter_type.as_ref(),
+                    self.search_only_pinned,
+                );
                 Some(Task::none())
             }
             Message::RepromptPasswordChanged(p) => {
@@ -370,14 +436,23 @@ impl CosmicBWardenApp {
             Message::SubmitReprompt => {
                 if let Some(id) = self.show_reprompt.clone() {
                     let password = self.reprompt_password.clone();
-                    Some(Task::perform(async move {
-                        let agent = AgentClient::new();
-                        match agent.send(AgentAction::GetEntry { id, password: Some(password) }).await {
-                            Ok(Response::Entry { entry }) => Ok(entry),
-                            Ok(Response::Error { message }) => Err(message),
-                            _ => Err("unexpected response".to_string()),
-                        }
-                    }, |res| Action::App(Message::EntryReceived(res))))
+                    Some(Task::perform(
+                        async move {
+                            let agent = AgentClient::new();
+                            match agent
+                                .send(AgentAction::GetEntry {
+                                    id,
+                                    password: Some(password),
+                                })
+                                .await
+                            {
+                                Ok(Response::Entry { entry }) => Ok(entry),
+                                Ok(Response::Error { message }) => Err(message),
+                                _ => Err("unexpected response".to_string()),
+                            }
+                        },
+                        |res| Action::App(Message::EntryReceived(res)),
+                    ))
                 } else {
                     Some(Task::none())
                 }
@@ -392,23 +467,23 @@ impl CosmicBWardenApp {
                 if let Some(entry) = &mut self.editing_entry {
                     match ty {
                         EntryType::Login => {
-                           entry.data = EntryData::Login {
-                               username: Some(String::new()),
-                               password: Some(String::new().into()),
-                               totp: None,
-                               uris: Vec::new(),
-                           };
+                            entry.data = EntryData::Login {
+                                username: Some(String::new()),
+                                password: Some(String::new().into()),
+                                totp: None,
+                                uris: Vec::new(),
+                            };
                         }
 
                         EntryType::SecureNote => {
-                           entry.data = EntryData::SecureNote;
+                            entry.data = EntryData::SecureNote;
                         }
                         EntryType::SshKey => {
-                           entry.data = EntryData::SshKey {
-                               private_key: Some(String::new().into()),
-                               public_key: Some(String::new()),
-                               fingerprint: None,
-                           };
+                            entry.data = EntryData::SshKey {
+                                private_key: Some(String::new().into()),
+                                public_key: Some(String::new()),
+                                fingerprint: None,
+                            };
                         }
 
                         _ => {}
