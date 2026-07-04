@@ -15,6 +15,8 @@ mod tpm_lifecycle;
 #[cfg(test)]
 mod custom_fields_cli;
 #[cfg(test)]
+mod ipc_hardening;
+#[cfg(test)]
 mod custom_fields_ui;
 #[cfg(all(test, feature = "browser-e2e"))]
 mod extension_e2e;

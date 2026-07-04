@@ -281,6 +281,35 @@ mod tests {
             Err(Error::UnimplementedCipherStringType { .. })
         ));
     }
+
+    // Deterministic mini-fuzz: cipherstrings arrive from the server, so the
+    // parser is attacker-reachable (threat A6). Arbitrary input must return
+    // Ok/Err, never panic. Seeded so failures reproduce.
+    #[test]
+    fn arbitrary_input_never_panics() {
+        use rand::{Rng as _, SeedableRng as _};
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0xC0B_5EED);
+
+        // Structured near-misses first — the historically dangerous shapes.
+        for s in [
+            "", ".", "..", "2.", "2.|", "2.||", "2.|||", "4.", "6.", "9.x",
+            "2.!!|??|##", "22.a|b|c", "-1.a", "\u{0}.\u{0}", "2.a|b|c|d",
+        ] {
+            let _ = CipherString::new(s);
+        }
+
+        // Random byte soup (valid UTF-8 by construction).
+        for _ in 0..5_000 {
+            let len = rng.random_range(0..64);
+            let s: String = (0..len)
+                .map(|_| char::from_u32(rng.random_range(1..0x500)).unwrap_or('.'))
+                .collect();
+            let _ = CipherString::new(&s);
+
+            // And the same soup shoved into a type-2 payload position.
+            let _ = CipherString::new(&format!("2.{s}"));
+        }
+    }
 }
 
 fn pkcs7_unpad(b: &[u8]) -> Option<&[u8]> {

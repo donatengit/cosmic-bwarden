@@ -1,0 +1,119 @@
+# CI for cosmic-bwarden.
+#
+# Fast gates (lint, unit, extension-unit) run on every push/PR. The full Rust
+# E2E suite needs a container runtime and ~20 min, so it runs nightly and on
+# manual dispatch only. E2E flake policy: the suite retries once — baseline
+# measurements (docs/review/05_testing.md) show ~2 container-runtime flakes
+# per 52-test run that pass on rerun.
+#
+# Submodules are reference material only (see docs/review/00_ground_truth.md
+# F1) — never fetched here; the build does not need them.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * *" # nightly E2E
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: fmt + clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: System deps (libcosmic + tss)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxkbcommon-dev libwayland-dev libegl1-mesa-dev \
+            pkg-config cmake libssl-dev libtss2-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: rustfmt
+        run: cargo fmt --check
+      - name: clippy (workspace)
+        run: cargo clippy --workspace --all-targets
+      - name: clippy (agent + tpm)
+        run: cargo clippy -p cosmic-bwarden-agent --features tpm
+
+  unit:
+    name: unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: System deps (libcosmic + tss)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxkbcommon-dev libwayland-dev libegl1-mesa-dev \
+            pkg-config cmake libssl-dev libtss2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: check (all features)
+        run: |
+          cargo check --workspace
+          cargo check -p cosmic-bwarden-agent --features tpm
+      - name: unit tests
+        run: |
+          cargo test -p cosmic-bwarden-core --quiet
+          cargo test -p cosmic-bwarden-agent --quiet
+          cargo test -p cosmic-bwarden-cli --quiet
+          cargo test -p cosmic-bwarden-ui --quiet
+
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    # Advisory DB changes daily; failures here mean "look at the advisory",
+    # not "the change is broken" — so don't block PRs, but stay loudly red.
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  extension-unit:
+    name: extension unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: browser-extension/package-lock.json
+      - run: npm ci
+        working-directory: browser-extension
+      - run: npm run test:unit
+        working-directory: browser-extension
+
+  e2e:
+    name: Rust E2E (nightly / manual)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest # docker daemon available for testcontainers
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: System deps (libcosmic + tss)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxkbcommon-dev libwayland-dev libegl1-mesa-dev \
+            pkg-config cmake libssl-dev libtss2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build binaries the harness launches
+        run: cargo build -p cosmic-bwarden-agent -p cosmic-bwarden-cli
+      - name: E2E suite (one retry for container flakes)
+        run: |
+          cargo test -p cosmic-bwarden-tests -- --test-threads=1 \
+            || cargo test -p cosmic-bwarden-tests -- --test-threads=1

@@ -125,6 +125,22 @@ pub async fn setup_env_no_agent() -> Result<TestEnv> {
     let host_port = container.get_host_port_ipv4(80).await?;
     let vault_url = format!("http://localhost:{}", host_port);
 
+    // Poll Vaultwarden's /alive endpoint instead of trusting the fixed
+    // WaitFor::seconds(5) above — under load 5 s is not always enough, and a
+    // half-started server produced intermittent test failures (see
+    // docs/review/00_ground_truth.md F9).
+    let http = reqwest::Client::new();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    loop {
+        match http.get(format!("{vault_url}/alive")).send().await {
+            Ok(res) if res.status().is_success() => break,
+            _ if tokio::time::Instant::now() >= deadline => {
+                anyhow::bail!("Vaultwarden not ready after 30s at {vault_url}");
+            }
+            _ => sleep(Duration::from_millis(250)).await,
+        }
+    }
+
     let profile = format!("test-{}", uuid::Uuid::new_v4());
     let temp_dir = tempfile::tempdir()?;
     let temp_path = temp_dir.path();
@@ -189,9 +205,22 @@ pub async fn setup_env() -> Result<TestEnv> {
     let mut env = setup_env_no_agent().await?;
     let agent_process = env.start_agent()?;
     env.agent_process = Some(agent_process);
-    // Wait for agent to start and create socket
-    sleep(Duration::from_millis(1000)).await;
+    // Poll for the socket instead of a fixed 1 s sleep — a slow-starting agent
+    // made tests flaky, and a fast one wastes most of the second.
+    wait_for_socket(&env.socket_path, Duration::from_secs(10)).await?;
     Ok(env)
+}
+
+/// Wait until `path` exists (agent has bound its socket), polling every 50 ms.
+pub async fn wait_for_socket(path: &Path, timeout: Duration) -> Result<()> {
+    let deadline = tokio::time::Instant::now() + timeout;
+    while !path.exists() {
+        if tokio::time::Instant::now() >= deadline {
+            anyhow::bail!("agent socket {} not created within {timeout:?}", path.display());
+        }
+        sleep(Duration::from_millis(50)).await;
+    }
+    Ok(())
 }
 
 pub async fn register_user(url: &str, email: &str, password: &str) -> Result<()> {

@@ -184,20 +184,26 @@ test-unit:
     cargo test --quiet -p cosmic-bwarden-core
     cargo test --quiet -p cosmic-bwarden-ui
 
+# Rebuild the binaries the E2E harness launches from target/debug — running
+# the suite against stale binaries fails the version-compatibility test with a
+# confusing mismatch (docs/review/00_ground_truth.md F9).
+build-test-binaries:
+    cargo build --quiet -p cosmic-bwarden-agent -p cosmic-bwarden-cli
+
 # 2. Agent & Protocol E2E Tests
 # Needs a container socket: Docker, or podman via `systemctl --user start podman.socket`
 # (the test harness auto-detects the podman user socket — no docker group required).
-test-agent:
+test-agent: build-test-binaries
     echo "--- 2. Agent & Protocol E2E Tests ---"
-    cargo test --quiet -p cosmic-bwarden-tests --lib -- agent security vault pinned_ops --test-threads=1
+    cargo test --quiet -p cosmic-bwarden-tests --lib -- agent security vault pinned_ops ipc_hardening --test-threads=1
 
 # 3. CLI E2E Tests
-test-cli:
+test-cli: build-test-binaries
     echo "--- 3. CLI E2E Tests ---"
     cargo test --quiet -p cosmic-bwarden-tests --lib -- cli_lifecycle cli_secret_mask_test custom_fields_cli --test-threads=1
 
 # 4. UI E2E Tests
-test-ui:
+test-ui: build-test-binaries
     echo "--- 4. UI E2E Tests ---"
     cargo test --quiet -p cosmic-bwarden-tests --lib -- window_flow custom_fields_ui --test-threads=1
 

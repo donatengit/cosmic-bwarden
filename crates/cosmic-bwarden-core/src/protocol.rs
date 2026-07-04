@@ -395,6 +395,27 @@ mod debug_redaction_tests {
         let r = Response::Error { message: "boom".to_string() };
         assert!(format!("{r:?}").contains("boom"));
     }
+
+    // Deterministic mini-fuzz: the agent postcard-decodes `Action` from any
+    // same-UID client, so the decoder is attacker-reachable (threat A2).
+    // Arbitrary bytes must produce Ok/Err, never a panic or huge allocation.
+    #[test]
+    fn action_decode_from_arbitrary_bytes_never_panics() {
+        use rand::{Rng as _, SeedableRng as _};
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0xDEC0DE);
+
+        for _ in 0..10_000 {
+            let len = rng.random_range(0..128);
+            let bytes: Vec<u8> = (0..len).map(|_| rng.random()).collect();
+            let _ = postcard::from_bytes::<Action>(&bytes);
+        }
+
+        // Truncations of a valid message — the classic framing edge case.
+        let valid = postcard::to_allocvec(&Action::Lock).unwrap();
+        for cut in 0..valid.len() {
+            let _ = postcard::from_bytes::<Action>(&valid[..cut]);
+        }
+    }
 }
 
 // Manual `Debug` that never prints secret payloads. `Password`, `Totp`, `Entry`,
