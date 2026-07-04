@@ -222,12 +222,18 @@ mod tests {
 
     #[test]
     fn test_version_match_ok() {
-        assert!(check_protocol_compatibility("2026.06-100-abc", "2026.06-100-abc").is_ok());
+        // Matching protocol constants are compatible regardless of build version.
+        assert!(check_protocol_compatibility("1", "1").is_ok());
+        assert!(check_protocol_compatibility(
+            cosmic_bwarden_core::PROTOCOL_VERSION,
+            cosmic_bwarden_core::PROTOCOL_VERSION
+        )
+        .is_ok());
     }
 
     #[test]
     fn test_version_mismatch_error() {
-        let err = check_protocol_compatibility("2026.06-100-abc", "0.0.0-fake").unwrap_err();
-        assert!(err.to_string().contains("Version mismatch"));
+        let err = check_protocol_compatibility("1", "2").unwrap_err();
+        assert!(err.to_string().contains("Protocol mismatch"));
     }
 }
