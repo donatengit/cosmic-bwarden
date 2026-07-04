@@ -1,6 +1,5 @@
 use crate::keyring;
 use crate::state::State;
-use cosmic_bwarden_core::db::Secret;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -38,8 +37,8 @@ where
             if let Some(email) = config.email.as_deref() {
                 match keyring::get_tokens(&config.server_name(), email).await {
                     Ok(Some((at, rt))) => {
-                        db.access_token = Some(Secret::from(at));
-                        db.refresh_token = Some(Secret::from(rt));
+                        db.access_token = Some(at.into());
+                        db.refresh_token = Some(rt.into());
                     }
                     Ok(None) => {}
                     Err(e) => log::warn!("failed to load tokens from keyring: {}", e),
@@ -107,9 +106,9 @@ where
                     {
                         let mut state_guard = state.lock().await;
                         if let Some(db) = &mut state_guard.db {
-                            db.access_token = Some(Secret::from(new_at.clone()));
+                            db.access_token = Some(new_at.clone().into());
                             if let Some(rt) = new_rt {
-                                db.refresh_token = Some(Secret::from(rt));
+                                db.refresh_token = Some(rt.into());
                             }
 
                             if config.persist_session {

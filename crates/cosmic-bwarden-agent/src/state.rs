@@ -5,7 +5,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex as AsyncMutex;
-use zeroize::Zeroize as _;
 
 pub struct State {
     pub keys: Option<locked::Keys>,
@@ -159,16 +158,13 @@ impl State {
         self.unlock_requested_notified = false;
         self.sync_failed = false;
         self.last_sync_error = None;
-        // Zeroize and drop session tokens so they can't be used while locked.
-        // The rest of `db` (encrypted entries, protected keys) stays in memory
-        // so the vault can be unlocked offline without a re-sync.
+        // Drop session tokens so they can't be used while locked — both
+        // `locked::Token` representations zeroize on drop. The rest of `db`
+        // (encrypted entries, protected keys) stays in memory so the vault
+        // can be unlocked offline without a re-sync.
         if let Some(db) = &mut self.db {
-            if let Some(mut t) = db.access_token.take() {
-                t.zeroize();
-            }
-            if let Some(mut t) = db.refresh_token.take() {
-                t.zeroize();
-            }
+            db.access_token = None;
+            db.refresh_token = None;
         }
         self.broadcast(cosmic_bwarden_core::protocol::Event::Locked);
     }

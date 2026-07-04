@@ -7,10 +7,15 @@ use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Debug)]
 pub struct Db {
+    // Session tokens are the only live plaintext credentials in this struct
+    // (the `protected_*` fields below are ciphertext), so they get the
+    // mlocked `Token` type and are never serialized; everything else uses the
+    // serde-friendly `Secret`. `#[serde(skip)]` only needs `Default` on
+    // deserialize, which `Option` provides, so `Token` needs no serde impls.
     #[serde(skip)]
-    pub access_token: Option<Secret>,
+    pub access_token: Option<crate::locked::Token>,
     #[serde(skip)]
-    pub refresh_token: Option<Secret>,
+    pub refresh_token: Option<crate::locked::Token>,
 
     pub kdf: Option<api::KdfType>,
     pub iterations: Option<u32>,

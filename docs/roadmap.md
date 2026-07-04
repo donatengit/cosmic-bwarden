@@ -49,20 +49,21 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
 - [ ] **Constant-time reprompt compare** `[P1-3]` — `handler/vault/query.rs:90` compares
       the master-password hash with `!=`; use `subtle::ConstantTimeEq`. Bounded impact
       (attacker is already same-UID) but cheap. (Was the prior pass's deferred item.)
-- [ ] **`mlock` session tokens** `[P1-4]` — access/refresh tokens live in a plain
-      `String`-backed `Secret` (`db/models.rs`), so while the vault is unlocked the
-      kernel may page them to swap under memory pressure; `lock()`'s zeroize scrubs
-      RAM only, not swap slots already written. *Decision 2026-07: deferred, residual
-      accepted for encrypted-swap/zram setups.* Scope note if revisited: only the
-      **tokens** need moving — they're `#[serde(skip)]` (never persisted), so they
-      could sit in `cosmic_bwarden_core::locked::Vec` (already used for
-      `Keys`/`PasswordHash`; degrades gracefully under `RLIMIT_MEMLOCK`) at the cost
-      of `&[u8]`→`&str` conversions at the HTTP/keyring call sites and a length
-      check (`locked::Vec` is a fixed 4 KiB `ArrayVec`; `extend` panics on
-      overflow). The `protected_*` fields do **not** apply: they're ciphertext and
-      are intentionally serialized to the on-disk vault cache anyway. The
-      hibernate-image exposure is separately mitigated by the logind delay
-      inhibitor (see `[U4-8]`).
+- [x] **`mlock` session tokens** `[P1-4]` — *done 2026-07*: `Db.access_token`/
+      `refresh_token` moved from `String`-backed `Secret` to the new
+      `cosmic_bwarden_core::locked::Token` (mlocked buffer, zeroize-on-drop, `Debug`
+      redacted, unit-tested), so they can no longer page to swap while the vault is
+      unlocked. Oversized tokens (> 4 KiB, `locked::Vec`'s fixed capacity — where
+      `ArrayVec::extend` would panic) degrade to a zeroize-on-drop heap `String`
+      with a warning, mirroring `locked::Vec`'s own `RLIMIT_MEMLOCK` degradation.
+      `From<String>` zeroizes the source, scrubbing the transient copy the token
+      arrived in. The `protected_*` fields stay `Secret` deliberately: they're
+      ciphertext and are serialized to the on-disk vault cache anyway. **Accepted
+      residual**: request-scoped copies (the `String` passed into `with_refresh`'s
+      closure, reqwest's `Authorization` header) remain pageable for the seconds a
+      request lives — eliminating those would mean threading locked types through
+      reqwest, which isn't realistic. Hibernate-image exposure is separately
+      mitigated by the logind delay inhibitor (see `[U4-8]`).
 - [x] **Serialize token refresh** `[F2-4]` — *done 2026-07*: `with_refresh`
       (server/auth.rs) now takes a per-agent `State::refresh_lock` around the
       refresh step only (not the whole request), with a double-check after

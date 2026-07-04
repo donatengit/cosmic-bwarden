@@ -115,8 +115,8 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
         if db.access_token.is_none() && config.persist_session {
             match keyring::get_tokens(&config.server_name(), &email).await {
                 Ok(Some((at, rt))) => {
-                    db.access_token = Some(Secret::from(at));
-                    db.refresh_token = Some(Secret::from(rt));
+                    db.access_token = Some(at.into());
+                    db.refresh_token = Some(rt.into());
                 }
                 Ok(None) => {}
                 Err(e) => log::warn!("pin unlock: could not load tokens from keyring: {}", e),
@@ -193,10 +193,9 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
                                 {
                                     let mut g = state.lock().await;
                                     if let Some(db) = &mut g.db {
-                                        db.access_token = Some(Secret::from(access_token.clone()));
-                                        db.refresh_token = refresh_token
-                                            .as_ref()
-                                            .map(|rt| Secret::from(rt.clone()));
+                                        db.access_token = Some(access_token.clone().into());
+                                        db.refresh_token =
+                                            refresh_token.as_ref().map(|rt| rt.clone().into());
                                     }
                                 }
                                 if config.persist_session {

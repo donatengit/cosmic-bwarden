@@ -115,8 +115,8 @@ pub async fn handle_login(
             cosmic_bwarden_core::db::Db::new()
         }
     };
-    db.access_token = Some(Secret::from(access_token.clone()));
-    db.refresh_token = refresh_token.map(Secret::from);
+    db.access_token = Some(access_token.clone().into());
+    db.refresh_token = refresh_token.map(Into::into);
     db.kdf = Some(kdf);
     db.iterations = Some(iterations);
     db.memory = memory;
