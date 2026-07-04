@@ -308,3 +308,74 @@ fn test_reveal_toggle() {
     let _ = app.update(Message::ToggleRevealField(id.clone(), field.clone()));
     assert!(!app.revealed_fields.contains(&(id.clone(), field.clone())));
 }
+
+// --- Clipboard auto-clear ([P1-9]) state machine ---
+
+#[test]
+fn test_copy_arms_the_autoclear() {
+    let mut app = CosmicBWardenApp::default();
+    assert_eq!(app.clipboard_clear_generation, 0);
+
+    let _ = app.update(Message::CopyToClipboard("hunter2".to_string()));
+
+    assert_eq!(app.clipboard_clear_generation, 1);
+    assert_eq!(app.clipboard_pending_clear.as_deref(), Some("hunter2"));
+}
+
+#[test]
+fn test_recopy_supersedes_the_pending_clear() {
+    let mut app = CosmicBWardenApp::default();
+
+    let _ = app.update(Message::CopyToClipboard("first".to_string()));
+    let _ = app.update(Message::CopyToClipboard("second".to_string()));
+
+    assert_eq!(app.clipboard_clear_generation, 2);
+    assert_eq!(app.clipboard_pending_clear.as_deref(), Some("second"));
+
+    // The first copy's timer fires with a stale generation: pending must
+    // survive untouched for the second copy's own timer.
+    let _ = app.update(Message::ClipboardClearElapsed(1));
+    assert_eq!(app.clipboard_pending_clear.as_deref(), Some("second"));
+}
+
+#[test]
+fn test_readback_matching_our_value_resolves_the_clear() {
+    let mut app = CosmicBWardenApp::default();
+    let _ = app.update(Message::CopyToClipboard("hunter2".to_string()));
+
+    let _ = app.update(Message::ClipboardClearReadback(
+        1,
+        Some("hunter2".to_string()),
+    ));
+
+    assert!(app.clipboard_pending_clear.is_none());
+}
+
+#[test]
+fn test_readback_with_foreign_content_still_resolves_but_leaves_it() {
+    // The user copied something else meanwhile — we must not wipe it, but the
+    // pending value must still be dropped (nothing left to clear).
+    let mut app = CosmicBWardenApp::default();
+    let _ = app.update(Message::CopyToClipboard("hunter2".to_string()));
+
+    let _ = app.update(Message::ClipboardClearReadback(
+        1,
+        Some("something the user copied".to_string()),
+    ));
+
+    assert!(app.clipboard_pending_clear.is_none());
+}
+
+#[test]
+fn test_stale_readback_does_not_touch_a_newer_copy() {
+    let mut app = CosmicBWardenApp::default();
+    let _ = app.update(Message::CopyToClipboard("first".to_string()));
+    let _ = app.update(Message::CopyToClipboard("second".to_string()));
+
+    let _ = app.update(Message::ClipboardClearReadback(
+        1,
+        Some("first".to_string()),
+    ));
+
+    assert_eq!(app.clipboard_pending_clear.as_deref(), Some("second"));
+}

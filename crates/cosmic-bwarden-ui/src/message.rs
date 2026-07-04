@@ -61,6 +61,12 @@ pub enum Message {
     EditNameChanged(String),
     EntriesReceived(u32, Result<Vec<SidebarEntry>, String>),
     CopyToClipboard(String),
+    /// Auto-clear timer fired; payload is the copy generation it was armed
+    /// for — stale generations (a newer copy happened since) are ignored.
+    ClipboardClearElapsed(u32),
+    /// Clipboard contents read back for the pending auto-clear: only wipe if
+    /// it still holds what we copied, never content the user copied elsewhere.
+    ClipboardClearReadback(u32, Option<String>),
     NotesAction(widget::text_editor::Action),
     DeleteEntry(String),
     DeleteEntryResult(Result<(), String>),

@@ -39,6 +39,19 @@ pub enum Error {
     #[error("failed to create reqwest client: {source}")]
     CreateReqwestClient { source: reqwest::Error },
 
+    #[error(
+        "refusing insecure server URL {url}: https:// is required \
+         (http:// is allowed for loopback hosts only) — the master-password \
+         hash and session tokens would otherwise cross the network in cleartext"
+    )]
+    InsecureServerUrl { url: String },
+
+    #[error("invalid server URL {url}: {source}")]
+    InvalidServerUrl {
+        url: String,
+        source: url::ParseError,
+    },
+
     #[error("request failed with status: {status}")]
     RequestFailed { status: u16 },
 

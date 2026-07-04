@@ -40,12 +40,18 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
       and wire `cargo audit` into the build/CI. Priority because this is a password
       manager and it pulls `tss-esapi 8.0.0-alpha.2` (an alpha crate handling key
       material). Track advisories against the whole tree, not just direct deps.
-- [ ] Pin/track the alpha `tss-esapi` version deliberately; revisit when a stable
-      release lands.
-- [ ] **Enforce `https://` on `base_url`** `[P1-1]` — `config.rs` accepts any scheme and
-      appends `/api`; an `http://` server sends the master-password hash and bearer
-      tokens in cleartext. Require https except for loopback hosts
-      (`localhost`/`127.0.0.0/8`/`::1`); `warn!` on a non-loopback http fallback.
+- [ ] Pin/track the alpha `tss-esapi` version deliberately; revisit at publish
+      time — likely stable by then (owner, 2026-07), so this may reduce to a
+      version bump rather than a risk assessment.
+- [x] **Enforce `https://` on `base_url`** `[P1-1]` — *done 2026-07*: enforced in
+      `api/client/mod.rs::ensure_transport_security`, called from
+      `reqwest_client()` — the single funnel every API request passes through,
+      so no per-call-site check to forget. `https` always allowed; `http` only
+      for loopback (`localhost`, `*.localhost` per RFC 6761, `127.0.0.0/8`,
+      `::1`) with a once-per-process `warn!`; anything else (public-host http,
+      LAN IPs, missing scheme, other schemes) fails with a dedicated
+      `Error::InsecureServerUrl`/`InvalidServerUrl`. Unit-tested including the
+      `localhost.example.com` suffix-spoof case.
 - [ ] **Constant-time reprompt compare** `[P1-3]` — `handler/vault/query.rs:90` compares
       the master-password hash with `!=`; use `subtle::ConstantTimeEq`. Bounded impact
       (attacker is already same-UID) but cheap. (Was the prior pass's deferred item.)
@@ -70,9 +76,12 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
       acquiring it — if a concurrent caller already refreshed while this one
       waited, retry with the now-current access token instead of exchanging the
       (single-use, Vaultwarden-rotated) refresh token a second time.
-- [ ] **Cap third-party log verbosity** `[P1-7]` — `reqwest`/`hyper`/`rustls` at
-      `RUST_LOG=trace` can emit `Authorization: Bearer` headers. Add a default filter that
-      caps those crates at `info`, and/or a warning in `docs/build_and_run.md`.
+- [x] **Cap third-party log verbosity** `[P1-7]` — *done 2026-07*: `reqwest`,
+      `hyper`, `hyper_util`, `h2`, `rustls` capped at `info` in both the agent's
+      env_logger setup (`agent/lib.rs`) and the UI's tracing EnvFilter
+      (`ui/main.rs`), regardless of `RUST_LOG` (module directives added after the
+      env parse also beat an explicit `RUST_LOG=hyper=trace`). Documented in
+      `docs/build_and_run.md`.
 
 ## Maintainability
 
@@ -120,7 +129,15 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
 
 ## UX backlog (Phase 4 review — ranked in docs/review/04_cosmic_ux.md)
 
-- [ ] Clipboard auto-clear after copy (UI, applet, extension) `[P1-9]` — top parity gap.
+- [x] ~~Clipboard auto-clear after copy (UI, applet)~~ `[P1-9]` — *done 2026-07 for
+      UI + applet*: every copy (main window `CopyToClipboard`, applet
+      username/secret) arms a 30 s timer (`CLIPBOARD_CLEAR_SECS`,
+      `ui/app/update/mod.rs`); on expiry the clipboard is read back and wiped
+      **only if it still holds the copied value** — content the user copied
+      elsewhere meanwhile is never clobbered, and a newer copy supersedes the
+      pending clear (generation counter, state-machine unit tests in
+      `app/tests/interactions.rs`). Still open: the **browser extension**'s copy
+      path (separate JS codebase) has no auto-clear.
 - [ ] TOTP code display/copy in UI+applet (agent's GetTotp already works).
 - [ ] Password generator (applet quick-gen + edit form).
 - [ ] Extension: re-check active tab's domain at fill time `[P1-8]`.

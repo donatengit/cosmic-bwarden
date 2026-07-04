@@ -161,6 +161,15 @@ pub struct CosmicBWardenApp {
     /// True when the agent reports a configured account (`has_account`). Used to
     /// avoid prompting to unlock when there is nothing to unlock (no account/email).
     pub has_account: bool,
+
+    // Clipboard auto-clear (`[P1-9]`)
+    /// Bumped on every copy; a pending clear only fires if its generation is
+    /// still current (i.e. no newer copy has claimed the clipboard since).
+    pub clipboard_clear_generation: u32,
+    /// The value most recently copied, held only while a clear is scheduled so
+    /// the readback can verify the clipboard still contains it before wiping.
+    /// Zeroized when the clear resolves either way.
+    pub clipboard_pending_clear: Option<String>,
 }
 
 impl Default for CosmicBWardenApp {
@@ -240,6 +249,8 @@ impl Default for CosmicBWardenApp {
             tpm_da: None,
             pin_incorrect: false,
             has_account: false,
+            clipboard_clear_generation: 0,
+            clipboard_pending_clear: None,
         }
     }
 }

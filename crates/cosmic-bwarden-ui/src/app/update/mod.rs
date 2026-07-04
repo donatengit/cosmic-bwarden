@@ -6,6 +6,11 @@ pub mod vault;
 use crate::app::state::CosmicBWardenApp;
 use crate::message::Message;
 use cosmic::app::Task;
+use zeroize::Zeroize as _;
+
+/// How long a copied value stays in the clipboard before the auto-clear
+/// fires (`[P1-9]`). Matches upstream Bitwarden clients' default.
+pub(crate) const CLIPBOARD_CLEAR_SECS: u64 = 30;
 
 impl CosmicBWardenApp {
     pub fn update_app(&mut self, message: Message) -> Task<Message> {
@@ -122,8 +127,35 @@ impl CosmicBWardenApp {
             | Message::LoginPinChanged(_)
             | Message::LoginPinRevealToggled => Task::none(),
 
-            Message::CopyToClipboard(text) => {
-                cosmic::iced::clipboard::write(text).map(|_: ()| cosmic::Action::None)
+            Message::CopyToClipboard(text) => self.copy_to_clipboard_with_autoclear(text),
+            Message::ClipboardClearElapsed(generation) => {
+                if generation == self.clipboard_clear_generation
+                    && self.clipboard_pending_clear.is_some()
+                {
+                    cosmic::iced::clipboard::read().map(move |contents| {
+                        cosmic::Action::App(Message::ClipboardClearReadback(generation, contents))
+                    })
+                } else {
+                    // A newer copy re-armed the timer; let that one decide.
+                    Task::none()
+                }
+            }
+            Message::ClipboardClearReadback(generation, contents) => {
+                if generation != self.clipboard_clear_generation {
+                    return Task::none();
+                }
+                let Some(mut ours) = self.clipboard_pending_clear.take() else {
+                    return Task::none();
+                };
+                // Only wipe if the clipboard still holds our value — never
+                // content the user copied from somewhere else since.
+                let still_ours = contents.as_deref() == Some(ours.as_str());
+                ours.zeroize();
+                if still_ours {
+                    cosmic::iced::clipboard::write(String::new()).map(|_: ()| cosmic::Action::None)
+                } else {
+                    Task::none()
+                }
             }
             Message::ToggleRevealField(id, field) => {
                 let key = (id, field);
@@ -208,5 +240,26 @@ impl CosmicBWardenApp {
                 Task::none()
             }
         }
+    }
+
+    /// Copy `value` to the clipboard and arm the auto-clear timer. Used by
+    /// both the main-window and applet copy paths, so every copied credential
+    /// is cleared after [`CLIPBOARD_CLEAR_SECS`] unless the user (or a newer
+    /// copy) has replaced the clipboard contents by then.
+    pub(crate) fn copy_to_clipboard_with_autoclear(&mut self, value: String) -> Task<Message> {
+        self.clipboard_clear_generation = self.clipboard_clear_generation.wrapping_add(1);
+        let generation = self.clipboard_clear_generation;
+        if let Some(mut stale) = self.clipboard_pending_clear.replace(value.clone()) {
+            stale.zeroize();
+        }
+        let write_task = cosmic::iced::clipboard::write(value).map(|_: ()| cosmic::Action::None);
+        let timer_task = Task::perform(
+            async move {
+                tokio::time::sleep(std::time::Duration::from_secs(CLIPBOARD_CLEAR_SECS)).await;
+                generation
+            },
+            |generation| cosmic::Action::App(Message::ClipboardClearElapsed(generation)),
+        );
+        Task::batch(vec![write_task, timer_task])
     }
 }

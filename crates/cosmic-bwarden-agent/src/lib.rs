@@ -52,7 +52,20 @@ pub async fn run() -> anyhow::Result<()> {
     // Default to `info` when RUST_LOG is unset: env_logger's built-in default
     // is `error` only, which hid every warn!-level failure (e.g. rejected
     // server API calls) from journalctl under the systemd service.
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    //
+    // The HTTP stack is capped at `info` regardless of RUST_LOG (`[P1-1]`
+    // sibling `[P1-7]`): reqwest/hyper at trace print full request headers —
+    // including `Authorization: Bearer …` — and this process logs to journald,
+    // which persists to disk. Module directives beat a global `trace`, and
+    // being added after `from_env` they also beat an explicit
+    // `RUST_LOG=hyper=trace`.
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .filter_module("reqwest", log::LevelFilter::Info)
+        .filter_module("hyper", log::LevelFilter::Info)
+        .filter_module("hyper_util", log::LevelFilter::Info)
+        .filter_module("h2", log::LevelFilter::Info)
+        .filter_module("rustls", log::LevelFilter::Info)
+        .init();
 
     log::info!(
         "cosmic-bwarden-agent starting: version={} protocol_version={}",

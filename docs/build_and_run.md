@@ -86,6 +86,11 @@ If you are running the COSMIC desktop, you can launch the applet to see it in yo
 
 - `COSMIC_BWARDEN_PROFILE`: Set this to use a different configuration profile (default is `cosmic-bwarden`).
 - `RUST_LOG`: Set to `info` or `debug` for verbose logging (e.g., `RUST_LOG=cosmic-bwarden_agent=debug`).
+  The HTTP stack (`reqwest`/`hyper`/`rustls`/`h2`) is capped at `info` even under
+  `RUST_LOG=trace`: at trace level those crates print full request headers,
+  including `Authorization: Bearer …` session tokens, and agent logs are
+  persisted to disk by journald. The cap is applied in code (agent and UI
+  logger setup) and cannot be raised via the environment.
 
 ## SSH Agent Setup
 To use the built-in SSH agent, export the following environment variable in your shell profile:

@@ -566,8 +566,7 @@ impl CosmicBWardenApp {
     }
 
     fn applet_copy_to_clipboard(&mut self, value: String) -> Task<Message> {
-        let clipboard_task =
-            cosmic::iced::clipboard::write(value).map(|_: ()| cosmic::Action::None);
+        let clipboard_task = self.copy_to_clipboard_with_autoclear(value);
         let toast_task = self
             .applet_toasts
             .push(Toast::new(fl!("copied-to-clipboard")))

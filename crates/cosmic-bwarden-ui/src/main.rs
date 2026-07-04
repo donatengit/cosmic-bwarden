@@ -52,10 +52,19 @@ fn setup_logs() {
     use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
     let fmt_layer = fmt::layer().with_target(false);
-    let filter_layer = EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new(format!(
-        "warn,{}=info",
-        env!("CARGO_CRATE_NAME")
-    )));
+    // The HTTP-stack caps mirror the agent's (`[P1-7]`): this process links
+    // the same core API client, and trace-level reqwest/hyper output includes
+    // `Authorization` headers — journald persists it to disk.
+    let filter_layer = EnvFilter::try_from_default_env()
+        .unwrap_or(EnvFilter::new(format!(
+            "warn,{}=info",
+            env!("CARGO_CRATE_NAME")
+        )))
+        .add_directive("reqwest=info".parse().expect("static directive"))
+        .add_directive("hyper=info".parse().expect("static directive"))
+        .add_directive("hyper_util=info".parse().expect("static directive"))
+        .add_directive("h2=info".parse().expect("static directive"))
+        .add_directive("rustls=info".parse().expect("static directive"));
 
     if let Ok(journal_layer) = tracing_journald::layer() {
         tracing_subscriber::registry()
