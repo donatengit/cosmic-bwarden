@@ -138,7 +138,7 @@ pub async fn handle_unlock(
                 match config.device_id().await {
                     Ok(device_id) => {
                         match client
-                            .login(&email, &device_id, &master_password_hash,
+                            .login(email, &device_id, &master_password_hash,
                                    None, None, None, None)
                             .await
                         {
@@ -154,7 +154,7 @@ pub async fn handle_unlock(
                                 if config.persist_session {
                                     if let Some(rt) = &refresh_token {
                                         if let Err(e) = keyring::store_tokens(
-                                            &config.server_name(), &email, &access_token, rt,
+                                            &config.server_name(), email, &access_token, rt,
                                         ).await {
                                             log::error!("failed to store refreshed tokens in keyring: {}", e);
                                         }

@@ -336,6 +336,9 @@ pub async fn handle_add_ssh_key(
     add_entry_to_server(entry, state).await
 }
 
+// Mirrors the AddCard IPC action's flat payload; a params struct is tracked in
+// docs/roadmap.md ("API parameter structs").
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_add_card(
     name: String,
     cardholder_name: Option<String>,
@@ -373,6 +376,9 @@ pub async fn handle_add_card(
     add_entry_to_server(entry, state).await
 }
 
+// Mirrors the AddIdentity IPC action's flat payload; a params struct is tracked
+// in docs/roadmap.md ("API parameter structs").
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_add_identity(
     name: String,
     first_name: Option<String>,

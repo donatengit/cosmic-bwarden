@@ -19,6 +19,9 @@ pub enum WindowState {
     Popup,
 }
 
+// MVU message enum: one short-lived value per event. Boxing the wide variants
+// (entry payloads) would touch every `match` arm for a transient allocation win.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum Message {
     ConfigReceived(Result<(CosmicBWardenConfig, bool, bool, bool, bool), String>),

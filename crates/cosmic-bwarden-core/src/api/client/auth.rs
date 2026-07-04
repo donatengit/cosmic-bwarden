@@ -67,6 +67,9 @@ impl Client {
         }
     }
 
+    // Mirrors the Bitwarden endpoint's flat payload; a params struct is tracked
+    // in docs/roadmap.md ("API parameter structs").
+    #[allow(clippy::too_many_arguments)]
     pub async fn login(
         &self,
         email: &str,

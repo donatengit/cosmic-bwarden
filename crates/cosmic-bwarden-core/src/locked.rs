@@ -43,7 +43,20 @@ impl Default for Vec {
         let data = Box::new(arrayvec::ArrayVec::<_, LEN>::new());
         let lock = match REGION_LOCK_WORKS.get() {
             Some(true) => {
-                Some(MlockGuard::new(data.as_ptr(), data.capacity()).unwrap())
+                // mlock worked before but can still fail here once the process
+                // accumulates enough locked regions to hit RLIMIT_MEMLOCK
+                // (64 KiB on older kernels). Degrade to an unlocked buffer with
+                // a warning instead of panicking the secrets-holding daemon.
+                match MlockGuard::new(data.as_ptr(), data.capacity()) {
+                    Ok(lock) => Some(lock),
+                    Err(e) => {
+                        log::warn!(
+                            "failed to lock memory region (RLIMIT_MEMLOCK exhausted?), \
+                             continuing without mlock for this buffer: {e}"
+                        );
+                        None
+                    }
+                }
             }
             Some(false) => None,
             None => match MlockGuard::new(data.as_ptr(), data.capacity()) {

@@ -34,6 +34,9 @@ pub use unlock::handle_unlock_with_pin;
 #[cfg(feature = "tpm")]
 const MIN_PIN_LEN: usize = cosmic_bwarden_core::MIN_PIN_LEN;
 
+// `Response` is deliberately unboxed (see the enum's large_enum_variant note);
+// this Err is constructed once per failed validation, not on a hot path.
+#[allow(clippy::result_large_err)]
 #[cfg(feature = "tpm")]
 fn validate_pin(pin: &str) -> Result<(), Response> {
     if pin.chars().count() < MIN_PIN_LEN {

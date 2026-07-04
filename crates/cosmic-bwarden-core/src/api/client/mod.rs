@@ -36,11 +36,11 @@ impl Client {
             reqwest::header::HeaderValue::from_str(&DEVICE_TYPE.to_string()).unwrap(),
         );
         let user_agent = format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
-        Ok(reqwest::Client::builder()
+        reqwest::Client::builder()
             .user_agent(user_agent)
             .default_headers(default_headers)
             .build()
-            .map_err(|e| Error::CreateReqwestClient { source: e })?)
+            .map_err(|e| Error::CreateReqwestClient { source: e })
     }
 
     pub(crate) fn identity_url(&self, path: &str) -> String {

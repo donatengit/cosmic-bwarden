@@ -143,9 +143,9 @@ fn unseal_with_policy(ctx: &mut Context, obj_handle: ObjectHandle, pin: &str) ->
         .context("policy_auth_value")?;
 
     let pin_auth = Auth::from_bytes(pin.as_bytes()).context("PIN too long for TPM auth")?;
-    ctx.tr_set_auth(obj_handle.into(), pin_auth)
+    ctx.tr_set_auth(obj_handle, pin_auth)
         .context("setting PIN auth on TPM object")?;
 
-    ctx.execute_with_session(Some(session), |c| c.unseal(obj_handle.into()))
+    ctx.execute_with_session(Some(session), |c| c.unseal(obj_handle))
         .context("TPM unseal — wrong PIN, changed PCRs, or DA lockout")
 }

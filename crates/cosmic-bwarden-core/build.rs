@@ -83,7 +83,7 @@ fn main() {
         let (year, month, secs_passed) = get_year_month_seconds_passed(now);
         
         let git_id = std::process::Command::new("git")
-            .args(&["rev-parse", "--short", "HEAD"])
+            .args(["rev-parse", "--short", "HEAD"])
             .output()
             .ok()
             .and_then(|out| {

@@ -54,11 +54,10 @@ pub fn merge_redacted_secrets(entry: &mut Entry, stored: &Entry) {
                 private_key: stored_private_key,
                 ..
             },
-        ) => {
-            if private_key.is_none() {
+        )
+            if private_key.is_none() => {
                 *private_key = stored_private_key.clone();
             }
-        }
         _ => {}
     }
     for field in &mut entry.fields {

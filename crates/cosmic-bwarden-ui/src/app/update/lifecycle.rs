@@ -243,15 +243,15 @@ impl CosmicBWardenApp {
                         tracing::warn!("TPM status check failed: {}", e);
                     }
                 }
-                return Some(Task::none());
+                Some(Task::none())
             }
             Message::TpmDaStatusReceived(status) => {
                 self.tpm_da = status;
-                return Some(Task::none());
+                Some(Task::none())
             }
             Message::TpmDiagnosticsReceived(checks) => {
                 self.tpm_diagnostics = checks;
-                return Some(Task::none());
+                Some(Task::none())
             }
             Message::TpmServerCredentialsToggled(on) => {
                 self.tpm_error = None;
@@ -260,7 +260,7 @@ impl CosmicBWardenApp {
                 } else {
                     AgentAction::DisableTpmServerCredentials
                 };
-                return Some(Task::perform(
+                Some(Task::perform(
                     async move {
                         let agent = AgentClient::new();
                         match agent.send(action).await {
@@ -270,7 +270,7 @@ impl CosmicBWardenApp {
                         }
                     },
                     |res| Action::App(Message::TpmServerCredentialsResult(res)),
-                ));
+                ))
             }
             Message::TpmServerCredentialsResult(res) => {
                 match res {
@@ -283,7 +283,7 @@ impl CosmicBWardenApp {
                         self.tpm_error = Some(e);
                     }
                 }
-                return Some(Task::none());
+                Some(Task::none())
             }
             Message::RefreshStateInternal => {
                 let mut tasks = Vec::new();

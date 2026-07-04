@@ -9,9 +9,11 @@ pub async fn handle_register(
     server_url: String,
     _state: &Arc<Mutex<State>>,
 ) -> Response {
-    let mut config = cosmic_bwarden_core::config::CosmicBWardenConfig::default();
-    config.base_url = Some(server_url);
-    config.email = Some(email.clone());
+    let config = cosmic_bwarden_core::config::CosmicBWardenConfig {
+        base_url: Some(server_url),
+        email: Some(email.clone()),
+        ..Default::default()
+    };
 
     let client =
         cosmic_bwarden_core::api::Client::new(&config.base_url(), &config.identity_url());

@@ -26,7 +26,7 @@ impl CosmicBWardenApp {
             btn,
             fl!("app-title"),
             self.applet_popup.is_some(),
-            |a| Message::Surface(a),
+            Message::Surface,
             None,
         ))
     }

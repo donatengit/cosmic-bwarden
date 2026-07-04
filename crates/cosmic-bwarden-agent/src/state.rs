@@ -87,10 +87,7 @@ impl State {
                         let pk = public_key
                             .as_ref()
                             .and_then(|pk| {
-                                match cosmic_bwarden_core::vault::decrypt(pk, effective_keys, entry.key.as_deref()) {
-                                    Ok(v) => Some(v),
-                                    Err(_) => None,
-                                }
+                                cosmic_bwarden_core::vault::decrypt(pk, effective_keys, entry.key.as_deref()).ok()
                             })
                             .or_else(|| {
                                 let empty_org_keys = HashMap::new();

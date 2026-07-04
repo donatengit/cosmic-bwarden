@@ -162,7 +162,7 @@ impl ssh_agent_lib::agent::Session for SshAgent {
                 if let Ok(pk) = pk_str.parse::<PublicKey>() {
                     if pk.to_bytes() == req_bytes {
                         let sk = PrivateKey::from_openssh(sk.expose())
-                            .map_err(|e| ssh_agent_lib::error::AgentError::other(e))?;
+                            .map_err(ssh_agent_lib::error::AgentError::other)?;
 
                         return sign_with_key(&sk, &request.data, request.flags);
                     }

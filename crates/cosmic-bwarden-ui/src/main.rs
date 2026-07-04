@@ -104,8 +104,10 @@ impl Application for CosmicBWardenApp {
             }
         }
 
-        let mut app = CosmicBWardenApp::default();
-        app.core = core;
+        let app = CosmicBWardenApp {
+            core,
+            ..Default::default()
+        };
 
         let tasks = vec![
             crate::app::tasks::check_protocol_version(),
@@ -297,7 +299,7 @@ impl Application for CosmicBWardenApp {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_logs();
 
-    let args = Cli::try_parse().unwrap_or_else(|_| Cli {
+    let args = Cli::try_parse().unwrap_or(Cli {
         config: None,
         socket: None,
     });

@@ -38,6 +38,10 @@ pub struct TpmDaStatus {
     pub recovery_interval_secs: Option<u32>,
 }
 
+// IPC request message: transient (one per request, immediately consumed), so
+// the size spread between small variants (Lock) and payload-carrying ones
+// (AddEntry) doesn't justify boxing and the match-ergonomics churn it brings.
+#[allow(clippy::large_enum_variant)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum Action {
     Register {
@@ -292,6 +296,8 @@ pub enum Event {
 /// string to show their own short feedback; the full error chain is log-only.
 pub const ERR_TPM_UNSEAL_FAILED: &str = "TPM unseal failed";
 
+// IPC response message: transient like `Action` — see the comment there.
+#[allow(clippy::large_enum_variant)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum Response {
     Ack,

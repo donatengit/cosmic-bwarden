@@ -3,6 +3,9 @@ use crate::api::models::*;
 use crate::api::client::Client;
 
 impl Client {
+    // Mirrors the Bitwarden endpoint's flat payload; a params struct is tracked
+    // in docs/roadmap.md ("API parameter structs").
+    #[allow(clippy::too_many_arguments)]
     pub async fn add_cipher(
         &self,
         access_token: &str,
@@ -60,6 +63,9 @@ impl Client {
         }
     }
 
+    // Mirrors the Bitwarden endpoint's flat payload; a params struct is tracked
+    // in docs/roadmap.md ("API parameter structs").
+    #[allow(clippy::too_many_arguments)]
     pub async fn add_ssh_key(
         &self,
         access_token: &str,
@@ -105,6 +111,9 @@ impl Client {
         }
     }
 
+    // Mirrors the Bitwarden endpoint's flat payload; a params struct is tracked
+    // in docs/roadmap.md ("API parameter structs").
+    #[allow(clippy::too_many_arguments)]
     pub async fn add_card(
         &self,
         access_token: &str,
@@ -156,6 +165,9 @@ impl Client {
         }
     }
 
+    // Mirrors the Bitwarden endpoint's flat payload; a params struct is tracked
+    // in docs/roadmap.md ("API parameter structs").
+    #[allow(clippy::too_many_arguments)]
     pub async fn add_identity(
         &self,
         access_token: &str,
@@ -221,6 +233,9 @@ impl Client {
         }
     }
 
+    // Mirrors the Bitwarden endpoint's flat payload; a params struct is tracked
+    // in docs/roadmap.md ("API parameter structs").
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_cipher(
         &self,
         access_token: &str,

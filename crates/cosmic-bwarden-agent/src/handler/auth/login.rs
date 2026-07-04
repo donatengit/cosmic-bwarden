@@ -5,6 +5,9 @@ use cosmic_bwarden_core::protocol::{Event, Response};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+// Mirrors the Login IPC action's flat payload; a params struct is tracked in
+// docs/roadmap.md ("API parameter structs").
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_login(
     email: String,
     password: String,

@@ -59,6 +59,8 @@ pub fn unlock_from_keys<S: std::hash::BuildHasher>(
     Ok((vault_keys, org_keys))
 }
 
+// Mirrors the Bitwarden unlock inputs; params struct tracked in docs/roadmap.md.
+#[allow(clippy::too_many_arguments)]
 pub fn unlock<S: std::hash::BuildHasher>(
     email: &str,
     password: &locked::Password,

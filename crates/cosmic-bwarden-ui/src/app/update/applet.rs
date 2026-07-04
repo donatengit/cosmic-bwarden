@@ -340,10 +340,10 @@ impl CosmicBWardenApp {
                         } else {
                             Some(self.applet_search_query.clone())
                         };
-                        return Some(Task::batch(vec![
+                        Some(Task::batch(vec![
                             fetch_sidebar_entries(self.search_id, None, None, false),
                             fetch_applet_search(self.applet_search_id, query, only_pinned),
-                        ]));
+                        ]))
                     }
                     Err(e) => {
                         tracing::error!("PIN unlock failed: {}", e);

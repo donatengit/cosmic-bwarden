@@ -218,6 +218,10 @@ impl From<&str> for Secret {
     }
 }
 
+// Variant sizes intentionally differ (Identity carries ~17 fields, SecureNote
+// none). Entries live in one Vec<Entry> per vault; boxing the big variants
+// would add a heap hop on every decrypt/search for a modest memory win.
+#[allow(clippy::large_enum_variant)]
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Eq, PartialEq)]
 pub enum EntryData {
     Login {

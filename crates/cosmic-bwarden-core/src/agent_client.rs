@@ -24,6 +24,12 @@ pub struct AgentClient {
     socket_path: std::path::PathBuf,
 }
 
+impl Default for AgentClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AgentClient {
     pub fn new() -> Self {
         Self {

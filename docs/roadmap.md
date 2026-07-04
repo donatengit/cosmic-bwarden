@@ -47,6 +47,21 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
 
 - [ ] **File-size refactoring** — several files exceed the 500-line hard limit in
       `AGENTS.md`. Concrete split plan: [`docs/archive/file_size_refactoring.md`](archive/file_size_refactoring.md).
+      Phase 3 `[A3-3]` update: no first-party file is over 500 *excluding tests*;
+      `ui/app/update/applet.rs` (572 incl. its tests) and `handler/vault/ops.rs` (469)
+      are the two to split first.
+- [ ] **API/handler parameter structs** — `handle_login`, `handle_add_card`,
+      `handle_add_identity`, `Client::{add_cipher,add_ssh_key,add_card,add_identity,
+      update_cipher}`, and `vault::unlock` take 8–15 positional args (clippy
+      `too_many_arguments`, currently `#[allow]`'d with a pointer here). Introduce
+      `AddCardParams`-style structs at the wire/handler boundary; removes the allows.
+- [ ] **KDF off the runtime thread** `[A3-1]` — the agent is `current_thread`; Argon2id
+      runs inline under the state lock, briefly blocking all IPC on unlock/reprompt. Wrap
+      in `spawn_blocking` once Phase 6 sets the latency budget.
+- [ ] **cosmic-config double-compile** — the workspace pins libcosmic `branch = "master"`
+      while its internal crates use the plain git URL, so cargo compiles `cosmic-config`
+      (and its derive) twice. Dropping `branch` breaks the UI build (resolves a newer
+      commit); revisit when the libcosmic pin is next bumped.
 
 ## Test coverage
 

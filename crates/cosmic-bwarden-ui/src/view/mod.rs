@@ -15,7 +15,7 @@ use cosmic::Element;
 fn format_secs(secs: u32) -> String {
     if secs == 0 {
         fl!("duration-moment")
-    } else if secs % 3600 == 0 {
+    } else if secs.is_multiple_of(3600) {
         format!("{}h", secs / 3600)
     } else if secs >= 3600 {
         format!("{}h{}m", secs / 3600, (secs % 3600) / 60)
@@ -90,7 +90,7 @@ impl CosmicBWardenApp {
                     .width(Length::Fixed(400.0))
                     .into(),
             )
-        } else if let Some(_) = &self.show_reprompt {
+        } else if self.show_reprompt.is_some() {
             let mut col = cosmic::widget::column::with_capacity(2).spacing(10);
 
             let password_input = secure_input(
