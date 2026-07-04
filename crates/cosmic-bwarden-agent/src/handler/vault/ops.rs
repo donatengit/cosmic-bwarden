@@ -4,7 +4,6 @@ use cosmic_bwarden_core::db::{Entry, EntryData, Field, Secret};
 use cosmic_bwarden_core::protocol::{EntryType, Response};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use totp_rs::{Algorithm, TOTP};
 
 pub async fn handle_get_totp(
     id: String,
@@ -37,35 +36,9 @@ pub async fn handle_get_totp(
             ..
         } = &entry.data
         {
-            let secret = totp_secret.expose();
-            // Bitwarden stores TOTP as either the secret key or an otpauth:// URL
-            let secret_key = if secret.starts_with("otpauth://") {
-                match TOTP::from_url(secret) {
-                    Ok(t) => t.get_secret_base32(),
-                    Err(_) => secret.to_string(),
-                }
-            } else {
-                secret.to_string()
-            };
-
-            match TOTP::new(
-                Algorithm::SHA1,
-                6,
-                1,
-                30,
-                secret_key.as_bytes().to_vec(),
-                None,
-                "".to_string(),
-            ) {
-                Ok(totp) => match totp.generate_current() {
-                    Ok(code) => Response::Totp { code },
-                    Err(e) => Response::Error {
-                        message: format!("TOTP generation failed: {}", e),
-                    },
-                },
-                Err(e) => Response::Error {
-                    message: format!("Invalid TOTP secret: {}", e),
-                },
+            match super::totp::generate_code(totp_secret.expose()) {
+                Ok(code) => Response::Totp { code },
+                Err(message) => Response::Error { message },
             }
         } else {
             Response::Error {

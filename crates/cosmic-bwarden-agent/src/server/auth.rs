@@ -4,6 +4,24 @@ use crate::state::State;
 use crate::keyring;
 use cosmic_bwarden_core::db::Secret;
 
+/// True when an API error means the access token was rejected (HTTP 401) and a
+/// refresh should be attempted. The API client returns 401s in two shapes —
+/// `RequestUnauthorized` from endpoints that special-case it, and
+/// `RequestFailed { status: 401 }` from those that don't. The `Other`-variant
+/// string check is kept as a safety net for wrapped/legacy error paths.
+/// (A previous version matched only `Other("…401…")`, which no API call
+/// produces — the refresh arm was unreachable and an expired access token
+/// permanently killed server sync until re-login.)
+fn is_unauthorized(e: &cosmic_bwarden_core::error::Error) -> bool {
+    use cosmic_bwarden_core::error::Error;
+    match e {
+        Error::RequestUnauthorized => true,
+        Error::RequestFailed { status: 401 } => true,
+        Error::Other(msg) => msg.contains("401"),
+        _ => false,
+    }
+}
+
 pub async fn with_refresh<F, Fut, T>(state: &Arc<Mutex<State>>, f: F) -> Result<T, String>
 where
     F: Fn(String) -> Fut,
@@ -47,7 +65,7 @@ where
 
     match f(access_token).await {
         Ok(res) => Ok(res),
-        Err(cosmic_bwarden_core::error::Error::Other(e)) if e.contains("401") => {
+        Err(e) if is_unauthorized(&e) => {
             log::info!("access token expired, refreshing...");
             let client = cosmic_bwarden_core::api::Client::new(&base_url, &identity_url);
             match client.exchange_refresh_token(&refresh_token).await {
@@ -93,5 +111,31 @@ where
             }
         }
         Err(e) => Err(e.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_unauthorized;
+    use cosmic_bwarden_core::error::Error;
+
+    // Regression for the dead-refresh-arm bug: both real 401 shapes produced by
+    // the API client must trigger a refresh.
+    #[test]
+    fn real_api_401_shapes_trigger_refresh() {
+        assert!(is_unauthorized(&Error::RequestUnauthorized));
+        assert!(is_unauthorized(&Error::RequestFailed { status: 401 }));
+    }
+
+    #[test]
+    fn other_variant_string_fallback_still_works() {
+        assert!(is_unauthorized(&Error::Other("HTTP 401 from proxy".into())));
+    }
+
+    #[test]
+    fn non_auth_errors_do_not_trigger_refresh() {
+        assert!(!is_unauthorized(&Error::RequestFailed { status: 500 }));
+        assert!(!is_unauthorized(&Error::RequestFailed { status: 403 }));
+        assert!(!is_unauthorized(&Error::Other("connection refused".into())));
     }
 }

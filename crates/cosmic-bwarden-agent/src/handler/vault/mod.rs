@@ -2,6 +2,7 @@ pub mod sync;
 pub mod query;
 pub mod ops;
 pub mod merge;
+mod totp;
 
 use crate::state::State;
 use cosmic_bwarden_core::protocol::{Action, Response};

@@ -14,7 +14,7 @@ socket compat, so `sg docker` recipes work *on this machine* — see F5).
 | Unit tests: core | ✅ 24/24 | |
 | Unit tests: ui | ✅ 115/115 | |
 | Unit tests: cli | ✅ 2/2 | |
-| Unit tests: agent | ⚠️ **0 tests** | all agent coverage lives in the E2E crate — see F7 |
+| Unit tests: agent | ⚠️ 3 tests (merge only) | *(corrected in Phase 2 — a tail-truncated read reported 0; now 11 after Phase 2 fixes)* — see F7 |
 | Rust E2E (`cosmic-bwarden-tests`, `--test-threads=1`) | ✅ 50/52, 2 env-failures rerun clean | 1062 s wall time; see F9 |
 | Extension unit (vitest) | ✅ 9/9 | |
 | Extension E2E (firefox-mock, Playwright) | ✅ 14/14 | |

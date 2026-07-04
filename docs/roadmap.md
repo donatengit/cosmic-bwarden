@@ -35,6 +35,10 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
       live in a plain `String`-backed `Secret` (`db/models.rs`), so they can page to
       swap. Move token storage onto `locked::Vec`, or document the residual as accepted
       for encrypted-swap setups.
+- [ ] **Serialize token refresh** `[F2-4]` — `with_refresh` (server/auth.rs) has no mutual
+      exclusion; two concurrent 401s can both exchange the refresh token, and Vaultwarden
+      rotates them, so the loser may persist a stale token. Guard the refresh block with a
+      `tokio::sync::Mutex` (double-check token freshness after acquiring).
 - [ ] **Cap third-party log verbosity** `[P1-7]` — `reqwest`/`hyper`/`rustls` at
       `RUST_LOG=trace` can emit `Authorization: Bearer` headers. Add a default filter that
       caps those crates at `info`, and/or a warning in `docs/build_and_run.md`.
