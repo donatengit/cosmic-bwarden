@@ -8,6 +8,6 @@ Type=Application
 Categories=Cosmic;Utility;Security;
 Keywords=Cosmic;Panel;Applet;Bitwarden;Password;
 OnlyShowIn=COSMIC;
-StartupWMClass=com.system76.CosmicBWarden
+StartupWMClass=com.enikeev.cosmic-bwarden
 X-CosmicApplet=true
 X-CosmicHoverPopup=Auto

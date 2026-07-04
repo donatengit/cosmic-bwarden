@@ -1,3 +1,4 @@
+# Maintainer: Don Enikeev <donat@enikeev.net>
 # AUR package skeleton for cosmic-bwarden.
 # NOT yet publishable: the repo has no public remote (fill `url`/`source`
 # after first push) and no LICENSE file (blocker tracked in docs/roadmap.md,
@@ -32,10 +33,10 @@ package() {
   install -Dm755 target/release/cosmic-bwarden-agent "$pkgdir/usr/bin/cosmic-bwarden-agent"
   install -Dm755 target/release/cosmic-applet-bwarden "$pkgdir/usr/bin/cosmic-applet-bwarden"
   install -Dm755 target/release/cosmic-bwarden-cli "$pkgdir/usr/bin/cosmic-bwarden-cli"
-  install -Dm644 crates/cosmic-bwarden-ui/resources/com.system76.CosmicBWarden.desktop \
-    "$pkgdir/usr/share/applications/com.system76.CosmicBWarden.desktop"
-  install -Dm644 packaging/com.system76.CosmicBWarden.ron \
-    "$pkgdir/usr/share/cosmic/applets/com.system76.CosmicBWarden.ron"
+  install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic-bwarden.desktop \
+    "$pkgdir/usr/share/applications/com.enikeev.cosmic-bwarden.desktop"
+  install -Dm644 packaging/com.enikeev.cosmic-bwarden.ron \
+    "$pkgdir/usr/share/cosmic/applets/com.enikeev.cosmic-bwarden.ron"
   install -Dm644 packaging/cosmic-bwarden-agent.deb.service \
     "$pkgdir/usr/lib/systemd/user/cosmic-bwarden-agent.service"
 }

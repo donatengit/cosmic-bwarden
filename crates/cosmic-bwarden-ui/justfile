@@ -7,7 +7,7 @@ build:
 
 install: build
     install -Dm755 ../../target/release/cosmic-bwarden-ui {{bin_dir}}/cosmic-bwarden-ui
-    install -Dm644 resources/com.system76.CosmicBWarden.desktop {{res_dir}}/applications/com.system76.CosmicBWarden.desktop
+    install -Dm644 resources/com.enikeev.cosmic-bwarden.desktop {{res_dir}}/applications/com.enikeev.cosmic-bwarden.desktop
 
 check:
     cargo check

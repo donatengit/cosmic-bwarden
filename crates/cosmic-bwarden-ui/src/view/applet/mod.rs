@@ -6,18 +6,24 @@ use crate::app::CosmicBWardenApp;
 use crate::fl;
 use crate::message::{Message, View};
 use cosmic::iced::Length;
-use cosmic::widget::{button, container, list_column, text, toaster};
+use cosmic::widget::{button, container, icon, list_column, text, toaster};
 use cosmic::Element;
+
+/// Dedicated branded panel icon: a symbolic SVG embedded in the binary rather than
+/// looked up by name in the system icon theme, so it renders correctly without any
+/// install-time step (dev builds included) and is recolored to match the panel's
+/// light/dark foreground automatically (`icon_button_from_handle` handles that for
+/// any `Handle` marked `symbolic`).
+const APPLET_ICON_SVG: &[u8] =
+    include_bytes!("../../../resources/icons/cosmic-bwarden-symbolic.svg");
 
 impl CosmicBWardenApp {
     pub fn applet_view(&self) -> Element<'_, Message> {
+        let icon_handle = icon::from_svg_bytes(APPLET_ICON_SVG).symbolic(true);
         let btn = self
             .core
             .applet
-            // TODO: replace with our own branded icons (icons/black*.png / white*.png at repo root).
-            // Requires either installing them into the hicolor XDG theme via the justfile `install`
-            // recipe, or switching to icon::from_path() with a theme-aware path (dark/light variant).
-            .icon_button("password-manager-symbolic")
+            .icon_button_from_handle(icon_handle)
             .on_press_with_rectangle(move |offset, bounds| {
                 Message::AppletIconClicked(offset, bounds)
             });

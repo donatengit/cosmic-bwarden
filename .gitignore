@@ -61,3 +61,9 @@ playwright-report/
 Thumbs.db
 desktop.ini
 
+# Local reference-only checkouts (libcosmic, upstream cosmic applets, official
+# Bitwarden clients, rbw) kept for reading during development. Not build
+# dependencies: libcosmic is pulled via the Cargo git dependency in Cargo.toml.
+# No slash suffix: also catches the dir if ever recreated as a symlink.
+tmp_code_examples
+

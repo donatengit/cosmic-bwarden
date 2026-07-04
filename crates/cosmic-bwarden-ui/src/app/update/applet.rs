@@ -534,6 +534,7 @@ impl CosmicBWardenApp {
 
         let popup_task = Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(
             cosmic::surface::action::app_popup::<CosmicBWardenApp>(
+                |_| Default::default(),
                 move |state: &mut CosmicBWardenApp| {
                     let new_id = window::Id::unique();
                     state.applet_popup = Some(new_id);

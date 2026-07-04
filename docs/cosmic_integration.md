@@ -6,21 +6,22 @@ truth).
 
 ## Application ID
 
-Everything keys off the ID **`com.system76.CosmicBWarden`** (desktop entry,
+Everything keys off the ID **`com.enikeev.cosmic-bwarden`** (desktop entry,
 applet metadata, `StartupWMClass`, `CONFIG_ID` in `core/src/config.rs`).
 
-> ⚠️ Pre-publish task (see `docs/roadmap.md`): this squats System76's RDNN
-> namespace. Before public release the ID must move to a namespace we control
-> (e.g. `io.github.<owner>.CosmicBWarden`), with a config migration for
-> `CONFIG_ID`.
+> This is a **temporary** ID pending publish. `config_dir()`/`data_dir()` key
+> off a separate `profile()` string (`core/src/dirs.rs`), not `CONFIG_ID`, so
+> `config.json` survives an ID change untouched; only keyring entries
+> (`agent/src/keyring.rs` `APP_ID`) are scoped to the ID and would need
+> re-login after a future rename.
 
 ## What gets installed
 
 | Artifact | Source | Installed to |
 |---|---|---|
 | Applet/app binary `cosmic-applet-bwarden` | built from the `cosmic-bwarden-ui` crate | `{bin_dir}` |
-| Desktop entry | `crates/cosmic-bwarden-ui/resources/com.system76.CosmicBWarden.desktop` | `{apps_dir}` |
-| Applet metadata (`.ron`) | generated inline by the justfile | `{applets_dir}/com.system76.CosmicBWarden.ron` |
+| Desktop entry | `crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic-bwarden.desktop` | `{apps_dir}` |
+| Applet metadata (`.ron`) | generated inline by the justfile | `{applets_dir}/com.enikeev.cosmic-bwarden.ron` |
 | Agent systemd user unit | `crates/cosmic-bwarden-agent/res/cosmic-bwarden-agent.service` (hardened; `@BINDIR@` substituted) | `{systemd_user_dir}` |
 | Firefox native-messaging host | `tests/browser-extension/register_host.py` | `~/.mozilla/native-messaging-hosts/` |
 
@@ -38,10 +39,19 @@ removed. Both talk to the same `cosmic-bwarden-agent` over the Unix socket.
 
 ## Panel icon
 
-The applet currently uses the theme icon `password-manager-symbolic`
-(`view/applet/mod.rs`). Branded symbolic icons (repo `icons/black.svg` /
-`white.svg`) are a tracked polish task — panel icons should be recolorable
-symbolic SVGs, not the PNG set (those serve the browser extension).
+The applet uses a dedicated branded symbolic icon
+(`resources/icons/cosmic-bwarden-symbolic.svg`), embedded at compile time via
+`icon::from_svg_bytes(...).symbolic(true)` and rendered through
+`applet.icon_button_from_handle()` (`view/applet/mod.rs`). Embedding avoids any
+install-time dependency on the system icon theme — the panel button renders
+correctly in dev builds too — and `symbolic(true)` makes libcosmic recolor it
+to match the panel's light/dark foreground automatically, no separate
+black/white variants needed.
+
+The `.desktop`/`.ron` `Icon=`/`icon:` fields still reference the theme name
+`password-manager-symbolic` (used for the launcher/app-switcher context, not
+the panel button); installing a dedicated icon into the hicolor theme for
+those is separate, tracked polish (`docs/roadmap.md` UX backlog).
 
 ## After installing
 

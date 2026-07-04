@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::message::{View, WindowState};
 
-pub const APP_ID: &str = "com.system76.CosmicBWarden";
+pub const APP_ID: &str = "com.enikeev.cosmic-bwarden";
 
 pub struct CosmicBWardenApp {
     pub core: Core,

@@ -205,7 +205,7 @@ impl Application for CosmicBWardenApp {
                     .height(Length::Fill)
                     .center_x(Length::Fill)
                     .center_y(Length::Fill)
-                    .class(cosmic::theme::Container::Dialog);
+                    .class(cosmic::theme::Container::Dialog(true));
 
                 cosmic::iced::widget::stack![view, modal].into()
             } else {

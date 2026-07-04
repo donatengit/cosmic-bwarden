@@ -16,11 +16,14 @@ forge.
 - [ ] **Extension store prep**: Firefox-flavoured manifest (`background.scripts`
       event page) alongside Chrome's `service_worker`; privacy policy; AMO
       source-review notes. Submit early to reserve `cosmic-bwarden@8bit.com`.
-- [ ] **Rename the app ID out of System76's namespace** `[U4-1]` —
-      `com.system76.CosmicBWarden` (desktop entry, applet .ron, StartupWMClass,
-      `CONFIG_ID` in core) must become a namespace we control, e.g.
-      `io.github.<owner>.CosmicBWarden`, with a config migration for the old ID.
-      Blocks Flatpak/store publishing.
+- [x] **Rename the app ID out of System76's namespace** `[U4-1]` — *done 2026-07*:
+      ID is now `com.enikeev.cosmic-bwarden` (desktop entry, applet .ron,
+      `StartupWMClass`, `CONFIG_ID`/`APP_ID` in core/ui/agent). `config.json`
+      needed no migration (keyed by `profile()`, not `CONFIG_ID` — see
+      `docs/cosmic_integration.md`); pre-existing local keyring entries under the
+      old ID are orphaned and require re-login. Still **temporary** — pick a
+      permanent namespace (e.g. a real domain or `io.github.<owner>`) before
+      Flatpak/store publishing.
 - [ ] Scrub git history and working tree for secrets / machine-specific paths.
 - [x] Review `docs/*_plan.md` scratch docs — keep or archive. *(Done 2026-07: completed
       plans moved to `docs/archive/`, see `docs/review/00_ground_truth.md` F3.)*
@@ -74,12 +77,28 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
       (docs/review/06_performance.md): worst-case KDF stall is ~131 ms (Argon2id
       defaults, release), once per unlock/reprompt — acceptable on the current-thread
       runtime. Revisit only if the runtime goes multi-thread for other reasons.
-- [ ] **Upgrade libcosmic to recent master** — the workspace is locked to commit
-      `8fa6a01d`; current master (`ee5d9659`+) has API changes that break the UI build
-      (~5 errors seen when the pin floated during the Phase 3 dedup attempt: E0061
-      arg-count changes, E0277/E0616/E0631). Plan: bump Cargo.lock deliberately, fix the
-      UI call sites, run the full UI test suite + `just restart-panel` smoke. Do this
-      before Phase 7 packaging so we ship against a current toolkit.
+- [x] **Upgrade libcosmic to recent master** — *done 2026-07*: bumped `8fa6a01d` →
+      `ee5d9659`. Fixed the 5 call-site breaks: `app_popup` gained a leading
+      `live_settings: Fn(&App) -> LiveSettings` param (`app/update/applet.rs`,
+      passed `|_| Default::default()`); `cosmic_theme::Theme::background` is now
+      `background(transparent: bool) -> &Container` instead of a public field
+      (`view/style.rs`, passed `false`); `theme::Container::Dialog` is now
+      `Dialog(is_overlay: bool)` (`main.rs`, passed `true` for the full-window
+      modal case). Full workspace `cargo check`/`cargo test` clean (115 UI +
+      26 core/agent/cli tests). `cargo clippy` has 12 pre-existing lint errors
+      (`items_after_test_module`, `needless_borrows_for_generic_args` in
+      `core/cipherstring.rs`, `field_reassign_with_default` in UI tests) —
+      confirmed present on the old pin too, so unrelated to this bump; still
+      open as separate maintainability debt. Live `just restart-panel` smoke
+      not performed (would touch the running desktop session).
+- [ ] **`cargo clippy --all-targets` fails workspace-wide** (12 errors, found while
+      validating the libcosmic bump above) — `items_after_test_module` and
+      `needless_borrows_for_generic_args` in `core/cipherstring.rs`,
+      `field_reassign_with_default` in `ui/app/tests/main_window.rs`. `cargo
+      check`/`cargo test` are unaffected (these are clippy-only lints); AGENTS.md's
+      "clippy+rustfmt now gated" note (Phase 3) evidently covers `cargo clippy`
+      without `--all-targets`, which doesn't lint test code — reconcile before
+      relying on clippy as a merge gate.
 - [ ] **cosmic-config double-compile** — the workspace pins libcosmic `branch = "master"`
       while its internal crates use the plain git URL, so cargo compiles `cosmic-config`
       (and its derive) twice. Dropping `branch` breaks the UI build (resolves a newer
@@ -96,7 +115,14 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
 - [ ] Replace emoji button icons (📂🔗🔑) with symbolic icons + tooltips `[U4-4]`.
 - [ ] Keyboard: Escape to dismiss, arrow-key list navigation, global shortcut `[U4-5]`.
 - [ ] Second locale to prove the Fluent pipeline `[U4-6]`.
-- [ ] Branded symbolic panel icon installed into the icon theme `[U4-7]`.
+- [x] ~~Branded symbolic panel icon~~ `[U4-7]` — *done 2026-07 for the applet
+      button*: `resources/icons/cosmic-bwarden-symbolic.svg` embedded via
+      `icon::from_svg_bytes(...).symbolic(true)` + `icon_button_from_handle`
+      (see `docs/cosmic_integration.md`), no icon-theme install needed. Still
+      open: the `.desktop`/`.ron` `Icon=`/`icon:` fields (launcher/app-switcher
+      context) still point at the generic `password-manager-symbolic` theme
+      icon — installing our own icon into hicolor for those is a separate,
+      smaller follow-up.
 - [ ] Read PrepareForSleep's bool arg; don't re-lock on resume `[U4-8]`.
 - [ ] Test stricter systemd sandboxing (ProtectHome + ReadWritePaths, ProtectSystem=strict,
       SystemCallFilter) against keyring/TPM/network, then adopt.
