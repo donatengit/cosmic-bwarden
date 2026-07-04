@@ -2,7 +2,9 @@ use cosmic_bwarden_core::db::EntryData;
 use cosmic_bwarden_core::locked;
 use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio::sync::Mutex as AsyncMutex;
 use zeroize::Zeroize as _;
 
 pub struct State {
@@ -25,6 +27,13 @@ pub struct State {
     /// True when a TPM sealed blob exists for the current account.
     /// Set on startup and updated by the tpm_pin handler.
     pub tpm_configured: bool,
+    /// Serializes `server::auth::with_refresh`'s refresh-token exchange.
+    /// Held only around the check-and-refresh step (not whole requests), so
+    /// concurrent 401s don't both spend the same single-use refresh token —
+    /// Vaultwarden rotates it on use, so the loser of an unsynchronized race
+    /// would persist a stale/already-consumed token. See `[F2-4]` in
+    /// `docs/roadmap.md`.
+    pub refresh_lock: Arc<AsyncMutex<()>>,
 }
 
 impl State {
@@ -43,6 +52,7 @@ impl State {
             sync_failed: false,
             last_sync_error: None,
             tpm_configured: false,
+            refresh_lock: Arc::new(AsyncMutex::new(())),
         }
     }
 

@@ -49,14 +49,26 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
 - [ ] **Constant-time reprompt compare** `[P1-3]` — `handler/vault/query.rs:90` compares
       the master-password hash with `!=`; use `subtle::ConstantTimeEq`. Bounded impact
       (attacker is already same-UID) but cheap. (Was the prior pass's deferred item.)
-- [ ] **`mlock` session tokens** `[P1-4]` — access/refresh tokens and `protected_key`
-      live in a plain `String`-backed `Secret` (`db/models.rs`), so they can page to
-      swap. Move token storage onto `locked::Vec`, or document the residual as accepted
-      for encrypted-swap setups.
-- [ ] **Serialize token refresh** `[F2-4]` — `with_refresh` (server/auth.rs) has no mutual
-      exclusion; two concurrent 401s can both exchange the refresh token, and Vaultwarden
-      rotates them, so the loser may persist a stale token. Guard the refresh block with a
-      `tokio::sync::Mutex` (double-check token freshness after acquiring).
+- [ ] **`mlock` session tokens** `[P1-4]` — access/refresh tokens live in a plain
+      `String`-backed `Secret` (`db/models.rs`), so while the vault is unlocked the
+      kernel may page them to swap under memory pressure; `lock()`'s zeroize scrubs
+      RAM only, not swap slots already written. *Decision 2026-07: deferred, residual
+      accepted for encrypted-swap/zram setups.* Scope note if revisited: only the
+      **tokens** need moving — they're `#[serde(skip)]` (never persisted), so they
+      could sit in `cosmic_bwarden_core::locked::Vec` (already used for
+      `Keys`/`PasswordHash`; degrades gracefully under `RLIMIT_MEMLOCK`) at the cost
+      of `&[u8]`→`&str` conversions at the HTTP/keyring call sites and a length
+      check (`locked::Vec` is a fixed 4 KiB `ArrayVec`; `extend` panics on
+      overflow). The `protected_*` fields do **not** apply: they're ciphertext and
+      are intentionally serialized to the on-disk vault cache anyway. The
+      hibernate-image exposure is separately mitigated by the logind delay
+      inhibitor (see `[U4-8]`).
+- [x] **Serialize token refresh** `[F2-4]` — *done 2026-07*: `with_refresh`
+      (server/auth.rs) now takes a per-agent `State::refresh_lock` around the
+      refresh step only (not the whole request), with a double-check after
+      acquiring it — if a concurrent caller already refreshed while this one
+      waited, retry with the now-current access token instead of exchanging the
+      (single-use, Vaultwarden-rotated) refresh token a second time.
 - [ ] **Cap third-party log verbosity** `[P1-7]` — `reqwest`/`hyper`/`rustls` at
       `RUST_LOG=trace` can emit `Authorization: Bearer` headers. Add a default filter that
       caps those crates at `info`, and/or a warning in `docs/build_and_run.md`.
@@ -123,7 +135,14 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
       context) still point at the generic `password-manager-symbolic` theme
       icon — installing our own icon into hicolor for those is a separate,
       smaller follow-up.
-- [ ] Read PrepareForSleep's bool arg; don't re-lock on resume `[U4-8]`.
+- [x] ~~Read PrepareForSleep's bool arg; don't re-lock on resume~~ `[U4-8]` — *done
+      2026-07*: `logind.rs` now deserializes the bool from
+      `PrepareForSleep`/`PrepareForShutdown` (fails toward locking), skips the
+      spurious re-lock on resume, and additionally takes a logind **delay
+      inhibitor** (`Inhibit("sleep:shutdown", …, "delay")`) so the zeroize is
+      guaranteed to finish before a hibernate image of RAM hits disk — released
+      after lock, re-armed on resume; degrades to the old racy behavior with a
+      warning if polkit denies it.
 - [ ] Test stricter systemd sandboxing (ProtectHome + ReadWritePaths, ProtectSystem=strict,
       SystemCallFilter) against keyring/TPM/network, then adopt.
 - [ ] Research: Wayland autotype; passkeys/FIDO2; attachments.

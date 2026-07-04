@@ -30,7 +30,7 @@ where
     let config = cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy()
         .map_err(|e| e.to_string())?;
 
-    let (access_token, refresh_token, base_url, identity_url) = {
+    let (access_token, refresh_lock, base_url, identity_url) = {
         let mut state_guard = state.lock().await;
         let db = state_guard.db.as_mut().ok_or("agent is locked")?;
 
@@ -47,28 +47,60 @@ where
             }
         }
 
+        let access_token = db
+            .access_token
+            .as_ref()
+            .ok_or("no API session token — please logout and log in again to restore server sync")?
+            .expose()
+            .to_string();
+
         (
-            db.access_token
-                .as_ref()
-                .ok_or(
-                    "no API session token — please logout and log in again to restore server sync",
-                )?
-                .expose()
-                .to_string(),
-            db.refresh_token
-                .as_ref()
-                .ok_or("no refresh token")?
-                .expose()
-                .to_string(),
+            access_token,
+            state_guard.refresh_lock.clone(),
             config.base_url(),
             config.identity_url(),
         )
     };
 
-    match f(access_token).await {
+    match f(access_token.clone()).await {
         Ok(res) => Ok(res),
         Err(e) if is_unauthorized(&e) => {
             log::info!("access token expired, refreshing...");
+
+            // Serializes refresh: Vaultwarden rotates the refresh token on use,
+            // so two concurrent 401s racing `exchange_refresh_token` with the
+            // same (single-use) token would leave the loser's response
+            // clobbering good tokens with a rejection or a stale pair (`[F2-4]`).
+            let _refresh_guard = refresh_lock.lock().await;
+
+            // Someone else may have already refreshed while we waited for the
+            // lock. If the access token in state has moved on from the one we
+            // just tried, retry with it instead of refreshing a second time.
+            let refreshed_access_token = {
+                let state_guard = state.lock().await;
+                state_guard
+                    .db
+                    .as_ref()
+                    .and_then(|db| db.access_token.as_ref())
+                    .map(|t| t.expose().to_string())
+            };
+            if let Some(current) = refreshed_access_token {
+                if current != access_token {
+                    log::info!("token already refreshed by a concurrent request, retrying with it");
+                    return f(current).await.map_err(|e| e.to_string());
+                }
+            }
+
+            let refresh_token = {
+                let state_guard = state.lock().await;
+                state_guard
+                    .db
+                    .as_ref()
+                    .and_then(|db| db.refresh_token.as_ref())
+                    .map(|t| t.expose().to_string())
+                    .ok_or("no refresh token")?
+            };
+
             let client = cosmic_bwarden_core::api::Client::new(&base_url, &identity_url);
             match client.exchange_refresh_token(&refresh_token).await {
                 Ok((new_at, new_rt, _new_key)) => {
