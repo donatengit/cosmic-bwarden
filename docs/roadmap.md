@@ -60,9 +60,10 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
       update_cipher}`, and `vault::unlock` take 8–15 positional args (clippy
       `too_many_arguments`, currently `#[allow]`'d with a pointer here). Introduce
       `AddCardParams`-style structs at the wire/handler boundary; removes the allows.
-- [ ] **KDF off the runtime thread** `[A3-1]` — the agent is `current_thread`; Argon2id
-      runs inline under the state lock, briefly blocking all IPC on unlock/reprompt. Wrap
-      in `spawn_blocking` once Phase 6 sets the latency budget.
+- [x] ~~KDF off the runtime thread~~ `[A3-1]` — *closed by Phase 6 measurement*
+      (docs/review/06_performance.md): worst-case KDF stall is ~131 ms (Argon2id
+      defaults, release), once per unlock/reprompt — acceptable on the current-thread
+      runtime. Revisit only if the runtime goes multi-thread for other reasons.
 - [ ] **Upgrade libcosmic to recent master** — the workspace is locked to commit
       `8fa6a01d`; current master (`ee5d9659`+) has API changes that break the UI build
       (~5 errors seen when the pin floated during the Phase 3 dedup attempt: E0061

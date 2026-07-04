@@ -9,6 +9,7 @@ pub mod error;
 pub mod identity;
 pub mod json;
 pub mod locked;
+mod perf;
 pub mod protocol;
 pub mod tests;
 pub mod vault;
