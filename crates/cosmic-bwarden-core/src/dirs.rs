@@ -91,6 +91,26 @@ pub fn tpm_hash_blob_file(server: &str, email: &str) -> std::path::PathBuf {
     data_dir().join(format!("tpm_sealed_hash_{}.bin", &hex[..16]))
 }
 
+/// Path for the device-global (not per-account) password-generator "last used
+/// settings" file. Must be readable/writable with zero accounts configured,
+/// so it lives alongside `device_id_file()` rather than under any account hash.
+pub fn generator_settings_file() -> std::path::PathBuf {
+    data_dir().join("generator_settings.json")
+}
+
+/// Path for the device-global symmetric key used to encrypt the password
+/// history file at rest. Generated once on first use; see `generator_history_file`.
+pub fn generator_key_file() -> std::path::PathBuf {
+    data_dir().join("generator_key.bin")
+}
+
+/// Path for the device-global, 7-day password-generation history (encrypted
+/// at rest using `generator_key_file`'s key). Not per-account: generation
+/// works without any account configured.
+pub fn generator_history_file() -> std::path::PathBuf {
+    data_dir().join("generator_history.bin")
+}
+
 pub fn socket_file() -> std::path::PathBuf {
     std::env::var_os("COSMIC_BWARDEN_SOCKET")
         .map(PathBuf::from)
@@ -125,7 +145,7 @@ fn runtime_dir() -> std::path::PathBuf {
             format!(
                 "{}/{}-{}",
                 std::env::temp_dir().to_string_lossy(),
-                &profile(),
+                profile(),
                 rustix::process::getuid().as_raw()
             )
             .into()

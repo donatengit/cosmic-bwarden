@@ -45,10 +45,20 @@ fn sidebar(
     }
 }
 
+/// Press the segmented-control tab corresponding to `filter`, as the sidebar
+/// view would (tabs are order-matched to `filter_to_idx`).
+fn activate_filter_tab(app: &mut CosmicBWardenApp, filter: Option<EntryType>) {
+    let idx = crate::view::vault::sidebar::filter_to_idx(&filter) as u16;
+    let entity = app.filter_model.entity_at(idx).expect("filter tab exists");
+    let _ = app.update(Message::FilterTabActivated(entity));
+}
+
 #[test]
 fn test_search_changed_filters_locally_no_ipc() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
     let initial_search_id = app.search_id;
     app.all_entries = vec![
         sidebar("1", "GitHub", Some("alice"), EntryType::Login, false),
@@ -76,18 +86,20 @@ fn test_search_changed_filters_locally_no_ipc() {
 
 #[test]
 fn test_search_changed_matches_username() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
-    app.all_entries = vec![
-        sidebar(
-            "1",
-            "GitHub",
-            Some("alice@example.com"),
-            EntryType::Login,
-            false,
-        ),
-        sidebar("2", "AWS", Some("bob@corp.com"), EntryType::Login, false),
-    ];
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        all_entries: vec![
+            sidebar(
+                "1",
+                "GitHub",
+                Some("alice@example.com"),
+                EntryType::Login,
+                false,
+            ),
+            sidebar("2", "AWS", Some("bob@corp.com"), EntryType::Login, false),
+        ],
+        ..Default::default()
+    };
 
     let _ = app.update(Message::SearchChanged("alice".to_string()));
 
@@ -112,9 +124,11 @@ fn test_search_changed_empty_query_shows_all() {
 }
 
 #[test]
-fn test_filter_type_changed_filters_locally_no_ipc() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
+fn test_filter_tab_filters_locally_no_ipc() {
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
     let initial_search_id = app.search_id;
     app.all_entries = vec![
         sidebar("1", "GitHub", None, EntryType::Login, false),
@@ -122,17 +136,17 @@ fn test_filter_type_changed_filters_locally_no_ipc() {
         sidebar("3", "Server Key", None, EntryType::SshKey, false),
     ];
 
-    let _ = app.update(Message::FilterTypeChanged(Some(EntryType::SshKey)));
+    activate_filter_tab(&mut app, Some(EntryType::SshKey));
 
     assert_eq!(app.filter_type, Some(EntryType::SshKey));
     assert_eq!(
         app.search_id, initial_search_id,
-        "FilterTypeChanged must NOT trigger IPC fetch"
+        "FilterTabActivated must NOT trigger IPC fetch"
     );
     assert_eq!(app.entries.len(), 1);
     assert_eq!(app.entries[0].id, "3");
 
-    let _ = app.update(Message::FilterTypeChanged(None));
+    activate_filter_tab(&mut app, None);
     assert_eq!(
         app.entries.len(),
         3,
@@ -142,20 +156,22 @@ fn test_filter_type_changed_filters_locally_no_ipc() {
 
 #[test]
 fn test_vault_filtering_and_searching() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
-    app.all_entries = vec![
-        sidebar("1", "GitHub", Some("alice"), EntryType::Login, false),
-        sidebar("2", "AWS Console", Some("bob"), EntryType::Login, false),
-        sidebar("3", "Server Key", None, EntryType::SshKey, false),
-    ];
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        all_entries: vec![
+            sidebar("1", "GitHub", Some("alice"), EntryType::Login, false),
+            sidebar("2", "AWS Console", Some("bob"), EntryType::Login, false),
+            sidebar("3", "Server Key", None, EntryType::SshKey, false),
+        ],
+        ..Default::default()
+    };
 
     let _ = app.update(Message::SearchChanged("git".to_string()));
     assert_eq!(app.search_query, "git");
     assert_eq!(app.entries.len(), 1);
     assert_eq!(app.entries[0].id, "1");
 
-    let _ = app.update(Message::FilterTypeChanged(Some(EntryType::SshKey)));
+    activate_filter_tab(&mut app, Some(EntryType::SshKey));
     assert_eq!(app.filter_type, Some(EntryType::SshKey));
     // "git" query + SSH filter → nothing matches
     assert_eq!(app.entries.len(), 0);
@@ -220,20 +236,22 @@ fn test_entry_field_editing() {
 }
 
 #[test]
-fn test_filter_type_changed_maps_to_entry_type() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
+fn test_filter_tab_maps_to_entry_type() {
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
 
-    let _ = app.update(Message::FilterTypeChanged(Some(EntryType::Login)));
+    activate_filter_tab(&mut app, Some(EntryType::Login));
     assert_eq!(app.filter_type, Some(EntryType::Login));
 
-    let _ = app.update(Message::FilterTypeChanged(Some(EntryType::SecureNote)));
+    activate_filter_tab(&mut app, Some(EntryType::SecureNote));
     assert_eq!(app.filter_type, Some(EntryType::SecureNote));
 
-    let _ = app.update(Message::FilterTypeChanged(Some(EntryType::SshKey)));
+    activate_filter_tab(&mut app, Some(EntryType::SshKey));
     assert_eq!(app.filter_type, Some(EntryType::SshKey));
 
-    let _ = app.update(Message::FilterTypeChanged(None));
+    activate_filter_tab(&mut app, None);
     assert_eq!(app.filter_type, None);
 }
 
@@ -280,10 +298,12 @@ fn test_reprompt_password_reveal_toggle() {
 
 #[test]
 fn test_cancel_reprompt_resets_reveal() {
-    let mut app = CosmicBWardenApp::default();
-    app.show_reprompt = Some("1".to_string());
-    app.reprompt_password = "secret".to_string();
-    app.reprompt_password_revealed = true;
+    let mut app = CosmicBWardenApp {
+        show_reprompt: Some("1".to_string()),
+        reprompt_password: "secret".to_string(),
+        reprompt_password_revealed: true,
+        ..Default::default()
+    };
 
     let _ = app.update(Message::CancelReprompt);
 
@@ -378,4 +398,67 @@ fn test_stale_readback_does_not_touch_a_newer_copy() {
     ));
 
     assert_eq!(app.clipboard_pending_clear.as_deref(), Some("second"));
+}
+
+/// The split of the vault window's two-pane grid.
+fn vault_split(app: &CosmicBWardenApp) -> widget::pane_grid::Split {
+    *app.vault_panes
+        .layout()
+        .splits()
+        .next()
+        .expect("vault pane grid has a split")
+}
+
+#[test]
+fn test_first_window_size_snaps_sidebar_to_min_width() {
+    let mut app = CosmicBWardenApp::default();
+
+    app.vault_window_resized(1000.0);
+
+    let expected = crate::app::state::SIDEBAR_MIN_WIDTH / 1000.0;
+    assert!((app.sidebar_ratio - expected).abs() < f32::EPSILON);
+}
+
+#[test]
+fn test_pane_drag_clamps_to_min_width() {
+    let mut app = CosmicBWardenApp::default();
+    app.vault_window_resized(1000.0);
+
+    let _ = app.update(Message::PaneResized(widget::pane_grid::ResizeEvent {
+        split: vault_split(&app),
+        ratio: 0.05,
+    }));
+
+    let min = crate::app::state::sidebar_min_ratio(1000.0);
+    assert!((app.sidebar_ratio - min).abs() < f32::EPSILON);
+}
+
+#[test]
+fn test_pane_drag_clamps_to_max_ratio() {
+    let mut app = CosmicBWardenApp::default();
+    app.vault_window_resized(1000.0);
+
+    let _ = app.update(Message::PaneResized(widget::pane_grid::ResizeEvent {
+        split: vault_split(&app),
+        ratio: 0.95,
+    }));
+
+    assert!((app.sidebar_ratio - crate::app::state::SIDEBAR_MAX_RATIO).abs() < f32::EPSILON);
+}
+
+#[test]
+fn test_window_shrink_keeps_sidebar_at_min_width() {
+    let mut app = CosmicBWardenApp::default();
+    app.vault_window_resized(1000.0);
+    // Widen the sidebar to 40% (= 400px), then shrink the window so 40%
+    // would fall below the pixel minimum.
+    let _ = app.update(Message::PaneResized(widget::pane_grid::ResizeEvent {
+        split: vault_split(&app),
+        ratio: 0.4,
+    }));
+
+    app.vault_window_resized(700.0);
+
+    let min = crate::app::state::sidebar_min_ratio(700.0);
+    assert!((app.sidebar_ratio - min).abs() < f32::EPSILON);
 }

@@ -155,6 +155,18 @@ button:hover {
     padding: 20px;
 }
 
+/* Caption above the list when it shows favourites (toggle or fallback). */
+.list-caption {
+    color: var(--text-muted);
+    font-size: 0.8em;
+    padding: 6px 10px 2px;
+}
+
+#fav-btn.active {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
 /* Forms and Details */
 .form-group {
     margin-bottom: 10px;

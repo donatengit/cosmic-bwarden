@@ -78,6 +78,8 @@ async fn test_all_modifications_survive_forced_sync() -> Result<()> {
                 ty: Some(cosmic_bwarden_core::api::FieldType::Text),
                 linked_id: None,
             }],
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
     assert!(matches!(res, Response::Ack), "AddEntry failed: {:?}", res);

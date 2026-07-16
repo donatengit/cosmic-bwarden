@@ -1,4 +1,5 @@
 mod auth;
+mod generator;
 mod subscription_handler;
 mod vault;
 
@@ -52,12 +53,20 @@ async fn dispatch(action: Action, state: &Arc<Mutex<State>>) -> Response {
         | Action::AddSecureNote { .. }
         | Action::AddCard { .. }
         | Action::AddIdentity { .. }
-        | Action::AddSshKey { .. } => vault::handle_request(action, state).await,
+        | Action::AddSshKey { .. }
+        | Action::CheckLoginMatch { .. }
+        | Action::UpdateLoginPassword { .. } => vault::handle_request(action, state).await,
         // Subscription / control actions
         Action::Subscribe
         | Action::Quit
         | Action::SetPendingEntry { .. }
         | Action::RequestUnlock => subscription_handler::handle_request(action, state).await,
+        // Password generator: deliberately independent of vault-lock state
+        // (works locked, and even with no account configured).
+        Action::GeneratePassword { .. }
+        | Action::GetGeneratorSettings
+        | Action::GetPasswordHistory
+        | Action::DeleteGeneratedPassword { .. } => generator::handle_request(action, state).await,
         // Intercepted in main.rs before reaching dispatch
         Action::UpdateLockTimeout { .. } => Response::Ack,
     }

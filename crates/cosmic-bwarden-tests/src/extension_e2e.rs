@@ -10,7 +10,7 @@ use zip::write::SimpleFileOptions;
 struct BrowserTest {
     driver: WebDriver,
     geckodriver: std::process::Child,
-    test_home: tempfile::TempDir,
+    _test_home: tempfile::TempDir,
     extension_url: String,
 }
 
@@ -172,7 +172,7 @@ impl BrowserTest {
         Ok(Self {
             driver,
             geckodriver,
-            test_home,
+            _test_home: test_home,
             extension_url,
         })
     }

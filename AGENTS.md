@@ -12,6 +12,7 @@ Start here, then go deeper as needed:
 | [`docs/testing.md`](docs/testing.md) | Complexity-ordered testing strategy and what each test suite covers |
 | [`docs/ssh-agent.md`](docs/ssh-agent.md) | SSH agent protocol implementation and socket paths |
 | [`docs/browser_integration.md`](docs/browser_integration.md) | Native browser extension architecture and IPC protocol |
+| [`docs/public_suffix_list.md`](docs/public_suffix_list.md) | Domain-matching rules (exact / boundary-subdomain / PSL eTLD+1) and the `public_suffix_list` feature |
 | [`docs/configurable_paths.md`](docs/configurable_paths.md) | Socket, config, and SSH path overrides; multi-instance isolation |
 | [`docs/cosmic_integration.md`](docs/cosmic_integration.md) | COSMIC panel applet registration and metadata |
 | [`docs/implementation.md`](docs/implementation.md) | Crypto, vault sync, and data model internals |
@@ -26,7 +27,7 @@ Start here, then go deeper as needed:
 ## Versioning
 
 - **Build version**: `YYYY.MM-N-<git_id>` generated in `core/build.rs`. Reused across crates via a 30-second `target/build_version.txt` cache.
-- **Protocol version**: Currently identical to build version. `Response::Version` always includes both `version` and `protocol_version` fields.
+- **Protocol version**: Independent of the build version — `cosmic_bwarden_core::PROTOCOL_VERSION`, a small integer string bumped ONLY on breaking wire-protocol changes (adding a field to a postcard-encoded `Action`/`Response` variant counts). `Response::Version` always includes both `version` and `protocol_version` fields.
 - **Compatibility check**: Pure function `check_protocol_compatibility()` in the CLI crate compares local version against agent's `protocol_version`. Unit-tested for both match and mismatch scenarios.
 - **Adding a version subcommand**: Always add `Commands::Version` to the CLI's enum, route it to the auth handler, and include the `check_protocol_compatibility()` call. Update `preprocess_args` if the new command name conflicts with type keywords.
 - **Breaking protocol changes**: Bump the `protocol_version` in `Response::Version` by updating `check_protocol_compatibility` expectations if the protocol surface changes incompatibly.
@@ -120,6 +121,18 @@ Seals the 64-byte vault key (`enc_key_expanded ‖ mac_key_expanded`) in a TPM2 
 - **Graceful degradation**: if TPM hardware is absent at runtime, `is_available()` returns false, UI hides PIN controls
 - **Smoke tests**: `cargo test -p cosmic-bwarden-tests --features tpm-smoke -- tpm --test-threads=1` (requires `swtpm` in PATH; auto-skip when absent)
 
+## Password Generator
+
+Charset-based generation, "last used settings", and a 7-day local history — all agent-side (`crates/cosmic-bwarden-agent/src/handler/generator/`), deliberately its own dispatch group in `handler.rs` (not folded into `handler/vault/`), since generation must work with the vault **locked** and even with **no account configured at all**.
+
+- **Protocol**: `Action::GeneratePassword { settings: Option<GeneratorSettings> }` → `Response::GeneratedPassword { password }`. `Some` persists the settings as the new device-wide "last used" and generates with them; `None` reuses whatever is currently persisted. Every call appends to history. `Action::GetGeneratorSettings` / `Action::GetPasswordHistory` are the read-only counterparts.
+- **Algorithm**: `handler/generator/algorithm.rs` — forces one char from each selected charset, fills the rest from the union, shuffles. **Must use `rand::rngs::OsRng`** (via `rand::TryRngCore::unwrap_err()`, since `OsRng` is fallible in rand 0.9) — never `rand::rng()`/`ThreadRng`, and never the seeded `StdRng` used elsewhere in this codebase for deterministic fuzz tests.
+- **Settings storage**: `crates/cosmic-bwarden-core/src/generator_settings.rs` — plain JSON at `dirs::generator_settings_file()` (`<data_dir>/generator_settings.json`), device-global (no server/email in the path), *not* folded into `CosmicBWardenConfig` (which is account-shaped and unavailable pre-login).
+- **History storage**: `handler/generator/storage.rs` — postcard-encoded `Vec<{created_at, ciphertext}>` at `dirs::generator_history_file()` (`<data_dir>/generator_history.bin`), atomic tmp+rename+0600 (same pattern as `db::persistence::Db::save`). Pruned to 7 days on every read and write — no background sweep.
+- **At-rest encryption**: reuses `cipherstring.rs`'s existing `CipherString::encrypt_symmetric`/`decrypt_symmetric` (AES-256-CBC + HMAC-SHA256) with a **locally-generated, device-global key** (`dirs::generator_key_file()`, `<data_dir>/generator_key.bin`, 0600) — not derived from any account's master password, since generation must work standalone. **Threat model**: protects against a different local user, a stray backup, or misconfigured permissions elsewhere reading the file directly. Does **not** protect against another process running as the same local user (the key sits unguarded next to the ciphertext by design) — the same protection level as the vault `Db` JSON cache's 0600-only model, not as strong as anything gated by the master password.
+- **Surfaces sharing this**: desktop UI pane (`view/vault/generator.rs`), COSMIC applet quick-gen entry (`view/applet/menu.rs`, works while locked), `cosmic-bwarden-cli generate` (`commands/generator.rs`), browser extension context menu + inline field icon (`content-generate.js`, `docs/browser_integration.md`).
+- **Full design**: `docs/password_generator_plan.md`.
+
 ## Browser Extension
 
 Source lives in `browser-extension/`. Plain vanilla JS — no bundler, no framework.
@@ -127,7 +140,11 @@ Source lives in `browser-extension/`. Plain vanilla JS — no bundler, no framew
 | File | Responsibility |
 |---|---|
 | `background.js` | Native messaging queue, badge count, theme-aware icon switching |
+| `background-save.js` | Save-prompt state machine: per-tab pending credentials, save/update decision via `CheckLoginMatch` |
 | `content.js` | Form fill injected into pages |
+| `content-heuristics.js` | Shared pure DOM helpers (username-field detection, submitted-credential capture); loaded first |
+| `content-submit.js` | Login-form submit detection → `LOGIN_SUBMITTED` to background |
+| `content-bar.js` | In-page "Save/Update password?" notification bar (open shadow root; never receives the password) |
 | `popup/popup.js` | View management, list rendering, fill, domain helpers |
 | `popup/popup-detail.js` | Detail view, secret reveal/copy (on-demand via `GetPassword`) |
 | `popup/popup-edit.js` | Edit/add form, field rendering |
@@ -136,6 +153,8 @@ Source lives in `browser-extension/`. Plain vanilla JS — no bundler, no framew
 **Icons**: `browser-extension/icons` is a symlink to the repo-root `icons/` folder (black*.png for light theme, white*.png for dark). `zip -r` dereferences symlinks, so `pack-extension` embeds them correctly.
 
 **Security invariant**: The detail view uses `GetEntryMeta` (no secrets). Secrets are fetched only on explicit reveal/copy (`GetPassword`/`GetTotp`) or fill (`GetEntry`). Never hold plaintext passwords in JS state from passive browsing.
+
+**Save prompt**: credentials captured at user-initiated form submit are the one exception — they live transiently in the background per-tab pending map (cleared on action/90 s TTL/tab close, never persisted or logged). "Does this login exist / did the password change" is decided inside the agent (`CheckLoginMatch`); the extension never fetches a stored secret to compare, and `SHOW_SAVE_BAR` messages to the page never carry the password. Updates go through `UpdateLoginPassword { id, password }` — never echo a `GetEntryMeta` result through `UpdateEntry`, which wipes notes (redaction sets them `None` and the merge treats `None` notes as a legitimate clear). See `docs/browser_integration.md`.
 
 ## Justfile (task runner)
 

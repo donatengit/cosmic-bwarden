@@ -41,7 +41,7 @@ The project follows a modular Rust-based architecture split into specialized cra
 ## "Game Changing" Improvements
 
 ### 🚀 Performance & UI
-- **Decryption Caching**: The agent caches decrypted names/usernames, enabling instant search even in huge vaults.
+- **Decryption Caching**: The agent caches decrypted names/usernames — plus each login's URI hosts for tab-domain matching (`CachedSidebarEntry.hosts`) — enabling instant search even in huge vaults. Plaintext hosts in unlocked-agent memory are deliberate: same sensitivity class as the cached names (see `docs/public_suffix_list.md`).
 - **Multi-Window Flow**: Distinct compact `Auth` window vs full `Main` window workspace.
 - **Intelligent Focus**: Prevents window fragmentation by focusing existing windows using `window::gain_focus`.
 - **Compact UX**: Uses `autosize` and `Length::Shrink` for a professional, focused feel on sensitive dialogs.
@@ -51,12 +51,19 @@ The project follows a modular Rust-based architecture split into specialized cra
 - **Safe Persistence**: `access_token` and `refresh_token` are marked `#[serde(skip)]` in `Db` to prevent plaintext leakage in JSON cache. Keyring persistence via `oo7` is the authorized long-term storage method.
 - **Granular Reprompts**: Full enforcement of Master Password reprompting for sensitive items.
 - **Reactive State**: The UI uses long-lived `Action::Subscribe` streams for agent-pushed events (`Locked`, `Unlocked`, `VaultChanged`) instead of polling.
+- **Safe Domain Matching**: Entry-to-page matching (popup suggestions, badge, save prompt) uses exact / label-boundary-subdomain / PSL eTLD+1 rules in `cosmic_bwarden_core::domain` — never label-stripping of the page host, so `victim.co.uk` can never surface other `.co.uk` entries. Rationale and feature gate in `docs/public_suffix_list.md`.
 
 ### 🔄 Data Integrity
 - **Real-Time CRUD Sync**: Every Add, Update, and Delete operation is immediately synchronized with the server.
 - **Manual Sync**: Dedicated Sync button for on-demand refreshes.
 
 ## Key Workflows
+
+### Browser Save Prompt
+On login-form submit, the extension captures the credentials, holds them in an in-memory per-tab map in the background script, and — once the post-login page settles — asks the agent (`CheckLoginMatch`) whether to offer an in-page **Save** (new Login with the site's origin URI, via the extended `AddEntry`) or **Update** (`UpdateLoginPassword`) bar. Invariants: the password comparison happens inside the agent (stored secrets never transit to JS), messages to the page never carry the password, and pending credentials are never persisted or logged. Details in `docs/browser_integration.md`.
+
+### Password Generator
+Charset-based generation, "last used settings", and a device-global 7-day history all live in the agent (`handler/generator/`), not in any one client — this is what lets the desktop pane, applet quick-gen, CLI (`generate` subcommand), and browser extension (context menu + inline field icon) share one set of settings and one history. `Action::GeneratePassword { settings: Option<GeneratorSettings> }` is the single request every surface uses: `Some` persists new settings and generates with them (the desktop pane's Generate button); `None` reuses whatever is currently persisted (applet/CLI-bare/browser extension). Deliberately independent of vault-lock state — no unlock, and no account, is required to generate. The 7-day history is encrypted at rest by reusing the existing `cipherstring.rs` symmetric cipher with a locally-generated, device-global key (not derived from any master password) — see `AGENTS.md`'s "Password Generator" section for the exact threat model this does and doesn't cover. Full design in `docs/password_generator_plan.md`.
 
 ### Authentication
 1. **Registration/Login**: Communicates with Bitwarden/Vaultwarden APIs.

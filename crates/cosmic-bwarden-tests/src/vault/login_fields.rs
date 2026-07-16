@@ -42,6 +42,8 @@ async fn test_login_with_uris() -> Result<()> {
             password: Some("uripass".to_string().into()),
             notes: None,
             fields: Vec::new(),
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
 
@@ -52,6 +54,7 @@ async fn test_login_with_uris() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
@@ -159,6 +162,8 @@ async fn test_custom_fields_all_types() -> Result<()> {
                     linked_id: None,
                 },
             ],
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
 
@@ -169,6 +174,7 @@ async fn test_custom_fields_all_types() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
@@ -231,6 +237,8 @@ async fn test_get_totp_from_login_entry() -> Result<()> {
             password: Some("totppass".to_string().into()),
             notes: None,
             fields: Vec::new(),
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
 
@@ -241,6 +249,7 @@ async fn test_get_totp_from_login_entry() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {

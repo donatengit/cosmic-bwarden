@@ -91,6 +91,8 @@ async fn test_reprompt() -> Result<()> {
             password: Some("secret".to_string().into()),
             notes: None,
             fields: Vec::new(),
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
     client.send(Action::Sync).await?;
@@ -232,9 +234,9 @@ async fn test_agent_events() -> Result<()> {
     use std::time::Duration;
 
     let ssh_sock = &env.ssh_socket_path;
-    wait_for_socket(&ssh_sock, Duration::from_secs(5)).await?;
+    wait_for_socket(ssh_sock, Duration::from_secs(5)).await?;
 
-    let _ = run_ssh_add_list(&ssh_sock)?;
+    let _ = run_ssh_add_list(ssh_sock)?;
 
     stream.read_exact(&mut len_buf).await?;
     let len = u32::from_le_bytes(len_buf) as usize;
@@ -249,7 +251,7 @@ async fn test_agent_events() -> Result<()> {
 
     // A second ssh-agent request while still locked should be debounced:
     // no second UnlockRequested for this lock period.
-    let _ = run_ssh_add_list(&ssh_sock)?;
+    let _ = run_ssh_add_list(ssh_sock)?;
 
     let mut len_buf2 = [0u8; 4];
     let res = tokio::time::timeout(Duration::from_secs(2), stream.read_exact(&mut len_buf2)).await;
@@ -292,13 +294,11 @@ async fn test_token_leakage() -> Result<()> {
     // Find the DB file in the isolated cache directory (search recursively)
     let mut db_path = None;
     for _ in 0..10 {
-        for entry in walkdir::WalkDir::new(&env.cache_home) {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
-                    db_path = Some(path.to_path_buf());
-                    break;
-                }
+        for entry in walkdir::WalkDir::new(&env.cache_home).into_iter().flatten() {
+            let path = entry.path();
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
+                db_path = Some(path.to_path_buf());
+                break;
             }
         }
         if db_path.is_some() {

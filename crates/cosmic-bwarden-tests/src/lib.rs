@@ -17,6 +17,8 @@ mod custom_fields_ui;
 #[cfg(all(test, feature = "browser-e2e"))]
 mod extension_e2e;
 #[cfg(test)]
+mod generator;
+#[cfg(test)]
 mod ipc_hardening;
 #[cfg(test)]
 mod paths;

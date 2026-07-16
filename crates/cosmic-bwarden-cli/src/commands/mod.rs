@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod generator;
 pub mod vault;
 
 use crate::args::{Cli, Commands};
@@ -30,5 +31,7 @@ pub async fn run(
         | Commands::Edit { .. }
         | Commands::AddNote { .. }
         | Commands::AddSshKey { .. } => vault::handle_command(cli, client, entry_type).await,
+
+        Commands::Generate { .. } => generator::handle_command(cli, client).await,
     }
 }

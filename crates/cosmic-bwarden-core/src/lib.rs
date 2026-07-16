@@ -5,13 +5,16 @@ pub mod cipherstring;
 pub mod config;
 pub mod db;
 pub mod dirs;
+pub mod domain;
 pub mod error;
+pub mod generator_settings;
 pub mod identity;
 pub mod json;
 pub mod locked;
 mod perf;
 pub mod protocol;
-pub mod tests;
+#[cfg(test)]
+mod tests;
 pub mod vault;
 
 pub fn version() -> &'static str {
@@ -24,7 +27,7 @@ pub fn version() -> &'static str {
 /// plus a git id, so comparing build versions declared every rebuild
 /// "incompatible" (observed as E2E failures from stale-binary skew —
 /// docs/review/00_ground_truth.md F9, decision in 07_packaging.md).
-pub const PROTOCOL_VERSION: &str = "1";
+pub const PROTOCOL_VERSION: &str = "2";
 
 /// Minimum length for a TPM-unlock PIN. Single source of truth for the agent
 /// (authoritative validation), the UI (captions and submit validation), and

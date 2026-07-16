@@ -16,17 +16,36 @@ use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
 use zeroize::Zeroize;
 
+/// Which unlock field the applet popup should autofocus: the PIN field when
+/// TPM PIN unlock is active, the master password field otherwise. Pulled out
+/// as a pure function so the decision is unit-testable independent of the
+/// opaque `Task` returned by `text_input::focus`.
+pub(crate) fn unlock_focus_id(show_pin_unlock: bool) -> cosmic::widget::Id {
+    if show_pin_unlock {
+        unlock::pin_input_id()
+    } else {
+        unlock::password_input_id()
+    }
+}
+
 impl CosmicBWardenApp {
     pub fn update_applet(&mut self, message: Message) -> Option<Task<Message>> {
         match message {
             Message::AppletIconClicked(offset, bounds) => {
-                if let Some(id) = self.applet_popup {
+                // `take()` eagerly instead of waiting for `WindowClosed`: if
+                // the compositor dismissed the popup without a close event
+                // reaching us, a stale `Some(id)` here would swallow every
+                // subsequent click (each one "closing" a dead popup).
+                if let Some(id) = self.applet_popup.take() {
+                    self.windows.remove(&id);
+                    tracing::info!(?id, "applet icon clicked: closing popup");
                     return Some(Task::done(cosmic::Action::Cosmic(
                         cosmic::app::Action::Surface(cosmic::surface::action::destroy_popup(id)),
                     )));
                 }
 
-                Some(self.open_applet_popup_task(Some((offset, bounds))))
+                tracing::info!("applet icon clicked: opening popup");
+                Some(self.open_applet_popup_task((offset, bounds)))
             }
             Message::Surface(action) => Some(Task::done(cosmic::Action::Cosmic(
                 cosmic::app::Action::Surface(action),
@@ -258,6 +277,30 @@ impl CosmicBWardenApp {
                     Some(Task::none())
                 }
             },
+            Message::AppletGeneratePasswordRequested => Some(Task::perform(
+                async move {
+                    let agent = AgentClient::new();
+                    // `settings: None` reuses whatever was last saved by any
+                    // surface (desktop pane, CLI, browser extension) — the
+                    // applet quick-gen entry never carries its own settings.
+                    match agent
+                        .send(AgentAction::GeneratePassword { settings: None })
+                        .await
+                    {
+                        Ok(Response::GeneratedPassword { password }) => Ok(password),
+                        Ok(Response::Error { message }) => Err(message),
+                        _ => Err("unexpected response".to_string()),
+                    }
+                },
+                |res| Action::App(Message::AppletGeneratePasswordReceived(res)),
+            )),
+            Message::AppletGeneratePasswordReceived(res) => match res {
+                Ok(pw) => Some(self.applet_copy_to_clipboard(pw)),
+                Err(e) => {
+                    self.applet_error = Some(e);
+                    Some(Task::none())
+                }
+            },
 
             // Inline reprompt
             Message::AppletRepromptPasswordChanged(p) => {
@@ -474,16 +517,17 @@ impl CosmicBWardenApp {
     }
 
     /// Resets transient popup state and builds the task that opens the
-    /// applet popup, focused on the unlock password field.
+    /// applet popup, focused on whichever unlock field is actually shown
+    /// (PIN when TPM PIN unlock is active, master password otherwise).
     ///
-    /// `anchor`, when `Some((offset, bounds))`, positions the popup next to
-    /// the clicked applet icon (as `AppletIconClicked` does). When `None`
-    /// (e.g. opened in response to `Event::UnlockRequested`),
-    /// `get_popup_settings`'s default `anchor_rect` is used, which anchors
-    /// next to the applet's own panel icon.
+    /// `(offset, bounds)` come from the icon click and position the popup
+    /// next to the clicked applet icon. Only ever called from a click:
+    /// cosmic-panel drops popups created while no panel surface is
+    /// hovered/focused (see the note in `update_lifecycle`'s `PinRequested`),
+    /// so opening from anywhere else can never map a popup.
     pub(crate) fn open_applet_popup_task(
         &mut self,
-        anchor: Option<(cosmic::iced::Vector, cosmic::iced::Rectangle)>,
+        anchor: (cosmic::iced::Vector, cosmic::iced::Rectangle),
     ) -> Task<Message> {
         // Reset only truly transient state; preserve search query and
         // favourites-filter so the popup re-opens with the last search intact.
@@ -493,21 +537,10 @@ impl CosmicBWardenApp {
         self.applet_reprompt_password.zeroize();
         self.applet_reprompt_password_revealed = false;
         self.applet_error = None;
-        self.applet_search_id += 1;
-
-        let only_pinned = applet_search::effective_only_pinned(
-            &self.applet_search_query,
-            self.applet_search_only_favourites,
-        );
-        let query = if self.applet_search_query.trim().is_empty() {
-            None
-        } else {
-            Some(self.applet_search_query.clone())
-        };
 
         let mut tasks = Vec::new();
         tasks.push(check_protocol_version());
-        tasks.push(text_input::focus(unlock::password_input_id()));
+        tasks.push(text_input::focus(unlock_focus_id(self.show_pin_unlock)));
         tasks.push(Task::perform(
             async {
                 let agent = AgentClient::new();
@@ -526,17 +559,12 @@ impl CosmicBWardenApp {
             |res| cosmic::Action::App(Message::ConfigReceived(res)),
         ));
 
-        tasks.push(fetch_applet_search(
-            self.applet_search_id,
-            query,
-            only_pinned,
-        ));
-
         let popup_task = Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(
             cosmic::surface::action::app_popup::<CosmicBWardenApp>(
                 |_| Default::default(),
                 move |state: &mut CosmicBWardenApp| {
                     let new_id = window::Id::unique();
+                    tracing::info!(?new_id, "creating applet popup surface");
                     state.applet_popup = Some(new_id);
                     state
                         .windows
@@ -548,14 +576,13 @@ impl CosmicBWardenApp {
                         None,
                         None,
                     );
-                    if let Some((offset, bounds)) = anchor {
-                        popup_settings.positioner.anchor_rect = cosmic::iced::Rectangle {
-                            x: (bounds.x - offset.x) as i32,
-                            y: (bounds.y - offset.y) as i32,
-                            width: bounds.width as i32,
-                            height: bounds.height as i32,
-                        };
-                    }
+                    let (offset, bounds) = anchor;
+                    popup_settings.positioner.anchor_rect = cosmic::iced::Rectangle {
+                        x: (bounds.x - offset.x) as i32,
+                        y: (bounds.y - offset.y) as i32,
+                        width: bounds.width as i32,
+                        height: bounds.height as i32,
+                    };
                     popup_settings
                 },
                 None,

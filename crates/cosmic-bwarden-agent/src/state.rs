@@ -6,6 +6,17 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex as AsyncMutex;
 
+/// A sidebar entry plus the normalized hosts it is bound to, for domain
+/// matching without per-query decryption. Hosts come from the login's URIs
+/// (skipping match type `Never`), with a hostname-shaped name as fallback for
+/// legacy entries created without URIs. Plaintext hosts sit in unlocked-agent
+/// memory alongside the plaintext names/usernames already cached here — same
+/// sensitivity class, documented in CONTEXT.md.
+pub struct CachedSidebarEntry {
+    pub entry: SidebarEntry,
+    pub hosts: Vec<String>,
+}
+
 pub struct State {
     pub keys: Option<locked::Keys>,
     pub org_keys: Option<HashMap<String, locked::Keys>>,
@@ -14,7 +25,7 @@ pub struct State {
     pub pinned_ids: HashSet<String>,
     /// Pre-built list of decrypted sidebar entries. Rebuilt on unlock and after
     /// every mutation (via sync). GetSidebarEntries just filters this in-memory.
-    pub sidebar_cache: Vec<SidebarEntry>,
+    pub sidebar_cache: Vec<CachedSidebarEntry>,
     pub pending_entry_id: Option<String>,
     pub subscribers: Vec<mpsc::UnboundedSender<cosmic_bwarden_core::protocol::Event>>,
     pub shutdown_tx: Option<mpsc::UnboundedSender<()>>,
@@ -85,8 +96,8 @@ impl State {
                     }
                 };
 
-                let (username, public_key, entry_type) = match &entry.data {
-                    EntryData::Login { username, .. } => {
+                let (username, public_key, entry_type, hosts) = match &entry.data {
+                    EntryData::Login { username, uris, .. } => {
                         let u = username.as_ref().and_then(|u| {
                             match cosmic_bwarden_core::vault::decrypt(u, effective_keys, entry.key.as_deref()) {
                                 Ok(v) => Some(v),
@@ -96,7 +107,38 @@ impl State {
                                 }
                             }
                         });
-                        (u, None, EntryType::Login)
+                        // Hosts for domain matching. URIs with match type
+                        // `Never` are excluded here so they can never surface
+                        // an entry (docs/public_suffix_list.md).
+                        let mut hosts: Vec<String> = uris
+                            .iter()
+                            .filter(|u| {
+                                u.match_type != Some(cosmic_bwarden_core::api::UriMatchType::Never)
+                            })
+                            .filter_map(|u| {
+                                match cosmic_bwarden_core::vault::decrypt(
+                                    &u.uri,
+                                    effective_keys,
+                                    entry.key.as_deref(),
+                                ) {
+                                    Ok(plain) => cosmic_bwarden_core::domain::host_from_uri(&plain),
+                                    Err(e) => {
+                                        log::warn!(
+                                            "sidebar cache: failed to decrypt uri for entry {}: {}",
+                                            entry.id,
+                                            e
+                                        );
+                                        None
+                                    }
+                                }
+                            })
+                            .collect();
+                        if hosts.is_empty() {
+                            // Legacy entries created without URIs: the save
+                            // bar's convention is name = domain.
+                            hosts.extend(cosmic_bwarden_core::domain::host_from_name(&name));
+                        }
+                        (u, None, EntryType::Login, hosts)
                     }
                     EntryData::SshKey { public_key, .. } => {
                         // Try the native sshKey.publicKey field first; fall back to a
@@ -121,20 +163,23 @@ impl State {
                                     None
                                 }
                             });
-                        (None, pk, EntryType::SshKey)
+                        (None, pk, EntryType::SshKey, Vec::new())
                     }
-                    EntryData::Card { .. } => (None, None, EntryType::Card),
-                    EntryData::Identity { .. } => (None, None, EntryType::Identity),
-                    EntryData::SecureNote => (None, None, EntryType::SecureNote),
+                    EntryData::Card { .. } => (None, None, EntryType::Card, Vec::new()),
+                    EntryData::Identity { .. } => (None, None, EntryType::Identity, Vec::new()),
+                    EntryData::SecureNote => (None, None, EntryType::SecureNote, Vec::new()),
                 };
 
-                cache.push(SidebarEntry {
-                    id: entry.id.clone(),
-                    name,
-                    username,
-                    public_key,
-                    entry_type,
-                    is_pinned: entry.favorite,
+                cache.push(CachedSidebarEntry {
+                    entry: SidebarEntry {
+                        id: entry.id.clone(),
+                        name,
+                        username,
+                        public_key,
+                        entry_type,
+                        is_pinned: entry.favorite,
+                    },
+                    hosts,
                 });
             }
             cache

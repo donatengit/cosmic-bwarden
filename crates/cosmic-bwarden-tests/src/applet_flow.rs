@@ -97,6 +97,8 @@ async fn test_lock_preserves_account_unlock_restores_entries() -> Result<()> {
             password: Some("restorepass".to_string().into()),
             notes: None,
             fields: Vec::new(),
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
     client.send(Action::Sync).await?;
@@ -123,6 +125,7 @@ async fn test_lock_preserves_account_unlock_restores_entries() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     assert!(
@@ -143,6 +146,7 @@ async fn test_lock_preserves_account_unlock_restores_entries() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {
@@ -201,6 +205,7 @@ async fn test_applet_unlock_after_lock() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: true,
+            domain: None,
         })
         .await?;
     assert!(
@@ -259,6 +264,8 @@ async fn test_favourites_only_when_query_empty() -> Result<()> {
                 password: Some(format!("pass{}", i).into()),
                 notes: None,
                 fields: Vec::new(),
+                totp: None,
+                uris: Vec::new(),
             })
             .await?;
     }
@@ -269,6 +276,7 @@ async fn test_favourites_only_when_query_empty() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     let entries = if let Response::SidebarEntries { entries } = res {
@@ -292,6 +300,7 @@ async fn test_favourites_only_when_query_empty() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: true,
+            domain: None,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {
@@ -306,6 +315,7 @@ async fn test_favourites_only_when_query_empty() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {
@@ -346,6 +356,7 @@ async fn test_ssh_public_key_in_sidebar_entries() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {
@@ -389,6 +400,7 @@ async fn test_get_password_for_secure_note() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
@@ -435,6 +447,8 @@ async fn test_get_password_reprompt_flow() -> Result<()> {
             password: Some("topsecret".to_string().into()),
             notes: None,
             fields: Vec::new(),
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
     client.send(Action::Sync).await?;

@@ -3,7 +3,9 @@ use cosmic::widget;
 use cosmic::widget::ToastId;
 use cosmic_bwarden_core::config::CosmicBWardenConfig;
 use cosmic_bwarden_core::db::Entry;
-use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
+use cosmic_bwarden_core::protocol::{
+    EntryType, GeneratorHistoryEntry, GeneratorSettings, SidebarEntry,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum View {
@@ -12,6 +14,7 @@ pub enum View {
     Unlock,
     Vault,
     Settings,
+    PasswordGenerator,
 }
 
 #[derive(Debug, Clone)]
@@ -50,7 +53,11 @@ pub enum Message {
 
     // Vault actions
     SearchChanged(String),
-    FilterTypeChanged(Option<EntryType>),
+    /// Segmented-control tab pressed; resolved to a filter via the tab's
+    /// position in `filter_model` (see `view::vault::sidebar::idx_to_filter`).
+    FilterTabActivated(widget::segmented_button::Entity),
+    /// Sidebar/content split dragged in the vault window.
+    PaneResized(widget::pane_grid::ResizeEvent),
     SelectEntry(String),
     EntryReceived(Result<Entry, String>),
     AddEntryRequested,
@@ -171,4 +178,32 @@ pub enum Message {
     TpmDisableResult(Result<(), String>),
     TpmServerCredentialsToggled(bool),
     TpmServerCredentialsResult(Result<(), String>),
+
+    // Password generator pane
+    GeneratorViewClicked,
+    GeneratorUppercaseToggled(bool),
+    GeneratorLowercaseToggled(bool),
+    GeneratorNumbersToggled(bool),
+    GeneratorSpecialToggled(bool),
+    GeneratorLengthChanged(u32),
+    /// Local-only: restores the pane's draft checkboxes/slider to
+    /// `GeneratorSettings::default()`. Does not call the agent or touch the
+    /// persisted "last used" settings — that only happens on the next Generate.
+    GeneratorResetClicked,
+    GeneratorGenerateClicked,
+    GeneratorGenerated(Result<String, String>),
+    GeneratorRevealToggled,
+    GeneratorSettingsReceived(Result<GeneratorSettings, String>),
+    GeneratorHistoryReceived(Result<Vec<GeneratorHistoryEntry>, String>),
+    GeneratorHistoryRevealToggled(usize),
+    /// Shows the confirmation dialog for deleting one history entry (index
+    /// into the currently displayed `generator_history`).
+    GeneratorHistoryDeleteRequested(usize),
+    GeneratorHistoryDeleteConfirmed,
+    GeneratorHistoryDeleteCancelled,
+    GeneratorHistoryDeleted(Result<(), String>),
+
+    // Applet popup: quick-generate (last-saved settings, copies to clipboard)
+    AppletGeneratePasswordRequested,
+    AppletGeneratePasswordReceived(Result<String, String>),
 }

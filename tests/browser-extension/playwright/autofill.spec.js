@@ -15,9 +15,12 @@ test.describe('Autofill Content Script', () => {
       </form>
     `);
 
-    // 2. Inject the content script
-    const contentScript = fs.readFileSync(path.join(EXTENSION_PATH, 'content.js'), 'utf8');
-    
+    // 2. Inject the content scripts (heuristics first, mirroring manifest order)
+    const contentScript =
+      fs.readFileSync(path.join(EXTENSION_PATH, 'content-heuristics.js'), 'utf8') +
+      '\n' +
+      fs.readFileSync(path.join(EXTENSION_PATH, 'content.js'), 'utf8');
+
     // Wrap content script to capture the listener
     await page.evaluate((script) => {
       window.browser = {
@@ -47,5 +50,45 @@ test.describe('Autofill Content Script', () => {
 
     expect(usernameValue).toBe('autofill-user');
     expect(passwordValue).toBe('autofill-password');
+  });
+
+  test('fills the username on a multi-step login page with no password field yet', async ({ page }) => {
+    // Google/Microsoft/SSO-style flow: only an email/username field is
+    // present on the first screen; the password field appears after "Next".
+    await page.setContent(`
+      <form id="login-form">
+        <input type="email" name="identifier" id="identifier-field" autocomplete="username">
+        <button type="submit">Next</button>
+      </form>
+    `);
+
+    const contentScript =
+      fs.readFileSync(path.join(EXTENSION_PATH, 'content-heuristics.js'), 'utf8') +
+      '\n' +
+      fs.readFileSync(path.join(EXTENSION_PATH, 'content.js'), 'utf8');
+
+    await page.evaluate((script) => {
+      window.browser = {
+        runtime: {
+          onMessage: {
+            addListener: (listener) => {
+              window._contentScriptListener = listener;
+            }
+          }
+        }
+      };
+      eval(script);
+    }, contentScript);
+
+    await page.evaluate(() => {
+      window._contentScriptListener({
+        type: 'FILL_FORM',
+        username: 'autofill-user',
+        password: 'autofill-password'
+      });
+    });
+
+    const usernameValue = await page.$eval('#identifier-field', el => el.value);
+    expect(usernameValue).toBe('autofill-user');
   });
 });

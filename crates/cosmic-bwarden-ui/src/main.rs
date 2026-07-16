@@ -176,6 +176,14 @@ impl Application for CosmicBWardenApp {
         Some(Message::WindowClosed(id))
     }
 
+    fn on_window_resize(&mut self, id: window::Id, width: f32, _height: f32) {
+        // Only the standalone vault window drives the sidebar split; ignore
+        // applet surfaces and tracked popups.
+        if !self.windows.contains_key(&id) && detect_run_mode() != RunMode::Applet {
+            self.vault_window_resized(width);
+        }
+    }
+
     fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
         self.update_app(message)
     }

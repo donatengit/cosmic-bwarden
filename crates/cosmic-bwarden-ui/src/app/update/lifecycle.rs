@@ -6,7 +6,6 @@ use cosmic::app::Task;
 use cosmic::Action;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
-use tracing::debug;
 
 pub(super) fn check_tpm_task() -> Task<Message> {
     Task::perform(
@@ -110,6 +109,23 @@ impl CosmicBWardenApp {
                                 fetch_sidebar_entries(self.search_id, None, None, false),
                                 check_tpm_task(),
                             ];
+                            if self.applet_popup.is_some() {
+                                self.applet_search_id += 1;
+                                let only_pinned = applet_search::effective_only_pinned(
+                                    &self.applet_search_query,
+                                    self.applet_search_only_favourites,
+                                );
+                                let query = if self.applet_search_query.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(self.applet_search_query.clone())
+                                };
+                                tasks.push(fetch_applet_search(
+                                    self.applet_search_id,
+                                    query,
+                                    only_pinned,
+                                ));
+                            }
                             if let Some(id) = self.pending_vault_entry.take() {
                                 tasks.push(Task::done(Action::App(Message::SelectEntry(id))));
                             }
@@ -151,17 +167,17 @@ impl CosmicBWardenApp {
                         self.selected_entry = None;
                         self.editing_entry = None;
                         self.selected_entry_id = None;
-                        // Refresh the lockout counter shown on the PIN screen.
-                        let da_task = check_tpm_da_task();
-                        if crate::detect_run_mode() == crate::RunMode::Applet
-                            && self.applet_popup.is_none()
-                        {
-                            return Some(Task::batch(vec![
-                                self.open_applet_popup_task(None),
-                                da_task,
-                            ]));
-                        }
-                        return Some(da_task);
+                        // Note: no popup auto-open here. cosmic-panel only
+                        // forwards an applet popup to the compositor while a
+                        // panel surface is hovered/focused (xdg_shell.rs
+                        // `new_popup`); a popup opened from a broadcast event
+                        // (pointer elsewhere) is silently dropped host-side
+                        // with no popup_done, leaving `applet_popup` pointing
+                        // at a surface that was never shown — which then
+                        // swallows every subsequent icon click. Priming the
+                        // view is enough: the next click opens straight into
+                        // the PIN prompt.
+                        return Some(check_tpm_da_task());
                     }
                     cosmic_bwarden_core::protocol::Event::UnlockRequested => {
                         if !self.unlock_prompt_ready() {
@@ -172,11 +188,7 @@ impl CosmicBWardenApp {
                         self.selected_entry = None;
                         self.editing_entry = None;
                         self.selected_entry_id = None;
-                        if crate::detect_run_mode() == crate::RunMode::Applet
-                            && self.applet_popup.is_none()
-                        {
-                            return Some(self.open_applet_popup_task(None));
-                        }
+                        // No popup auto-open — see PinRequested above.
                     }
                     cosmic_bwarden_core::protocol::Event::Unlocked => {
                         self.view = View::Vault;
@@ -202,7 +214,7 @@ impl CosmicBWardenApp {
                 Some(Task::none())
             }
             Message::WindowClosed(id) => {
-                debug!("Window closed: {:?}", id);
+                tracing::info!(?id, applet_popup = ?self.applet_popup, "window closed");
                 if self.applet_popup == Some(id) {
                     self.applet_popup = None;
                 }

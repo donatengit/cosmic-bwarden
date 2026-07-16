@@ -7,7 +7,10 @@ use cosmic::Element;
 
 /// Top header row: "Open Vault" (or "⚠ Not synced" in red) + Lock|Logout icon buttons.
 pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
-    let is_unlocked = matches!(app.view, View::Vault | View::Settings);
+    let is_unlocked = matches!(
+        app.view,
+        View::Vault | View::Settings | View::PasswordGenerator
+    );
 
     let open_btn: Element<'static, Message> = if app.sync_failed && is_unlocked {
         button::destructive(fl!("open-vault-window"))
@@ -21,7 +24,7 @@ pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
             .into()
     };
 
-    let mut action_row = row::with_capacity(3).spacing(0).align_y(Alignment::Center);
+    let mut action_row = row::with_capacity(4).spacing(0).align_y(Alignment::Center);
 
     if app.sync_failed && is_unlocked {
         let session_expired = app
@@ -50,6 +53,17 @@ pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
         action_row = action_row.push(not_synced_btn);
     }
 
+    // Unconditional (not gated by is_unlocked): generation is local RNG, not a
+    // vault operation, so it must work while locked or even before login —
+    // it always uses whatever settings were last saved by any surface.
+    let generate_btn = tooltip(
+        button::icon(icon::from_name("dice-symbolic"))
+            .on_press(Message::AppletGeneratePasswordRequested),
+        text::caption(fl!("generate-password")),
+        tooltip::Position::Bottom,
+    );
+    action_row = action_row.push(generate_btn);
+
     if is_unlocked {
         let lock_btn = tooltip(
             button::icon(icon::from_name("system-lock-screen-symbolic"))
@@ -77,7 +91,10 @@ pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
 
 /// Quit footer: a single "Quit" button that expands to show sub-actions.
 pub fn quit_footer(app: &CosmicBWardenApp) -> Vec<Element<'static, Message>> {
-    let is_unlocked = matches!(app.view, View::Vault | View::Settings);
+    let is_unlocked = matches!(
+        app.view,
+        View::Vault | View::Settings | View::PasswordGenerator
+    );
 
     let label = if app.applet_quit_expanded {
         format!("▾ {}", fl!("quit"))

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="128" height="128" viewBox="29 77 128 128">
+<desc>Created with SVGMaker Editor 3.1.0</desc>
+<defs>
+</defs>
+<path transform="translate(0,0)" style="stroke-width: 0; fill: rgb(255,250,250); fill-opacity: 0.88; fill-rule: evenodd" stroke-linecap="round" d="M157.219 84.9789L82.0852 84.9789C52.8857 84.9789 29.2175 110.3281 29.2175 141.5949 29.2175 172.8614 52.8857 198.208 82.0852 198.208L98.7472 198.208 98.7472 170.2064 91.2233 170.2064C71.4076 170.2064 55.3457 156.4915 55.3457 139.5736 55.3457 122.6554 71.4076 108.9389 91.2233 108.9389L157.219 108.9389 157.219 84.9789ZM104.9292 170.2064L104.9292 198.208 145.6545 198.208 152.5743 170.2064 104.9292 170.2064Z"/>
+<ellipse transform="translate(0,0)" style="stroke: rgb(255,255,255); stroke-opacity: 0; stroke-width: 0; fill: rgb(255,250,250); fill-opacity: 0.88" cx="90.5601" cy="130.3384" rx="9.668" ry="9.7808" vector-effect="non-scaling-stroke"/>
+<ellipse transform="translate(0,0)" style="stroke: rgb(255,255,255); stroke-opacity: 0; stroke-width: 0; fill: rgb(255,250,250); fill-opacity: 0.88" cx="113.0719" cy="130.4628" rx="9.668" ry="9.7808" vector-effect="non-scaling-stroke"/>
+<ellipse transform="translate(0,0)" style="stroke: rgb(255,255,255); stroke-opacity: 0; stroke-width: 0; fill: rgb(255,250,250); fill-opacity: 0.88" cx="135.3937" cy="130.3799" rx="9.668" ry="9.7808" vector-effect="non-scaling-stroke"/>
+</svg>

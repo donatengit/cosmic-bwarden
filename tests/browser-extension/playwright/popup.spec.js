@@ -169,8 +169,10 @@ test.describe('Extension Popup — locked vault', () => {
 
 test.describe('Extension Popup — domain-based filtering', () => {
   // Popup receives tab URL https://example.com/login.
-  // extractDomain → "example.com", which is passed as the GetSidebarEntries query.
-  // The mock returns only the domain-matching entry for that query.
+  // extractDomain → "example.com", which is passed as GetSidebarEntries'
+  // `domain` field (query stays null). A typed search goes in `query` and
+  // wins over `domain`. The mock mirrors the agent: substring name-search
+  // for `query`, host equality/subdomain match for `domain`.
   test.beforeEach(async ({ page }) => {
     const domainEntries = [
       { id: '1', name: 'example.com', username: 'user@example.com', entry_type: 'Login', is_pinned: false }
@@ -184,12 +186,14 @@ test.describe('Extension Popup — domain-based filtering', () => {
             if (message === 'GetConfig') return { Config: { is_locked: false, needs_login: false } };
             if (message && message.GetSidebarEntries) {
               const q = message.GetSidebarEntries.query;
-              // Simulate agent name-search: return only entries whose name includes query
+              const d = message.GetSidebarEntries.domain;
               const all = ${JSON.stringify([
                 { id: '1', name: 'example.com', username: 'user@example.com', entry_type: 'Login', is_pinned: false },
                 { id: '2', name: 'other.com',   username: 'other@other.com',  entry_type: 'Login', is_pinned: false }
               ])};
-              const filtered = q ? all.filter(e => e.name.includes(q)) : all;
+              let filtered = all;
+              if (q) filtered = all.filter(e => e.name.includes(q));
+              else if (d) filtered = all.filter(e => e.name === d || d.endsWith('.' + e.name));
               return { SidebarEntries: { entries: filtered } };
             }
             if (message && message.SetTheme !== undefined) return { Ack: true };
@@ -212,12 +216,13 @@ test.describe('Extension Popup — domain-based filtering', () => {
     await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
   });
 
-  test('passes extracted domain as query to GetSidebarEntries on open', async ({ page }) => {
+  test('passes extracted host in the domain field to GetSidebarEntries on open', async ({ page }) => {
     await page.waitForTimeout(300); // let init complete
     const msgs = await page.evaluate(() => window._sentMessages);
     const sidebarCall = msgs.find(m => m && m.GetSidebarEntries);
     expect(sidebarCall).toBeTruthy();
-    expect(sidebarCall.GetSidebarEntries.query).toBe('example.com');
+    expect(sidebarCall.GetSidebarEntries.domain).toBe('example.com');
+    expect(sidebarCall.GetSidebarEntries.query).toBeNull();
   });
 
   test('shows only domain-matched entries by default', async ({ page }) => {
@@ -228,6 +233,87 @@ test.describe('Extension Popup — domain-based filtering', () => {
   test('typing in search overrides domain filter', async ({ page }) => {
     await page.locator('#search').fill('other');
     await expect(page.locator('.entry-name', { hasText: 'other.com' })).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.entry-name', { hasText: 'example.com' })).not.toBeVisible();
+  });
+});
+
+test.describe('Extension Popup — favourites', () => {
+  // Mock honours query (substring on name), only_pinned, and domain
+  // (exact/subdomain on name), mirroring the agent's semantics.
+  const setup = async (page, tabUrl) => {
+    await page.addInitScript(`
+      window._sentMessages = [];
+      window.browser = {
+        runtime: {
+          sendMessage: async (message) => {
+            window._sentMessages.push(JSON.parse(JSON.stringify(message)));
+            if (message === 'GetConfig') return { Config: { is_locked: false, needs_login: false } };
+            if (message && message.GetSidebarEntries) {
+              const p = message.GetSidebarEntries;
+              let filtered = [
+                { id: '1', name: 'example.com', username: 'user@example.com', entry_type: 'Login', is_pinned: false },
+                { id: '2', name: 'pinned.com',  username: 'fav@pinned.com',   entry_type: 'Login', is_pinned: true }
+              ];
+              if (p.only_pinned) filtered = filtered.filter(e => e.is_pinned);
+              if (p.query) filtered = filtered.filter(e => e.name.includes(p.query));
+              else if (p.domain) filtered = filtered.filter(e => e.name === p.domain || p.domain.endsWith('.' + e.name));
+              return { SidebarEntries: { entries: filtered } };
+            }
+            if (message && message.SetTheme !== undefined) return { Ack: true };
+            return { Error: { message: 'Unknown' } };
+          },
+          connectNative: () => ({
+            onMessage: { addListener: () => {} },
+            onDisconnect: { addListener: () => {} },
+            postMessage: () => {},
+            disconnect: () => {}
+          })
+        },
+        tabs: {
+          query: async () => [{ id: 1, url: '${tabUrl}' }],
+          sendMessage: async () => {},
+          create: async () => {}
+        }
+      };
+    `);
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+  };
+
+  test('falls back to favourites when the tab domain matches nothing', async ({ page }) => {
+    await setup(page, 'https://nomatch.example.org/');
+    await expect(page.locator('.entry-name', { hasText: 'pinned.com' })).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.entry-name', { hasText: 'example.com' })).not.toBeVisible();
+    await expect(page.locator('.list-caption')).toHaveText('★ Favourites');
+  });
+
+  test('domain match wins over the favourites fallback', async ({ page }) => {
+    await setup(page, 'https://example.com/login');
+    await expect(page.locator('.entry-name', { hasText: 'example.com' })).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.entry-name', { hasText: 'pinned.com' })).not.toBeVisible();
+    await expect(page.locator('.list-caption')).not.toBeVisible();
+  });
+
+  test('star toggle restricts to favourites even with a domain match', async ({ page }) => {
+    await setup(page, 'https://example.com/login');
+    await expect(page.locator('.entry-name', { hasText: 'example.com' })).toBeVisible({ timeout: 5000 });
+
+    await page.locator('#fav-btn').click();
+    await expect(page.locator('.entry-name', { hasText: 'pinned.com' })).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.entry-name', { hasText: 'example.com' })).not.toBeVisible();
+    await expect(page.locator('#fav-btn')).toHaveText('★');
+
+    // Toggle off restores the domain view.
+    await page.locator('#fav-btn').click();
+    await expect(page.locator('.entry-name', { hasText: 'example.com' })).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('#fav-btn')).toHaveText('☆');
+  });
+
+  test('typed search with toggle on searches favourites only', async ({ page }) => {
+    await setup(page, 'https://example.com/login');
+    await page.locator('#fav-btn').click();
+    // "com" matches both names, but only the pinned entry may appear.
+    await page.locator('#search').fill('com');
+    await expect(page.locator('.entry-name', { hasText: 'pinned.com' })).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.entry-name', { hasText: 'example.com' })).not.toBeVisible();
   });
 });

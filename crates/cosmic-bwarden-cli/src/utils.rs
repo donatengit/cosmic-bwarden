@@ -70,7 +70,7 @@ pub fn preprocess_args(args: Vec<String>) -> Vec<String> {
     let type_keywords = ["login", "card", "identity", "note", "sshkey", "ssh-key"];
     let subcommands = [
         "register", "login", "logout", "unlock", "lock", "sync", "list", "ls", "get", "add",
-        "unlocked", "quit", "pin", "unpin", "edit", "version",
+        "unlocked", "quit", "pin", "unpin", "edit", "version", "generate",
     ];
 
     let mut found_type = None;

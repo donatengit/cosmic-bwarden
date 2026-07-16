@@ -41,6 +41,8 @@ async fn test_custom_fields_ui_simulation() -> Result<()> {
                 ty: Some(cosmic_bwarden_core::api::FieldType::Text),
                 linked_id: None,
             }],
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
     client.send(Action::Sync).await?;

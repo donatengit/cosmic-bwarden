@@ -6,12 +6,12 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "cosmic-bwarden@8bit.com",
-      "strict_min_version": "109.0"
+      "strict_min_version": "115.0"
     }
   },
   "background": {
     "service_worker": "background.js",
-    "scripts": ["background.js"]
+    "scripts": ["background-save.js", "background.js"]
   },
   "icons": {
     "16": "icons/black16.png",
@@ -31,7 +31,10 @@
   "permissions": [
     "nativeMessaging",
     "tabs",
-    "clipboardWrite"
+    "clipboardWrite",
+    "contextMenus",
+    "storage",
+    "alarms"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -39,7 +42,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["content-heuristics.js", "content.js", "content-submit.js", "content-bar.js", "content-generate.js"],
       "run_at": "document_idle"
     }
   ]

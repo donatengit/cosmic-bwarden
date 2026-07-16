@@ -101,7 +101,7 @@ minutes-fmt = { $minutes } min
 filter-all = All
 filter-logins = Logins
 filter-notes = Notes
-filter-ssh-keys = SSH Keys
+filter-ssh-keys = SSH
 no-entries-found = No entries found
 no-pinned-entries = No pinned entries
 no-results = No results
@@ -140,3 +140,20 @@ just-quit = Just Quit
 add-new-entry = Add New Entry
 copied-to-clipboard = Copied to clipboard
 public-key-label = Public key
+generate-password = Generate password
+
+# Password generator
+password-generator = Password Generator
+uppercase = Uppercase (A-Z)
+lowercase = Lowercase (a-z)
+numbers = Numbers (0-9)
+special-characters = Special characters
+# { $length } is the generated password's length.
+password-length = Length: { $length }
+generate = Generate
+reset = Reset
+no-password-generated-yet = No password generated yet.
+recent-passwords = Recent Passwords (last 7 days)
+no-recent-passwords = No recent passwords.
+delete-history-entry-title = Delete Password?
+confirm-delete-history-entry = Remove this password from the recent-passwords history? This action cannot be undone.

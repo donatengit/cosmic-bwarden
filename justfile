@@ -238,6 +238,7 @@ pack-extension:
         --exclude "package.json" \
         --exclude "package-lock.json" \
         --exclude "test-results/*" \
+        --exclude "*.test.js" \
         --exclude "*.tmp"
 
 # Setup extension testing environment (installs npm dependencies)

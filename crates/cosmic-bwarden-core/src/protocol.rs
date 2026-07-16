@@ -1,3 +1,7 @@
+mod debug_impls;
+#[cfg(test)]
+mod tests;
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryType {
     Login,
@@ -38,6 +42,41 @@ pub struct TpmDaStatus {
     pub recovery_interval_secs: Option<u32>,
 }
 
+/// Password-generator charset/length preferences. Shared, device-global (not
+/// per-account) "last-used settings" — every surface (UI pane, applet quick-gen,
+/// CLI, browser extension) reads/writes the same persisted value via the agent.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GeneratorSettings {
+    pub uppercase: bool,
+    pub lowercase: bool,
+    pub numbers: bool,
+    pub special: bool,
+    /// 8..=32, enforced by the agent regardless of what a client sends.
+    pub length: u8,
+}
+
+impl Default for GeneratorSettings {
+    fn default() -> Self {
+        Self {
+            uppercase: true,
+            lowercase: true,
+            numbers: true,
+            special: true,
+            length: 14,
+        }
+    }
+}
+
+/// One entry in the device-local, 7-day password-generation history. Not tied
+/// to any vault entry or account — every generated password lands here
+/// regardless of which surface (UI/applet/CLI/browser) requested it.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct GeneratorHistoryEntry {
+    pub password: String,
+    /// Unix epoch seconds.
+    pub created_at: u64,
+}
+
 // IPC request message: transient (one per request, immediately consumed), so
 // the size spread between small variants (Lock) and payload-carrying ones
 // (AddEntry) doesn't justify boxing and the match-ergonomics churn it brings.
@@ -74,6 +113,13 @@ pub enum Action {
         query: Option<String>,
         entry_type: Option<EntryType>,
         only_pinned: bool,
+        /// Current tab's full host (lowercased, no scheme). When set and
+        /// `query` is None, entries are matched via `domain::hosts_match`
+        /// against their cached URI hosts (exact / boundary-subdomain /
+        /// eTLD+1) instead of the substring name search. A set `query` wins
+        /// over `domain`. (serde default: JSON clients may omit it.)
+        #[serde(default)]
+        domain: Option<String>,
     },
     GetEntry {
         id: String,
@@ -107,6 +153,12 @@ pub enum Action {
         password: Option<crate::db::Secret>,
         notes: Option<crate::db::Secret>,
         fields: Vec<crate::db::Field>,
+        // `default` keeps older JSON clients (extension popup) that omit these
+        // keys parsing in the browser host.
+        #[serde(default)]
+        totp: Option<crate::db::Secret>,
+        #[serde(default)]
+        uris: Vec<crate::db::Uri>,
     },
     AddSecureNote {
         name: String,
@@ -201,6 +253,50 @@ pub enum Action {
     UpdateLockTimeout {
         seconds: u64,
     },
+    /// Browser save-prompt support: does a Login entry exist for this
+    /// domain+username, and does its stored password differ from the
+    /// just-submitted one? The comparison happens inside the agent; the stored
+    /// password is never returned. `password` is the freshly submitted value
+    /// the client already holds.
+    CheckLoginMatch {
+        domain: String,
+        username: String,
+        password: String,
+    },
+    /// Set a new password on an existing Login entry (browser "Update" flow).
+    /// The agent decrypts the stored entry itself, so no other secret (TOTP,
+    /// notes) ever transits to the client, and redaction/merge pitfalls of
+    /// echoing a `GetEntryMeta` result through `UpdateEntry` are avoided.
+    UpdateLoginPassword {
+        id: String,
+        password: String,
+    },
+
+    /// Generate a password. `Some(settings)` persists the given settings as the
+    /// new device-wide "last used" and generates with them (the UI pane's
+    /// Generate button, and any CLI/browser caller fully specifying options).
+    /// `None` reuses whatever is currently persisted (falling back to
+    /// `GeneratorSettings::default()` on first use) — the applet quick-gen
+    /// button, browser context menu, and inline field icon all send this.
+    /// Every call, regardless of `Some`/`None`, appends the result to the
+    /// 7-day local history. Does not require the vault to be unlocked, or
+    /// even an account to be configured.
+    GeneratePassword {
+        settings: Option<GeneratorSettings>,
+    },
+    /// Fetch the currently persisted "last used" generator settings (for the
+    /// UI pane to populate on open, and for Reset-button semantics).
+    GetGeneratorSettings,
+    /// Fetch the local password-generation history, pruned to the last 7 days,
+    /// newest first.
+    GetPasswordHistory,
+    /// Delete one entry from the local password-generation history, identified
+    /// by its `created_at` timestamp (history entries have no separate id).
+    /// If more than one entry shares the same second, all matching entries
+    /// are removed — an accepted, low-stakes edge case for a 7-day cache.
+    DeleteGeneratedPassword {
+        created_at: u64,
+    },
 }
 
 impl Action {
@@ -246,30 +342,12 @@ impl Action {
             Self::CheckTpmDiagnostics => "CheckTpmDiagnostics",
             Self::GetTpmDaStatus => "GetTpmDaStatus",
             Self::UpdateLockTimeout { .. } => "UpdateLockTimeout",
-        }
-    }
-}
-
-// Manual `Debug` that never prints field values. Many `Action` variants carry
-// master passwords, PINs, TOTP secrets, and card data; the derived `Debug` would
-// leak them into logs (`handler.rs`, `main.rs`, `browser_host.rs`) at info/debug.
-impl std::fmt::Debug for Action {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            // Non-secret scalar fields are safe and useful for debugging.
-            Self::GetEntry { id, .. } => write!(f, "GetEntry {{ id: {id:?} }}"),
-            Self::GetEntryMeta { id } => write!(f, "GetEntryMeta {{ id: {id:?} }}"),
-            Self::GetPassword { id, .. } => write!(f, "GetPassword {{ id: {id:?} }}"),
-            Self::GetTotp { id, .. } => write!(f, "GetTotp {{ id: {id:?} }}"),
-            Self::DeleteEntry { id } => write!(f, "DeleteEntry {{ id: {id:?} }}"),
-            Self::PinEntry { id } => write!(f, "PinEntry {{ id: {id:?} }}"),
-            Self::UnpinEntry { id } => write!(f, "UnpinEntry {{ id: {id:?} }}"),
-            Self::SetPendingEntry { id } => write!(f, "SetPendingEntry {{ id: {id:?} }}"),
-            Self::UpdateLockTimeout { seconds } => {
-                write!(f, "UpdateLockTimeout {{ seconds: {seconds} }}")
-            }
-            // Everything else: variant name only.
-            other => f.write_str(other.variant_name()),
+            Self::CheckLoginMatch { .. } => "CheckLoginMatch",
+            Self::UpdateLoginPassword { .. } => "UpdateLoginPassword",
+            Self::GeneratePassword { .. } => "GeneratePassword",
+            Self::GetGeneratorSettings => "GetGeneratorSettings",
+            Self::GetPasswordHistory => "GetPasswordHistory",
+            Self::DeleteGeneratedPassword { .. } => "DeleteGeneratedPassword",
         }
     }
 }
@@ -358,137 +436,26 @@ pub enum Response {
     TpmDaStatus {
         status: TpmDaStatus,
     },
-}
-
-#[cfg(test)]
-mod debug_redaction_tests {
-    use super::*;
-
-    #[test]
-    fn action_debug_never_prints_secrets() {
-        let a = Action::Unlock {
-            password: "hunter2-secret".to_string(),
-        };
-        assert_eq!(format!("{a:?}"), "Unlock");
-
-        let a = Action::UnlockWithPin {
-            pin: "1234-secret".to_string(),
-        };
-        assert!(!format!("{a:?}").contains("1234-secret"));
-
-        let a = Action::SetupTpmPin {
-            master_password: "master-secret".to_string(),
-            pin: "pin-secret".to_string(),
-        };
-        let s = format!("{a:?}");
-        assert!(!s.contains("master-secret") && !s.contains("pin-secret"));
-
-        // Non-secret scalar (entry id) is allowed for debuggability.
-        let a = Action::GetPassword {
-            id: "entry-123".to_string(),
-            password: Some("x".into()),
-        };
-        let s = format!("{a:?}");
-        assert!(s.contains("entry-123") && !s.contains("\"x\""));
-    }
-
-    #[test]
-    fn response_debug_never_prints_secrets() {
-        let r = Response::Password {
-            password: "leaked-pw".to_string(),
-        };
-        assert!(!format!("{r:?}").contains("leaked-pw"));
-
-        let r = Response::Totp {
-            code: "123456".to_string(),
-        };
-        assert!(!format!("{r:?}").contains("123456"));
-
-        // Error messages remain visible.
-        let r = Response::Error {
-            message: "boom".to_string(),
-        };
-        assert!(format!("{r:?}").contains("boom"));
-    }
-
-    // Deterministic mini-fuzz: the agent postcard-decodes `Action` from any
-    // same-UID client, so the decoder is attacker-reachable (threat A2).
-    // Arbitrary bytes must produce Ok/Err, never a panic or huge allocation.
-    #[test]
-    fn action_decode_from_arbitrary_bytes_never_panics() {
-        use rand::{Rng as _, SeedableRng as _};
-        let mut rng = rand::rngs::StdRng::seed_from_u64(0xDEC0DE);
-
-        for _ in 0..10_000 {
-            let len = rng.random_range(0..128);
-            let bytes: Vec<u8> = (0..len).map(|_| rng.random()).collect();
-            let _ = postcard::from_bytes::<Action>(&bytes);
-        }
-
-        // Truncations of a valid message — the classic framing edge case.
-        let valid = postcard::to_allocvec(&Action::Lock).unwrap();
-        for cut in 0..valid.len() {
-            let _ = postcard::from_bytes::<Action>(&valid[..cut]);
-        }
-    }
-}
-
-// Manual `Debug` that never prints secret payloads. `Password`, `Totp`, `Entry`,
-// and `Entries` carry decrypted secrets; the derived `Debug` would leak them into
-// logs. Non-secret variants (errors, versions, flags) print their useful fields.
-impl std::fmt::Debug for Response {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Ack => f.write_str("Ack"),
-            Self::Error { message } => write!(f, "Error {{ message: {message:?} }}"),
-            Self::TwoFactorRequired { providers, .. } => {
-                write!(
-                    f,
-                    "TwoFactorRequired {{ providers: {providers:?}, token: <redacted> }}"
-                )
-            }
-            Self::NewDeviceVerificationRequired => f.write_str("NewDeviceVerificationRequired"),
-            Self::Config {
-                needs_login,
-                has_account,
-                is_locked,
-                sync_failed,
-                ..
-            } => write!(
-                f,
-                "Config {{ needs_login: {needs_login}, has_account: {has_account}, \
-                 is_locked: {is_locked}, sync_failed: {sync_failed} }}"
-            ),
-            Self::Entries { entries } => {
-                write!(f, "Entries {{ count: {}, <redacted> }}", entries.len())
-            }
-            Self::SidebarEntries { entries } => {
-                write!(f, "SidebarEntries {{ count: {} }}", entries.len())
-            }
-            Self::Entry { .. } => f.write_str("Entry { <redacted> }"),
-            Self::Password { .. } => f.write_str("Password { <redacted> }"),
-            Self::Totp { .. } => f.write_str("Totp { <redacted> }"),
-            Self::Version {
-                version,
-                protocol_version,
-            } => write!(
-                f,
-                "Version {{ version: {version:?}, protocol_version: {protocol_version:?} }}"
-            ),
-            Self::Event { event } => write!(f, "Event {{ event: {event:?} }}"),
-            Self::TpmStatus {
-                available,
-                configured,
-                server_credentials,
-            } => write!(
-                f,
-                "TpmStatus {{ available: {available}, configured: {configured}, \
-                 server_credentials: {server_credentials} }}"
-            ),
-            Self::TpmDiagnostics { checks } => {
-                write!(f, "TpmDiagnostics {{ checks: {} }}", checks.len())
-            }
-            Self::TpmDaStatus { status } => write!(f, "TpmDaStatus {{ {status:?} }}"),
-        }
-    }
+    /// Answer to `CheckLoginMatch`. Carries no secrets: `password_matches`
+    /// only confirms equality with a value the client already possesses.
+    LoginMatch {
+        /// Id of the matched Login entry, if any exists for domain+username.
+        entry_id: Option<String>,
+        /// Display name of the matched entry (for the save-bar text).
+        name: Option<String>,
+        /// True when the matched entry's stored password equals the submitted one.
+        password_matches: bool,
+    },
+    /// A freshly generated password. Never logged verbatim (see `debug_impls`).
+    GeneratedPassword {
+        password: String,
+    },
+    /// Answer to `GetGeneratorSettings`.
+    GeneratorSettings {
+        settings: GeneratorSettings,
+    },
+    /// Answer to `GetPasswordHistory`: entries from the last 7 days, newest first.
+    PasswordHistory {
+        entries: Vec<GeneratorHistoryEntry>,
+    },
 }

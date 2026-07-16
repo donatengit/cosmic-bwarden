@@ -53,6 +53,7 @@ async fn test_ssh_key_full_crud() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
@@ -144,6 +145,7 @@ async fn test_ssh_key_full_crud() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {
@@ -189,6 +191,7 @@ async fn test_secure_note_full_crud() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
@@ -260,6 +263,7 @@ async fn test_secure_note_full_crud() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {

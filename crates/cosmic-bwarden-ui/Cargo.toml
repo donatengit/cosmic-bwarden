@@ -55,5 +55,12 @@ i18n-embed-fl = { workspace = true }
 rust-embed = { workspace = true }
 zeroize = { workspace = true }
 
+[features]
+default = ["public_suffix_list"]
+# PSL-backed eTLD+1 extraction for applet row labels (e.g. shows
+# "example.co.uk", not "co.uk"). Without it labels fall back to the full
+# host, never a naive last-two-labels cut. See docs/public_suffix_list.md.
+public_suffix_list = ["cosmic-bwarden-core/public_suffix_list"]
+
 [lints]
 workspace = true

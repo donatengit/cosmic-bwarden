@@ -41,6 +41,8 @@ async fn test_pin_visible_without_sync() -> Result<()> {
             password: Some("freshpass".to_string().into()),
             notes: None,
             fields: Vec::new(),
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
     client.send(Action::Sync).await?;
@@ -51,6 +53,7 @@ async fn test_pin_visible_without_sync() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     let entries = if let Response::SidebarEntries { entries } = res {
@@ -71,6 +74,7 @@ async fn test_pin_visible_without_sync() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: true,
+            domain: None,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {
@@ -122,6 +126,8 @@ async fn test_pinning_lifecycle() -> Result<()> {
                 password: Some(format!("pass{}", i).into()),
                 notes: None,
                 fields: Vec::new(),
+                totp: None,
+                uris: Vec::new(),
             })
             .await?;
     }
@@ -132,6 +138,7 @@ async fn test_pinning_lifecycle() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     let entries = if let Response::SidebarEntries { entries } = res {
@@ -176,6 +183,7 @@ async fn test_pinning_lifecycle() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {
@@ -191,6 +199,7 @@ async fn test_pinning_lifecycle() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: true,
+            domain: None,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {
@@ -229,6 +238,7 @@ async fn test_pinning_lifecycle() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: true,
+            domain: None,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {
@@ -250,6 +260,7 @@ async fn test_pinning_lifecycle() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: true,
+            domain: None,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {
@@ -266,6 +277,7 @@ async fn test_pinning_lifecycle() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: true,
+            domain: None,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {
@@ -314,6 +326,8 @@ async fn test_pin_after_restart_unlock_silent_reauth() -> Result<()> {
             password: Some("targetpass".to_string().into()),
             notes: None,
             fields: Vec::new(),
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
     client.send(Action::Sync).await?;
@@ -323,6 +337,7 @@ async fn test_pin_after_restart_unlock_silent_reauth() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     let entries = if let Response::SidebarEntries { entries } = res {
@@ -381,6 +396,7 @@ async fn test_pin_after_restart_unlock_silent_reauth() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: true,
+            domain: None,
         })
         .await?;
     if let Response::SidebarEntries { entries } = res {

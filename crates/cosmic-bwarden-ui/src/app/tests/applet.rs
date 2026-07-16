@@ -1,5 +1,7 @@
+use crate::app::update::applet::unlock_focus_id;
 use crate::app::CosmicBWardenApp;
 use crate::message::{Message, View, WindowState};
+use crate::view::applet::unlock;
 use cosmic::iced::window;
 use cosmic::Application;
 use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
@@ -21,6 +23,12 @@ fn entry(id: &str, name: &str, entry_type: EntryType) -> SidebarEntry {
         entry_type,
         is_pinned: false,
     }
+}
+
+#[test]
+fn test_unlock_focus_id_prefers_pin_when_pin_unlock_active() {
+    assert_eq!(unlock_focus_id(true), unlock::pin_input_id());
+    assert_eq!(unlock_focus_id(false), unlock::password_input_id());
 }
 
 #[tokio::test]
@@ -59,8 +67,10 @@ async fn test_applet_toggle_favourites_filter() {
 
 #[tokio::test]
 async fn test_applet_reprompt_password_changed_and_cancelled() {
-    let mut app = CosmicBWardenApp::default();
-    app.applet_reprompt_id = Some("entry-1".to_string());
+    let mut app = CosmicBWardenApp {
+        applet_reprompt_id: Some("entry-1".to_string()),
+        ..Default::default()
+    };
 
     let _ = app.update(Message::AppletRepromptPasswordChanged(
         "hunter2".to_string(),
@@ -74,9 +84,11 @@ async fn test_applet_reprompt_password_changed_and_cancelled() {
 
 #[tokio::test]
 async fn test_applet_unlock_result_success_transitions_to_vault() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Unlock;
-    app.applet_unlock_password = "hunter2".to_string();
+    let mut app = CosmicBWardenApp {
+        view: View::Unlock,
+        applet_unlock_password: "hunter2".to_string(),
+        ..Default::default()
+    };
     let prev_search_id = app.applet_search_id;
 
     let _ = app.update(Message::AppletUnlockResult(Ok(())));
@@ -89,9 +101,11 @@ async fn test_applet_unlock_result_success_transitions_to_vault() {
 
 #[tokio::test]
 async fn test_applet_unlock_result_error_keeps_unlock_view() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Unlock;
-    app.applet_unlock_password = "hunter2".to_string();
+    let mut app = CosmicBWardenApp {
+        view: View::Unlock,
+        applet_unlock_password: "hunter2".to_string(),
+        ..Default::default()
+    };
 
     let _ = app.update(Message::AppletUnlockResult(Err(
         "invalid password".to_string()
@@ -133,8 +147,10 @@ async fn test_applet_toggle_unlock_and_reprompt_password_reveal() {
 
 #[tokio::test]
 async fn test_applet_search_results_received_ignores_stale_id() {
-    let mut app = CosmicBWardenApp::default();
-    app.applet_search_id = 2;
+    let mut app = CosmicBWardenApp {
+        applet_search_id: 2,
+        ..Default::default()
+    };
 
     let stale = vec![entry("stale", "Stale Entry", EntryType::Login)];
     let _ = app.update(Message::AppletSearchResultsReceived(1, Ok(stale)));
@@ -244,10 +260,12 @@ async fn test_popup_closed_preserves_search_query() {
 
 #[tokio::test]
 async fn test_popup_search_state_survives_vault_event() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
-    app.applet_search_query = "github".to_string();
-    app.applet_search_only_favourites = true;
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        applet_search_query: "github".to_string(),
+        applet_search_only_favourites: true,
+        ..Default::default()
+    };
 
     // A VaultChanged event triggers a refresh but must not touch applet search state.
     let _ = app.update(Message::EventReceived(
@@ -266,9 +284,11 @@ async fn test_popup_search_state_survives_vault_event() {
 
 #[tokio::test]
 async fn test_applet_refresh_state_triggers_fetch_when_popup_open() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
-    app.applet_popup = Some(window::Id::unique());
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        applet_popup: Some(window::Id::unique()),
+        ..Default::default()
+    };
     let prev_search_id = app.applet_search_id;
 
     let _ = app.update(Message::RefreshStateInternal);
@@ -400,16 +420,18 @@ async fn test_applet_note_row_renders_with_vault_and_secret_buttons() {
 
 #[tokio::test]
 async fn test_applet_copy_primary_copies_username_from_search_results() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
-    app.applet_search_results = vec![SidebarEntry {
-        id: "e1".to_string(),
-        name: "example.com".to_string(),
-        username: Some("alice@example.com".to_string()),
-        public_key: None,
-        entry_type: EntryType::Login,
-        is_pinned: false,
-    }];
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        applet_search_results: vec![SidebarEntry {
+            id: "e1".to_string(),
+            name: "example.com".to_string(),
+            username: Some("alice@example.com".to_string()),
+            public_key: None,
+            entry_type: EntryType::Login,
+            is_pinned: false,
+        }],
+        ..Default::default()
+    };
 
     // Should not panic even though clipboard write is async
     let _ = app.update(Message::AppletCopyPrimary("e1".to_string()));
@@ -417,9 +439,11 @@ async fn test_applet_copy_primary_copies_username_from_search_results() {
 
 #[tokio::test]
 async fn test_applet_copy_primary_no_op_for_missing_id() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
-    app.applet_search_results = vec![];
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        applet_search_results: vec![],
+        ..Default::default()
+    };
 
     let _ = app.update(Message::AppletCopyPrimary("nonexistent".to_string()));
     // No panic, no state change
@@ -430,8 +454,10 @@ async fn test_applet_copy_primary_no_op_for_missing_id() {
 
 #[tokio::test]
 async fn test_applet_open_in_vault_does_not_crash() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
 
     let _ = app.update(Message::AppletOpenInVault("entry-1".to_string()));
     // State must remain intact

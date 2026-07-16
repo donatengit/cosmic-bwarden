@@ -9,27 +9,23 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 function fillForm(username, password) {
     const passwordInputs = document.querySelectorAll('input[type="password"]');
 
+    if (passwordInputs.length === 0) {
+        // Multi-step logins (Google/Microsoft/SSO-style) show only a
+        // username/email field first; the password field appears after
+        // "Next" is clicked. findUsernameOnlyInput comes from
+        // content-heuristics.js (loaded first).
+        const usernameOnlyInput = findUsernameOnlyInput();
+        if (usernameOnlyInput) setInputValue(usernameOnlyInput, username);
+        return;
+    }
+
     passwordInputs.forEach(passwordInput => {
         const form = passwordInput.form || passwordInput.closest('form') || document;
 
         setInputValue(passwordInput, password);
 
-        const textInputs = form.querySelectorAll('input[type="text"], input[type="email"], input:not([type])');
-        let usernameInput = null;
-
-        for (const input of textInputs) {
-            const name = (input.name || "").toLowerCase();
-            const id = (input.id || "").toLowerCase();
-            const placeholder = (input.placeholder || "").toLowerCase();
-            if (name.includes("user") || name.includes("email") || name.includes("login") ||
-                id.includes("user") || id.includes("email") || id.includes("login") ||
-                placeholder.includes("user") || placeholder.includes("email") || placeholder.includes("login")) {
-                usernameInput = input;
-                break;
-            }
-        }
-
-        if (!usernameInput && textInputs.length > 0) usernameInput = textInputs[0];
+        // findUsernameInput comes from content-heuristics.js (loaded first).
+        const usernameInput = findUsernameInput(form);
         if (usernameInput) setInputValue(usernameInput, username);
     });
 }

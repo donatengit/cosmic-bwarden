@@ -18,10 +18,8 @@ pub fn decrypt_org_keys<S: std::hash::BuildHasher>(
 ) -> Result<HashMap<String, locked::Keys>> {
     let private_key = if let Some(ppk) = protected_private_key {
         let ppk_cipher = CipherString::new(ppk)?;
-        match ppk_cipher.decrypt_locked_symmetric(vault_keys) {
-            Ok(pk) => Some(locked::PrivateKey::new(pk)),
-            Err(e) => return Err(e),
-        }
+        let pk = ppk_cipher.decrypt_locked_symmetric(vault_keys)?;
+        Some(locked::PrivateKey::new(pk))
     } else {
         None
     };
@@ -30,11 +28,8 @@ pub fn decrypt_org_keys<S: std::hash::BuildHasher>(
     if let Some(pk) = private_key {
         for (org_id, protected_org_key) in protected_org_keys {
             let pok_cipher = CipherString::new(protected_org_key)?;
-            let org_key = match pok_cipher.decrypt_locked_asymmetric(&pk) {
-                Ok(k) => locked::Keys::new(k),
-                Err(e) => return Err(e),
-            };
-            org_keys.insert(org_id.clone(), org_key);
+            let k = pok_cipher.decrypt_locked_asymmetric(&pk)?;
+            org_keys.insert(org_id.clone(), locked::Keys::new(k));
         }
     }
     Ok(org_keys)

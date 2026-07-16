@@ -1,7 +1,7 @@
 use crate::app::CosmicBWardenApp;
 use crate::fl;
 use crate::message::Message;
-use crate::view::style::muted_text;
+use crate::view::style::{brand_icon, muted_text};
 use crate::MIN_PIN_LEN;
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{
@@ -68,9 +68,10 @@ impl CosmicBWardenApp {
             ));
         }
 
-        let header = cosmic::widget::row::with_capacity(2)
+        let header = cosmic::widget::row::with_capacity(3)
             .spacing(10)
             .align_y(Alignment::Center)
+            .push(brand_icon(32))
             .push(text::title2(fl!("settings")).width(Length::Fill))
             .push(if is_editing {
                 Element::from(

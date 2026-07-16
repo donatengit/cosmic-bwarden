@@ -26,6 +26,51 @@ fn format_secs(secs: u32) -> String {
     }
 }
 
+/// Convert days since the Unix epoch (1970-01-01) to a proleptic Gregorian
+/// (year, month, day). Howard Hinnant's public-domain `civil_from_days`
+/// algorithm (http://howardhinnant.github.io/date_algorithms.html) — avoids
+/// pulling in `chrono`/`time` just to render a handful of history timestamps.
+fn civil_from_days(z: i64) -> (i64, u32, u32) {
+    let z = z + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u64; // [0, 146096]
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; // [0, 399]
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
+    let mp = (5 * doy + 2) / 153; // [0, 11]
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32; // [1, 31]
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32; // [1, 12]
+    (if m <= 2 { y + 1 } else { y }, m, d)
+}
+
+/// The inverse of `civil_from_days` — days since the Unix epoch for a given
+/// (year, month, day). Only needed to round-trip-test `civil_from_days`
+/// itself; never used to render anything.
+#[cfg(test)]
+fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = (y - era * 400) as u64; // [0, 399]
+    let doy = (153 * u64::from(if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + u64::from(d) - 1; // [0, 365]
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; // [0, 146096]
+    era * 146097 + doe as i64 - 719468
+}
+
+/// Render a Unix timestamp (seconds) as a compact, unambiguous, locale-neutral
+/// "YYYY-MM-DD HH:MM" in UTC. Deliberately not converted to local time: doing
+/// that correctly needs a timezone database, which would mean pulling in
+/// `chrono`/`time` just for this — an accepted trade-off for a "roughly when
+/// was this generated" history list, not an audit log.
+pub(crate) fn format_unix_timestamp_utc(secs: u64) -> String {
+    let secs = secs as i64;
+    let days = secs.div_euclid(86400);
+    let time_of_day = secs.rem_euclid(86400);
+    let (year, month, day) = civil_from_days(days);
+    let hour = time_of_day / 3600;
+    let minute = (time_of_day % 3600) / 60;
+    format!("{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}")
+}
+
 impl CosmicBWardenApp {
     /// One-line summary of the TPM dictionary-attack lockout state for display on
     /// the PIN screens and in Settings. `None` when the TPM is unavailable or the
@@ -122,6 +167,22 @@ impl CosmicBWardenApp {
                     .width(Length::Fixed(400.0))
                     .into(),
             )
+        } else if self.generator_history_delete_pending.is_some() {
+            Some(
+                cosmic::widget::dialog()
+                    .title(fl!("delete-history-entry-title"))
+                    .body(fl!("confirm-delete-history-entry"))
+                    .primary_action(
+                        button::destructive(fl!("delete"))
+                            .on_press(Message::GeneratorHistoryDeleteConfirmed),
+                    )
+                    .secondary_action(
+                        button::standard(fl!("cancel"))
+                            .on_press(Message::GeneratorHistoryDeleteCancelled),
+                    )
+                    .width(Length::Fixed(400.0))
+                    .into(),
+            )
         } else {
             None
         }
@@ -151,7 +212,62 @@ impl CosmicBWardenApp {
         match self.view {
             View::Loading => cosmic::widget::text::body(fl!("loading")).into(),
             View::Setup | View::Unlock => self.view_auth(),
-            View::Vault | View::Settings => self.view_vault(),
+            View::Vault | View::Settings | View::PasswordGenerator => self.view_vault(),
         }
+    }
+}
+
+#[cfg(test)]
+mod date_format_tests {
+    use super::*;
+
+    #[test]
+    fn epoch_is_1970_01_01() {
+        assert_eq!(civil_from_days(0), (1970, 1, 1));
+    }
+
+    // Howard Hinnant's own published test vector for this exact algorithm.
+    #[test]
+    fn known_reference_date() {
+        assert_eq!(days_from_civil(2000, 3, 1), 11017);
+        assert_eq!(civil_from_days(11017), (2000, 3, 1));
+    }
+
+    #[test]
+    fn round_trips_across_a_leap_year_boundary() {
+        for day in -400..400 {
+            let (y, m, d) = civil_from_days(day);
+            assert_eq!(
+                days_from_civil(y, m, d),
+                day,
+                "round-trip failed for day {day}"
+            );
+        }
+    }
+
+    #[test]
+    fn leap_day_2000_is_valid_and_next_day_is_march_1st() {
+        let leap_day = days_from_civil(2000, 2, 29);
+        assert_eq!(civil_from_days(leap_day), (2000, 2, 29));
+        assert_eq!(civil_from_days(leap_day + 1), (2000, 3, 1));
+    }
+
+    // 1900 is NOT a leap year (divisible by 100 but not 400) — the classic
+    // Gregorian edge case this algorithm must get right.
+    #[test]
+    fn year_1900_is_not_a_leap_year() {
+        let feb_28_1900 = days_from_civil(1900, 2, 28);
+        assert_eq!(civil_from_days(feb_28_1900 + 1), (1900, 3, 1));
+    }
+
+    #[test]
+    fn formats_a_known_timestamp() {
+        // 2000-03-01 00:00:00 UTC = day 11017 * 86400 seconds.
+        let secs = 11017u64 * 86400;
+        assert_eq!(format_unix_timestamp_utc(secs), "2000-03-01 00:00");
+        assert_eq!(
+            format_unix_timestamp_utc(secs + 3600 + 120),
+            "2000-03-01 01:02"
+        );
     }
 }

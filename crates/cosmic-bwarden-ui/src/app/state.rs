@@ -38,6 +38,28 @@ mod app_id_tests {
     }
 }
 
+/// The two panes of the main vault window's resizable split.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VaultPane {
+    Sidebar,
+    Content,
+}
+
+/// Minimum — and initial — width of the vault sidebar, in logical pixels.
+pub const SIDEBAR_MIN_WIDTH: f32 = 340.0;
+/// Upper drag limit for the sidebar split, as a share of the window width.
+pub const SIDEBAR_MAX_RATIO: f32 = 0.60;
+/// Sidebar share used only until the first window-size report arrives, at
+/// which point the split snaps to exactly [`SIDEBAR_MIN_WIDTH`].
+pub const SIDEBAR_DEFAULT_RATIO: f32 = 0.35;
+
+/// Lowest allowed sidebar ratio for the given window width: the ratio that
+/// keeps the sidebar at [`SIDEBAR_MIN_WIDTH`], capped so the clamp range
+/// stays valid on windows too narrow to honor the pixel minimum.
+pub fn sidebar_min_ratio(window_width: f32) -> f32 {
+    (SIDEBAR_MIN_WIDTH / window_width).min(SIDEBAR_MAX_RATIO)
+}
+
 pub struct CosmicBWardenApp {
     pub core: Core,
     pub config: CosmicBWardenConfig,
@@ -56,6 +78,20 @@ pub struct CosmicBWardenApp {
     pub selected_entry: Option<Entry>,
     pub editing_entry: Option<Entry>,
     pub filter_type: Option<EntryType>,
+    /// Selection model backing the sidebar's type-filter segmented control.
+    /// Item order matches `view::vault::sidebar::filter_to_idx`; kept in sync
+    /// with `filter_type` by the `FilterTabActivated`/`FilterTypeChanged`
+    /// handlers.
+    pub filter_model: widget::segmented_button::SingleSelectModel,
+    /// Pane layout of the vault window (sidebar | content), resizable by
+    /// dragging the split.
+    pub vault_panes: widget::pane_grid::State<VaultPane>,
+    /// Current sidebar share of the window width, mirrored from `vault_panes`
+    /// on every resize so it can be re-clamped when the window itself resizes.
+    pub sidebar_ratio: f32,
+    /// Last reported width of the vault window, in logical pixels; `None`
+    /// until the runtime's first `on_window_resize` callback.
+    pub vault_window_width: Option<f32>,
     pub search_only_pinned: bool,
     pub revealed_fields: HashSet<(String, String)>,
 
@@ -162,6 +198,24 @@ pub struct CosmicBWardenApp {
     /// avoid prompting to unlock when there is nothing to unlock (no account/email).
     pub has_account: bool,
 
+    // Password generator pane
+    /// Current draft checkbox/slider state — may differ from the device's
+    /// last-saved settings until Generate is pressed (Reset restores schema
+    /// defaults locally, without touching what's persisted).
+    pub generator_settings: cosmic_bwarden_core::protocol::GeneratorSettings,
+    pub generator_result: Option<String>,
+    pub generator_result_revealed: bool,
+    pub generator_history: Vec<cosmic_bwarden_core::protocol::GeneratorHistoryEntry>,
+    /// Per-row reveal state, keyed by index into `generator_history`. Safe to
+    /// key by index because the pane always refetches and replaces the whole
+    /// Vec together (on open and after each Generate), so indices never go
+    /// stale mid-session.
+    pub generator_history_revealed: HashSet<usize>,
+    pub generator_error: Option<String>,
+    /// Index into `generator_history` pending delete confirmation; shown via
+    /// the same dialog widget as vault-entry deletion (`view_dialogs`).
+    pub generator_history_delete_pending: Option<usize>,
+
     // Clipboard auto-clear (`[P1-9]`)
     /// Bumped on every copy; a pending clear only fires if its generation is
     /// still current (i.e. no newer copy has claimed the clipboard since).
@@ -188,6 +242,17 @@ impl Default for CosmicBWardenApp {
             selected_entry: None,
             editing_entry: None,
             filter_type: None,
+            filter_model: crate::view::vault::sidebar::filter_model(),
+            vault_panes: widget::pane_grid::State::with_configuration(
+                widget::pane_grid::Configuration::Split {
+                    axis: widget::pane_grid::Axis::Vertical,
+                    ratio: SIDEBAR_DEFAULT_RATIO,
+                    a: Box::new(widget::pane_grid::Configuration::Pane(VaultPane::Sidebar)),
+                    b: Box::new(widget::pane_grid::Configuration::Pane(VaultPane::Content)),
+                },
+            ),
+            sidebar_ratio: SIDEBAR_DEFAULT_RATIO,
+            vault_window_width: None,
             search_only_pinned: false,
             revealed_fields: HashSet::new(),
             login_email: String::new(),
@@ -251,6 +316,13 @@ impl Default for CosmicBWardenApp {
             has_account: false,
             clipboard_clear_generation: 0,
             clipboard_pending_clear: None,
+            generator_settings: cosmic_bwarden_core::protocol::GeneratorSettings::default(),
+            generator_result: None,
+            generator_result_revealed: false,
+            generator_history: Vec::new(),
+            generator_history_revealed: HashSet::new(),
+            generator_error: None,
+            generator_history_delete_pending: None,
         }
     }
 }

@@ -139,7 +139,13 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
       `app/tests/interactions.rs`). Still open: the **browser extension**'s copy
       path (separate JS codebase) has no auto-clear.
 - [ ] TOTP code display/copy in UI+applet (agent's GetTotp already works).
-- [ ] Password generator (applet quick-gen + edit form).
+- [x] ~~Password generator (applet quick-gen + edit form)~~ — *done 2026-07*:
+      full-page generator pane (checkboxes, length slider, reveal/copy,
+      7-day local history) at `crates/cosmic-bwarden-ui/src/view/vault/generator.rs`;
+      applet quick-gen entry; `cosmic-bwarden-cli generate`; browser extension
+      context menu + inline field icon. Settings/history/algorithm live in the
+      agent (`handler/generator/`) so every surface shares them. See
+      `docs/password_generator_plan.md`.
 - [ ] Extension: re-check active tab's domain at fill time `[P1-8]`.
 - [ ] Folder/collection navigation in the vault window.
 - [ ] Replace emoji button icons (📂🔗🔑) with symbolic icons + tooltips `[U4-4]`.

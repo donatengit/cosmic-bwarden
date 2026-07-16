@@ -232,15 +232,39 @@ fn random_iv() -> Vec<u8> {
     iv
 }
 
+fn pkcs7_unpad(b: &[u8]) -> Option<&[u8]> {
+    if b.is_empty() {
+        return None;
+    }
+
+    let padding_val = b[b.len() - 1];
+    if padding_val == 0 {
+        return None;
+    }
+
+    let padding_len = usize::from(padding_val);
+    if padding_len > b.len() {
+        return None;
+    }
+
+    for c in b.iter().copied().skip(b.len() - padding_len) {
+        if c != padding_val {
+            return None;
+        }
+    }
+
+    Some(&b[..b.len() - padding_len])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn type2_requires_mac() {
-        let iv = crate::base64::encode(&[0u8; 16]);
-        let ct = crate::base64::encode(&[0u8; 16]);
-        let mac = crate::base64::encode(&[0u8; 32]);
+        let iv = crate::base64::encode([0u8; 16]);
+        let ct = crate::base64::encode([0u8; 16]);
+        let mac = crate::base64::encode([0u8; 32]);
 
         // 3-part (iv|ct|mac) is accepted.
         assert!(CipherString::new(&format!("2.{iv}|{ct}|{mac}")).is_ok());
@@ -302,28 +326,4 @@ mod tests {
             let _ = CipherString::new(&format!("2.{s}"));
         }
     }
-}
-
-fn pkcs7_unpad(b: &[u8]) -> Option<&[u8]> {
-    if b.is_empty() {
-        return None;
-    }
-
-    let padding_val = b[b.len() - 1];
-    if padding_val == 0 {
-        return None;
-    }
-
-    let padding_len = usize::from(padding_val);
-    if padding_len > b.len() {
-        return None;
-    }
-
-    for c in b.iter().copied().skip(b.len() - padding_len) {
-        if c != padding_val {
-            return None;
-        }
-    }
-
-    Some(&b[..b.len() - padding_len])
 }

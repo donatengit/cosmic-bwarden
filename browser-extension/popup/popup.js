@@ -4,6 +4,7 @@ if (typeof globalThis.browser === 'undefined') { globalThis.browser = globalThis
 const searchInput = document.getElementById('search');
 const resultsDiv  = document.getElementById('results');
 const syncBtn     = document.getElementById('sync-btn');
+const favBtn      = document.getElementById('fav-btn');
 const addBtn      = document.getElementById('add-btn');
 const backBtn     = document.getElementById('back-btn');
 const lockBtn     = document.getElementById('lock-btn');
@@ -16,16 +17,18 @@ const viewEdit    = document.getElementById('view-edit');
 let currentEntry = null;
 let currentView  = 'list';
 let currentTabDomain = null;
+let favouritesOnly = false;
 
 // ── Domain helpers ────────────────────────────────────────────────────────────
 function extractDomain(url) {
     try {
-        // Use the full registrable host (only stripping a leading "www."), NOT the
-        // last two labels. Collapsing to the last two labels treats multi-part
-        // public suffixes wrong: for "victim.co.uk" it would yield "co.uk", so the
-        // agent's substring search would surface every ".co.uk" entry. A proper fix
-        // would consult the Public Suffix List; absent that, matching the full host
-        // is the safe choice.
+        // Full host, only a leading "www." stripped. Never collapse labels
+        // here: deriving a registrable domain is the agent's job, where the
+        // Public Suffix List lives (see docs/public_suffix_list.md). The host
+        // goes in GetSidebarEntries' `domain` field and the agent matches it
+        // against each entry's stored URI hosts (exact / boundary-subdomain /
+        // eTLD+1), so "account.facebook.com" surfaces a "facebook.com" entry
+        // while "victim.co.uk" can never surface other ".co.uk" entries.
         return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
     } catch { return null; }
 }
@@ -43,11 +46,11 @@ window.onerror = (msg, url, line) => showStatus(`JS Error: ${msg} at ${line}`);
 function showView(view) {
     currentView = view;
     [viewList, viewDetail, viewEdit].forEach(v => v.classList.add('hidden'));
-    [backBtn, searchInput, addBtn, syncBtn, lockBtn].forEach(b => b.classList.add('hidden'));
+    [backBtn, searchInput, favBtn, addBtn, syncBtn, lockBtn].forEach(b => b.classList.add('hidden'));
 
     if (view === 'list') {
         viewList.classList.remove('hidden');
-        [searchInput, addBtn, syncBtn, lockBtn].forEach(b => b.classList.remove('hidden'));
+        [searchInput, favBtn, addBtn, syncBtn, lockBtn].forEach(b => b.classList.remove('hidden'));
         updateResults();
     } else if (view === 'detail') {
         viewDetail.classList.remove('hidden');
@@ -59,11 +62,25 @@ function showView(view) {
 }
 
 // ── Vault list ────────────────────────────────────────────────────────────────
+async function getEntries(params) {
+    const response = await browser.runtime.sendMessage({
+        "GetSidebarEntries": {
+            "query": null, "entry_type": null, "only_pinned": false, "domain": null,
+            ...params
+        }
+    });
+    if (response.SidebarEntries) return response.SidebarEntries.entries;
+    throw new Error(response.Error ? response.Error.message : "Unexpected agent response.");
+}
+
 async function updateResults() {
     hideStatus();
-    // When no explicit search, use the current tab's domain so the agent
-    // returns only name-matching entries (e.g. "iqos.ru" matches entry "iqos.ru").
-    const query = searchInput.value || currentTabDomain || null;
+    // A typed search is a substring query; otherwise the current tab's host
+    // goes in `domain` and the agent domain-matches it against entry URIs.
+    // The ★ toggle restricts everything to favourites; with no search and no
+    // domain match, favourites are shown anyway for quick access (same idea
+    // as the applet's empty-query behaviour).
+    const query = searchInput.value || null;
     try {
         const configResp = await browser.runtime.sendMessage("GetConfig");
         if (configResp.Config) {
@@ -78,23 +95,37 @@ async function updateResults() {
             }
         }
 
-        const response = await browser.runtime.sendMessage({
-            "GetSidebarEntries": { "query": query, "entry_type": null, "only_pinned": false }
-        });
-
-        if (response.SidebarEntries) {
-            renderEntries(response.SidebarEntries.entries);
-        } else if (response.Error) {
-            showStatus(response.Error.message);
+        let entries;
+        let caption = null;
+        if (favouritesOnly) {
+            entries = await getEntries({ query, only_pinned: true });
+            caption = '★ Favourites';
+        } else if (query) {
+            entries = await getEntries({ query });
+        } else {
+            entries = currentTabDomain
+                ? await getEntries({ domain: currentTabDomain })
+                : [];
+            if (entries.length === 0) {
+                entries = await getEntries({ only_pinned: true });
+                caption = '★ Favourites';
+            }
         }
-    } catch { showStatus("Failed to communicate with agent."); }
+        renderEntries(entries, caption);
+    } catch (e) { showStatus(e.message || "Failed to communicate with agent."); }
 }
 
-function renderEntries(entries) {
+function renderEntries(entries, caption = null) {
     resultsDiv.innerHTML = '';
     if (entries.length === 0) {
         resultsDiv.innerHTML = '<div class="no-results">No entries found</div>';
         return;
+    }
+    if (caption) {
+        const capEl = document.createElement('div');
+        capEl.className = 'list-caption';
+        capEl.textContent = caption;
+        resultsDiv.appendChild(capEl);
     }
 
     for (const entry of entries) {
@@ -174,6 +205,12 @@ function getEntryType(entry) {
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
 searchInput.addEventListener('input', updateResults);
+favBtn.onclick = () => {
+    favouritesOnly = !favouritesOnly;
+    favBtn.textContent = favouritesOnly ? '★' : '☆';
+    favBtn.classList.toggle('active', favouritesOnly);
+    updateResults();
+};
 syncBtn.onclick = async () => { await browser.runtime.sendMessage("Sync"); updateResults(); };
 lockBtn.onclick = async () => { await browser.runtime.sendMessage("Lock"); showView('list'); };
 addBtn.onclick = () => showAddForm();

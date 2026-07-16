@@ -42,8 +42,10 @@ fn full_entry(id: &str, name: &str) -> Entry {
 
 #[test]
 fn test_toggle_pin_flips_is_pinned() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
     let id = "entry-1".to_string();
 
     app.entries = vec![SidebarEntry {
@@ -72,8 +74,10 @@ fn test_toggle_pin_flips_is_pinned() {
 
 #[test]
 fn test_toggle_search_pinned_filter() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
     let initial_search_id = app.search_id;
     app.all_entries = vec![
         SidebarEntry {
@@ -165,8 +169,10 @@ async fn test_e2e_user_flow_login_and_add_note() {
 
 #[test]
 fn test_settings_flow() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
     app.config.lock_timeout = 600; // 10 mins
 
     // 1. Open Settings
@@ -201,9 +207,11 @@ fn test_settings_flow() {
 // VaultChanged → RefreshStateInternal → GetConfig async round-trip.
 #[test]
 fn test_sync_result_ok_clears_sync_failed_immediately() {
-    let mut app = CosmicBWardenApp::default();
-    app.sync_failed = true;
-    app.error = Some("delete failed: connection refused".to_string());
+    let mut app = CosmicBWardenApp {
+        sync_failed: true,
+        error: Some("delete failed: connection refused".to_string()),
+        ..Default::default()
+    };
 
     let _ = app.update(Message::SyncResult(Ok(())));
 

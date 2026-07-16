@@ -12,9 +12,9 @@ use cosmic_bwarden_core::locked;
 fn make_test_keys(enc_seed: u8, mac_seed: u8) -> locked::Keys {
     let mut v = locked::Vec::new();
     // 32-byte enc key: repeating enc_seed
-    v.extend(std::iter::repeat(enc_seed).take(32));
+    v.extend(std::iter::repeat_n(enc_seed, 32));
     // 32-byte mac key: repeating mac_seed
-    v.extend(std::iter::repeat(mac_seed).take(32));
+    v.extend(std::iter::repeat_n(mac_seed, 32));
     locked::Keys::new(v)
 }
 

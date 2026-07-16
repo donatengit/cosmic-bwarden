@@ -85,58 +85,120 @@ fn select_entry(app: &mut CosmicBWardenApp, entry: Entry) {
 
 #[test]
 fn test_view_auth_setup_renders() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Setup;
+    let app = CosmicBWardenApp {
+        view: View::Setup,
+        ..Default::default()
+    };
     let _ = app.view();
 }
 
 #[test]
 fn test_view_auth_unlock_renders() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Unlock;
-    app.login_email = "user@example.com".to_string();
+    let app = CosmicBWardenApp {
+        view: View::Unlock,
+        login_email: "user@example.com".to_string(),
+        ..Default::default()
+    };
     let _ = app.view();
 }
 
 #[test]
 fn test_view_vault_no_selection_renders() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
+    let app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
     let _ = app.view();
 }
 
 #[test]
 fn test_view_vault_with_login_entry_renders() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
-    app.entries = vec![sidebar_entry("1", "Login Entry", EntryType::Login)];
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        entries: vec![sidebar_entry("1", "Login Entry", EntryType::Login)],
+        ..Default::default()
+    };
     select_entry(&mut app, login_entry("1", "Login Entry"));
     let _ = app.view();
 }
 
 #[test]
 fn test_view_vault_with_ssh_entry_renders() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
-    app.entries = vec![sidebar_entry("2", "SSH Entry", EntryType::SshKey)];
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        entries: vec![sidebar_entry("2", "SSH Entry", EntryType::SshKey)],
+        ..Default::default()
+    };
     select_entry(&mut app, ssh_entry("2", "SSH Entry"));
     let _ = app.view();
 }
 
 #[test]
 fn test_view_vault_with_note_entry_renders() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
-    app.entries = vec![sidebar_entry("3", "Note Entry", EntryType::SecureNote)];
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        entries: vec![sidebar_entry("3", "Note Entry", EntryType::SecureNote)],
+        ..Default::default()
+    };
     select_entry(&mut app, note_entry("3", "Note Entry"));
     let _ = app.view();
 }
 
 #[test]
 fn test_view_vault_settings_panel_renders() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Settings;
-    app.entries = vec![sidebar_entry("1", "Login Entry", EntryType::Login)];
+    let app = CosmicBWardenApp {
+        view: View::Settings,
+        entries: vec![sidebar_entry("1", "Login Entry", EntryType::Login)],
+        ..Default::default()
+    };
     let _ = app.view();
     assert!(!app.entries.is_empty());
+}
+
+#[test]
+fn test_view_vault_password_generator_panel_renders_empty() {
+    let app = CosmicBWardenApp {
+        view: View::PasswordGenerator,
+        ..Default::default()
+    };
+    let _ = app.view();
+}
+
+#[test]
+fn test_view_vault_password_generator_panel_renders_with_result_and_history() {
+    use cosmic_bwarden_core::protocol::GeneratorHistoryEntry;
+
+    let mut app = CosmicBWardenApp {
+        view: View::PasswordGenerator,
+        generator_result: Some("generated-pw-1".to_string()),
+        generator_history: vec![
+            GeneratorHistoryEntry {
+                password: "generated-pw-1".to_string(),
+                created_at: 1_700_000_000,
+            },
+            GeneratorHistoryEntry {
+                password: "generated-pw-2".to_string(),
+                created_at: 1_699_999_000,
+            },
+        ],
+        ..Default::default()
+    };
+    app.generator_history_revealed.insert(0);
+    let _ = app.view();
+}
+
+#[test]
+fn test_generator_history_delete_confirmation_dialog_renders() {
+    use cosmic_bwarden_core::protocol::GeneratorHistoryEntry;
+
+    let app = CosmicBWardenApp {
+        view: View::PasswordGenerator,
+        generator_history: vec![GeneratorHistoryEntry {
+            password: "generated-pw-1".to_string(),
+            created_at: 1_700_000_000,
+        }],
+        generator_history_delete_pending: Some(0),
+        ..Default::default()
+    };
+    let _ = app.view();
 }

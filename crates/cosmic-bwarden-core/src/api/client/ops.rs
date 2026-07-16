@@ -14,6 +14,8 @@ impl Client {
         favorite: bool,
         username: Option<&str>,
         password: Option<&str>,
+        totp: Option<&str>,
+        uris: Option<Vec<serde_json::Value>>,
         notes: Option<&str>,
         fields: Option<Vec<CipherField>>,
     ) -> Result<()> {
@@ -21,8 +23,8 @@ impl Client {
             Some(serde_json::json!({
                 "username": username,
                 "password": password,
-                "totp": null,
-                "uris": null,
+                "totp": totp,
+                "uris": uris,
             }))
         } else {
             None

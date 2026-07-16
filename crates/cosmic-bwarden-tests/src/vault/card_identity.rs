@@ -57,6 +57,7 @@ async fn test_card_full_update() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
@@ -215,6 +216,7 @@ async fn test_identity_full_update() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {

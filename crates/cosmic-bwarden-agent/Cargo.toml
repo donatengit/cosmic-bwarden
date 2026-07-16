@@ -51,10 +51,14 @@ path = "src/bin/cosmic-bwarden-agent-tpm.rs"
 required-features = ["tpm"]
 
 [features]
-default = ["browser-host"]
+default = ["browser-host", "public_suffix_list"]
 keyring = ["dep:oo7"]
 browser-host = []
 tpm = ["dep:tss-esapi"]
+# Forwards to the core crate's PSL-backed eTLD+1 matching rule; see
+# docs/public_suffix_list.md. Disable for a smaller binary at the cost of
+# sibling-subdomain matching (accounts.google.com vs mail.google.com).
+public_suffix_list = ["cosmic-bwarden-core/public_suffix_list"]
 
 [lints]
 workspace = true

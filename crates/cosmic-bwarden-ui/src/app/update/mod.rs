@@ -1,6 +1,7 @@
 pub mod applet;
 pub mod auth;
 pub mod lifecycle;
+pub mod pwgen;
 pub mod vault;
 
 use crate::app::state::CosmicBWardenApp;
@@ -30,6 +31,10 @@ impl CosmicBWardenApp {
             return task;
         }
 
+        if let Some(task) = self.update_pwgen(message.clone()) {
+            return task;
+        }
+
         // Handle remaining messages
         match message {
             Message::EmailChanged(_)
@@ -48,7 +53,8 @@ impl CosmicBWardenApp {
             | Message::LogoutClicked
             | Message::LogoutResult
             | Message::SearchChanged(_)
-            | Message::FilterTypeChanged(_)
+            | Message::FilterTabActivated(_)
+            | Message::PaneResized(_)
             | Message::SelectEntry(_)
             | Message::EntryReceived(_)
             | Message::AddEntryRequested
@@ -125,7 +131,26 @@ impl CosmicBWardenApp {
             | Message::TpmServerCredentialsResult(_)
             | Message::LoginPinEnabledToggled(_)
             | Message::LoginPinChanged(_)
-            | Message::LoginPinRevealToggled => Task::none(),
+            | Message::LoginPinRevealToggled
+            | Message::GeneratorViewClicked
+            | Message::GeneratorUppercaseToggled(_)
+            | Message::GeneratorLowercaseToggled(_)
+            | Message::GeneratorNumbersToggled(_)
+            | Message::GeneratorSpecialToggled(_)
+            | Message::GeneratorLengthChanged(_)
+            | Message::GeneratorResetClicked
+            | Message::GeneratorGenerateClicked
+            | Message::GeneratorGenerated(_)
+            | Message::GeneratorRevealToggled
+            | Message::GeneratorSettingsReceived(_)
+            | Message::GeneratorHistoryReceived(_)
+            | Message::GeneratorHistoryRevealToggled(_)
+            | Message::GeneratorHistoryDeleteRequested(_)
+            | Message::GeneratorHistoryDeleteCancelled
+            | Message::GeneratorHistoryDeleteConfirmed
+            | Message::GeneratorHistoryDeleted(_)
+            | Message::AppletGeneratePasswordRequested
+            | Message::AppletGeneratePasswordReceived(_) => Task::none(),
 
             Message::CopyToClipboard(text) => self.copy_to_clipboard_with_autoclear(text),
             Message::ClipboardClearElapsed(generation) => {

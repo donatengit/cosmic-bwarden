@@ -40,6 +40,8 @@ async fn test_agent_login_lifecycle() -> Result<()> {
             password: Some("secret".to_string().into()),
             notes: None,
             fields: Vec::new(),
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
 

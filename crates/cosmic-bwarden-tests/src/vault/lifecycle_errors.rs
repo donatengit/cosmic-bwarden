@@ -85,6 +85,8 @@ async fn test_delete_fails_gracefully_when_backend_unavailable() -> Result<()> {
             password: Some("delpass".to_string().into()),
             notes: None,
             fields: Vec::new(),
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
     client.send(Action::Sync).await?;
@@ -94,6 +96,7 @@ async fn test_delete_fails_gracefully_when_backend_unavailable() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {
@@ -177,6 +180,8 @@ async fn test_add_fails_gracefully_when_backend_unavailable() -> Result<()> {
             password: Some("failpass".to_string().into()),
             notes: None,
             fields: Vec::new(),
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
     assert!(
@@ -221,6 +226,8 @@ async fn test_update_fails_gracefully_when_backend_unavailable() -> Result<()> {
             password: Some("uppass".to_string().into()),
             notes: None,
             fields: Vec::new(),
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
     client.send(Action::Sync).await?;
@@ -230,6 +237,7 @@ async fn test_update_fails_gracefully_when_backend_unavailable() -> Result<()> {
             query: None,
             entry_type: None,
             only_pinned: false,
+            domain: None,
         })
         .await?;
     let id = if let Response::SidebarEntries { entries } = res {

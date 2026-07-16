@@ -36,6 +36,8 @@ async fn test_note_crud_lifecycle() -> Result<()> {
             password: None,
             notes: Some("Initial content".into()),
             fields: Vec::new(),
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
 
@@ -160,6 +162,8 @@ async fn test_login_crud_lifecycle() -> Result<()> {
             password: Some("pass123".to_string().into()),
             notes: None,
             fields: Vec::new(),
+            totp: None,
+            uris: Vec::new(),
         })
         .await?;
 

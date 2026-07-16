@@ -20,6 +20,7 @@ hmac = { version = "0.12.1", features = ["std"] }
 pbkdf2 = "0.12.2"
 percent-encoding = "2.3"
 pkcs8 = "0.10.2"
+psl = { version = "2.1", optional = true }
 rand = { workspace = true }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
 rsa = { workspace = true }
@@ -45,6 +46,13 @@ default = []
 # Useful when debugging Bitwarden API response drift; not needed in
 # production builds.
 debug-api = ["dep:serde_path_to_error"]
+# Public Suffix List-backed registrable-domain (eTLD+1) rule in
+# `domain::hosts_match`. The `psl` crate compiles the list into the binary
+# (+~800KB .text, no heap, no runtime fetch). Without this feature matching
+# degrades gracefully to the exact + label-boundary subdomain rules (sibling
+# subdomains like accounts.google.com vs mail.google.com stop matching).
+# See docs/public_suffix_list.md for the full rationale.
+public_suffix_list = ["dep:psl"]
 
 [lints]
 workspace = true

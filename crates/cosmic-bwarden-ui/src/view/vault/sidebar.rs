@@ -2,21 +2,24 @@ use crate::app::CosmicBWardenApp;
 use crate::fl;
 use crate::message::{Message, View};
 use cosmic::iced::{Alignment, Length};
-use cosmic::widget::{button, container, divider, icon, list_column, text};
+use cosmic::widget::{button, container, divider, icon, list_column, segmented_button, text};
 use cosmic::Element;
 use cosmic_bwarden_core::protocol::EntryType;
 
-/// Localized filter dropdown labels, order-matched to `filter_to_idx` /
-/// `idx_to_filter` (All, Logins, Notes, SSH Keys).
-fn filter_labels() -> Vec<String> {
-    vec![
-        fl!("filter-all"),
-        fl!("filter-logins"),
-        fl!("filter-notes"),
-        fl!("filter-ssh-keys"),
-    ]
+/// Model for the type-filter segmented control. Item order is matched to
+/// `filter_to_idx` / `idx_to_filter` (All, Logins, Notes, SSH Keys).
+pub(crate) fn filter_model() -> segmented_button::SingleSelectModel {
+    segmented_button::Model::builder()
+        .insert(|b| b.text(fl!("filter-all")).activate())
+        .insert(|b| b.text(fl!("filter-logins")))
+        .insert(|b| b.text(fl!("filter-notes")))
+        .insert(|b| b.text(fl!("filter-ssh-keys")))
+        .build()
 }
 
+/// Inverse of `idx_to_filter`; production code only maps tab → filter, so
+/// this direction is exercised by tests alone.
+#[cfg(test)]
 pub(crate) fn filter_to_idx(filter: &Option<EntryType>) -> usize {
     match filter {
         None => 0,
@@ -63,14 +66,20 @@ impl CosmicBWardenApp {
                 .push(star_btn),
         );
 
-        // Filter dropdown
-        let filter_dropdown = cosmic::widget::dropdown(
-            filter_labels(),
-            Some(filter_to_idx(&self.filter_type)),
-            |idx| Message::FilterTypeChanged(idx_to_filter(idx)),
-        )
-        .width(Length::Fill);
-        sidebar = sidebar.push(filter_dropdown);
+        // Type filter as a joint segmented control. The Custom style
+        // delegates to the stock Control appearance — identical look, but the
+        // widget only draws (and reserves width for) the active-item
+        // checkmark when the style is literally `Control`, so this drops it.
+        let filter_control = cosmic::widget::segmented_control::horizontal(&self.filter_model)
+            .on_activate(Message::FilterTabActivated)
+            .style(cosmic::theme::SegmentedButton::Custom(Box::new(|theme| {
+                segmented_button::StyleSheet::horizontal(
+                    theme,
+                    &cosmic::theme::SegmentedButton::Control,
+                )
+            })))
+            .width(Length::Fill);
+        sidebar = sidebar.push(filter_control);
         sidebar = sidebar.push(divider::horizontal::default());
 
         // Entry List
@@ -95,13 +104,22 @@ impl CosmicBWardenApp {
         // Bottom Actions
         sidebar = sidebar.push(divider::horizontal::default());
 
-        let mut top_row = cosmic::widget::row::with_capacity(2)
-            .spacing(10)
-            .align_y(Alignment::Center);
-        top_row = top_row.push(
-            button::suggested(fl!("add"))
-                .on_press(Message::AddEntryRequested)
-                .width(Length::Fill),
+        // Row 1: Add and Password Generator (never accented — a secondary
+        // tool, not a primary navigation destination like Settings).
+        sidebar = sidebar.push(
+            cosmic::widget::row::with_capacity(2)
+                .spacing(10)
+                .align_y(Alignment::Center)
+                .push(
+                    button::suggested(fl!("add"))
+                        .on_press(Message::AddEntryRequested)
+                        .width(Length::Fill),
+                )
+                .push(
+                    button::standard(fl!("password-generator"))
+                        .on_press(Message::GeneratorViewClicked)
+                        .width(Length::Fill),
+                ),
         );
 
         let session_expired = self.sync_failed
@@ -111,28 +129,54 @@ impl CosmicBWardenApp {
                 .map(|e| e.contains("session token"))
                 .unwrap_or(false);
 
+        // Sync is icon-only like Lock/Logout; its state shows through the
+        // icon + destructive class, the tooltip names the state.
         let sync_area: cosmic::Element<Message> = if self.syncing {
             // Show a small spinner while the sync request is in flight so the
             // user gets immediate feedback that something is happening.
             container(cosmic::widget::indeterminate_circular().size(20.0))
-                .center_x(Length::Fixed(64.0))
+                .center_x(Length::Fixed(32.0))
                 .center_y(Length::Fixed(32.0))
                 .into()
         } else if session_expired {
-            button::destructive(fl!("session-expired"))
+            button::icon(icon::from_name("dialog-password-symbolic"))
+                .class(cosmic::theme::Button::Destructive)
+                .tooltip(fl!("session-expired"))
                 .on_press(Message::LogoutClicked)
                 .into()
         } else if self.sync_failed {
-            button::destructive(fl!("not-synced"))
+            button::icon(icon::from_name("network-error-symbolic"))
+                .class(cosmic::theme::Button::Destructive)
+                .tooltip(fl!("not-synced"))
                 .on_press(Message::SyncClicked)
                 .into()
         } else {
-            button::standard(fl!("sync"))
+            button::icon(icon::from_name("emblem-synchronizing-symbolic"))
+                .tooltip(fl!("sync"))
                 .on_press(Message::SyncClicked)
                 .into()
         };
-        top_row = top_row.push(sync_area);
-        sidebar = sidebar.push(top_row);
+
+        // Row 2: Sync, Lock, Logout (all icons, compact) and Settings.
+        let lock_btn = button::icon(icon::from_name("system-lock-screen-symbolic"))
+            .tooltip(fl!("lock"))
+            .on_press(Message::LockClicked);
+        let logout_btn = button::icon(icon::from_name("system-log-out-symbolic"))
+            .tooltip(fl!("logout"))
+            .on_press(Message::LogoutClicked);
+        let settings_btn = if self.view == View::Settings {
+            button::suggested(fl!("settings"))
+        } else {
+            button::standard(fl!("settings"))
+        };
+        let actions_row = cosmic::widget::row::with_capacity(4)
+            .spacing(5)
+            .align_y(Alignment::Center)
+            .push(sync_area)
+            .push(lock_btn)
+            .push(logout_btn)
+            .push(settings_btn.on_press(Message::SettingsViewClicked));
+        sidebar = sidebar.push(actions_row);
 
         // Show the actual error text so the user knows WHY the button is red.
         if self.sync_failed {
@@ -140,24 +184,6 @@ impl CosmicBWardenApp {
                 sidebar = sidebar.push(text::caption(msg.as_str()));
             }
         }
-
-        let mut bottom_row = cosmic::widget::row::with_capacity(3)
-            .spacing(10)
-            .align_y(Alignment::Center);
-        let settings_btn = if self.view == View::Settings {
-            button::suggested(fl!("settings"))
-        } else {
-            button::standard(fl!("settings"))
-        };
-        bottom_row = bottom_row.push(
-            settings_btn
-                .on_press(Message::SettingsViewClicked)
-                .width(Length::Fill),
-        );
-        bottom_row = bottom_row.push(button::standard(fl!("lock")).on_press(Message::LockClicked));
-        bottom_row =
-            bottom_row.push(button::standard(fl!("logout")).on_press(Message::LogoutClicked));
-        sidebar = sidebar.push(bottom_row);
 
         sidebar.into()
     }

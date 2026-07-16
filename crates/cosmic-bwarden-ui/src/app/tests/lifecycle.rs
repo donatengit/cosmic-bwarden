@@ -45,22 +45,24 @@ async fn test_popup_lifecycle() {
     // Close popup
     let _ = app.update(Message::WindowClosed(id));
     assert!(app.applet_popup.is_none());
-    assert!(app.windows.get(&id).is_none());
+    assert!(!app.windows.contains_key(&id));
 }
 
 #[tokio::test]
 async fn test_lock_logout_clears_state() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
-    app.entries = vec![SidebarEntry {
-        id: "1".to_string(),
-        name: "Entry 1".to_string(),
-        username: None,
-        public_key: None,
-        entry_type: EntryType::Login,
-        is_pinned: false,
-    }];
-    app.selected_entry_id = Some("1".to_string());
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        entries: vec![SidebarEntry {
+            id: "1".to_string(),
+            name: "Entry 1".to_string(),
+            username: None,
+            public_key: None,
+            entry_type: EntryType::Login,
+            is_pinned: false,
+        }],
+        selected_entry_id: Some("1".to_string()),
+        ..Default::default()
+    };
     app.revealed_fields
         .insert(("1".to_string(), "Password".to_string()));
 
@@ -162,13 +164,68 @@ async fn test_config_received_vault_triggers_entry_fetch() {
     );
 }
 
+// The applet popup's entry fetch must not fire until the vault is confirmed
+// unlocked (ConfigReceived), not speculatively on click. Firing it eagerly on
+// click wasted a request on the single serialized agent connection whenever
+// the vault turned out to be locked, delaying the requests that actually
+// drive the locked-state UI (Version/GetConfig/CheckTpm).
+#[tokio::test]
+async fn test_config_received_unlocked_with_applet_popup_triggers_applet_fetch() {
+    let mut app = CosmicBWardenApp::default();
+    let popup_id = window::Id::unique();
+    app.applet_popup = Some(popup_id);
+    let prev_id = app.applet_search_id;
+
+    // Unlocked: has_account=true, is_locked=false
+    let _ = app.update(Message::ConfigReceived(Ok((
+        CosmicBWardenConfig::default(),
+        false,
+        true,
+        false,
+        false,
+    ))));
+
+    assert_eq!(app.view, View::Vault);
+    assert!(
+        app.applet_search_id > prev_id,
+        "ConfigReceived with an open applet popup and an unlocked vault must \
+         increment applet_search_id to trigger the applet entry fetch"
+    );
+}
+
+// Companion to the above: with no applet popup open (main-window-only
+// session), ConfigReceived must not bother fetching applet search results.
+#[tokio::test]
+async fn test_config_received_unlocked_without_applet_popup_skips_applet_fetch() {
+    let mut app = CosmicBWardenApp {
+        applet_popup: None,
+        ..Default::default()
+    };
+    let prev_id = app.applet_search_id;
+
+    let _ = app.update(Message::ConfigReceived(Ok((
+        CosmicBWardenConfig::default(),
+        false,
+        true,
+        false,
+        false,
+    ))));
+
+    assert_eq!(app.view, View::Vault);
+    assert_eq!(
+        app.applet_search_id, prev_id,
+        "ConfigReceived without an open applet popup must not trigger an applet entry fetch"
+    );
+}
+
 // Bug (d): LockResult and LogoutResult must clear any prior error so it does
 // not bleed through onto the Unlock/Setup screen.
 #[test]
 fn test_lock_logout_clears_error() {
-    let mut app = CosmicBWardenApp::default();
-
-    app.error = Some("sync failed: no API session token".to_string());
+    let mut app = CosmicBWardenApp {
+        error: Some("sync failed: no API session token".to_string()),
+        ..Default::default()
+    };
     let _ = app.update(Message::LockResult);
     assert!(app.error.is_none(), "LockResult must clear app.error");
 
@@ -182,9 +239,11 @@ fn test_lock_logout_clears_error() {
 // than surfacing the error to the user.
 #[test]
 fn test_entries_received_locked_clears_without_setting_error() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
-    app.search_id = 3;
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        search_id: 3,
+        ..Default::default()
+    };
     let entry = SidebarEntry {
         id: "1".to_string(),
         name: "Entry 1".to_string(),
@@ -217,10 +276,12 @@ fn test_entries_received_locked_clears_without_setting_error() {
 
 #[test]
 fn test_entries_received_populates_all_entries_and_applies_active_filter() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
-    app.search_id = 5;
-    app.search_query = "git".to_string();
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        search_id: 5,
+        search_query: "git".to_string(),
+        ..Default::default()
+    };
 
     let entries = vec![
         SidebarEntry {
@@ -262,8 +323,10 @@ fn test_entries_received_populates_all_entries_and_applies_active_filter() {
 
 #[test]
 fn test_entries_received_stale_id_ignored() {
-    let mut app = CosmicBWardenApp::default();
-    app.search_id = 5;
+    let mut app = CosmicBWardenApp {
+        search_id: 5,
+        ..Default::default()
+    };
 
     let entries = vec![SidebarEntry {
         id: "1".to_string(),
@@ -288,16 +351,18 @@ fn test_entries_received_stale_id_ignored() {
 
 #[test]
 fn test_settings_view_keeps_sidebar_entries() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
-    app.entries = vec![SidebarEntry {
-        id: "1".to_string(),
-        name: "Entry 1".to_string(),
-        username: None,
-        public_key: None,
-        entry_type: EntryType::Login,
-        is_pinned: false,
-    }];
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        entries: vec![SidebarEntry {
+            id: "1".to_string(),
+            name: "Entry 1".to_string(),
+            username: None,
+            public_key: None,
+            entry_type: EntryType::Login,
+            is_pinned: false,
+        }],
+        ..Default::default()
+    };
 
     let _ = app.update(Message::SettingsViewClicked);
     assert_eq!(app.view, View::Settings);
@@ -415,8 +480,10 @@ fn test_settings_view_clicked_dispatches_tpm_check() {
     // become accessible after the user was added to the tss group, etc.).
     // We verify by confirming tpm_status_known resets when the incoming
     // response changes state — i.e. the task was dispatched and processed.
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
 
     // Pre-set known state from a prior check.
     let _ = app.update(Message::TpmStatusReceived(Ok((true, false, false))));
@@ -543,9 +610,11 @@ fn test_disable_then_enable_cycle_state() {
 
 #[tokio::test]
 async fn test_pin_incorrect_flag_lifecycle() {
-    let mut app = CosmicBWardenApp::default();
     // Ready account so PinRequested actually prompts.
-    app.has_account = true;
+    let mut app = CosmicBWardenApp {
+        has_account: true,
+        ..Default::default()
+    };
     app.config.email = Some("user@example.com".to_string());
     let _ = app.update(Message::TpmStatusReceived(Ok((true, true, false))));
 
@@ -620,8 +689,10 @@ fn test_da_status_received_updates_state() {
 #[test]
 fn test_apply_unlock_pin_noop_without_tpm() {
     // No TPM: the PIN field is inert and produces no task, and is cleared.
-    let mut app = CosmicBWardenApp::default();
-    app.unlock_pin = "123456".to_string();
+    let mut app = CosmicBWardenApp {
+        unlock_pin: "123456".to_string(),
+        ..Default::default()
+    };
     assert!(app.apply_unlock_pin_task().is_none());
     assert!(app.unlock_pin.is_empty());
 }

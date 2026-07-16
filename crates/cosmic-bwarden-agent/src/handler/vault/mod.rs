@@ -1,3 +1,5 @@
+pub mod add;
+pub mod browser_save;
 pub mod merge;
 pub mod ops;
 pub mod query;
@@ -21,7 +23,8 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
             query,
             entry_type,
             only_pinned,
-        } => query::handle_get_sidebar_entries(query, entry_type, only_pinned, state).await,
+            domain,
+        } => query::handle_get_sidebar_entries(query, entry_type, only_pinned, domain, state).await,
         Action::GetEntry { id, password } => query::handle_get_entry(id, password, state).await,
         Action::GetEntryMeta { id } => query::handle_get_entry_meta(id, state).await,
         Action::GetPassword { id, password } => {
@@ -72,21 +75,28 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
             password,
             notes,
             fields,
+            totp,
+            uris,
         } => {
-            ops::handle_add_entry(name, entry_type, username, password, notes, fields, state).await
+            add::handle_add_entry(
+                name, entry_type, username, password, notes, fields, totp, uris, state,
+            )
+            .await
         }
         Action::AddSecureNote {
             name,
             notes,
             fields,
         } => {
-            ops::handle_add_entry(
+            add::handle_add_entry(
                 name,
                 cosmic_bwarden_core::protocol::EntryType::SecureNote,
                 None,
                 None,
                 Some(notes),
                 fields,
+                None,
+                Vec::new(),
                 state,
             )
             .await
@@ -97,7 +107,7 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
             public_key,
             notes,
             fields,
-        } => ops::handle_add_ssh_key(name, private_key, public_key, notes, fields, state).await,
+        } => add::handle_add_ssh_key(name, private_key, public_key, notes, fields, state).await,
         Action::AddCard {
             name,
             cardholder_name,
@@ -109,7 +119,7 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
             notes,
             fields,
         } => {
-            ops::handle_add_card(
+            add::handle_add_card(
                 name,
                 cardholder_name,
                 brand,
@@ -137,7 +147,7 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
             notes,
             fields,
         } => {
-            ops::handle_add_identity(
+            add::handle_add_identity(
                 name,
                 first_name,
                 last_name,
@@ -153,6 +163,14 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
                 state,
             )
             .await
+        }
+        Action::CheckLoginMatch {
+            domain,
+            username,
+            password,
+        } => browser_save::handle_check_login_match(domain, username, password, state).await,
+        Action::UpdateLoginPassword { id, password } => {
+            browser_save::handle_update_login_password(id, password, state).await
         }
         _ => Response::Error {
             message: "not implemented in vault handler".to_string(),

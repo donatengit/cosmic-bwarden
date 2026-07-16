@@ -38,6 +38,103 @@ pub fn check_protocol_version() -> Task<Message> {
     )
 }
 
+pub fn fetch_sidebar_entries(
+    id: u32,
+    query: Option<String>,
+    entry_type: Option<EntryType>,
+    only_pinned: bool,
+) -> Task<Message> {
+    Task::perform(
+        async move {
+            let agent = AgentClient::new();
+            match agent
+                .send(AgentAction::GetSidebarEntries {
+                    query,
+                    entry_type,
+                    only_pinned,
+                    domain: None,
+                })
+                .await
+            {
+                Ok(Response::SidebarEntries { entries }) => Ok(entries),
+                Ok(Response::Error { message }) => Err(message),
+                _ => Err("unexpected response".to_string()),
+            }
+        },
+        move |res| Action::App(Message::EntriesReceived(id, res)),
+    )
+}
+
+pub fn fetch_applet_search(id: u32, query: Option<String>, only_pinned: bool) -> Task<Message> {
+    Task::perform(
+        async move {
+            let agent = AgentClient::new();
+            match agent
+                .send(AgentAction::GetSidebarEntries {
+                    query,
+                    entry_type: None,
+                    only_pinned,
+                    domain: None,
+                })
+                .await
+            {
+                Ok(Response::SidebarEntries { entries }) => Ok(entries),
+                Ok(Response::Error { message }) => Err(message),
+                _ => Err("unexpected response".to_string()),
+            }
+        },
+        move |res| Action::App(Message::AppletSearchResultsReceived(id, res)),
+    )
+}
+
+pub fn fetch_generator_settings() -> Task<Message> {
+    Task::perform(
+        async move {
+            let agent = AgentClient::new();
+            match agent.send(AgentAction::GetGeneratorSettings).await {
+                Ok(Response::GeneratorSettings { settings }) => Ok(settings),
+                Ok(Response::Error { message }) => Err(message),
+                _ => Err("unexpected response".to_string()),
+            }
+        },
+        |res| Action::App(Message::GeneratorSettingsReceived(res)),
+    )
+}
+
+pub fn fetch_generator_history() -> Task<Message> {
+    Task::perform(
+        async move {
+            let agent = AgentClient::new();
+            match agent.send(AgentAction::GetPasswordHistory).await {
+                Ok(Response::PasswordHistory { entries }) => Ok(entries),
+                Ok(Response::Error { message }) => Err(message),
+                _ => Err("unexpected response".to_string()),
+            }
+        },
+        |res| Action::App(Message::GeneratorHistoryReceived(res)),
+    )
+}
+
+pub fn fetch_applet_secret(id: String, password: Option<String>) -> Task<Message> {
+    Task::perform(
+        async move {
+            let agent = AgentClient::new();
+            match agent
+                .send(AgentAction::GetPassword {
+                    id: id.clone(),
+                    password,
+                })
+                .await
+            {
+                Ok(Response::Password { password }) => Ok(password),
+                Ok(Response::Error { message }) => Err((id, message)),
+                _ => Err((id, "unexpected response".to_string())),
+            }
+        },
+        |res| Action::App(Message::AppletSecretReceived(res)),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -62,71 +159,4 @@ mod tests {
         assert_ne!(build_version, cosmic_bwarden_core::PROTOCOL_VERSION);
         assert!(!protocol_mismatch(cosmic_bwarden_core::PROTOCOL_VERSION));
     }
-}
-
-pub fn fetch_sidebar_entries(
-    id: u32,
-    query: Option<String>,
-    entry_type: Option<EntryType>,
-    only_pinned: bool,
-) -> Task<Message> {
-    Task::perform(
-        async move {
-            let agent = AgentClient::new();
-            match agent
-                .send(AgentAction::GetSidebarEntries {
-                    query,
-                    entry_type,
-                    only_pinned,
-                })
-                .await
-            {
-                Ok(Response::SidebarEntries { entries }) => Ok(entries),
-                Ok(Response::Error { message }) => Err(message),
-                _ => Err("unexpected response".to_string()),
-            }
-        },
-        move |res| Action::App(Message::EntriesReceived(id, res)),
-    )
-}
-
-pub fn fetch_applet_search(id: u32, query: Option<String>, only_pinned: bool) -> Task<Message> {
-    Task::perform(
-        async move {
-            let agent = AgentClient::new();
-            match agent
-                .send(AgentAction::GetSidebarEntries {
-                    query,
-                    entry_type: None,
-                    only_pinned,
-                })
-                .await
-            {
-                Ok(Response::SidebarEntries { entries }) => Ok(entries),
-                Ok(Response::Error { message }) => Err(message),
-                _ => Err("unexpected response".to_string()),
-            }
-        },
-        move |res| Action::App(Message::AppletSearchResultsReceived(id, res)),
-    )
-}
-
-pub fn fetch_applet_secret(id: String, password: Option<String>) -> Task<Message> {
-    Task::perform(
-        async move {
-            let agent = AgentClient::new();
-            match agent
-                .send(AgentAction::GetPassword {
-                    id: id.clone(),
-                    password,
-                })
-                .await
-            {
-                Ok(Response::Password { password }) => Ok(password),
-                Ok(Response::Error { message }) => Err((id, message)),
-                _ => Err((id, "unexpected response".to_string())),
-            }
-        },
-        |res| Action::App(Message::AppletSecretReceived(res)),
-    )
 }

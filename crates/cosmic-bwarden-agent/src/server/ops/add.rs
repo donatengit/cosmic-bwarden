@@ -31,9 +31,16 @@ pub async fn add_entry_on_server(
         );
     }
 
+    // Login-only payloads that don't fit the shared tuple below.
+    let mut totp_enc: Option<String> = None;
+    let mut uris_enc: Option<Vec<serde_json::Value>> = None;
+
     let (ty, u_enc, p_enc, priv_enc, pub_enc, card_payload, identity_payload) = match &entry.data {
         cosmic_bwarden_core::db::EntryData::Login {
-            username, password, ..
+            username,
+            password,
+            totp,
+            uris,
         } => {
             let u_enc = if let Some(u) = username {
                 Some(
@@ -61,6 +68,35 @@ pub async fn add_entry_on_server(
             } else {
                 None
             };
+            if let Some(t) = totp {
+                totp_enc = Some(
+                    match cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(
+                        keys,
+                        t.expose().as_bytes(),
+                    ) {
+                        Ok(cs) => cs.to_string(),
+                        Err(e) => return Err(e.to_string()),
+                    },
+                );
+            }
+            if !uris.is_empty() {
+                let mut encrypted = Vec::with_capacity(uris.len());
+                for uri in uris {
+                    let uri_enc =
+                        match cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(
+                            keys,
+                            uri.uri.as_bytes(),
+                        ) {
+                            Ok(cs) => cs.to_string(),
+                            Err(e) => return Err(e.to_string()),
+                        };
+                    encrypted.push(serde_json::json!({
+                        "uri": uri_enc,
+                        "match": uri.match_type,
+                    }));
+                }
+                uris_enc = Some(encrypted);
+            }
             (1, u_enc, p_enc, None, None, None, None)
         }
         cosmic_bwarden_core::db::EntryData::SecureNote => (2, None, None, None, None, None, None),
@@ -254,6 +290,8 @@ pub async fn add_entry_on_server(
         let name_enc = name_enc.clone();
         let u_enc = u_enc.clone();
         let p_enc = p_enc.clone();
+        let totp_enc = totp_enc.clone();
+        let uris_enc = uris_enc.clone();
         let priv_enc = priv_enc.clone();
         let pub_enc = pub_enc.clone();
         let card_payload = card_payload.clone();
@@ -275,6 +313,8 @@ pub async fn add_entry_on_server(
                             favorite,
                             u_enc.as_deref(),
                             p_enc.as_deref(),
+                            totp_enc.as_deref(),
+                            uris_enc,
                             notes_enc.as_deref(),
                             Some(fields_enc),
                         )

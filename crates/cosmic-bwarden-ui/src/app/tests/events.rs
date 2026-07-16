@@ -6,8 +6,10 @@ use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
 
 #[tokio::test]
 async fn test_auth_window_transition() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Unlock;
+    let mut app = CosmicBWardenApp {
+        view: View::Unlock,
+        ..Default::default()
+    };
 
     // Successful auth
     let _ = app.update(Message::AuthResult(Ok(())));
@@ -17,9 +19,11 @@ async fn test_auth_window_transition() {
 
 #[tokio::test]
 async fn test_reactive_events() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
-    app.selected_entry_id = Some("1".to_string());
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        selected_entry_id: Some("1".to_string()),
+        ..Default::default()
+    };
 
     // 1. Receive Locked event
     let _ = app.update(Message::EventReceived(
@@ -40,8 +44,10 @@ async fn test_reactive_events() {
 // by a logout. Prior code preserved entries and error across the transition.
 #[tokio::test]
 async fn test_event_locked_clears_entries_and_error() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
     let entry = SidebarEntry {
         id: "1".to_string(),
         name: "Some Entry".to_string(),
@@ -77,11 +83,13 @@ async fn test_event_locked_clears_entries_and_error() {
 
 #[tokio::test]
 async fn test_unlock_requested_event_shows_unlock_view() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
-    app.selected_entry_id = Some("1".to_string());
-    // Readiness: an account must be configured, otherwise unlocking is pointless.
-    app.has_account = true;
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        selected_entry_id: Some("1".to_string()),
+        // Readiness: an account must be configured, otherwise unlocking is pointless.
+        has_account: true,
+        ..Default::default()
+    };
     app.config.email = Some("user@example.com".to_string());
 
     let _ = app.update(Message::EventReceived(
@@ -95,8 +103,10 @@ async fn test_unlock_requested_event_shows_unlock_view() {
 async fn test_unlock_requested_ignored_without_account() {
     // No account/email configured — an unlock request must NOT force the unlock
     // prompt (it couldn't succeed). The view stays put; config is re-queried.
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
     assert!(!app.unlock_prompt_ready());
 
     let _ = app.update(Message::EventReceived(
@@ -112,8 +122,10 @@ async fn test_unlock_requested_ignored_without_account() {
 
 #[tokio::test]
 async fn test_pin_requested_ignored_without_account() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
     let _ = app.update(Message::EventReceived(
         cosmic_bwarden_core::protocol::Event::PinRequested,
     ));
@@ -126,8 +138,10 @@ async fn test_pin_requested_ignored_without_account() {
 
 #[tokio::test]
 async fn test_open_entry_event_dispatches_select_entry_when_in_vault() {
-    let mut app = CosmicBWardenApp::default();
-    app.view = View::Vault;
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
 
     // EventReceived(OpenEntry) returns Task::done(SelectEntry(id)).
     // In tests the runtime doesn't execute returned tasks, so we simulate the

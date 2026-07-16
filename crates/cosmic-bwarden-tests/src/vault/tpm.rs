@@ -14,7 +14,7 @@ use crate::common::{register_user, setup_env};
 use anyhow::Result;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action, Response};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use tokio::time::{sleep, Duration};
 
@@ -94,7 +94,7 @@ fn start_swtpm() -> Option<(SwtpmGuard, PathBuf)> {
 }
 
 /// Returns the TCTI string for swtpm given the server socket path.
-fn swtpm_tcti(socket_path: &PathBuf) -> String {
+fn swtpm_tcti(socket_path: &Path) -> String {
     format!(
         "swtpm:path={}",
         socket_path.with_extension("server").display()

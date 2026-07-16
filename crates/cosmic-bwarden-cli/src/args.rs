@@ -11,6 +11,7 @@ use cosmic_bwarden_core::protocol::EntryType as ProtocolEntryType;
   cosmic-bwarden-cli note ls
   cosmic-bwarden-cli get note \"My Note\"
   cosmic-bwarden-cli login (lists all logins)
+  cosmic-bwarden-cli generate --length 20 --special --numbers
 
 Entry types (login, card, identity, note, sshkey) can be used as keywords
 anywhere in the command line."
@@ -194,4 +195,38 @@ ENTRY TYPE DETAILS:
     Quit,
     /// Show version information and check agent compatibility
     Version,
+    /// Generate a password using (and updating) the shared generator settings
+    #[command(
+        long_about = "Generate a password using the device-wide generator settings shared \
+with the desktop UI, applet, and browser extension.\n\n\
+Passing no character-group/length flags reuses whatever was last saved \
+(falling back to a sensible default on first use). Passing any one of \
+-U/-l/-n/-s fully specifies this run's character groups (all four are \
+independently on/off, not additive), and that becomes the new \"last used\" \
+setting for every other surface.",
+        after_help = "EXAMPLES:
+  cosmic-bwarden-cli generate
+  cosmic-bwarden-cli generate --length 20 --special --numbers
+  cosmic-bwarden-cli generate --history"
+    )]
+    Generate {
+        /// Include uppercase letters (A-Z)
+        #[arg(short = 'U', long)]
+        uppercase: bool,
+        /// Include lowercase letters (a-z)
+        #[arg(short = 'l', long)]
+        lowercase: bool,
+        /// Include numbers (0-9)
+        #[arg(short = 'n', long)]
+        numbers: bool,
+        /// Include special characters
+        #[arg(short = 's', long)]
+        special: bool,
+        /// Password length (8-32). Omit to reuse the last-saved length.
+        #[arg(long, value_parser = clap::value_parser!(u8).range(8..=32))]
+        length: Option<u8>,
+        /// Show the last 7 days of generated passwords instead of generating a new one
+        #[arg(long, conflicts_with_all = ["uppercase", "lowercase", "numbers", "special", "length"])]
+        history: bool,
+    },
 }

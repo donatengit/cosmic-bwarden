@@ -182,6 +182,8 @@ async fn test_vault_data_survives_tpm_roundtrip() -> Result<()> {
                 password: Some("pass123".to_string().into()),
                 notes: Some(format!("Note for {}", name).into()),
                 fields: Vec::new(),
+                totp: None,
+                uris: Vec::new(),
             })
             .await?;
     }

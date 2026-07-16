@@ -24,6 +24,7 @@ pub async fn handle_command(
                         query: query.clone(),
                         entry_type,
                         only_pinned: true,
+                        domain: None,
                     })
                     .await?;
                 if let Response::SidebarEntries { entries } = res {
@@ -215,6 +216,8 @@ pub async fn handle_command(
                             password,
                             notes,
                             fields,
+                            totp: None,
+                            uris: Vec::new(),
                         })
                         .await?
                 }

@@ -1,6 +1,7 @@
 use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::fetch_sidebar_entries;
 use crate::message::{Message, View};
+use crate::view::vault::sidebar;
 use cosmic::app::Task;
 use cosmic::Action;
 use cosmic_bwarden_core::agent_client::AgentClient;
@@ -53,8 +54,24 @@ impl CosmicBWardenApp {
                 );
                 Some(Task::none())
             }
-            Message::FilterTypeChanged(t) => {
-                self.filter_type = t;
+            Message::PaneResized(event) => {
+                // The window-resize hook fires before any drag can happen, so
+                // the width is known here in practice; fall back to no minimum
+                // rather than guessing one.
+                let min_ratio = self
+                    .vault_window_width
+                    .map_or(0.0, crate::app::state::sidebar_min_ratio);
+                let ratio = event
+                    .ratio
+                    .clamp(min_ratio, crate::app::state::SIDEBAR_MAX_RATIO);
+                self.vault_panes.resize(event.split, ratio);
+                self.sidebar_ratio = ratio;
+                Some(Task::none())
+            }
+            Message::FilterTabActivated(entity) => {
+                self.filter_model.activate(entity);
+                let idx = self.filter_model.position(entity).unwrap_or(0);
+                self.filter_type = sidebar::idx_to_filter(idx as usize);
                 self.entries = apply_local_filter(
                     &self.all_entries,
                     &self.search_query,
@@ -492,6 +509,35 @@ impl CosmicBWardenApp {
                 Some(Task::none())
             }
             _ => None,
+        }
+    }
+
+    /// Runtime hook (via `Application::on_window_resize`): records the vault
+    /// window's width and keeps the sidebar within its limits. On the first
+    /// report the split snaps to exactly `SIDEBAR_MIN_WIDTH`, which is the
+    /// width the vault opens with; on later reports the current ratio is only
+    /// re-clamped, so shrinking the window never drops the sidebar below the
+    /// pixel minimum.
+    pub(crate) fn vault_window_resized(&mut self, width: f32) {
+        if width <= 0.0 {
+            return;
+        }
+        let first = self.vault_window_width.is_none();
+        self.vault_window_width = Some(width);
+
+        let min_ratio = crate::app::state::sidebar_min_ratio(width);
+        let ratio = if first {
+            min_ratio
+        } else {
+            self.sidebar_ratio
+                .clamp(min_ratio, crate::app::state::SIDEBAR_MAX_RATIO)
+        };
+        if ratio != self.sidebar_ratio {
+            let split = self.vault_panes.layout().splits().next().copied();
+            if let Some(split) = split {
+                self.vault_panes.resize(split, ratio);
+            }
+            self.sidebar_ratio = ratio;
         }
     }
 }

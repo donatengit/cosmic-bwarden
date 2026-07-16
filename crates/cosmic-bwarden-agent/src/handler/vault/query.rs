@@ -110,6 +110,7 @@ pub async fn handle_get_sidebar_entries(
     query: Option<String>,
     entry_type: Option<EntryType>,
     only_pinned: bool,
+    domain: Option<String>,
     state: &Arc<Mutex<State>>,
 ) -> Response {
     let state_guard = state.lock().await;
@@ -120,10 +121,19 @@ pub async fn handle_get_sidebar_entries(
     }
 
     let q = query.as_deref().map(str::to_lowercase);
+    // A typed search wins over the tab-domain filter (the popup sends one or
+    // the other; defined here so mixed clients behave predictably).
+    let d = match &q {
+        None => domain
+            .as_deref()
+            .and_then(cosmic_bwarden_core::domain::host_from_uri),
+        Some(_) => None,
+    };
     let entries: Vec<SidebarEntry> = state_guard
         .sidebar_cache
         .iter()
-        .filter(|e| {
+        .filter(|c| {
+            let e = &c.entry;
             if only_pinned && !e.is_pinned {
                 return false;
             }
@@ -153,9 +163,15 @@ pub async fn handle_get_sidebar_entries(
                     .map(|u| u.to_lowercase().contains(q.as_str()))
                     .unwrap_or(false);
             }
+            if let Some(d) = &d {
+                return c
+                    .hosts
+                    .iter()
+                    .any(|h| cosmic_bwarden_core::domain::hosts_match(h, d));
+            }
             true
         })
-        .cloned()
+        .map(|c| c.entry.clone())
         .collect();
 
     Response::SidebarEntries { entries }

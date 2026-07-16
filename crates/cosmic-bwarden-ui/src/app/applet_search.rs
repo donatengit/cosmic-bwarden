@@ -30,30 +30,20 @@ pub fn truncate_label(s: &str) -> String {
     s.chars().take(APPLET_LABEL_MAX_LEN).collect()
 }
 
-/// Extracts the eTLD+1 (e.g. `"facebook.com"`) from a hostname-like name.
-/// Falls back to the original name if it doesn't look like a URL/hostname.
+/// Extracts a compact domain label (e.g. `"facebook.com"`) from a
+/// hostname-like name. Falls back to the original name if it doesn't look
+/// like a URL/hostname. With the `public_suffix_list` feature the label is
+/// the PSL-derived eTLD+1 (`www.example.co.uk` → `example.co.uk`); without
+/// it, the full host — never a naive last-two-labels cut, which displayed
+/// `example.co.uk` as `co.uk`.
 pub fn extract_domain_label(name: &str) -> String {
-    // Strip protocol prefix if present
-    let stripped = name
-        .strip_prefix("https://")
-        .or_else(|| name.strip_prefix("http://"))
-        .unwrap_or(name);
-
-    // Take only the host part (before any path)
-    let host = stripped.split('/').next().unwrap_or(stripped);
-
-    // Must look like a hostname: no spaces, has a dot, no @ (email)
-    if host.contains(' ') || !host.contains('.') || host.contains('@') {
+    let Some(host) = cosmic_bwarden_core::domain::host_from_name(name) else {
         return name.to_string();
+    };
+    match cosmic_bwarden_core::domain::registrable_domain(&host) {
+        Some(d) => d.to_string(),
+        None => host,
     }
-
-    // Extract eTLD+1: last two dot-separated segments
-    if let Some(last_dot) = host.rfind('.') {
-        if let Some(prev_dot) = host[..last_dot].rfind('.') {
-            return host[prev_dot + 1..].to_string();
-        }
-    }
-    host.to_string()
 }
 
 /// Returns `true` if `name` looks like a URL or bare hostname that a browser
@@ -145,21 +135,39 @@ mod tests {
         assert_eq!(truncate_label("short"), "short");
     }
 
+    #[cfg(feature = "public_suffix_list")]
     #[test]
     fn extract_domain_label_strips_subdomain() {
         assert_eq!(extract_domain_label("account.facebook.com"), "facebook.com");
         assert_eq!(extract_domain_label("www.facebook.com"), "facebook.com");
     }
 
+    #[cfg(feature = "public_suffix_list")]
     #[test]
     fn extract_domain_label_strips_protocol_and_path() {
         assert_eq!(
             extract_domain_label("https://account.facebook.com/login"),
             "facebook.com"
         );
+        // The PSL knows co.uk is a public suffix; the old last-two-labels
+        // cut displayed this as "co.uk".
         assert_eq!(
             extract_domain_label("http://www.example.co.uk/path"),
-            "co.uk"
+            "example.co.uk"
+        );
+    }
+
+    #[cfg(not(feature = "public_suffix_list"))]
+    #[test]
+    fn extract_domain_label_without_psl_keeps_full_host() {
+        assert_eq!(
+            extract_domain_label("account.facebook.com"),
+            "account.facebook.com"
+        );
+        assert_eq!(extract_domain_label("www.facebook.com"), "facebook.com");
+        assert_eq!(
+            extract_domain_label("http://www.example.co.uk/path"),
+            "example.co.uk"
         );
     }
 

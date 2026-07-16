@@ -137,10 +137,69 @@ async fn test_browser_host_proxy_comprehensive() -> anyhow::Result<()> {
         &mut stdin,
         &mut stdout,
     )?;
-    // Should return Error (locked) but verifies serialization/routing
+    // Should return Error (locked) but verifies serialization/routing.
+    // Note: no "uris"/"totp" keys above — that is the current popup payload,
+    // guarding the #[serde(default)] backward compatibility of AddEntry.
     assert!(resp.get("Error").is_some());
     let err_msg = resp["Error"]["message"].as_str().unwrap();
     assert!(err_msg.contains("locked") || err_msg.contains("logged in"));
+
+    // 8b. Test AddEntry with the extended Login payload (uris + totp)
+    let resp = send_receive_raw(
+        serde_json::json!({
+            "AddEntry": {
+                "name": "example.com",
+                "entry_type": "Login",
+                "username": "testuser",
+                "password": "testpassword",
+                "notes": null,
+                "fields": [],
+                "totp": "JBSWY3DPEHPK3PXP",
+                "uris": [{ "uri": "https://example.com", "match_type": null }]
+            }
+        }),
+        &mut stdin,
+        &mut stdout,
+    )?;
+    assert!(
+        resp.get("Error").is_some(),
+        "expected locked Error, got {resp:?}"
+    );
+
+    // 8c. Test CheckLoginMatch (browser save-prompt) routing
+    let resp = send_receive_raw(
+        serde_json::json!({
+            "CheckLoginMatch": {
+                "domain": "example.com",
+                "username": "testuser",
+                "password": "testpassword"
+            }
+        }),
+        &mut stdin,
+        &mut stdout,
+    )?;
+    let err_msg = resp["Error"]["message"].as_str().unwrap();
+    assert!(
+        err_msg.contains("locked"),
+        "expected locked Error, got {err_msg}"
+    );
+
+    // 8d. Test UpdateLoginPassword (browser save-prompt) routing
+    let resp = send_receive_raw(
+        serde_json::json!({
+            "UpdateLoginPassword": {
+                "id": "some-id",
+                "password": "newpassword"
+            }
+        }),
+        &mut stdin,
+        &mut stdout,
+    )?;
+    let err_msg = resp["Error"]["message"].as_str().unwrap();
+    assert!(
+        err_msg.contains("locked"),
+        "expected locked Error, got {err_msg}"
+    );
 
     // 9. Test Invalid Protocol Message (Negative test)
     // Send something that isn't a valid Action
