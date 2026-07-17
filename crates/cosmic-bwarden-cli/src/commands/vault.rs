@@ -160,6 +160,7 @@ pub async fn handle_command(
             args,
             field,
             secret_field,
+            stdin,
         } => {
             let t = entry_type.unwrap_or(ProtocolEntryType::Login);
 
@@ -174,7 +175,14 @@ pub async fn handle_command(
                     match k {
                         "username" | "user" => username = Some(v.to_string()),
                         "password" | "pass" => password = Some(Secret::from(v.to_string())),
-                        "notes" | "note" => notes = Some(Secret::from(v.to_string())),
+                        "notes" | "note" => {
+                            if *stdin {
+                                anyhow::bail!(
+                                    "Cannot pass notes=... together with --stdin; choose one"
+                                );
+                            }
+                            notes = Some(Secret::from(v.to_string()))
+                        }
                         "private_key" | "private" => {
                             private_key = Some(Secret::from(v.to_string()))
                         }
@@ -182,6 +190,15 @@ pub async fn handle_command(
                         _ => (),
                     }
                 }
+            }
+
+            if *stdin {
+                use std::io::Read;
+                let mut buf = String::new();
+                std::io::stdin()
+                    .read_to_string(&mut buf)
+                    .map_err(|e| anyhow::anyhow!("Failed to read notes from stdin: {e}"))?;
+                notes = Some(Secret::from(buf));
             }
 
             let mut fields = Vec::new();
@@ -252,6 +269,7 @@ pub async fn handle_command(
             args,
             field,
             secret_field,
+            stdin,
         } => {
             let id = resolve_id(client, id_or_name, entry_type).await?;
             let entry_res = client
@@ -273,7 +291,14 @@ pub async fn handle_command(
                 if let Some((k, v)) = arg.split_once('=') {
                     match k {
                         "name" => entry.name = v.to_string(),
-                        "notes" | "note" => entry.notes = Some(Secret::from(v.to_string())),
+                        "notes" | "note" => {
+                            if *stdin {
+                                anyhow::bail!(
+                                    "Cannot pass notes=... together with --stdin; choose one"
+                                );
+                            }
+                            entry.notes = Some(Secret::from(v.to_string()))
+                        }
                         _ => match &mut entry.data {
                             cosmic_bwarden_core::db::EntryData::Login {
                                 username,
@@ -301,6 +326,15 @@ pub async fn handle_command(
                         },
                     }
                 }
+            }
+
+            if *stdin {
+                use std::io::Read;
+                let mut buf = String::new();
+                std::io::stdin()
+                    .read_to_string(&mut buf)
+                    .map_err(|e| anyhow::anyhow!("Failed to read notes from stdin: {e}"))?;
+                entry.notes = Some(Secret::from(buf));
             }
 
             for f in field {

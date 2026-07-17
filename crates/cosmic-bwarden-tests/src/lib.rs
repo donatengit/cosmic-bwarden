@@ -21,6 +21,8 @@ mod generator;
 #[cfg(test)]
 mod ipc_hardening;
 #[cfg(test)]
+mod notes_stdin_cli;
+#[cfg(test)]
 mod paths;
 #[cfg(test)]
 mod pinned_ops;

@@ -130,11 +130,15 @@ pub enum Commands {
   cosmic-bwarden-cli login add \"My Account\" username=user1
   cosmic-bwarden-cli add note \"My Note\" notes=\"Some text\"
   cosmic-bwarden-cli sshkey add \"Work Key\" private_key=X
+  cat credentials.yaml | cosmic-bwarden-cli add note \"AWS Creds\" --stdin
 
 ENTRY TYPE DETAILS:
   For login:  username=X, password=Y, notes=N
   For note:   any key=value will be added to the note body.
-  For sshkey: private_key=X, public_key=Y, notes=N"
+  For sshkey: private_key=X, public_key=Y, notes=N
+
+--stdin reads the entry's notes from standard input (e.g. piping in a
+credentials.yaml or env_vars.sh file) instead of a notes=/note= pair."
     )]
     Add {
         /// Name of the entry
@@ -148,8 +152,17 @@ ENTRY TYPE DETAILS:
         /// Secret custom fields (name=value)
         #[arg(short = 's', long = "secret-field", value_name = "NAME=VALUE")]
         secret_field: Vec<String>,
+        /// Read notes content from standard input instead of notes=/note=
+        #[arg(long, action = clap::ArgAction::SetTrue)]
+        stdin: bool,
     },
     /// Edit an existing entry
+    #[command(after_help = "EXAMPLES:
+  cosmic-bwarden-cli edit \"My Account\" password=newpass
+  cat env_vars.sh | cosmic-bwarden-cli edit \"My Note\" --stdin
+
+--stdin reads the entry's notes from standard input instead of a
+notes=/note= pair.")]
     Edit {
         /// Entry ID or Name
         id_or_name: String,
@@ -162,6 +175,9 @@ ENTRY TYPE DETAILS:
         /// Secret custom fields to add/update (name=value)
         #[arg(short = 's', long = "secret-field", value_name = "NAME=VALUE")]
         secret_field: Vec<String>,
+        /// Read notes content from standard input instead of notes=/note=
+        #[arg(long, action = clap::ArgAction::SetTrue)]
+        stdin: bool,
     },
     /// Add a new secure note (alias)
     #[command(hide = true)]
