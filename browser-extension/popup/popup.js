@@ -12,6 +12,7 @@ const statusDiv   = document.getElementById('status');
 const viewList    = document.getElementById('view-list');
 const viewDetail  = document.getElementById('view-detail');
 const viewEdit    = document.getElementById('view-edit');
+const viewLocked  = document.getElementById('view-locked');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentEntry = null;
@@ -45,7 +46,7 @@ window.onerror = (msg, url, line) => showStatus(`JS Error: ${msg} at ${line}`);
 // ── View management ───────────────────────────────────────────────────────────
 function showView(view) {
     currentView = view;
-    [viewList, viewDetail, viewEdit].forEach(v => v.classList.add('hidden'));
+    [viewList, viewDetail, viewEdit, viewLocked].forEach(v => v.classList.add('hidden'));
     [backBtn, searchInput, favBtn, addBtn, syncBtn, lockBtn].forEach(b => b.classList.add('hidden'));
 
     if (view === 'list') {
@@ -58,6 +59,8 @@ function showView(view) {
     } else if (view === 'edit') {
         viewEdit.classList.remove('hidden');
         backBtn.classList.remove('hidden');
+    } else if (view === 'locked') {
+        viewLocked.classList.remove('hidden');
     }
 }
 
@@ -86,7 +89,7 @@ async function updateResults() {
         if (configResp.Config) {
             if (configResp.Config.is_locked) {
                 await browser.runtime.sendMessage("RequestUnlock");
-                showStatus("Vault is locked — unlock via the COSMIC applet.");
+                await showLockedView();
                 return;
             }
             if (configResp.Config.needs_login) {

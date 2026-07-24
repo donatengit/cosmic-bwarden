@@ -2,7 +2,7 @@ use crate::app::CosmicBWardenApp;
 use crate::fl;
 use crate::message::{Message, View};
 use cosmic::iced::{Alignment, Length};
-use cosmic::widget::{button, container, divider, icon, list_column, segmented_button, text};
+use cosmic::widget::{button, container, icon, list_column, segmented_button, text};
 use cosmic::Element;
 use cosmic_bwarden_core::protocol::EntryType;
 
@@ -45,7 +45,22 @@ impl CosmicBWardenApp {
 
         let mut sidebar = column::with_capacity(6).spacing(10).height(Length::Fill);
 
-        // Search Bar
+        // Type filter as a joint segmented control. The Custom style
+        // delegates to the stock Control appearance — identical look, but the
+        // widget only draws (and reserves width for) the active-item
+        // checkmark when the style is literally `Control`, so this drops it.
+        let filter_control = cosmic::widget::segmented_control::horizontal(&self.filter_model)
+            .on_activate(Message::FilterTabActivated)
+            .style(cosmic::theme::SegmentedButton::Custom(Box::new(|theme| {
+                segmented_button::StyleSheet::horizontal(
+                    theme,
+                    &cosmic::theme::SegmentedButton::Control,
+                )
+            })))
+            .width(Length::Fill);
+        sidebar = sidebar.push(filter_control);
+
+        // Search Bar + Favourites toggle
         let search_bar = search_input(fl!("search"), &self.search_query)
             .on_input(Message::SearchChanged)
             .width(Length::Fill);
@@ -65,22 +80,6 @@ impl CosmicBWardenApp {
                 .push(search_bar)
                 .push(star_btn),
         );
-
-        // Type filter as a joint segmented control. The Custom style
-        // delegates to the stock Control appearance — identical look, but the
-        // widget only draws (and reserves width for) the active-item
-        // checkmark when the style is literally `Control`, so this drops it.
-        let filter_control = cosmic::widget::segmented_control::horizontal(&self.filter_model)
-            .on_activate(Message::FilterTabActivated)
-            .style(cosmic::theme::SegmentedButton::Custom(Box::new(|theme| {
-                segmented_button::StyleSheet::horizontal(
-                    theme,
-                    &cosmic::theme::SegmentedButton::Control,
-                )
-            })))
-            .width(Length::Fill);
-        sidebar = sidebar.push(filter_control);
-        sidebar = sidebar.push(divider::horizontal::default());
 
         // Entry List
         let mut list = list_column();
@@ -102,8 +101,6 @@ impl CosmicBWardenApp {
         sidebar = sidebar.push(cosmic::widget::scrollable(list).height(Length::Fill));
 
         // Bottom Actions
-        sidebar = sidebar.push(divider::horizontal::default());
-
         // Row 1: Add and Password Generator (never accented — a secondary
         // tool, not a primary navigation destination like Settings).
         sidebar = sidebar.push(

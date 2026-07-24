@@ -23,18 +23,33 @@ const DOMAIN_ENTRIES = [
   { id: '1', name: 'Test Login', username: 'testuser', entry_type: 'Login', is_pinned: false }
 ];
 
-function buildMock({ isLocked = false, tabUrl = null, entriesForQuery = null } = {}) {
+function buildMock({ isLocked = false, tabUrl = null, entriesForQuery = null, tpmStatus = null, unlockPinResult = null } = {}) {
   const entries = JSON.stringify(entriesForQuery ?? ALL_ENTRIES);
+  const tpm = JSON.stringify(tpmStatus ?? { available: false, configured: false, server_credentials: false });
   return `
     window._sentMessages = [];
+    window._locked = ${isLocked};
     window.browser = {
       runtime: {
         sendMessage: async (message) => {
           window._sentMessages.push(JSON.parse(JSON.stringify(message)));
-          if (message === 'GetConfig') return { Config: { is_locked: ${isLocked}, needs_login: false } };
-          if (message === 'RequestUnlock') return { Ack: true };
-          if (message === 'Sync') return { Ack: true };
-          if (message === 'Lock') return { Ack: true };
+          if (message === 'GetConfig') return { Config: { is_locked: window._locked, needs_login: false } };
+          // Response::Ack is a unit enum variant — the real agent (via serde_json)
+          // serializes it as the bare string "Ack", never { Ack: true }. Mocking
+          // it as an object here previously hid a real bug (popup-lock.js only
+          // checked resp.Ack, so a successful UnlockWithPin fell through to
+          // "Unexpected agent response." against the real agent).
+          if (message === 'RequestUnlock') return 'Ack';
+          if (message === 'Sync') return 'Ack';
+          if (message === 'Lock') return 'Ack';
+          if (message === 'CheckTpm') return { TpmStatus: ${tpm} };
+          if (message === 'GetTpmDaStatus')
+            return { TpmDaStatus: { status: { available: true, max_tries: 32, lockout_counter: 3, remaining: 29, in_lockout: false, recovery_interval_secs: null } } };
+          if (message && message.UnlockWithPin) {
+            const result = ${JSON.stringify(unlockPinResult ?? { Error: { message: 'TPM unseal failed' } })};
+            if (result === 'Ack' || (result && result.Ack)) window._locked = false;
+            return result;
+          }
           if (message && message.GetSidebarEntries)
             return { SidebarEntries: { entries: ${entries} } };
           if (message && message.GetEntryMeta)
@@ -151,19 +166,94 @@ test.describe('Extension Popup', () => {
   });
 });
 
-test.describe('Extension Popup — locked vault', () => {
+test.describe('Extension Popup — locked vault, no PIN configured', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(buildMock({ isLocked: true }));
     await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
   });
 
-  test('shows locked status and sends RequestUnlock to agent', async ({ page }) => {
-    await expect(page.locator('#status')).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('#status')).toContainText('locked');
+  test('shows locked message (no PIN input) and sends RequestUnlock to agent', async ({ page }) => {
+    await expect(page.locator('#view-locked')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('#locked-message')).toContainText('locked');
+    await expect(page.locator('#locked-pin-group')).not.toBeVisible();
 
     expect(await page.evaluate(() =>
       window._sentMessages.some(m => m === 'RequestUnlock')
     )).toBe(true);
+    expect(await page.evaluate(() =>
+      window._sentMessages.some(m => m === 'CheckTpm')
+    )).toBe(true);
+  });
+});
+
+test.describe('Extension Popup — locked vault, PIN unlock configured', () => {
+  const pinTpmStatus = { available: true, configured: true, server_credentials: false };
+
+  test('shows the PIN input', async ({ page }) => {
+    await page.addInitScript(buildMock({ isLocked: true, tpmStatus: pinTpmStatus }));
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+
+    await expect(page.locator('#locked-pin-group')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('#locked-fallback-btn')).toBeVisible();
+  });
+
+  test('correct PIN unlocks and returns to the entry list', async ({ page }) => {
+    await page.addInitScript(buildMock({
+      isLocked: true, tpmStatus: pinTpmStatus, unlockPinResult: 'Ack',
+    }));
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+
+    await page.locator('#locked-pin-input').fill('1234');
+    await page.locator('#locked-unlock-btn').click();
+
+    await expect(page.locator('#view-list')).toBeVisible({ timeout: 5000 });
+    const msgs = await page.evaluate(() => window._sentMessages);
+    expect(msgs.some(m => m && m.UnlockWithPin && m.UnlockWithPin.pin === '1234')).toBe(true);
+  });
+
+  test('wrong PIN shows attempts-remaining feedback and stays locked', async ({ page }) => {
+    await page.addInitScript(buildMock({
+      isLocked: true, tpmStatus: pinTpmStatus,
+      unlockPinResult: { Error: { message: 'TPM unseal failed' } },
+    }));
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+
+    await page.locator('#locked-pin-input').fill('0000');
+    await page.locator('#locked-unlock-btn').click();
+
+    await expect(page.locator('#locked-feedback')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('#locked-feedback')).toContainText('29 of 32 attempts remaining');
+    await expect(page.locator('#view-locked')).toBeVisible();
+    // The PIN field is cleared after a failed attempt.
+    expect(await page.locator('#locked-pin-input').inputValue()).toBe('');
+
+    const msgs = await page.evaluate(() => window._sentMessages);
+    expect(msgs.some(m => m === 'GetTpmDaStatus')).toBe(true);
+  });
+
+  test('an environmental error is shown as-is, not as an incorrect PIN', async ({ page }) => {
+    await page.addInitScript(buildMock({
+      isLocked: true, tpmStatus: pinTpmStatus,
+      unlockPinResult: { Error: { message: 'no account configured — please login first' } },
+    }));
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+
+    await page.locator('#locked-pin-input').fill('1234');
+    await page.locator('#locked-unlock-btn').click();
+
+    await expect(page.locator('#locked-feedback')).toContainText('no account configured');
+  });
+
+  test('fallback button switches to the master-password-elsewhere message', async ({ page }) => {
+    await page.addInitScript(buildMock({ isLocked: true, tpmStatus: pinTpmStatus }));
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+
+    await expect(page.locator('#locked-pin-group')).toBeVisible({ timeout: 5000 });
+    await page.locator('#locked-fallback-btn').click();
+
+    await expect(page.locator('#locked-pin-group')).not.toBeVisible();
+    await expect(page.locator('#locked-fallback-btn')).not.toBeVisible();
+    await expect(page.locator('#locked-message')).toContainText('COSMIC app or applet');
   });
 });
 

@@ -204,6 +204,53 @@ Clicking the icon fills every field in its group (e.g. both "new" and
 - See `AGENTS.md`'s "Password Generator" section for the at-rest protection
   (and threat model) of the local 7-day history the agent maintains.
 
+## PIN Unlock (TPM 2.0)
+
+The popup offers a quick PIN unlock when the vault is locked, mirroring the
+desktop UI's PIN flow (see `AGENTS.md`'s "TPM PIN Unlock" section). The
+extension only ever collects a PIN here — master password unlock stays a
+desktop/CLI-only action; the popup never collects the master password, so the
+"thin client, no secrets" invariant holds for the locked state too.
+
+### Message flow
+
+```
+popup opens, GetConfig → is_locked: true
+      ▼
+RequestUnlock (unchanged — lets the desktop applet also react)
+      ▼
+CheckTpm → TpmStatus{available, configured}
+      ▼
+available && configured?
+   yes → show PIN input (view-locked / popup-lock.js)
+   no  → show the existing "unlock via the COSMIC app or applet" message
+
+PIN submitted → UnlockWithPin{pin}
+   Ack                              → back to the entry list (re-fetches GetConfig/entries)
+   Error{ERR_TPM_UNSEAL_FAILED}      → GetTpmDaStatus → show attempts-remaining/lockout line
+   Error{other message}              → shown as-is (environmental failure, not a wrong PIN)
+```
+
+`CheckTpm` and `GetTpmDaStatus` are safe to call on any build: without the
+agent's `tpm` feature they return `TpmStatus{available:false,...}` /
+`TpmDaStatus::default()` rather than erroring, so the popup always falls back
+to the plain locked message when TPM PIN unlock isn't compiled in or not
+configured for the account.
+
+### Script load order gotcha
+
+`popup-lock.js` (which defines `showLockedView`) is loaded **before**
+`popup.js` in `popup.html`, not after, even though it calls `popup.js`
+globals (`showView`, `browser`) from its function bodies. `popup.js`'s init
+IIFE `await`s `browser.tabs.query`, and browsers run a microtask checkpoint
+— which can resume that `await` — right after a `<script>`'s synchronous
+portion finishes, *before* the parser reaches the next `<script>` tag. If
+`popup-lock.js` loaded after `popup.js`, that resumed continuation could call
+`showLockedView()` before it was defined. Loading it first sidesteps the
+race: nothing at `popup-lock.js`'s own top level calls into `popup.js`, so
+order doesn't matter for it, but order very much matters for what `popup.js`
+can already call by the time its `await` resolves.
+
 ## Verification
 
 The integration is verified by an E2E test suite in `crates/cosmic-bwarden-tests/src/browser_host.rs`. This test:

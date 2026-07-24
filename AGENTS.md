@@ -146,6 +146,7 @@ Source lives in `browser-extension/`. Plain vanilla JS — no bundler, no framew
 | `content-submit.js` | Login-form submit detection → `LOGIN_SUBMITTED` to background |
 | `content-bar.js` | In-page "Save/Update password?" notification bar (open shadow root; never receives the password) |
 | `popup/popup.js` | View management, list rendering, fill, domain helpers |
+| `popup/popup-lock.js` | Locked-vault view: TPM PIN unlock, DA lockout feedback; loaded *before* `popup.js` — see `docs/browser_integration.md`'s "Script load order gotcha" |
 | `popup/popup-detail.js` | Detail view, secret reveal/copy (on-demand via `GetPassword`) |
 | `popup/popup-edit.js` | Edit/add form, field rendering |
 | `popup/popup.css` | CSS custom properties; dark mode via `prefers-color-scheme` |

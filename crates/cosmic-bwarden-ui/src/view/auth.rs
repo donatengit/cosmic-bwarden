@@ -1,7 +1,7 @@
 use crate::app::CosmicBWardenApp;
 use crate::fl;
 use crate::message::{Message, View};
-use crate::view::style::{brand_icon, muted_text};
+use crate::view::style::muted_text;
 use crate::MIN_PIN_LEN;
 use cosmic::iced::Length;
 use cosmic::widget::{button, list_column, secure_input, settings as cosmic_settings, text};
@@ -115,7 +115,6 @@ impl CosmicBWardenApp {
             }
 
             cosmic::widget::dialog()
-                .icon(brand_icon(48))
                 .title(fl!("welcome-title"))
                 .body(fl!("welcome-body"))
                 .control(login_col)
@@ -159,7 +158,6 @@ impl CosmicBWardenApp {
                 .on_press(Message::AppletUseMasterPasswordInstead);
 
             cosmic::widget::dialog()
-                .icon(brand_icon(48))
                 .title(fl!("vault-locked"))
                 .body(fl!("enter-pin-to-unlock"))
                 .control(pin_col)
@@ -227,7 +225,6 @@ impl CosmicBWardenApp {
             let logout_btn = button::standard(fl!("logout")).on_press(Message::LogoutClicked);
 
             cosmic::widget::dialog()
-                .icon(brand_icon(48))
                 .title(fl!("vault-locked"))
                 .body(fl!("enter-master-password-to-unlock"))
                 .control(unlock_col)

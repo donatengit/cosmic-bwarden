@@ -154,11 +154,14 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
 - [x] ~~Branded symbolic panel icon~~ `[U4-7]` — *done 2026-07 for the applet
       button*: `resources/icons/cosmic-bwarden-symbolic.svg` embedded via
       `icon::from_svg_bytes(...).symbolic(true)` + `icon_button_from_handle`
-      (see `docs/cosmic_integration.md`), no icon-theme install needed. Still
-      open: the `.desktop`/`.ron` `Icon=`/`icon:` fields (launcher/app-switcher
-      context) still point at the generic `password-manager-symbolic` theme
-      icon — installing our own icon into hicolor for those is a separate,
-      smaller follow-up.
+      (see `docs/cosmic_integration.md`), no icon-theme install needed. The
+      `.desktop` `Icon=` field (window/dock context) now points at
+      `com.enikeev.cosmic_bwarden`, installed into hicolor from
+      `icons/black.svg` + rasters by `just install`/`clean-install`/
+      `user-install`. The `.ron` `icon:` field (panel-applet listing in COSMIC
+      Settings) intentionally stays on the generic `password-manager-symbolic`
+      theme icon — it's rendered small/recolored like the panel button, so a
+      dedicated asset isn't worth it there.
 - [x] ~~Read PrepareForSleep's bool arg; don't re-lock on resume~~ `[U4-8]` — *done
       2026-07*: `logind.rs` now deserializes the bool from
       `PrepareForSleep`/`PrepareForShutdown` (fails toward locking), skips the
@@ -167,6 +170,27 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
       guaranteed to finish before a hibernate image of RAM hits disk — released
       after lock, re-armed on resume; degrades to the old racy behavior with a
       warning if polkit denies it.
+- [ ] **State-dependent applet panel icon** — every stateful official COSMIC
+      applet (`cosmic-applet-network`, `-bluetooth`, `-audio`, `-battery` in
+      `tmp_code_examples/cosmic_examples/cosmic-applets`) recomputes its icon
+      name from current state and swaps it on every relevant change (e.g.
+      bluetooth enabled/disabled, audio mute/volume-tier). Ours
+      (`view/applet/mod.rs`) always renders the same static embedded
+      `APPLET_ICON_SVG` regardless of locked/unlocked/needs-login/sync-failed
+      state. No COSMIC applet has a "locked" concept to copy an icon name
+      from, so this needs a freeform choice (e.g. a padlock overlay or dimmed
+      variant when locked) — the applicable *pattern* from the examples is
+      "state field → icon lookup," not a specific icon name.
+- [ ] **`.desktop`/`.ron` panel-overflow metadata** — 17 of ~18 official
+      applets set `X-CosmicShrinkable=true` plus a numeric `X-OverflowPriority`
+      (verified against `cosmic-panel-bin/src/space/wrapper_space.rs` in
+      `tmp_code_examples/cosmic_examples/cosmic-panel`, current as of
+      2026-07-24); ours sets neither, so on a crowded panel we get whatever
+      default behavior applies to unmarked applets instead of a deliberate
+      choice. Add both fields to
+      `crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop`
+      and the justfile's inline `.ron` generation (mirrors the `.desktop` file
+      per `docs/cosmic_integration.md`).
 - [ ] Test stricter systemd sandboxing (ProtectHome + ReadWritePaths, ProtectSystem=strict,
       SystemCallFilter) against keyring/TPM/network, then adopt.
 - [ ] Research: Wayland autotype; passkeys/FIDO2; attachments.

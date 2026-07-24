@@ -50,10 +50,47 @@ correctly in dev builds too — and `symbolic(true)` makes libcosmic recolor it
 to match the panel's light/dark foreground automatically, no separate
 black/white variants needed.
 
-The `.desktop`/`.ron` `Icon=`/`icon:` fields still reference the theme name
-`password-manager-symbolic` (used for the launcher/app-switcher context, not
-the panel button); installing a dedicated icon into the hicolor theme for
-those is separate, tracked polish (`docs/roadmap.md` UX backlog).
+The `.ron` `icon:` field still references the generic theme name
+`password-manager-symbolic` (used only for the panel-applet listing in COSMIC
+Settings) — that one's fine as a placeholder since it's rendered small and
+recolored like the panel button.
+
+The `.desktop` `Icon=` field is different: it's what the window manager/dock
+resolves for the "big" window/taskbar icon when the app runs standalone, so it
+needs a real installed icon, not a generic theme name. `just install` /
+`clean-install` / `user-install` install the repo's full detailed brand mark
+(`icons/black.svg`, plus `black{16,32,64,128}.png` — the same source as
+`FULL_ICON_SVG` in `view/style.rs`, not the simplified panel glyph) into the
+hicolor icon theme as `com.enikeev.cosmic_bwarden`, and `Icon=` in the
+`.desktop` file points at that name. `cargo deb`'s asset list
+(`crates/cosmic-bwarden-ui/Cargo.toml`) mirrors this same hicolor layout.
+
+### No light/dark variant for the standalone icon (and why)
+
+`icons/white.svg`/`white{16,32,64,128}.png` exist in the repo (used by the
+**browser extension**'s toolbar icon, which does its own theme detection in
+JS — see `docs/browser_integration.md`), but they are **not** installed as an
+alternate `com.enikeev.cosmic_bwarden` for dark theme, and that's
+intentional, not an oversight: unlike the panel button's `symbolic(true)`
+runtime recolor (a libcosmic/iced feature that only applies to icons *we*
+render ourselves), there is no OS-level mechanism that swaps a plain hicolor
+app icon by system light/dark preference — confirmed against
+`tmp_code_examples/cosmic_examples/cosmic-settings` and `toot`, both of which
+ship exactly one icon for their standalone app identity, no pair. Trying to
+install `white.svg` under the same `com.enikeev.cosmic_bwarden` name would
+just silently never be selected by anything.
+
+What *is* real: the freedesktop `-symbolic` suffix convention, which some
+consumers (app-icon pickers, launchers/search results, anything that renders
+it the way we render our own panel button) will look up and recolor
+correctly. `just install`/`clean-install`/`user-install`/`cargo deb` all
+additionally install the existing embedded panel glyph
+(`resources/icons/cosmic-bwarden-symbolic.svg` — no new artwork needed, it's
+the same monochrome mark already used for the panel button) as
+`com.enikeev.cosmic_bwarden-symbolic.svg` in hicolor's `scalable/apps/`, so
+that recolor-capable path actually exists. The primary `Icon=` still points
+at the single full-color `black.svg`-derived icon, matching every other
+COSMIC app's convention for the non-recolored case.
 
 ## After installing
 

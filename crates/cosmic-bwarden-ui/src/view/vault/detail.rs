@@ -283,7 +283,6 @@ impl CosmicBWardenApp {
             col = col.push(header);
             col = col.push(fields_col);
         }
-        col = col.push(divider::horizontal::default());
         col = col.push(text::body(fl!("notes")));
 
         let notes_editor = cosmic::widget::text_editor(&self.notes_content)

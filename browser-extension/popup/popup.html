@@ -17,6 +17,17 @@
 
         <div id="status" class="hidden"></div>
 
+        <!-- View: Locked (PIN unlock) -->
+        <div id="view-locked" class="hidden">
+            <div id="locked-message" class="locked-message"></div>
+            <div id="locked-pin-group" class="hidden">
+                <input type="password" id="locked-pin-input" placeholder="PIN" inputmode="numeric" autocomplete="off">
+                <button id="locked-unlock-btn">Unlock</button>
+            </div>
+            <div id="locked-feedback" class="hidden"></div>
+            <button id="locked-fallback-btn" class="hidden">Use master password instead</button>
+        </div>
+
         <!-- View: List -->
         <div id="view-list" class="hidden">
             <div id="results"></div>
@@ -59,6 +70,11 @@
             </form>
         </div>
     </div>
+    <!-- popup-lock.js loads first: popup.js's init IIFE awaits browser.tabs.query
+         and may call showLockedView() from a microtask that fires before the
+         parser reaches a later <script> tag, so anything popup.js can call
+         during init must already be defined. -->
+    <script src="popup-lock.js"></script>
     <script src="popup.js"></script>
     <script src="popup-detail.js"></script>
     <script src="popup-edit.js"></script>

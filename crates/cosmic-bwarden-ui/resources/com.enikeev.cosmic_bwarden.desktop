@@ -2,7 +2,7 @@
 Name=CosmicBWarden
 Comment=Secure Bitwarden client for COSMIC
 Exec=cosmic-applet-bwarden
-Icon=password-manager-symbolic
+Icon=com.enikeev.cosmic_bwarden
 Terminal=false
 Type=Application
 Categories=Cosmic;Utility;Security;

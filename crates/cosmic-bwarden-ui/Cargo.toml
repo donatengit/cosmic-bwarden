@@ -34,8 +34,19 @@ assets = [
     ["resources/com.enikeev.cosmic_bwarden.desktop", "usr/share/applications/", "644"],
     ["../../packaging/com.enikeev.cosmic_bwarden.ron", "usr/share/cosmic/applets/", "644"],
     ["../../packaging/cosmic-bwarden-agent.deb.service", "usr/lib/systemd/user/cosmic-bwarden-agent.service", "644"],
-    ["../../icons/black.svg", "usr/share/cosmic-bwarden/icons/black.svg", "644"],
-    ["../../icons/white.svg", "usr/share/cosmic-bwarden/icons/white.svg", "644"],
+    # Mirrors `just install`'s hicolor layout (docs/cosmic_integration.md).
+    # There is no dark-theme variant of the plain app icon: Linux desktops
+    # don't swap a hicolor app icon by system theme (verified against
+    # cosmic-settings/toot in tmp_code_examples — every COSMIC app ships
+    # exactly one). The `-symbolic` sibling below is the one icon a
+    # theme-aware consumer (e.g. app-icon pickers, the panel button we
+    # already render this way) can actually auto-recolor.
+    ["../../icons/black.svg", "usr/share/icons/hicolor/scalable/apps/com.enikeev.cosmic_bwarden.svg", "644"],
+    ["../../icons/black16.png", "usr/share/icons/hicolor/16x16/apps/com.enikeev.cosmic_bwarden.png", "644"],
+    ["../../icons/black32.png", "usr/share/icons/hicolor/32x32/apps/com.enikeev.cosmic_bwarden.png", "644"],
+    ["../../icons/black64.png", "usr/share/icons/hicolor/64x64/apps/com.enikeev.cosmic_bwarden.png", "644"],
+    ["../../icons/black128.png", "usr/share/icons/hicolor/128x128/apps/com.enikeev.cosmic_bwarden.png", "644"],
+    ["resources/icons/cosmic-bwarden-symbolic.svg", "usr/share/icons/hicolor/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg", "644"],
 ]
 
 [dependencies]

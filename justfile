@@ -3,6 +3,7 @@ bin_dir := prefix + "/bin"
 share_dir := prefix + "/share"
 applets_dir := share_dir + "/cosmic/applets"
 apps_dir := share_dir + "/applications"
+icons_dir := share_dir + "/icons/hicolor"
 systemd_user_dir := "/usr/lib/systemd/user"
 
 # Resolve the invoking user's home dir even when run via `sudo just ...`,
@@ -11,6 +12,7 @@ real_home := `if [ -n "${SUDO_USER:-}" ]; then getent passwd "$SUDO_USER" | cut 
 local_share := real_home + "/.local/share"
 local_applets := local_share + "/cosmic/applets"
 local_apps := local_share + "/applications"
+local_icons := local_share + "/icons/hicolor"
 
 # Auto-detect TPM2 support: enable the agent's `tpm` feature when libtss2-esys is present.
 _tpm_features := `pkg-config --exists tss2-esys 2>/dev/null && echo '--features cosmic-bwarden-agent/tpm' || true`
@@ -36,7 +38,15 @@ install: build
     
     echo "Installing desktop entry..."
     install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop {{apps_dir}}/com.enikeev.cosmic_bwarden.desktop
-    
+
+    echo "Installing application icon..."
+    install -Dm644 icons/black.svg {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
+    install -Dm644 icons/black16.png {{icons_dir}}/16x16/apps/com.enikeev.cosmic_bwarden.png
+    install -Dm644 icons/black32.png {{icons_dir}}/32x32/apps/com.enikeev.cosmic_bwarden.png
+    install -Dm644 icons/black64.png {{icons_dir}}/64x64/apps/com.enikeev.cosmic_bwarden.png
+    install -Dm644 icons/black128.png {{icons_dir}}/128x128/apps/com.enikeev.cosmic_bwarden.png
+    install -Dm644 crates/cosmic-bwarden-ui/resources/icons/cosmic-bwarden-symbolic.svg {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg
+
     echo "Installing COSMIC applet metadata..."
     mkdir -p {{applets_dir}}
     echo '( name: "CosmicBWarden", description: "Secure Bitwarden client for COSMIC", identifier: "com.enikeev.cosmic_bwarden", icon: "password-manager-symbolic", )' > {{applets_dir}}/com.enikeev.cosmic_bwarden.ron
@@ -78,6 +88,14 @@ clean-install: uninstall build
     echo "Installing desktop entry..."
     sudo install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop {{apps_dir}}/com.enikeev.cosmic_bwarden.desktop
 
+    echo "Installing application icon..."
+    sudo install -Dm644 icons/black.svg {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
+    sudo install -Dm644 icons/black16.png {{icons_dir}}/16x16/apps/com.enikeev.cosmic_bwarden.png
+    sudo install -Dm644 icons/black32.png {{icons_dir}}/32x32/apps/com.enikeev.cosmic_bwarden.png
+    sudo install -Dm644 icons/black64.png {{icons_dir}}/64x64/apps/com.enikeev.cosmic_bwarden.png
+    sudo install -Dm644 icons/black128.png {{icons_dir}}/128x128/apps/com.enikeev.cosmic_bwarden.png
+    sudo install -Dm644 crates/cosmic-bwarden-ui/resources/icons/cosmic-bwarden-symbolic.svg {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg
+
     echo "Installing COSMIC applet metadata..."
     sudo mkdir -p {{applets_dir}}
     sudo sh -c "echo '( name: \"CosmicBWarden\", description: \"Secure Bitwarden client for COSMIC\", identifier: \"com.enikeev.cosmic_bwarden\", icon: \"password-manager-symbolic\" )' > {{applets_dir}}/com.enikeev.cosmic_bwarden.ron"
@@ -116,6 +134,14 @@ user-install: build
     echo "Installing desktop entry to local apps..."
     mkdir -p {{local_apps}}
     install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop {{local_apps}}/com.enikeev.cosmic_bwarden.desktop
+
+    echo "Installing application icon to local icons..."
+    install -Dm644 icons/black.svg {{local_icons}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
+    install -Dm644 icons/black16.png {{local_icons}}/16x16/apps/com.enikeev.cosmic_bwarden.png
+    install -Dm644 icons/black32.png {{local_icons}}/32x32/apps/com.enikeev.cosmic_bwarden.png
+    install -Dm644 icons/black64.png {{local_icons}}/64x64/apps/com.enikeev.cosmic_bwarden.png
+    install -Dm644 icons/black128.png {{local_icons}}/128x128/apps/com.enikeev.cosmic_bwarden.png
+    install -Dm644 crates/cosmic-bwarden-ui/resources/icons/cosmic-bwarden-symbolic.svg {{local_icons}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg
 
     echo "Installing binaries to user bin..."
     mkdir -p {{local_share}}/../bin
@@ -165,9 +191,21 @@ uninstall:
     # "Open Vault Window" (dbus_activation::subscription exits(1) on failure).
     sudo rm -f {{apps_dir}}/com.enikeev.cosmic-bwarden.desktop
     sudo rm -f {{applets_dir}}/com.enikeev.cosmic-bwarden.ron
+    sudo rm -f {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
+    sudo rm -f {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg
+    sudo rm -f {{icons_dir}}/16x16/apps/com.enikeev.cosmic_bwarden.png
+    sudo rm -f {{icons_dir}}/32x32/apps/com.enikeev.cosmic_bwarden.png
+    sudo rm -f {{icons_dir}}/64x64/apps/com.enikeev.cosmic_bwarden.png
+    sudo rm -f {{icons_dir}}/128x128/apps/com.enikeev.cosmic_bwarden.png
     echo "Uninstalling from local paths..."
     rm -f {{local_apps}}/com.enikeev.cosmic_bwarden.desktop
     rm -f {{local_applets}}/com.enikeev.cosmic_bwarden.ron
+    rm -f {{local_icons}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
+    rm -f {{local_icons}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg
+    rm -f {{local_icons}}/16x16/apps/com.enikeev.cosmic_bwarden.png
+    rm -f {{local_icons}}/32x32/apps/com.enikeev.cosmic_bwarden.png
+    rm -f {{local_icons}}/64x64/apps/com.enikeev.cosmic_bwarden.png
+    rm -f {{local_icons}}/128x128/apps/com.enikeev.cosmic_bwarden.png
     rm -f {{local_share}}/../bin/cosmic-bwarden-agent
     rm -f {{local_share}}/../bin/cosmic-applet-bwarden
     rm -f {{local_share}}/../bin/cosmic-bwarden-cli
