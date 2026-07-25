@@ -149,6 +149,36 @@ button:hover {
     font-size: 0.85em;
 }
 
+/* List-row copy dropdown (Copy Username / Copy Password). The menu is
+   appended to <body> and positioned via JS (position: fixed) rather than
+   nested under .copy-dropdown, so it isn't clipped by #results' overflow. */
+.copy-dropdown-menu {
+    position: fixed;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-shadow: 0 2px 6px var(--shadow);
+    z-index: 1000;
+    min-width: 130px;
+    overflow: hidden;
+}
+
+.copy-dropdown-menu button {
+    border: none;
+    border-radius: 0;
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 0.85em;
+    background: var(--surface);
+    color: var(--text);
+}
+
+.copy-dropdown-menu button:hover {
+    background: var(--surface-hover);
+}
+
 .no-results {
     text-align: center;
     color: var(--text-faint);

@@ -23,12 +23,18 @@ const DOMAIN_ENTRIES = [
   { id: '1', name: 'Test Login', username: 'testuser', entry_type: 'Login', is_pinned: false }
 ];
 
-function buildMock({ isLocked = false, tabUrl = null, entriesForQuery = null, tpmStatus = null, unlockPinResult = null } = {}) {
+function buildMock({ isLocked = false, tabUrl = null, entriesForQuery = null, tpmStatus = null, unlockPinResult = null, entryMetaUri = null, entryMetaName = null } = {}) {
   const entries = JSON.stringify(entriesForQuery ?? ALL_ENTRIES);
   const tpm = JSON.stringify(tpmStatus ?? { available: false, configured: false, server_credentials: false });
+  const entryMeta = JSON.parse(JSON.stringify(MOCK_ENTRY_META));
+  entryMeta.data.Login.uris = entryMetaUri ? [{ uri: entryMetaUri }] : [];
+  if (entryMetaName) entryMeta.name = entryMetaName;
   return `
     window._sentMessages = [];
     window._locked = ${isLocked};
+    // Real close would tear down the Playwright page mid-test; the extension
+    // popup itself is a real window the browser lets script-close.
+    window.close = () => { window._closed = true; };
     window.browser = {
       runtime: {
         sendMessage: async (message) => {
@@ -53,7 +59,7 @@ function buildMock({ isLocked = false, tabUrl = null, entriesForQuery = null, tp
           if (message && message.GetSidebarEntries)
             return { SidebarEntries: { entries: ${entries} } };
           if (message && message.GetEntryMeta)
-            return { Entry: { entry: ${JSON.stringify(MOCK_ENTRY_META)} } };
+            return { Entry: { entry: ${JSON.stringify(entryMeta)} } };
           if (message && message.GetEntry)
             return { Entry: { entry: ${JSON.stringify(MOCK_ENTRY_FULL)} } };
           if (message && message.GetPassword)
@@ -71,7 +77,7 @@ function buildMock({ isLocked = false, tabUrl = null, entriesForQuery = null, tp
       tabs: {
         query: async () => [{ id: 123, url: ${tabUrl ? `'${tabUrl}'` : 'undefined'} }],
         sendMessage: async () => {},
-        create: async () => {}
+        create: async (opts) => { window._tabsCreated = (window._tabsCreated || []).concat([opts]); }
       }
     };
   `;
@@ -101,14 +107,89 @@ test.describe('Extension Popup', () => {
     expect(await page.locator('#footer').count()).toBe(0);
   });
 
-  test('each entry row has a Fill and an Edit button', async ({ page }) => {
+  test('each Login entry row has a Fill, copy-dropdown, and view-details button', async ({ page }) => {
     await expect(page.locator('.entry-actions button[title="Autofill"]')).toBeVisible();
-    await expect(page.locator('.entry-actions button[title="Edit"]')).toBeVisible();
-    await expect(page.locator('.entry-actions button[title="Edit"]')).toHaveText('✏');
+    await expect(page.locator('.entry-actions button[title="Copy username or password"]')).toBeVisible();
+    await expect(page.locator('.entry-actions button[title="View details"]')).toBeVisible();
+    await expect(page.locator('.entry-actions button[title="View details"]')).toHaveText('👁');
   });
 
-  test('clicking entry name opens detail via GetEntryMeta, never GetEntry', async ({ page }) => {
+  test('clicking a Login entry row opens its URL in a new tab', async ({ page }) => {
+    await page.addInitScript(buildMock({ entryMetaUri: 'example.com/login' }));
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+
     await page.locator('.entry-name', { hasText: 'Test Login' }).click();
+    await page.waitForFunction(() => window._tabsCreated && window._tabsCreated.length > 0);
+
+    const created = await page.evaluate(() => window._tabsCreated);
+    expect(created).toEqual([{ url: 'https://example.com/login' }]);
+
+    const msgs = await page.evaluate(() => window._sentMessages);
+    expect(msgs.some(m => m && m.GetEntryMeta)).toBe(true);
+    expect(msgs.some(m => m && m.GetEntry)).toBe(false);
+  });
+
+  test('clicking a Login entry row with no saved URL shows a status message instead of opening a tab', async ({ page }) => {
+    await page.locator('.entry-name', { hasText: 'Test Login' }).click();
+    await expect(page.locator('#status')).toBeVisible();
+    await expect(page.locator('#status')).toHaveText('No website saved for this entry.');
+
+    const created = await page.evaluate(() => window._tabsCreated || []);
+    expect(created.length).toBe(0);
+  });
+
+  test('clicking a Login entry row with no saved URL but a hostname-like name opens that name as a URL', async ({ page }) => {
+    const hostnameEntries = [
+      { id: '1', name: 'account.facebook.com', username: 'testuser', entry_type: 'Login', is_pinned: false }
+    ];
+    await page.addInitScript(buildMock({ entriesForQuery: hostnameEntries, entryMetaName: 'account.facebook.com' }));
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+
+    await page.locator('.entry-name', { hasText: 'account.facebook.com' }).click();
+    await page.waitForFunction(() => window._tabsCreated && window._tabsCreated.length > 0);
+
+    const created = await page.evaluate(() => window._tabsCreated);
+    expect(created).toEqual([{ url: 'https://account.facebook.com' }]);
+  });
+
+  test('copy dropdown: Copy Username writes to clipboard without calling GetPassword', async ({ page }) => {
+    await page.evaluate(() => {
+      let clip = '';
+      navigator.clipboard.writeText = async (t) => { clip = t; };
+      navigator.clipboard.readText  = async () => clip;
+    });
+
+    await page.locator('.entry-actions button[title="Copy username or password"]').click();
+    await page.locator('.copy-dropdown-menu button', { hasText: 'Copy Username' }).click();
+
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('testuser');
+    expect(await page.evaluate(() => window._sentMessages.some(m => m && m.GetPassword))).toBe(false);
+  });
+
+  test('copy dropdown: Copy Password fetches GetPassword and writes to clipboard', async ({ page }) => {
+    await page.evaluate(() => {
+      let clip = '';
+      navigator.clipboard.writeText = async (t) => { clip = t; };
+      navigator.clipboard.readText  = async () => clip;
+    });
+
+    await page.locator('.entry-actions button[title="Copy username or password"]').click();
+    await page.locator('.copy-dropdown-menu button', { hasText: 'Copy Password' }).click();
+
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('testpassword');
+    expect(await page.evaluate(() => window._sentMessages.some(m => m && m.GetPassword))).toBe(true);
+  });
+
+  test('copy dropdown closes when clicking outside', async ({ page }) => {
+    await page.locator('.entry-actions button[title="Copy username or password"]').click();
+    await expect(page.locator('.copy-dropdown-menu')).toBeVisible();
+
+    await page.locator('#search').click();
+    await expect(page.locator('.copy-dropdown-menu')).toHaveCount(0);
+  });
+
+  test('view-details button opens detail via GetEntryMeta, never GetEntry', async ({ page }) => {
+    await page.locator('.entry-actions button[title="View details"]').click();
     await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
 
     const msgs = await page.evaluate(() => window._sentMessages);
@@ -117,7 +198,7 @@ test.describe('Extension Popup', () => {
   });
 
   test('detail view shows masked placeholder, not the real password', async ({ page }) => {
-    await page.locator('.entry-name', { hasText: 'Test Login' }).click();
+    await page.locator('.entry-actions button[title="View details"]').click();
     await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
 
     const maskedText = await page.locator('.secret-text').first().textContent();
@@ -126,7 +207,7 @@ test.describe('Extension Popup', () => {
   });
 
   test('reveal button triggers GetPassword and shows plaintext', async ({ page }) => {
-    await page.locator('.entry-name', { hasText: 'Test Login' }).click();
+    await page.locator('.entry-actions button[title="View details"]').click();
     await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
 
     // Not yet called
@@ -138,25 +219,45 @@ test.describe('Extension Popup', () => {
     expect(await page.locator('.secret-text').first().textContent()).toBe('testpassword');
   });
 
-  test('copy button triggers GetPassword and writes to clipboard', async ({ page }) => {
+  test('password copy button triggers GetPassword and writes to clipboard', async ({ page }) => {
     await page.evaluate(() => {
       let clip = '';
       navigator.clipboard.writeText = async (t) => { clip = t; };
       navigator.clipboard.readText  = async () => clip;
     });
 
-    await page.locator('.entry-name', { hasText: 'Test Login' }).click();
+    await page.locator('.entry-actions button[title="View details"]').click();
     await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
 
-    await page.locator('button.copy-btn').first().click();
+    // Username's copy-btn comes first in the DOM; password's is the second.
+    await page.locator('button.copy-btn').nth(1).click();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('testpassword');
   });
 
-  test('edit icon in list opens edit form via GetEntry', async ({ page }) => {
-    await page.locator('.entry-actions button[title="Edit"]').click();
+  test('username copy button writes to clipboard without calling GetPassword', async ({ page }) => {
+    await page.evaluate(() => {
+      let clip = '';
+      navigator.clipboard.writeText = async (t) => { clip = t; };
+      navigator.clipboard.readText  = async () => clip;
+    });
+
+    await page.locator('.entry-actions button[title="View details"]').click();
+    await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
+
+    await page.locator('button.copy-btn').first().click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('testuser');
+    expect(await page.evaluate(() => window._sentMessages.some(m => m && m.GetPassword))).toBe(false);
+  });
+
+  test('detail view Edit button re-fetches the full entry via GetEntry before opening the edit form', async ({ page }) => {
+    await page.locator('.entry-actions button[title="View details"]').click();
+    await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
+
+    await page.locator('#edit-btn').click();
     await expect(page.locator('#view-edit')).toBeVisible({ timeout: 5000 });
 
     expect(await page.evaluate(() => window._sentMessages.some(m => m && m.GetEntry))).toBe(true);
+    expect(await page.locator('.password-field-wrap input').inputValue()).toBe('testpassword');
   });
 
   test('SetTheme message is sent to background on popup init', async ({ page }) => {

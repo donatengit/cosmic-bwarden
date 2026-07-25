@@ -90,7 +90,11 @@ function renderDetail(entry) {
 
     const data = entry.data;
     if (data.Login) {
-        detailContent.appendChild(makeDetailItem('Username', data.Login.username || ''));
+        const username = data.Login.username || '';
+        const userFrag = document.createDocumentFragment();
+        userFrag.appendChild(document.createTextNode(username));
+        if (username) userFrag.appendChild(makeCopyBtn(() => username));
+        detailContent.appendChild(makeDetailItem('Username', userFrag));
         detailContent.appendChild(makeDetailItem('Password', makeSecretRow(entry.id)));
         if (data.Login.totp !== undefined && data.Login.totp !== null) {
             const frag = document.createDocumentFragment();
@@ -131,7 +135,11 @@ function renderDetail(entry) {
     }
 }
 
-editBtn.onclick = () => showEditForm();
+// currentEntry here comes from showDetail()'s meta-only GetEntryMeta (no
+// password). Re-fetch the full entry via showEdit before rendering the
+// form — showEditForm() alone would prefill the password field empty, and
+// on save that empty value overwrites the stored password with null.
+editBtn.onclick = () => currentEntry && showEdit(currentEntry.id);
 deleteBtn.onclick = async () => {
     if (!currentEntry || !confirm("Delete this entry?")) return;
     try {

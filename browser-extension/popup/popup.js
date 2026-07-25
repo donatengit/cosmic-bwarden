@@ -134,7 +134,12 @@ function renderEntries(entries, caption = null) {
     for (const entry of entries) {
         const div = document.createElement('div');
         div.className = 'entry';
-        div.onclick = () => showDetail(entry.id);
+        // Login entries: clicking the row launches the site (its primary
+        // purpose). Other types have no URL to open, so fall back to detail.
+        div.onclick = () => {
+            if (entry.entry_type === 'Login') openEntrySite(entry.id);
+            else showDetail(entry.id);
+        };
 
         const info = document.createElement('div');
         info.className = 'entry-info';
@@ -154,15 +159,15 @@ function renderEntries(entries, caption = null) {
             fillBtn.textContent = 'Fill';
             fillBtn.title = 'Autofill';
             fillBtn.onclick = e => { e.stopPropagation(); fillEntry(entry.id); };
-            actions.append(fillBtn);
+            actions.append(fillBtn, makeCopyDropdownBtn(entry));
         }
 
-        const editIconBtn = document.createElement('button');
-        editIconBtn.textContent = '✏';
-        editIconBtn.title = 'Edit';
-        editIconBtn.onclick = e => { e.stopPropagation(); showEdit(entry.id); };
+        const viewIconBtn = document.createElement('button');
+        viewIconBtn.textContent = '👁';
+        viewIconBtn.title = 'View details';
+        viewIconBtn.onclick = e => { e.stopPropagation(); showDetail(entry.id); };
 
-        actions.append(editIconBtn);
+        actions.append(viewIconBtn);
         div.append(info, actions);
         resultsDiv.appendChild(div);
     }
