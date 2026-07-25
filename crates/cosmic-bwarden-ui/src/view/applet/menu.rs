@@ -57,7 +57,9 @@ pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
     // vault operation, so it must work while locked or even before login —
     // it always uses whatever settings were last saved by any surface.
     let generate_btn = tooltip(
-        button::icon(icon::from_name("view-refresh-symbolic"))
+        // TODO: temporary placeholder — insert-drawing-symbolic exists in the
+        // Cosmic icon theme but reads as "draw/sketch", not "generate".
+        button::icon(icon::from_name("insert-drawing-symbolic"))
             .on_press(Message::AppletGeneratePasswordRequested),
         text::caption(fl!("generate-password")),
         tooltip::Position::Bottom,
