@@ -13,6 +13,23 @@ pub fn output_entry(entry: &Entry, fields_str: &str, show_secrets: bool) -> Resu
     let all_fields = fields_str == "all";
     let requested_fields: std::collections::HashSet<&str> = fields_str.split(',').collect();
 
+    // Raw mode: `--fields notes` alone (nothing else) prints just the note
+    // body, byte-for-byte, with no "Notes:" label or other fields mixed in.
+    // This is the restore half of the `add --stdin` round trip: `get NAME
+    // --fields notes --show-secrets > file.yaml` reproduces exactly what
+    // `cat file.yaml | add NAME --stdin` stored.
+    if !all_fields && requested_fields.len() == 1 && requested_fields.contains("notes") {
+        if let Some(notes) = &entry.notes {
+            if show_secrets {
+                use std::io::Write;
+                std::io::stdout().write_all(notes.expose().as_bytes())?;
+            } else {
+                println!("********");
+            }
+        }
+        return Ok(());
+    }
+
     if all_fields || requested_fields.contains("name") {
         println!("Name: {}", entry.name);
     }
@@ -135,12 +152,14 @@ pub fn output_entry(entry: &Entry, fields_str: &str, show_secrets: bool) -> Resu
         }
     }
 
-    // Show notes for CLI output if they are present and show_secrets is enabled
-    if let Some(notes) = &entry.notes {
-        if show_secrets {
-            println!("Notes:\n{}", notes.expose());
-        } else {
-            println!("Notes: ********");
+    // Show notes for CLI output if they are present, requested, and show_secrets is enabled
+    if all_fields || requested_fields.contains("notes") {
+        if let Some(notes) = &entry.notes {
+            if show_secrets {
+                println!("Notes:\n{}", notes.expose());
+            } else {
+                println!("Notes: ********");
+            }
         }
     }
 

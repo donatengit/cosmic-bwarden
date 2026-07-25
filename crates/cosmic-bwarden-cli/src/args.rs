@@ -109,6 +109,14 @@ pub enum Commands {
         id_or_name: String,
     },
     /// Get details for an entry
+    #[command(after_help = "EXAMPLES:
+  cosmic-bwarden-cli get \"My Account\" --show-secrets
+  cosmic-bwarden-cli get \"AWS Creds\" --fields notes --show-secrets
+  cosmic-bwarden-cli get \"AWS Creds\" --fields notes --show-secrets > credentials.yaml
+
+`--fields notes` alone (no other field names) prints just the note body,
+byte-for-byte, with no label \u{2014} pipe it straight to a file to restore
+whatever was stored with `add --stdin` / `edit --stdin` (see `add --help`).")]
     Get {
         /// Show secret fields
         #[arg(short = 'S', long = "show-secrets", action = clap::ArgAction::SetTrue)]
@@ -131,14 +139,27 @@ pub enum Commands {
   cosmic-bwarden-cli add note \"My Note\" notes=\"Some text\"
   cosmic-bwarden-cli sshkey add \"Work Key\" private_key=X
   cat credentials.yaml | cosmic-bwarden-cli add note \"AWS Creds\" --stdin
+  cosmic-bwarden-cli add note \"AWS Creds\" --stdin < credentials.yaml
+  cosmic-bwarden-cli add note \"AWS Creds\" --replace --stdin < credentials.yaml
+
+  # ...later, restore the whole file from the note:
+  cosmic-bwarden-cli get \"AWS Creds\" --fields notes --show-secrets > credentials.yaml
 
 ENTRY TYPE DETAILS:
   For login:  username=X, password=Y, notes=N
   For note:   any key=value will be added to the note body.
   For sshkey: private_key=X, public_key=Y, notes=N
 
---stdin reads the entry's notes from standard input (e.g. piping in a
-credentials.yaml or env_vars.sh file) instead of a notes=/note= pair."
+--stdin reads the entry's notes from standard input (via `cat file | ...`
+or `... < file`) instead of a notes=/note= pair.
+`get --fields notes --show-secrets` prints the note body back byte-for-byte
+(no label), so the pair above round-trips a whole file through the vault.
+
+Adding an entry never overwrites an existing one by name \u{2014} names are
+not unique (Bitwarden allows e.g. two logins both called \"GitHub\"). If an
+entry of the same name AND type already exists, `add` warns on stderr but
+still creates a new entry, unless --replace is given, in which case the
+existing entry (or entries) are deleted first."
     )]
     Add {
         /// Name of the entry
@@ -155,14 +176,25 @@ credentials.yaml or env_vars.sh file) instead of a notes=/note= pair."
         /// Read notes content from standard input instead of notes=/note=
         #[arg(long, action = clap::ArgAction::SetTrue)]
         stdin: bool,
+        /// Delete any existing entry with the same name and type before adding
+        #[arg(long, action = clap::ArgAction::SetTrue)]
+        replace: bool,
     },
     /// Edit an existing entry
     #[command(after_help = "EXAMPLES:
   cosmic-bwarden-cli edit \"My Account\" password=newpass
   cat env_vars.sh | cosmic-bwarden-cli edit \"My Note\" --stdin
+  cosmic-bwarden-cli edit \"My Note\" --stdin < env_vars.sh
+  cosmic-bwarden-cli edit b837ec2d-1590-42cf-8a14-b48a0152fc9c --delete
 
---stdin reads the entry's notes from standard input instead of a
-notes=/note= pair.")]
+  # ...later, restore the whole file from the note:
+  cosmic-bwarden-cli get \"My Note\" --fields notes --show-secrets > env_vars.sh
+
+--stdin reads the entry's notes from standard input (via `cat file | ...`
+or `... < file`) instead of a notes=/note= pair. `get --fields notes
+--show-secrets` prints it back byte-for-byte (no label) for the round trip
+above. --delete removes the resolved entry instead of editing it (cannot be
+combined with any other edit argument).")]
     Edit {
         /// Entry ID or Name
         id_or_name: String,
@@ -178,6 +210,9 @@ notes=/note= pair.")]
         /// Read notes content from standard input instead of notes=/note=
         #[arg(long, action = clap::ArgAction::SetTrue)]
         stdin: bool,
+        /// Delete the resolved entry instead of editing it
+        #[arg(long, action = clap::ArgAction::SetTrue)]
+        delete: bool,
     },
     /// Add a new secure note (alias)
     #[command(hide = true)]

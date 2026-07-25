@@ -5,6 +5,8 @@ mod applet_flow;
 #[cfg(test)]
 mod browser_host;
 #[cfg(test)]
+mod cli_duplicate_delete;
+#[cfg(test)]
 mod cli_lifecycle;
 #[cfg(test)]
 mod common;

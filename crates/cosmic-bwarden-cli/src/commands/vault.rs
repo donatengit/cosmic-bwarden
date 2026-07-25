@@ -1,10 +1,20 @@
 use crate::args::{Cli, Commands};
 use crate::output::{handle_response, output_entry};
-use crate::utils::resolve_id;
+use crate::utils::{find_same_name_entries, resolve_id};
 use anyhow::Result;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::db::{Field, Secret};
 use cosmic_bwarden_core::protocol::{Action, EntryType as ProtocolEntryType, Response};
+
+fn entry_type_label(t: ProtocolEntryType) -> &'static str {
+    match t {
+        ProtocolEntryType::Login => "login",
+        ProtocolEntryType::Card => "card",
+        ProtocolEntryType::Identity => "identity",
+        ProtocolEntryType::SecureNote => "note",
+        ProtocolEntryType::SshKey => "sshkey",
+    }
+}
 
 pub async fn handle_command(
     cli: &Cli,
@@ -161,8 +171,32 @@ pub async fn handle_command(
             field,
             secret_field,
             stdin,
+            replace,
         } => {
             let t = entry_type.unwrap_or(ProtocolEntryType::Login);
+
+            let duplicates = find_same_name_entries(client, name, t).await?;
+            if *replace {
+                for dup in &duplicates {
+                    let res = client
+                        .send(Action::DeleteEntry {
+                            id: dup.id.clone(),
+                        })
+                        .await?;
+                    handle_response(res)?;
+                    eprintln!("Replaced existing entry {} (\"{}\")", dup.id, dup.name);
+                }
+            } else {
+                for dup in &duplicates {
+                    eprintln!(
+                        "Warning: a {} entry named \"{}\" already exists (id {}). Adding a new entry anyway.\n  Use --replace to replace it instead, or run: cosmic-bwarden-cli edit {} --delete",
+                        entry_type_label(t),
+                        dup.name,
+                        dup.id,
+                        dup.id
+                    );
+                }
+            }
 
             let mut username = None;
             let mut password = None;
@@ -270,8 +304,22 @@ pub async fn handle_command(
             field,
             secret_field,
             stdin,
+            delete,
         } => {
             let id = resolve_id(client, id_or_name, entry_type).await?;
+
+            if *delete {
+                if !args.is_empty() || !field.is_empty() || !secret_field.is_empty() || *stdin {
+                    anyhow::bail!(
+                        "Cannot combine --delete with other edit arguments (name=value, --field, --secret-field, --stdin)"
+                    );
+                }
+                let res = client.send(Action::DeleteEntry { id }).await?;
+                handle_response(res)?;
+                println!("Entry deleted successfully");
+                return Ok(());
+            }
+
             let entry_res = client
                 .send(Action::GetEntry {
                     id: id.clone(),

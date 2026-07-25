@@ -258,6 +258,66 @@ async fn test_edit_note_from_stdin() -> Result<()> {
 }
 
 #[tokio::test]
+async fn test_note_stdin_round_trip_byte_exact() -> Result<()> {
+    let env = setup_env().await?;
+
+    let email = "roundtripnotes@example.com";
+    let password = "roundtripnotespassword123";
+    register_user(&env.vault_url, email, password).await?;
+
+    let client = AgentClient::new_with_socket(env.socket_path.clone());
+    client
+        .send(Action::Login {
+            email: email.to_string(),
+            password: password.to_string(),
+            server_url: Some(env.vault_url.clone()),
+            remember_me: true,
+            two_factor_token: None,
+            two_factor_provider: None,
+            two_factor_code: None,
+            device_verification_code: None,
+        })
+        .await?;
+
+    // Store: `cat credentials.yaml | cosmic-bwarden-cli note add "AWS Creds" --stdin`
+    let (success, _stdout, stderr) = run_cli_with_stdin(
+        &env,
+        &["note", "add", "AWS Creds", "--stdin"],
+        CREDENTIALS_YAML,
+    )?;
+    assert!(success, "CLI add --stdin failed: {stderr}");
+    client.send(Action::Sync).await?;
+
+    // Restore: `cosmic-bwarden-cli get "AWS Creds" --fields notes --show-secrets > credentials.yaml`
+    // must reproduce the original file byte-for-byte, with no "Notes:" label
+    // or other field mixed in.
+    let output = env
+        .cli_cmd()
+        .args(["get", "AWS Creds", "--fields", "notes", "--show-secrets"])
+        .output()?;
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("CLI stdout should be valid UTF-8");
+    assert_eq!(
+        stdout, CREDENTIALS_YAML,
+        "expected raw --fields notes output to match the original file byte-for-byte"
+    );
+
+    // Requesting a different field must not leak the note body alongside it.
+    let output = env
+        .cli_cmd()
+        .args(["get", "AWS Creds", "--fields", "name", "--show-secrets"])
+        .output()?;
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("aws_access_key_id"),
+        "notes should not leak when --fields excludes notes, got: {stdout}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_add_stdin_conflicts_with_notes_arg() -> Result<()> {
     let env = setup_env().await?;
 

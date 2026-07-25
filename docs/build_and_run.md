@@ -73,7 +73,34 @@ The `cosmic-bwarden-cli` provides a powerful interface for scripting and advance
 
 # Get a specific field (e.g. Note or SSH Private Key), revealing secrets
 ./target/release/cosmic-bwarden-cli get "My Private Key" --fields notes --show-secrets
+
+# Store a whole file as a note's contents, without it ever touching argv/shell
+# history, then restore it byte-for-byte later. `--stdin` works with either
+# a pipe or `< file` redirection (the latter skips the useless `cat`):
+cat credentials.yaml | ./target/release/cosmic-bwarden-cli note add "AWS Creds" --stdin
+./target/release/cosmic-bwarden-cli note add "AWS Creds" --stdin < credentials.yaml
+./target/release/cosmic-bwarden-cli get "AWS Creds" --fields notes --show-secrets > credentials.yaml
+
+# `edit --stdin` replaces an existing entry's notes the same way:
+./target/release/cosmic-bwarden-cli edit "AWS Creds" --stdin < credentials.yaml
+
+# Names are not unique (Bitwarden allows e.g. two logins both called
+# "GitHub"), so `add` never overwrites an existing entry by name. Re-running
+# the add above a second time warns on stderr but still creates a second
+# "AWS Creds" note. Use --replace to delete any same-name-and-type entry
+# first instead:
+./target/release/cosmic-bwarden-cli note add "AWS Creds" --replace --stdin < credentials.yaml
+
+# Remove an entry entirely with `edit --delete` (there is no separate
+# `delete`/`rm` subcommand):
+./target/release/cosmic-bwarden-cli edit "AWS Creds" --delete
 ```
+
+`get --fields notes --show-secrets` is special-cased: when `notes` is the
+*only* requested field, the CLI prints just the note body with no `Notes:`
+label or other fields mixed in, so the pipeline above round-trips a file
+exactly. Requesting `--fields all` (the default) or multiple fields still
+prints the labeled, human-readable form.
 
 ### 4. Launch the Applet
 If you are running the COSMIC desktop, you can launch the applet to see it in your panel.

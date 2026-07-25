@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use cosmic_bwarden_core::agent_client::AgentClient;
+use cosmic_bwarden_core::db::Entry;
 use cosmic_bwarden_core::protocol::{Action, EntryType as ProtocolEntryType, Response};
 use std::io::Write;
 
@@ -59,6 +60,31 @@ pub async fn resolve_id(
         Ok(entries[idx - 1].id.clone())
     } else {
         Ok(entries[0].id.clone())
+    }
+}
+
+/// Entries whose name matches `name` exactly (case-sensitive) and whose type
+/// matches `entry_type`. Used by `add` to warn about / replace pre-existing
+/// same-name entries — `GetEntries`'s own `query` match is a case-insensitive
+/// substring search, so results are filtered down to exact matches here.
+pub async fn find_same_name_entries(
+    client: &AgentClient,
+    name: &str,
+    entry_type: ProtocolEntryType,
+) -> Result<Vec<Entry>> {
+    let res = client
+        .send(Action::GetEntries {
+            query: Some(name.to_string()),
+            entry_type: Some(entry_type),
+            only_pinned: false,
+        })
+        .await?;
+    match res {
+        Response::Entries { entries } => {
+            Ok(entries.into_iter().filter(|e| e.name == name).collect())
+        }
+        Response::Error { message } => anyhow::bail!("Agent error: {}", message),
+        _ => Ok(Vec::new()),
     }
 }
 
