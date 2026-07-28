@@ -5,7 +5,8 @@ use cosmic::widget;
 use cosmic::Application;
 use cosmic_bwarden_core::config::CosmicBWardenConfig;
 use cosmic_bwarden_core::db::{Entry, EntryData};
-use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
+use cosmic_bwarden_core::protocol::entry_save::save_action;
+use cosmic_bwarden_core::protocol::{Action as AgentAction, EntryType, SidebarEntry};
 
 fn sidebar(id: &str, name: &str) -> SidebarEntry {
     SidebarEntry {
@@ -161,10 +162,58 @@ async fn test_e2e_user_flow_login_and_add_note() {
         )));
     }
 
-    // 8. Save
+    // 8. Assert the action the UI would actually send. Feeding
+    //    `SaveEditResult(Ok(()))` below only simulates a success this test
+    //    invented — on its own it passes even when the dispatched action is
+    //    one the server rejects, which is exactly how the new-entry HTTP 400
+    //    slipped through. Check the mapping against the state the flow built.
+    let draft = app
+        .editing_entry
+        .clone()
+        .expect("a draft must be pending before save");
+    match save_action(draft) {
+        AgentAction::AddEntry { entry_type, .. } => {
+            assert!(matches!(entry_type, EntryType::SecureNote));
+        }
+        other => panic!(
+            "a never-saved draft must be created, not updated; got {}",
+            other.variant_name()
+        ),
+    }
+
+    // 9. Save
     let _ = app.update(Message::SaveEdit);
     let _ = app.update(Message::SaveEditResult(Ok(())));
     assert!(app.editing_entry.is_none());
+}
+
+#[test]
+fn failed_save_keeps_the_users_edits() {
+    // Regression: SaveEdit used to `take()` the edit buffer, so a rejected
+    // save (e.g. the server 400 on new-entry creation) silently threw away
+    // everything the user had typed.
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
+
+    let _ = app.update(Message::AddEntryRequested);
+    let _ = app.update(Message::EditFieldChanged(
+        "Username".to_string(),
+        "alice".to_string(),
+    ));
+    let _ = app.update(Message::SaveEdit);
+    let _ = app.update(Message::SaveEditResult(Err("add failed: 400".to_string())));
+
+    let editing = app
+        .editing_entry
+        .as_ref()
+        .expect("edit buffer must survive a failed save");
+    match &editing.data {
+        EntryData::Login { username, .. } => assert_eq!(username.as_deref(), Some("alice")),
+        other => panic!("expected a login draft, got {:?}", other),
+    }
+    assert!(app.error.is_some());
 }
 
 #[test]

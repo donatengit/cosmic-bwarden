@@ -74,6 +74,33 @@ These must never regress. Treat violations as build-blocking bugs.
 2. Follow MVU strictly for UI changes — no logic in view functions.
 3. Update `CONTEXT.md` for architectural changes.
 
+### Dispatching agent actions from the UI (review-blocking)
+Never decide *which* `Action` to send inside the `async` block handed to
+`Task::perform`. An action built in that closure is unreachable from any test
+that doesn't spin up an executor and a live agent, so a wrong variant stays
+invisible until it hits the server — this shipped once as new entries being
+sent via `UpdateEntry`, producing `PUT /ciphers/new-<unix_secs>` and an HTTP
+400 that discarded the user's unsaved work.
+
+- **Build the action in a pure function**, then move it into the closure:
+  `protocol::entry_save` (core, shared with the E2E suite) and, in the UI,
+  `app/update/{vault,auth,generator}_actions.rs`. Unit-test the mapping
+  directly. Parameterless status/config queries are exempt — they have no
+  decision to get wrong.
+- **The applet and main window must share one builder.** Both surfaces send
+  lock/logout/unlock/PIN actions; two hand-written copies is how they drift.
+  `auth_actions` is the single definition for both.
+- **A builder taking a secret by value owns wiping it.** If a decision arm
+  sends nothing, hand the secret back (see `UnlockPinIntent::Nothing`) so the
+  caller can `zeroize` it — dropping a plain `String` leaves it in freed memory.
+- **Tests must assert the emitted action**, not a hand-fed response. Feeding
+  `SaveEditResult(Ok(()))` asserts a success the test invented and passes
+  against an action the server rejects.
+- **Optimistic local mutation must be paired with the matching action** — the
+  next sync silently reverts any mismatch, which reads as data loss.
+- **Never `take()` an edit buffer before the agent confirms.** Clone it, and
+  clear it only on success, so a failed save leaves the user's input on screen.
+
 ## Code Organization
 - **Target file size: 150–250 lines.** This is the range where edits are reliable and context fits cleanly.
 - **Hard limit: 500 lines.** If a file exceeds this, split it before adding more code. No exceptions.

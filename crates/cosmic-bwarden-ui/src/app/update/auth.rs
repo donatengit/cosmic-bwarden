@@ -1,12 +1,13 @@
 use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::fetch_sidebar_entries;
+use crate::app::update::auth_actions;
 use crate::fl;
 use crate::message::{Message, View};
 use crate::MIN_PIN_LEN;
 use cosmic::app::Task;
 use cosmic::Action;
 use cosmic_bwarden_core::agent_client::AgentClient;
-use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
+use cosmic_bwarden_core::protocol::Response;
 use tracing::error;
 use zeroize::Zeroize;
 
@@ -59,7 +60,7 @@ impl CosmicBWardenApp {
                 Some(Task::perform(
                     async move {
                         let agent = AgentClient::new();
-                        match agent.send(AgentAction::UnlockWithPin { pin }).await {
+                        match agent.send(auth_actions::unlock_with_pin(pin)).await {
                             Ok(Response::Ack) => Ok(()),
                             Ok(Response::Error { message }) => Err(message),
                             _ => Err("unexpected response".to_string()),
@@ -108,33 +109,19 @@ impl CosmicBWardenApp {
                     return Some(Task::none());
                 }
 
-                let email = self.login_email.clone();
-                let password = self.login_password.clone();
-                let server_url = Some(self.login_server.clone());
-                let remember_me = self.login_remember;
-                let device_verification_code = if self.login_verification_code.is_empty() {
-                    None
-                } else {
-                    Some(self.login_verification_code.clone())
-                };
+                let action = auth_actions::login(
+                    self.login_email.clone(),
+                    self.login_password.clone(),
+                    self.login_server.clone(),
+                    self.login_remember,
+                    &self.login_verification_code,
+                );
 
                 self.auth_loading = true;
                 Some(Task::perform(
                     async move {
                         let agent = AgentClient::new();
-                        match agent
-                            .send(AgentAction::Login {
-                                email,
-                                password,
-                                server_url,
-                                remember_me,
-                                two_factor_token: None,
-                                two_factor_provider: None,
-                                two_factor_code: None,
-                                device_verification_code,
-                            })
-                            .await
-                        {
+                        match agent.send(action).await {
                             Ok(Response::Ack) => Ok(()),
                             Ok(Response::Error { message }) => Err(message),
                             _ => Err("unexpected response".to_string()),
@@ -170,7 +157,7 @@ impl CosmicBWardenApp {
                 Some(Task::perform(
                     async move {
                         let agent = AgentClient::new();
-                        match agent.send(AgentAction::Unlock { password }).await {
+                        match agent.send(auth_actions::unlock(password)).await {
                             Ok(Response::Ack) => Ok(()),
                             Ok(Response::Error { message }) => Err(message),
                             _ => Err("unexpected response".to_string()),
@@ -211,10 +198,7 @@ impl CosmicBWardenApp {
                             tasks.push(Task::perform(
                                 async move {
                                     let agent = AgentClient::new();
-                                    match agent
-                                        .send(AgentAction::SetupTpmPinFromUnlocked { pin })
-                                        .await
-                                    {
+                                    match agent.send(auth_actions::setup_tpm_pin(pin)).await {
                                         Ok(Response::Ack) => Ok(()),
                                         Ok(Response::Error { message }) => Err(message),
                                         _ => Err("unexpected response".to_string()),
@@ -252,7 +236,7 @@ impl CosmicBWardenApp {
             Message::LockClicked => Some(Task::perform(
                 async {
                     let agent = AgentClient::new();
-                    let _ = agent.send(AgentAction::Lock).await;
+                    let _ = agent.send(auth_actions::lock()).await;
                 },
                 |_| Action::App(Message::LockResult),
             )),
@@ -276,7 +260,7 @@ impl CosmicBWardenApp {
             Message::LogoutClicked => Some(Task::perform(
                 async {
                     let agent = AgentClient::new();
-                    let _ = agent.send(AgentAction::Logout).await;
+                    let _ = agent.send(auth_actions::logout()).await;
                 },
                 |_| Action::App(Message::LogoutResult),
             )),
@@ -304,46 +288,42 @@ impl CosmicBWardenApp {
     /// a mismatch); an empty PIN removes an existing (possibly stale) PIN blob.
     /// Consumes `self.unlock_pin`. Returns None when there is nothing to do.
     pub(crate) fn apply_unlock_pin_task(&mut self) -> Option<Task<Message>> {
-        if !self.tpm_available {
-            self.unlock_pin.zeroize();
-            self.unlock_pin.clear();
-            self.unlock_pin_revealed = false;
-            return None;
-        }
+        // Consume the field either way — the PIN must not outlive this call,
+        // including on the no-TPM path where nothing is sent.
         let pin = std::mem::take(&mut self.unlock_pin);
         self.unlock_pin_revealed = false;
 
-        if !pin.is_empty() {
-            Some(Task::perform(
+        // Each arm routes to a different result message, so the mapping to a
+        // task stays here while the *decision* stays unit-testable.
+        match auth_actions::apply_unlock_pin(self.tpm_available, self.tpm_configured, pin) {
+            auth_actions::UnlockPinIntent::Reseal(action) => Some(Task::perform(
                 async move {
                     let agent = AgentClient::new();
-                    match agent
-                        .send(AgentAction::SetupTpmPinFromUnlocked { pin })
-                        .await
-                    {
+                    match agent.send(action).await {
                         Ok(Response::Ack) => Ok(()),
                         Ok(Response::Error { message }) => Err(message),
                         _ => Err("unexpected response".to_string()),
                     }
                 },
                 |res| Action::App(Message::TpmSetupResult(res)),
-            ))
-        } else if self.tpm_configured {
-            // Empty PIN + an existing blob → disable PIN unlock (clears a stale
-            // blob left over after a TPM/PCR mismatch).
-            Some(Task::perform(
-                async {
+            )),
+            auth_actions::UnlockPinIntent::ClearStale(action) => Some(Task::perform(
+                async move {
                     let agent = AgentClient::new();
-                    match agent.send(AgentAction::DisableTpmPin).await {
+                    match agent.send(action).await {
                         Ok(Response::Ack) => Ok(()),
                         Ok(Response::Error { message }) => Err(message),
                         _ => Err("unexpected response".to_string()),
                     }
                 },
                 |res| Action::App(Message::TpmDisableResult(res)),
-            ))
-        } else {
-            None
+            )),
+            // Nothing was sent, so the PIN came back unused: wipe it rather
+            // than letting a plain String drop leave it in freed memory.
+            auth_actions::UnlockPinIntent::Nothing(mut unused) => {
+                unused.zeroize();
+                None
+            }
         }
     }
 }

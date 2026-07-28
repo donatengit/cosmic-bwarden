@@ -1,3 +1,4 @@
+use crate::app::update::{generator_actions, vault_actions};
 use crate::message::Message;
 use cosmic::app::Task;
 use cosmic::Action;
@@ -48,12 +49,11 @@ pub fn fetch_sidebar_entries(
         async move {
             let agent = AgentClient::new();
             match agent
-                .send(AgentAction::GetSidebarEntries {
+                .send(vault_actions::sidebar_entries(
                     query,
                     entry_type,
                     only_pinned,
-                    domain: None,
-                })
+                ))
                 .await
             {
                 Ok(Response::SidebarEntries { entries }) => Ok(entries),
@@ -70,12 +70,7 @@ pub fn fetch_applet_search(id: u32, query: Option<String>, only_pinned: bool) ->
         async move {
             let agent = AgentClient::new();
             match agent
-                .send(AgentAction::GetSidebarEntries {
-                    query,
-                    entry_type: None,
-                    only_pinned,
-                    domain: None,
-                })
+                .send(vault_actions::applet_search(query, only_pinned))
                 .await
             {
                 Ok(Response::SidebarEntries { entries }) => Ok(entries),
@@ -91,7 +86,7 @@ pub fn fetch_generator_settings() -> Task<Message> {
     Task::perform(
         async move {
             let agent = AgentClient::new();
-            match agent.send(AgentAction::GetGeneratorSettings).await {
+            match agent.send(generator_actions::fetch_settings()).await {
                 Ok(Response::GeneratorSettings { settings }) => Ok(settings),
                 Ok(Response::Error { message }) => Err(message),
                 _ => Err("unexpected response".to_string()),
@@ -105,7 +100,7 @@ pub fn fetch_generator_history() -> Task<Message> {
     Task::perform(
         async move {
             let agent = AgentClient::new();
-            match agent.send(AgentAction::GetPasswordHistory).await {
+            match agent.send(generator_actions::fetch_history()).await {
                 Ok(Response::PasswordHistory { entries }) => Ok(entries),
                 Ok(Response::Error { message }) => Err(message),
                 _ => Err("unexpected response".to_string()),
@@ -120,10 +115,7 @@ pub fn fetch_applet_secret(id: String, password: Option<String>) -> Task<Message
         async move {
             let agent = AgentClient::new();
             match agent
-                .send(AgentAction::GetPassword {
-                    id: id.clone(),
-                    password,
-                })
+                .send(vault_actions::fetch_password(id.clone(), password))
                 .await
             {
                 Ok(Response::Password { password }) => Ok(password),

@@ -1,6 +1,7 @@
 use crate::app::applet_search;
 use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::{fetch_applet_search, fetch_sidebar_entries};
+use crate::app::update::auth_actions;
 use crate::message::{Message, View};
 use cosmic::app::Task;
 use cosmic::Action;
@@ -277,11 +278,7 @@ impl CosmicBWardenApp {
             }
             Message::TpmServerCredentialsToggled(on) => {
                 self.tpm_error = None;
-                let action = if on {
-                    AgentAction::EnableTpmServerCredentials
-                } else {
-                    AgentAction::DisableTpmServerCredentials
-                };
+                let action = auth_actions::tpm_server_credentials(on);
                 Some(Task::perform(
                     async move {
                         let agent = AgentClient::new();

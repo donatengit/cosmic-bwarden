@@ -3,6 +3,7 @@ use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::{
     check_protocol_version, fetch_applet_search, fetch_applet_secret, fetch_sidebar_entries,
 };
+use crate::app::update::{auth_actions, generator_actions};
 use crate::fl;
 use crate::message::{Message, View};
 use crate::view::applet::{search, unlock};
@@ -71,14 +72,14 @@ impl CosmicBWardenApp {
             Message::LockAndQuit => Some(Task::perform(
                 async {
                     let agent = AgentClient::new();
-                    let _ = agent.send(AgentAction::Lock).await;
+                    let _ = agent.send(auth_actions::lock()).await;
                 },
                 |_| Action::App(Message::Exit),
             )),
             Message::LogoutAndQuit => Some(Task::perform(
                 async {
                     let agent = AgentClient::new();
-                    let _ = agent.send(AgentAction::Logout).await;
+                    let _ = agent.send(auth_actions::logout()).await;
                 },
                 |_| Action::App(Message::Exit),
             )),
@@ -144,7 +145,7 @@ impl CosmicBWardenApp {
                 Some(Task::perform(
                     async move {
                         let agent = AgentClient::new();
-                        match agent.send(AgentAction::Unlock { password }).await {
+                        match agent.send(auth_actions::unlock(password)).await {
                             Ok(Response::Ack) => Ok(()),
                             Ok(Response::Error { message }) => Err(message),
                             _ => Err("unexpected response".to_string()),
@@ -283,10 +284,7 @@ impl CosmicBWardenApp {
                     // `settings: None` reuses whatever was last saved by any
                     // surface (desktop pane, CLI, browser extension) — the
                     // applet quick-gen entry never carries its own settings.
-                    match agent
-                        .send(AgentAction::GeneratePassword { settings: None })
-                        .await
-                    {
+                    match agent.send(generator_actions::generate_with_stored()).await {
                         Ok(Response::GeneratedPassword { password }) => Ok(password),
                         Ok(Response::Error { message }) => Err(message),
                         _ => Err("unexpected response".to_string()),
@@ -353,7 +351,7 @@ impl CosmicBWardenApp {
                 Some(Task::perform(
                     async move {
                         let agent = AgentClient::new();
-                        match agent.send(AgentAction::UnlockWithPin { pin }).await {
+                        match agent.send(auth_actions::unlock_with_pin(pin)).await {
                             Ok(Response::Ack) => Ok(()),
                             Ok(Response::Error { message }) => Err(message),
                             _ => Err("unexpected response".to_string()),
@@ -446,10 +444,7 @@ impl CosmicBWardenApp {
                 Some(Task::perform(
                     async move {
                         let agent = AgentClient::new();
-                        match agent
-                            .send(AgentAction::SetupTpmPinFromUnlocked { pin })
-                            .await
-                        {
+                        match agent.send(auth_actions::setup_tpm_pin(pin)).await {
                             Ok(Response::Ack) => Ok(()),
                             Ok(Response::Error { message }) => Err(message),
                             _ => Err("unexpected response".to_string()),
@@ -484,7 +479,7 @@ impl CosmicBWardenApp {
             Message::TpmDisableSubmitted => Some(Task::perform(
                 async {
                     let agent = AgentClient::new();
-                    match agent.send(AgentAction::DisableTpmPin).await {
+                    match agent.send(auth_actions::disable_tpm_pin()).await {
                         Ok(Response::Ack) => Ok(()),
                         Ok(Response::Error { message }) => Err(message),
                         _ => Err("unexpected response".to_string()),

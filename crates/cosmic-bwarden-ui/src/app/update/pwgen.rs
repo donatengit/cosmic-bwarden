@@ -1,10 +1,11 @@
 use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::{fetch_generator_history, fetch_generator_settings};
+use crate::app::update::generator_actions;
 use crate::message::{Message, View};
 use cosmic::app::Task;
 use cosmic::Action;
 use cosmic_bwarden_core::agent_client::AgentClient;
-use cosmic_bwarden_core::protocol::{Action as AgentAction, GeneratorSettings, Response};
+use cosmic_bwarden_core::protocol::{GeneratorSettings, Response};
 
 impl CosmicBWardenApp {
     pub fn update_pwgen(&mut self, message: Message) -> Option<Task<Message>> {
@@ -48,12 +49,7 @@ impl CosmicBWardenApp {
                 Some(Task::perform(
                     async move {
                         let agent = AgentClient::new();
-                        match agent
-                            .send(AgentAction::GeneratePassword {
-                                settings: Some(settings),
-                            })
-                            .await
-                        {
+                        match agent.send(generator_actions::generate_with(settings)).await {
                             Ok(Response::GeneratedPassword { password }) => Ok(password),
                             Ok(Response::Error { message }) => Err(message),
                             _ => Err("unexpected response".to_string()),
@@ -121,7 +117,7 @@ impl CosmicBWardenApp {
                     async move {
                         let agent = AgentClient::new();
                         match agent
-                            .send(AgentAction::DeleteGeneratedPassword { created_at })
+                            .send(generator_actions::delete_history_entry(created_at))
                             .await
                         {
                             Ok(Response::Ack) => Ok(()),

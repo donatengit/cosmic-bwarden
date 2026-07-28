@@ -10,3 +10,4 @@ pub mod ssh_agent;
 pub mod ssh_agent_lifecycle;
 #[cfg(feature = "tpm-smoke")]
 pub mod tpm;
+pub mod ui_save_flow;

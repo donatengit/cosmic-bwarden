@@ -1,4 +1,5 @@
 mod debug_impls;
+pub mod entry_save;
 #[cfg(test)]
 mod tests;
 

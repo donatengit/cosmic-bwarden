@@ -83,7 +83,7 @@ impl CosmicBWardenApp {
 
         if is_editing {
             let editing = self.editing_entry.as_ref().unwrap();
-            let is_new = editing.id.starts_with("new-");
+            let is_new = cosmic_bwarden_core::protocol::entry_save::is_new(editing);
 
             if is_new {
                 let entry_type_selector = cosmic::widget::row::with_capacity(3)

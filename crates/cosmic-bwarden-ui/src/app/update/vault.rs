@@ -1,11 +1,12 @@
 use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::fetch_sidebar_entries;
+use crate::app::update::vault_actions;
 use crate::message::{Message, View};
 use crate::view::vault::sidebar;
 use cosmic::app::Task;
 use cosmic::Action;
 use cosmic_bwarden_core::agent_client::AgentClient;
-use cosmic_bwarden_core::db::{Entry, EntryData, Secret};
+
 use cosmic_bwarden_core::protocol::{Action as AgentAction, EntryType, Response, SidebarEntry};
 use zeroize::Zeroize;
 
@@ -85,13 +86,11 @@ impl CosmicBWardenApp {
                 self.selected_entry = None;
                 self.editing_entry = None;
                 self.view = View::Vault;
+                let action = vault_actions::fetch_entry(id, None);
                 Some(Task::perform(
                     async move {
                         let agent = AgentClient::new();
-                        match agent
-                            .send(AgentAction::GetEntry { id, password: None })
-                            .await
-                        {
+                        match agent.send(action).await {
                             Ok(Response::Entry { entry }) => Ok(entry),
                             Ok(Response::Error { message }) => Err(message),
                             _ => Err("unexpected response".to_string()),
@@ -120,177 +119,6 @@ impl CosmicBWardenApp {
                 }
                 Some(Task::none())
             }
-            Message::AddEntryRequested => {
-                let new_entry = Entry {
-                    id: format!(
-                        "new-{}",
-                        std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .map(|d| d.as_secs())
-                            .unwrap_or(0)
-                    ),
-                    org_id: None,
-                    folder: None,
-                    folder_id: None,
-                    name: "New Entry".to_string(),
-                    favorite: false,
-                    data: EntryData::Login {
-                        username: Some(String::new()),
-                        password: Some(String::new().into()),
-                        totp: None,
-                        uris: Vec::new(),
-                    },
-                    fields: Vec::new(),
-                    notes: Some(Secret::from(String::new())),
-                    history: Vec::new(),
-                    key: None,
-                    master_password_reprompt: cosmic_bwarden_core::api::CipherRepromptType::None,
-                };
-                self.selected_entry = Some(new_entry.clone());
-                self.editing_entry = Some(new_entry);
-                self.selected_entry_id = None;
-                self.notes_content = cosmic::widget::text_editor::Content::new();
-                self.edit_password_revealed = false;
-                Some(Task::none())
-            }
-            Message::EditEntry => {
-                if let Some(entry) = &self.selected_entry {
-                    self.editing_entry = Some(entry.clone());
-                    self.notes_content = cosmic::widget::text_editor::Content::with_text(
-                        entry.notes.as_deref().unwrap_or(""),
-                    );
-                    self.edit_password_revealed = false;
-                }
-                Some(Task::none())
-            }
-            Message::CancelEdit => {
-                self.editing_entry = None;
-                self.notes_content = cosmic::widget::text_editor::Content::with_text(
-                    self.selected_entry
-                        .as_ref()
-                        .and_then(|e| e.notes.as_deref())
-                        .unwrap_or(""),
-                );
-                Some(Task::none())
-            }
-            Message::SaveEdit => {
-                if let Some(mut entry) = self.editing_entry.take() {
-                    if let Some(notes) = &entry.notes {
-                        if notes.trim().is_empty() {
-                            entry.notes = None;
-                        }
-                    }
-                    Some(Task::perform(
-                        async move {
-                            let agent = AgentClient::new();
-                            match agent.send(AgentAction::UpdateEntry { entry }).await {
-                                Ok(Response::Ack) => Ok(()),
-                                Ok(Response::Error { message }) => Err(message),
-                                _ => Err("unexpected response".to_string()),
-                            }
-                        },
-                        |res| Action::App(Message::SaveEditResult(res)),
-                    ))
-                } else {
-                    Some(Task::none())
-                }
-            }
-            Message::SaveEditResult(res) => match res {
-                Ok(()) => {
-                    let id = self.selected_entry_id.clone();
-                    self.editing_entry = None;
-                    self.search_id += 1;
-                    let sidebar_task = fetch_sidebar_entries(self.search_id, None, None, false);
-                    if let Some(id) = id {
-                        Some(Task::batch(vec![
-                            sidebar_task,
-                            Task::done(Action::App(Message::SelectEntry(id))),
-                        ]))
-                    } else {
-                        Some(sidebar_task)
-                    }
-                }
-                Err(e) => {
-                    self.sync_failed = true;
-                    self.error = Some(e);
-                    Some(Task::none())
-                }
-            },
-            Message::EditFieldChanged(field, value) => {
-                if let Some(entry) = &mut self.editing_entry {
-                    match &mut entry.data {
-                        EntryData::Login {
-                            username, password, ..
-                        } => {
-                            if field == "Username" {
-                                *username = Some(value.clone());
-                            } else if field == "Password" {
-                                *password = Some(value.clone().into());
-                            }
-                        }
-                        EntryData::SshKey {
-                            private_key,
-                            public_key,
-                            fingerprint,
-                        } => {
-                            if field == "Private Key" {
-                                *private_key = Some(value.clone().into());
-                            } else if field == "Public Key" {
-                                *public_key = Some(value.clone());
-                            } else if field == "Fingerprint" {
-                                *fingerprint = Some(value.clone());
-                            }
-                        }
-                        EntryData::Card {
-                            number,
-                            cardholder_name,
-                            brand,
-                            ..
-                        } => {
-                            if field == "Card Number" {
-                                *number = Some(value.clone().into());
-                            } else if field == "Cardholder" {
-                                *cardholder_name = Some(value.clone());
-                            } else if field == "Brand" {
-                                *brand = Some(value.clone());
-                            }
-                        }
-                        EntryData::Identity {
-                            username, email, ..
-                        } => {
-                            if field == "Username" {
-                                *username = Some(value.clone());
-                            } else if field == "Email" {
-                                *email = Some(value.clone());
-                            }
-                        }
-                        EntryData::SecureNote => {}
-                    }
-
-                    // Also check custom fields
-                    if let Some(f) = entry
-                        .fields
-                        .iter_mut()
-                        .find(|f| f.name.as_deref() == Some(&field))
-                    {
-                        f.value = Some(value.into());
-                    }
-                }
-                Some(Task::none())
-            }
-            Message::EditNameChanged(name) => {
-                if let Some(entry) = &mut self.editing_entry {
-                    entry.name = name;
-                }
-                Some(Task::none())
-            }
-            Message::NotesAction(action) => {
-                self.notes_content.perform(action);
-                if let Some(entry) = &mut self.editing_entry {
-                    entry.notes = Some(self.notes_content.text().into());
-                }
-                Some(Task::none())
-            }
             Message::DeleteEntry(id) => {
                 self.show_delete_confirm = Some(id);
                 Some(Task::none())
@@ -298,10 +126,11 @@ impl CosmicBWardenApp {
             Message::ConfirmDelete => {
                 self.deleting = true;
                 if let Some(id) = self.show_delete_confirm.take() {
+                    let action = vault_actions::delete_entry(id);
                     Some(Task::perform(
                         async move {
                             let agent = AgentClient::new();
-                            match agent.send(AgentAction::DeleteEntry { id }).await {
+                            match agent.send(action).await {
                                 Ok(Response::Ack) => Ok(()),
                                 Ok(Response::Error { message }) => Err(message),
                                 _ => Err("unexpected response".to_string()),
@@ -422,11 +251,7 @@ impl CosmicBWardenApp {
                     }
                 }
 
-                let action = if is_pinned {
-                    AgentAction::PinEntry { id: id.clone() }
-                } else {
-                    AgentAction::UnpinEntry { id: id.clone() }
-                };
+                let action = vault_actions::toggle_pin(id.clone(), is_pinned);
 
                 Some(Task::perform(
                     async move {
@@ -452,17 +277,12 @@ impl CosmicBWardenApp {
             }
             Message::SubmitReprompt => {
                 if let Some(id) = self.show_reprompt.clone() {
-                    let password = self.reprompt_password.clone();
+                    let action =
+                        vault_actions::fetch_entry(id, Some(self.reprompt_password.clone()));
                     Some(Task::perform(
                         async move {
                             let agent = AgentClient::new();
-                            match agent
-                                .send(AgentAction::GetEntry {
-                                    id,
-                                    password: Some(password),
-                                })
-                                .await
-                            {
+                            match agent.send(action).await {
                                 Ok(Response::Entry { entry }) => Ok(entry),
                                 Ok(Response::Error { message }) => Err(message),
                                 _ => Err("unexpected response".to_string()),
@@ -478,34 +298,6 @@ impl CosmicBWardenApp {
                 self.show_reprompt = None;
                 self.reprompt_password.zeroize();
                 self.reprompt_password_revealed = false;
-                Some(Task::none())
-            }
-            Message::NewEntryTypeChanged(ty) => {
-                if let Some(entry) = &mut self.editing_entry {
-                    match ty {
-                        EntryType::Login => {
-                            entry.data = EntryData::Login {
-                                username: Some(String::new()),
-                                password: Some(String::new().into()),
-                                totp: None,
-                                uris: Vec::new(),
-                            };
-                        }
-
-                        EntryType::SecureNote => {
-                            entry.data = EntryData::SecureNote;
-                        }
-                        EntryType::SshKey => {
-                            entry.data = EntryData::SshKey {
-                                private_key: Some(String::new().into()),
-                                public_key: Some(String::new()),
-                                fingerprint: None,
-                            };
-                        }
-
-                        _ => {}
-                    }
-                }
                 Some(Task::none())
             }
             _ => None,

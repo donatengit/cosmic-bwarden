@@ -10,6 +10,7 @@ The project follows a modular Rust-based architecture split into specialized cra
     - `api/`: API clients (`client.rs`) and data transfer models (`models.rs`).
     - `db/`: Persistence logic (`persistence.rs`) and vault models (`models.rs`).
     - `crypto/`: Cryptographic primitives and cipherstrings.
+    - `protocol/entry_save.rs`: Pure `Entry -> Action` mapping shared by clients — decides *create vs. update* from whether the entry still carries a client-side `new-<unix_secs>` placeholder id. Lives in core so the E2E suite can drive the exact mapping the UI uses against a real server.
 - **`cosmic-bwarden-agent`**: A secure background service.
     - `handler.rs`: Central IPC request dispatcher.
     - `server.rs`: High-level server-side synchronization logic.
@@ -17,7 +18,7 @@ The project follows a modular Rust-based architecture split into specialized cra
     - `ssh_agent.rs`: SSH agent protocol implementation.
 - **`cosmic-bwarden-cli`**: A feature-rich command-line interface.
 - **`cosmic-bwarden-ui`**: The main graphical interface.
-    - `app/`: MVU decomposition into `state.rs`, `update/` (chained `lifecycle`/`auth`/`vault`/`applet` handlers), and `tasks.rs`.
+    - `app/`: MVU decomposition into `state.rs`, `update/` (chained `lifecycle`/`auth`/`vault`/`vault_edit`/`applet`/`pwgen` handlers), and `tasks.rs`. `update/vault_edit.rs` owns the detail pane's edit buffer; `update/{vault,auth,generator}_actions.rs` hold the pure `state -> Action` builders so tests can assert what the UI dispatches. `auth_actions` is shared by the main window and the applet, which previously built the same session actions twice.
     - `view/`: Modular view components (Auth, Vault, Settings, `applet/`).
 - **`cosmic-bwarden-tests`**: End-to-end integration tests using Docker.
     - `vault/ssh_agent.rs` / `vault/ssh_agent_lifecycle.rs`: Real-protocol SSH agent coverage — a real `ssh`/`ssh-add` client signs/authenticates against a containerized `sshd` via the agent's `ssh-agent-socket` (Ed25519 + RSA), including lock/unlock and logout/login state-transition checks. Helpers in `ssh_test_utils.rs`.

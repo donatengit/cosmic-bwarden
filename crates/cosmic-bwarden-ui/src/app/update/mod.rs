@@ -1,8 +1,12 @@
 pub mod applet;
 pub mod auth;
+pub mod auth_actions;
+pub mod generator_actions;
 pub mod lifecycle;
 pub mod pwgen;
 pub mod vault;
+pub mod vault_actions;
+pub mod vault_edit;
 
 use crate::app::state::CosmicBWardenApp;
 use crate::message::Message;
@@ -24,6 +28,10 @@ impl CosmicBWardenApp {
         }
 
         if let Some(task) = self.update_vault(message.clone()) {
+            return task;
+        }
+
+        if let Some(task) = self.update_vault_edit(message.clone()) {
             return task;
         }
 
