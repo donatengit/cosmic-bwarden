@@ -69,3 +69,9 @@ tmp_code_examples
 
 # Reasonix agent workspace (session notes, plans, scratch)
 .reasonix
+
+# Claude Code local settings (machine-specific paths — see security review)
+.claude
+
+# Local scratch dir
+tmp
