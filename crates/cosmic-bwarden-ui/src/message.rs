@@ -17,6 +17,20 @@ pub enum View {
     PasswordGenerator,
 }
 
+impl View {
+    /// Whether the vault is considered unlocked in this view. Single source
+    /// of truth shared by the applet menu (`header_row`, `quit_footer`) and
+    /// the applet popup content routing — previously duplicated as two
+    /// `matches!` blocks plus a popup `match` that disagreed on
+    /// `View::PasswordGenerator`.
+    pub fn is_unlocked(&self) -> bool {
+        matches!(
+            self,
+            View::Vault | View::Settings | View::PasswordGenerator
+        )
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum WindowState {
     Popup,
@@ -206,4 +220,23 @@ pub enum Message {
     // Applet popup: quick-generate (last-saved settings, copies to clipboard)
     AppletGeneratePasswordRequested,
     AppletGeneratePasswordReceived(Result<String, String>),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_unlocked_true_for_vault_surfaces() {
+        assert!(View::Vault.is_unlocked());
+        assert!(View::Settings.is_unlocked());
+        assert!(View::PasswordGenerator.is_unlocked());
+    }
+
+    #[test]
+    fn is_unlocked_false_for_pre_vault_views() {
+        assert!(!View::Loading.is_unlocked());
+        assert!(!View::Setup.is_unlocked());
+        assert!(!View::Unlock.is_unlocked());
+    }
 }

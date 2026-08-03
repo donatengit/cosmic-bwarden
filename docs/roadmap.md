@@ -15,7 +15,7 @@ forge.
       (`packaging/PKGBUILD`).
 - [ ] **Extension store prep**: Firefox-flavoured manifest (`background.scripts`
       event page) alongside Chrome's `service_worker`; privacy policy; AMO
-      source-review notes. Submit early to reserve `cosmic-bwarden@8bit.com`.
+      source-review notes. Submit early to reserve `cosmic-bwarden@enikeev.com`.
 - [x] **Rename the app ID out of System76's namespace** `[U4-1]` — *done 2026-07*:
       ID is now `com.enikeev.cosmic_bwarden` (desktop entry, applet .ron,
       `StartupWMClass`, `CONFIG_ID`/`APP_ID` in core/ui/agent). `config.json`
@@ -156,12 +156,14 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
       `icon::from_svg_bytes(...).symbolic(true)` + `icon_button_from_handle`
       (see `docs/cosmic_integration.md`), no icon-theme install needed. The
       `.desktop` `Icon=` field (window/dock context) now points at
-      `com.enikeev.cosmic_bwarden`, installed into hicolor from
-      `icons/black.svg` + rasters by `just install`/`clean-install`/
-      `user-install`. The `.ron` `icon:` field (panel-applet listing in COSMIC
-      Settings) intentionally stays on the generic `password-manager-symbolic`
-      theme icon — it's rendered small/recolored like the panel button, so a
-      dedicated asset isn't worth it there.
+      `com.enikeev.cosmic_bwarden-symbolic` (the simplified monochrome mark,
+      installed into hicolor `scalable/apps/`; the full-color
+      `icons/black.svg` + raster set is installed alongside as
+      `com.enikeev.cosmic_bwarden` by `just install`/`clean-install`/
+      `user-install`). The `.ron` `icon:` field (panel-applet listing in COSMIC
+      Settings) also uses the branded `com.enikeev.cosmic_bwarden-symbolic`
+      (installed alongside the full-color set) — rendered small/recolored
+      like the panel button.
 - [x] ~~Read PrepareForSleep's bool arg; don't re-lock on resume~~ `[U4-8]` — *done
       2026-07*: `logind.rs` now deserializes the bool from
       `PrepareForSleep`/`PrepareForShutdown` (fails toward locking), skips the

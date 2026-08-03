@@ -2,5 +2,5 @@
     name: "CosmicBWarden",
     description: "Secure Bitwarden client for COSMIC",
     identifier: "com.enikeev.cosmic_bwarden",
-    icon: "password-manager-symbolic",
+    icon: "com.enikeev.cosmic_bwarden-symbolic",
 )

@@ -1,16 +1,13 @@
 use crate::app::CosmicBWardenApp;
 use crate::fl;
-use crate::message::{Message, View};
+use crate::message::Message;
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{button, container, icon, row, text, tooltip};
 use cosmic::Element;
 
 /// Top header row: "Open Vault" (or "⚠ Not synced" in red) + Lock|Logout icon buttons.
 pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
-    let is_unlocked = matches!(
-        app.view,
-        View::Vault | View::Settings | View::PasswordGenerator
-    );
+    let is_unlocked = app.view.is_unlocked();
 
     let open_btn: Element<'static, Message> = if app.sync_failed && is_unlocked {
         button::destructive(fl!("open-vault-window"))
@@ -35,13 +32,13 @@ pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
         let (icon_name, tooltip_label, action) = if session_expired {
             (
                 "dialog-password-symbolic",
-                "Session expired — click to log in again",
+                fl!("sync-session-expired-tooltip"),
                 Message::LogoutClicked,
             )
         } else {
             (
                 "network-error-symbolic",
-                "Not synced — click to retry",
+                fl!("sync-not-synced-tooltip"),
                 Message::SyncClicked,
             )
         };
@@ -93,15 +90,12 @@ pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
 
 /// Quit footer: a single "Quit" button that expands to show sub-actions.
 pub fn quit_footer(app: &CosmicBWardenApp) -> Vec<Element<'static, Message>> {
-    let is_unlocked = matches!(
-        app.view,
-        View::Vault | View::Settings | View::PasswordGenerator
-    );
+    let is_unlocked = app.view.is_unlocked();
 
     let label = if app.applet_quit_expanded {
-        format!("▾ {}", fl!("quit"))
+        fl!("quit-menu-expanded", label = fl!("quit"))
     } else {
-        format!("▸ {}", fl!("quit"))
+        fl!("quit-menu-collapsed", label = fl!("quit"))
     };
 
     let mut items: Vec<Element<'static, Message>> = vec![button::text(label)

@@ -66,10 +66,12 @@ impl CosmicBWardenApp {
         let mut content = list_column();
         content = content.add(menu::header_row(self));
 
-        content = match self.view {
-            View::Vault | View::Settings => content.add(search::view(self)),
-            View::Setup => content.add(container(text::body(fl!("not-configured"))).padding(10)),
-            _ => content.add(unlock::view(self)),
+        content = if self.view.is_unlocked() {
+            content.add(search::view(self))
+        } else if self.view == View::Setup {
+            content.add(container(text::body(fl!("not-configured"))).padding(10))
+        } else {
+            content.add(unlock::view(self))
         };
 
         if let Some(error) = &self.applet_error {

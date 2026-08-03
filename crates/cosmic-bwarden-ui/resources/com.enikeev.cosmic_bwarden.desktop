@@ -2,12 +2,15 @@
 Name=CosmicBWarden
 Comment=Secure Bitwarden client for COSMIC
 Exec=cosmic-applet-bwarden
-Icon=com.enikeev.cosmic_bwarden
+Icon=com.enikeev.cosmic_bwarden-symbolic
 Terminal=false
+StartupNotify=true
 Type=Application
 Categories=Cosmic;Utility;Security;
 Keywords=Cosmic;Panel;Applet;Bitwarden;Password;
 OnlyShowIn=COSMIC;
 StartupWMClass=com.enikeev.cosmic_bwarden
 X-CosmicApplet=true
+X-CosmicShrinkable=true
 X-CosmicHoverPopup=Auto
+X-OverflowPriority=10

@@ -141,6 +141,13 @@ add-new-entry = Add New Entry
 copied-to-clipboard = Copied to clipboard
 public-key-label = Public key
 generate-password = Generate password
+# Applet header tooltips shown while unlocked when the last sync failed; the
+# icon button next to the tooltip performs the described action.
+sync-session-expired-tooltip = Session expired — click to log in again
+sync-not-synced-tooltip = Not synced — click to retry
+# { $label } is the translated "Quit" label (`quit`).
+quit-menu-expanded = ▾ { $label }
+quit-menu-collapsed = ▸ { $label }
 
 # Password generator
 password-generator = Password Generator
