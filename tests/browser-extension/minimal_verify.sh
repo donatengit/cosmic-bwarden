@@ -29,7 +29,7 @@ cat <<EOF > "$MANIFEST_DIR/$HOST_NAME.json"
   "description": "COSMIC BWarden Test Host",
   "path": "$AGENT_BIN",
   "type": "stdio",
-  "allowed_extensions": ["cosmic-bwarden@8bit.com"]
+  "allowed_extensions": ["cosmic-bwarden@enikeev.com"]
 }
 EOF
 

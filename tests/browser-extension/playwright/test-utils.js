@@ -122,7 +122,7 @@ export function runCli(args, env = {}) {
 export async function getExtensionId(page) {
   await page.goto('about:debugging#/runtime/this-firefox');
   // This is tricky as about:debugging is a system page.
-  // Alternatively, we can use the manifest ID "cosmic-bwarden@8bit.com"
+  // Alternatively, we can use the manifest ID "cosmic-bwarden@enikeev.com"
   // to find the internal UUID if we need to open the popup URL directly.
-  return "cosmic-bwarden@8bit.com";
+  return "cosmic-bwarden@enikeev.com";
 }

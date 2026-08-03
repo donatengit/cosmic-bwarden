@@ -60,7 +60,7 @@ be maintained; revisit only if COSMIC grows a portal-based applet story.
 
 ## Extension shipping notes (AMO / Chrome Web Store)
 
-- ID `cosmic-bwarden@8bit.com` is pinned in the native-host manifest; AMO signing keys
+- ID `cosmic-bwarden@enikeev.com` is pinned in the native-host manifest; AMO signing keys
   that ID on first submission — submit before advertising, since squatters can't be
   evicted.
 - Firefox: the known MV3 `service_worker` limitation (test-suite notes) means AMO

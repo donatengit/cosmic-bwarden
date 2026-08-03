@@ -71,7 +71,7 @@ impl BrowserTest {
             "description": "COSMIC BWarden Test Host",
             "path": wrapper_path.to_str().unwrap(),
             "type": "stdio",
-            "allowed_extensions": ["cosmic-bwarden@8bit.com"]
+            "allowed_extensions": ["cosmic-bwarden@enikeev.com"]
         });
         std::fs::write(
             manifest_dir.join(format!("{}.json", host_name)),

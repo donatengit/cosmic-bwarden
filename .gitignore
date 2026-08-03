@@ -67,3 +67,5 @@ desktop.ini
 # No slash suffix: also catches the dir if ever recreated as a symlink.
 tmp_code_examples
 
+# Reasonix agent workspace (session notes, plans, scratch)
+.reasonix

@@ -18,7 +18,7 @@ path = "src/main.rs"
 # `dpkg-shlibdeps` on a real Debian/Ubuntu host before publishing.
 [package.metadata.deb]
 name = "cosmic-bwarden"
-maintainer = "Donat Enikeev <donat@enikeev.net>"
+maintainer = "Don Enikeev <donat@enikeev.net>"
 copyright = "2026, Donat Enikeev"
 extended-description = """\
 Native Bitwarden/Vaultwarden client for the COSMIC desktop: background agent \

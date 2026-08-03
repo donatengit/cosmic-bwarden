@@ -11,7 +11,7 @@ import json
 
 HOST_NAME = "com.8bit.cosmic_bwarden"
 DESCRIPTION = "COSMIC BWarden Native Messaging Host"
-ALLOWED_EXTENSIONS = ["cosmic-bwarden@8bit.com"]
+ALLOWED_EXTENSIONS = ["cosmic-bwarden@enikeev.com"]
 
 
 def register_firefox(agent_path: str, home: str) -> None:

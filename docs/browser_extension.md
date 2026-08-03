@@ -161,4 +161,4 @@ just pack-extension
 
 Produces `target/cosmic-bwarden-extension.zip` — alongside the Rust build artifacts, already covered by `.gitignore`. The zip contains only the production extension files (`manifest.json`, `background.js`, `content.js`, `popup/`); dev files (`node_modules/`, `package.json`, `package-lock.json`, `test-results/`, `*.tmp`) are excluded.
 
-The zip is suitable for uploading to the Chrome Web Store or Firefox Add-ons (AMO). The extension ID in `manifest.json` is `cosmic-bwarden@8bit.com` (Firefox) — Chrome assigns its own ID on first load.
+The zip is suitable for uploading to the Chrome Web Store or Firefox Add-ons (AMO). The extension ID in `manifest.json` is `cosmic-bwarden@enikeev.com` (Firefox) — Chrome assigns its own ID on first load.
