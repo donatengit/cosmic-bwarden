@@ -9,7 +9,7 @@ import os
 import sys
 import json
 
-HOST_NAME = "com.8bit.cosmic_bwarden"
+HOST_NAME = "com.enikeev.cosmic_bwarden"
 DESCRIPTION = "COSMIC BWarden Native Messaging Host"
 ALLOWED_EXTENSIONS = ["cosmic-bwarden@enikeev.com"]
 

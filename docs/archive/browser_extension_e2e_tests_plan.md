@@ -31,7 +31,7 @@ To avoid complex mocking and ensure behavioral correctness, we will use a "Real-
 - Set `headless: false` (required for extensions and Native Messaging in Firefox), utilizing `xvfb-run` for CI.
 
 ### Native Messaging Setup:
-- A helper script will create the JSON manifest in `~/.mozilla/native-messaging-hosts/com.8bit.cosmic_bwarden.json` (or a custom profile path) before tests start.
+- A helper script will create the JSON manifest in `~/.mozilla/native-messaging-hosts/com.enikeev.cosmic_bwarden.json` (or a custom profile path) before tests start.
 
 ## 3. Test Scenarios
 

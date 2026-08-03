@@ -217,7 +217,7 @@ uninstall:
     rm -f {{local_apps}}/com.enikeev.cosmic-bwarden.desktop
     rm -f {{local_applets}}/com.enikeev.cosmic-bwarden.ron
     echo "Removing Firefox native messaging host..."
-    rm -f {{real_home}}/.mozilla/native-messaging-hosts/com.8bit.cosmic_bwarden.json
+    rm -f {{real_home}}/.mozilla/native-messaging-hosts/com.enikeev.cosmic_bwarden.json
     rm -f {{real_home}}/.mozilla/native-messaging-hosts/cosmic-bwarden-browser-host.sh
 
 # Clean build artifacts

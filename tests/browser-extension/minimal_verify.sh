@@ -19,7 +19,7 @@ echo "Using isolated HOME: $HOME"
 rm -f /tmp/cosmic-bwarden-browser-host.log
 
 # 1. Setup Native Messaging Host Manifest
-HOST_NAME="com.8bit.cosmic_bwarden"
+HOST_NAME="com.enikeev.cosmic_bwarden"
 MANIFEST_DIR="$HOME/.mozilla/native-messaging-hosts"
 mkdir -p "$MANIFEST_DIR"
 

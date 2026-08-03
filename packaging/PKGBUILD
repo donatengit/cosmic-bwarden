@@ -1,9 +1,8 @@
 # Maintainer: Don Enikeev <donat@enikeev.net>
 # AUR package skeleton for cosmic-bwarden.
-# NOT yet publishable: the repo has no public remote (fill `url`/`source`
-# after first push) and no LICENSE file (blocker tracked in docs/roadmap.md,
-# pre-publish section). Validate with `makepkg --printsrcinfo` and a clean
-# chroot build once both exist.
+# Not yet publishable: the repo has no public remote (fill `url`/`source`
+# after first push). Validate with `makepkg --printsrcinfo` and a clean
+# chroot build once the repo is public.
 
 pkgname=cosmic-bwarden
 pkgver=2026.07.0
@@ -39,4 +38,5 @@ package() {
     "$pkgdir/usr/share/cosmic/applets/com.enikeev.cosmic_bwarden.ron"
   install -Dm644 packaging/cosmic-bwarden-agent.deb.service \
     "$pkgdir/usr/lib/systemd/user/cosmic-bwarden-agent.service"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

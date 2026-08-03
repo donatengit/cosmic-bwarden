@@ -20,6 +20,7 @@ path = "src/main.rs"
 name = "cosmic-bwarden"
 maintainer = "Don Enikeev <donat@enikeev.net>"
 copyright = "2026, Donat Enikeev"
+license-file = "../../LICENSE"
 extended-description = """\
 Native Bitwarden/Vaultwarden client for the COSMIC desktop: background agent \
 holding the vault in memory-locked storage, panel applet, CLI, SSH agent, and \

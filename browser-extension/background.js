@@ -9,7 +9,7 @@ const queue = [];
 let isProcessing = false;
 
 function connect() {
-    port = browser.runtime.connectNative("com.8bit.cosmic_bwarden");
+    port = browser.runtime.connectNative("com.enikeev.cosmic_bwarden");
 
     port.onDisconnect.addListener((p) => {
         const lastErr = chrome.runtime.lastError;

@@ -50,7 +50,7 @@ just register-browser-host
 This runs `tools/register_browser_host.py`, which:
 1. Detects the agent's location in `target/debug`.
 2. Creates a wrapper script to handle the `browser-host` argument.
-3. Generates the host manifest JSON in `~/.mozilla/native-messaging-hosts/com.8bit.cosmic_bwarden.json`.
+3. Generates the host manifest JSON in `~/.mozilla/native-messaging-hosts/com.enikeev.cosmic_bwarden.json`.
 
 ### Manual Installation
 1. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`.

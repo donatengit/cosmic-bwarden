@@ -48,7 +48,7 @@ For a permanent install, package the extension with `just pack-extension` and su
 
 ## Native messaging host
 
-The agent binary acts as the native messaging host (`com.8bit.cosmic_bwarden`). Registration writes a wrapper script and a manifest into `~/.mozilla/native-messaging-hosts/`.
+The agent binary acts as the native messaging host (`com.enikeev.cosmic_bwarden`). Registration writes a wrapper script and a manifest into `~/.mozilla/native-messaging-hosts/`.
 
 **Post-install (normal users):** registration is done automatically by `just install`.
 

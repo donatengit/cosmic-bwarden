@@ -65,7 +65,7 @@ impl BrowserTest {
             std::fs::set_permissions(&wrapper_path, std::fs::Permissions::from_mode(0o755))?;
         }
 
-        let host_name = "com.8bit.cosmic_bwarden";
+        let host_name = "com.enikeev.cosmic_bwarden";
         let manifest_content = json!({
             "name": host_name,
             "description": "COSMIC BWarden Test Host",

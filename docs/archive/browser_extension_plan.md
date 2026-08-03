@@ -33,7 +33,7 @@ Update `cosmic-bwarden-agent` to support a subcommand for the Native Messaging p
 Create a minimalist extension in `browser-extension/`.
 
 ### Background Script (`background.js`):
-- Connect to the host using `browser.runtime.connectNative("com.8bit.cosmic_bwarden")`.
+- Connect to the host using `browser.runtime.connectNative("com.enikeev.cosmic_bwarden")`.
 - The browser will execute: `cosmic-bwarden-agent browser-host`.
 - Maintain no long-term state or vault data in `browser.storage`.
 
