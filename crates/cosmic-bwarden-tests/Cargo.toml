@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-only"
 authors = ["Don Enikeev <donat@enikeev.net>"]
+repository = "https://github.com/donatengit/cosmic-bwarden"
+description = "End-to-end test harness for cosmic-bwarden (not published)"
 
 [dependencies]
 thirtyfour = { version = "0.31", optional = true }

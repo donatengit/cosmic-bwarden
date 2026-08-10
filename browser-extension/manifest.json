@@ -3,6 +3,7 @@
   "name": "COSMIC BWarden",
   "version": "0.1.0",
   "description": "Native COSMIC Bitwarden client extension",
+  "homepage_url": "https://github.com/donatengit/cosmic-bwarden",
   "browser_specific_settings": {
     "gecko": {
       "id": "cosmic-bwarden@enikeev.com",

@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-only"
 authors = ["Don Enikeev <donat@enikeev.net>"]
-description = "CosmicBWarden UI"
+repository = "https://github.com/donatengit/cosmic-bwarden"
+homepage = "https://github.com/donatengit/cosmic-bwarden"
+description = "CosmicBWarden panel applet and vault window"
 
 [[bin]]
 name = "cosmic-applet-bwarden"

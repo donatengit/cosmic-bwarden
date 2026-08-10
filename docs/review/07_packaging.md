@@ -13,6 +13,12 @@ produced and structure-verified; AUR skeleton and tag-driven release workflow ar
 place. Two hard pre-publish blockers remain: **no LICENSE** and **no public remote**.
 **Gate: PASS** (artifact produced), with those blockers owned by the roadmap.
 
+> **Update (2026-08-10, publication prep):** both blockers are cleared. GPL-3.0-only
+> `LICENSE` shipped in Phase 8 and is now installed by both the `.deb` and the PKGBUILD;
+> the public remote is `https://github.com/donatengit/cosmic-bwarden`, and the PKGBUILD
+> `url`/`source` point at it. Remaining before an actual AUR submission: cut a
+> `vYYYY.MM.P` tag and replace the `SKIP` checksum with the real tarball sha256.
+
 ## Versioning & protocol — decided and implemented
 
 - **Problem**: the build version (`YYYY.MM-<seconds-into-month>-<git>`) was also the

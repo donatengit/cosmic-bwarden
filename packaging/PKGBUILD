@@ -1,15 +1,15 @@
 # Maintainer: Don Enikeev <donat@enikeev.net>
 # AUR package skeleton for cosmic-bwarden.
-# Not yet publishable: the repo has no public remote (fill `url`/`source`
-# after first push). Validate with `makepkg --printsrcinfo` and a clean
-# chroot build once the repo is public.
+# Before submitting to the AUR: cut a `vYYYY.MM.P` tag, replace the `SKIP`
+# checksum with the real tarball sha256, and validate with
+# `makepkg --printsrcinfo` plus a clean chroot build.
 
 pkgname=cosmic-bwarden
 pkgver=2026.07.0
 pkgrel=1
 pkgdesc="Native Bitwarden/Vaultwarden client for the COSMIC desktop (agent, applet, CLI, SSH agent)"
 arch=(x86_64)
-url="https://github.com/OWNER/cosmic-bwarden" # TODO after first push
+url="https://github.com/donatengit/cosmic-bwarden"
 license=(GPL-3.0-only)
 depends=(libxkbcommon wayland mesa)
 makedepends=(cargo just cmake pkgconf)

@@ -68,8 +68,9 @@ Real coverage-guided fuzzing stays on the roadmap.
 - **Nightly + manual**: full Rust E2E on the runner's Docker daemon, with **one retry**
   (policy justified by the measured 100 %-rerun-clean flake profile above).
 - Submodules are never fetched (build doesn't need them — Phase 0).
-- **Not yet exercised**: the repo has no remote. First push to GitHub is the activation
-  step; expect one round of runner-environment fixes (apt package names, tss headers).
+- **Not yet exercised at review time**: the repo had no remote. *(Update 2026-08-10: the
+  remote is `github.com/donatengit/cosmic-bwarden`; the first push is the activation step
+  — expect one round of runner-environment fixes: apt package names, tss headers.)*
 
 ## rustfmt adoption
 

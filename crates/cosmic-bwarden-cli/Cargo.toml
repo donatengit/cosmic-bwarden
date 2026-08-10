@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-only"
 authors = ["Don Enikeev <donat@enikeev.net>"]
+repository = "https://github.com/donatengit/cosmic-bwarden"
+description = "Command-line client for the cosmic-bwarden agent"
 
 [dependencies]
 cosmic-bwarden-core = { path = "../cosmic-bwarden-core" }
