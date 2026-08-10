@@ -218,11 +218,28 @@ fn failed_save_keeps_the_users_edits() {
 
 #[test]
 fn test_settings_flow() {
+    // Saving settings writes a real file. Without this redirect the write lands
+    // on the developer's own ~/.config/cosmic-bwarden/config.json — which is
+    // exactly how a `cargo test` run once destroyed a live account. See
+    // app/tests/config_env.rs.
+    let mut seeded = super::config_env::account_config();
+    seeded.lock_timeout = 600; // 10 mins
+    let config_file = super::config_env::ConfigFile::with(&seeded);
+
     let mut app = CosmicBWardenApp {
         view: View::Vault,
         ..Default::default()
     };
-    app.config.lock_timeout = 600; // 10 mins
+    // Settings may only be persisted once the agent's config has been loaded.
+    let _ = app.update(Message::ConfigReceived(Ok((
+        seeded.clone(),
+        false,
+        true,
+        false,
+        false,
+    ))));
+    app.view = View::Vault;
+    assert_eq!(app.config.lock_timeout, 600);
 
     // 1. Open Settings
     let _ = app.update(Message::SettingsViewClicked);
@@ -241,6 +258,10 @@ fn test_settings_flow() {
     let _ = app.update(Message::SettingsSaveClicked);
     assert_eq!(app.config.lock_timeout, 1200); // 20 * 60
     assert!(app.editing_config.is_none());
+    // The save reaches disk, and takes nothing else with it.
+    let written = config_file.read();
+    assert_eq!(written.lock_timeout, 1200);
+    assert_eq!(written.email, seeded.email);
 
     // 6. Test Cancel
     let _ = app.update(Message::SettingsEditClicked);

@@ -36,6 +36,23 @@ forge.
       suite runs nightly and on manual dispatch. The `extension` job also builds the
       distributable zip so packaging breaks surface on push, not mid-release.)*
 
+## Data integrity
+
+- [ ] **The agent should own `config.json` outright** — *raised 2026-08 by the
+      settings-clobber incident*. Two processes write the same file with different
+      notions of its contents: the agent load-modify-saves, while the UI persisted its
+      whole in-memory struct. The immediate fix makes the UI read-modify-write only the
+      two fields its Settings pane owns (guarded on `config_loaded`, regression-tested in
+      `ui/src/app/tests/settings_persist.rs`), but the durable fix is an `UpdateSettings`
+      action so the agent remains the single writer. Needs a `PROTOCOL_VERSION` bump.
+- [ ] **`server_name()` should filter empty strings like `base_url()` does** — with the
+      server field left blank, `base_url` is `Some("")`, so the vault cache and TPM blob
+      are keyed on `""` (`:user@example.com.json`, `tpm_sealed_<sha256("" ‖ 0 ‖ email)>`)
+      while `base_url()` reports `api.bitwarden.com`. Any repair that "normalises" the
+      config to `None` silently points the agent at a *different* cache file and an
+      unfindable TPM blob. Fixing it means migrating existing cache/TPM filenames — do
+      not change it without that migration.
+
 ## Security / supply chain
 
 Items below tagged `[P1-n]` come from the Phase 1 security review

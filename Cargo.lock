@@ -1437,6 +1437,8 @@ dependencies = [
  "postcard",
  "rust-embed",
  "serde",
+ "serde_json",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-journald",

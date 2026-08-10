@@ -69,6 +69,29 @@ These must never regress. Treat violations as build-blocking bugs.
 4. If a fix attempt fails, document why before trying the next approach.
 5. Every bug fix requires a corresponding test case.
 
+### Tests must never touch real user state (review-blocking)
+`dirs::config_file()`, `db_file()`, `device_id_file()` and friends fall back to
+the *live* user paths (`~/.config/cosmic-bwarden/`, `~/.cache/…`) whenever the
+`COSMIC_BWARDEN_*` overrides are unset. A unit test that reaches a save path
+therefore overwrites the developer's own account. On 2026-08-10 a plain
+`cargo test -p cosmic-bwarden-ui` did exactly that: `test_settings_flow` drove
+`SettingsSaveClicked` with a `Default` config and replaced a live
+`config.json` with all-`null` fields. The running agent kept serving the vault
+from memory, so nothing looked broken until the next vault write failed with
+`email not set in config` — and only the untouched cache file made recovery
+possible.
+
+Rules:
+- Any test that can reach `save_legacy()`, `Db::save()`, or a keyring/TPM write
+  must redirect the path first. In the UI crate use
+  `app/tests/config_env.rs::ConfigFile`; elsewhere set the `COSMIC_BWARDEN_*`
+  override explicitly.
+- Env overrides are process-global — serialize such tests behind the helper's
+  lock rather than hoping the scheduler is kind.
+- When adding a config field, ask which process *owns* it. The UI owns only
+  what its Settings pane edits; it must read-modify-write the file, never
+  persist its whole in-memory struct.
+
 ### Adding features
 1. Update `preprocess_args` and `--help` (`after_help` with `EXAMPLES:` block) for any CLI change.
 2. Follow MVU strictly for UI changes — no logic in view functions.

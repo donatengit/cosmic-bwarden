@@ -1,7 +1,9 @@
 pub mod applet;
+pub mod config_env;
 pub mod events;
 pub mod flows;
 pub mod interactions;
 pub mod lifecycle;
 pub mod main_window;
 pub mod pwgen;
+pub mod settings_persist;

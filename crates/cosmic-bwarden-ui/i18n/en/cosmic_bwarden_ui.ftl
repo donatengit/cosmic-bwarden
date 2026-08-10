@@ -164,3 +164,5 @@ recent-passwords = Recent Passwords (last 7 days)
 no-recent-passwords = No recent passwords.
 delete-history-entry-title = Delete Password?
 confirm-delete-history-entry = Remove this password from the recent-passwords history? This action cannot be undone.
+settings-save-not-loaded = Settings were not saved: the agent's configuration has not loaded yet. Reopen this window once the vault is available.
+settings-save-failed = Settings were not saved: { $error }

@@ -9,6 +9,7 @@ pub mod vault_actions;
 pub mod vault_edit;
 
 use crate::app::state::CosmicBWardenApp;
+use crate::fl;
 use crate::message::Message;
 use cosmic::app::Task;
 use zeroize::Zeroize as _;
@@ -227,13 +228,53 @@ impl CosmicBWardenApp {
                 Task::none()
             }
             Message::SettingsSaveClicked => {
-                if let Some(config) = self.editing_config.take() {
-                    self.config = config.clone();
-                    let lock_timeout = config.lock_timeout;
-                    // Persist to disk so the agent picks it up on next restart.
-                    if let Err(e) = config.save_legacy() {
-                        tracing::error!("failed to save config: {}", e);
+                if let Some(edited) = self.editing_config.take() {
+                    // This pane owns exactly two fields. Everything else in the
+                    // file (email, base_url's account identity, device_id, the
+                    // TPM flags, persist_session) belongs to the agent, so the
+                    // save is a read-modify-write of the owned fields rather
+                    // than a wholesale write of the in-memory struct. Writing
+                    // the struct wholesale erased a live account once: the
+                    // in-memory config is `Default` until GetConfig answers,
+                    // and it also goes stale whenever the agent rewrites the
+                    // file (e.g. TPM setup flipping `tpm_enabled`).
+                    if !self.config_loaded {
+                        tracing::error!(
+                            "refusing to save settings before the agent's config was loaded"
+                        );
+                        self.error = Some(fl!("settings-save-not-loaded"));
+                        // Keep the buffer: never discard the user's edit on a
+                        // failed save (same rule as the vault edit buffer).
+                        self.editing_config = Some(edited);
+                        return Task::none();
                     }
+
+                    let lock_timeout = edited.lock_timeout;
+                    let merged =
+                        match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
+                            Ok(mut on_disk) => {
+                                on_disk.base_url = edited.base_url.clone();
+                                on_disk.lock_timeout = edited.lock_timeout;
+                                on_disk
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    "failed to read config before saving settings: {}",
+                                    e
+                                );
+                                self.error =
+                                    Some(fl!("settings-save-failed", error = e.to_string()));
+                                self.editing_config = Some(edited);
+                                return Task::none();
+                            }
+                        };
+                    if let Err(e) = merged.save_legacy() {
+                        tracing::error!("failed to save config: {}", e);
+                        self.error = Some(fl!("settings-save-failed", error = e.to_string()));
+                        self.editing_config = Some(edited);
+                        return Task::none();
+                    }
+                    self.config = merged;
                     // Stay on the Settings pane after save.
                     self.view = crate::message::View::Settings;
                     // Notify the running agent to update its live timer.

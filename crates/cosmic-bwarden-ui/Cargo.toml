@@ -69,6 +69,12 @@ i18n-embed-fl = { workspace = true }
 rust-embed = { workspace = true }
 zeroize = { workspace = true }
 
+[dev-dependencies]
+# Settings-persistence regression tests write a real config file through the
+# COSMIC_BWARDEN_CONFIG override (see app/tests/settings_persist.rs).
+tempfile = "3.10"
+serde_json = { workspace = true }
+
 [features]
 default = ["public_suffix_list"]
 # PSL-backed eTLD+1 extraction for applet row labels (e.g. shows

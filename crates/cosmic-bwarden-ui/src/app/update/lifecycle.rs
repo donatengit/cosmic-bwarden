@@ -83,6 +83,9 @@ impl CosmicBWardenApp {
                 match res {
                     Ok((config, _needs_login, has_account, is_locked, sync_failed)) => {
                         self.config = config;
+                        // Only now does `config` mirror the file; Settings may
+                        // be persisted from here on (see state.config_loaded).
+                        self.config_loaded = true;
                         self.sync_failed = sync_failed;
                         self.has_account = has_account;
                         if !has_account {

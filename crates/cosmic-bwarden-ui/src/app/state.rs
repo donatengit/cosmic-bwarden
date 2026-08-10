@@ -63,6 +63,12 @@ pub fn sidebar_min_ratio(window_width: f32) -> f32 {
 pub struct CosmicBWardenApp {
     pub core: Core,
     pub config: CosmicBWardenConfig,
+    /// True once the agent has answered `GetConfig` and `config` reflects what
+    /// is actually on disk. Until then `config` is `Default::default()` — every
+    /// field `None` — and must never be written back: doing so once erased a
+    /// live account's `email`/`base_url`/TPM flags, leaving a running agent that
+    /// worked from memory but could not persist a single vault write.
+    pub config_loaded: bool,
     pub windows: HashMap<window::Id, WindowState>,
 
     // Global State
@@ -231,6 +237,7 @@ impl Default for CosmicBWardenApp {
         Self {
             core: Core::default(),
             config: CosmicBWardenConfig::default(),
+            config_loaded: false,
             windows: HashMap::new(),
             view: View::Loading,
             auth_loading: false,
