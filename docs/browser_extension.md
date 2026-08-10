@@ -83,7 +83,7 @@ Chrome/Chromium registration is handled automatically during Playwright E2E test
 | Project | Spec file | Native messaging | Status |
 |---|---|---|---|
 | `chrome-full` | `chrome-full.spec.js` | Real (Playwright Chromium + agent) | Passing |
-| `firefox-mock` | non-`full` specs | Mocked (page.evaluate shims) | Passing |
+| `firefox-mock` | non-`full` specs | Mocked (page.evaluate shims) | Passing — runs in CI on every push (headless: the project sets `headless: !!process.env.CI`, and these specs never install the extension) |
 | `firefox-full` | `full.spec.js` | Real (Firefox + agent) | Failing — Firefox debugging protocol cannot attach to MV3 background pages; manual loading works fine |
 
 ### Running Chrome E2E manually

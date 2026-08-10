@@ -63,8 +63,10 @@ Real coverage-guided fuzzing stays on the roadmap.
 ## CI (`.github/workflows/ci.yml`)
 
 - **Every push/PR**: rustfmt check · clippy (workspace + tpm) · check (all features) ·
-  unit tests ×4 crates · extension vitest · `cargo audit` (non-blocking on PRs — advisory
-  DB drift shouldn't fail unrelated changes, but stays red-visible).
+  unit tests ×4 crates · extension vitest · extension Playwright `firefox-mock` (headless;
+  no agent or native host needed) · extension zip built and shape-asserted · `cargo audit`
+  (non-blocking on PRs — advisory DB drift shouldn't fail unrelated changes, but stays
+  red-visible; ignore list with per-advisory justification in `.cargo/audit.toml`).
 - **Nightly + manual**: full Rust E2E on the runner's Docker daemon, with **one retry**
   (policy justified by the measured 100 %-rerun-clean flake profile above).
 - Submodules are never fetched (build doesn't need them — Phase 0).

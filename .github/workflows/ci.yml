@@ -102,6 +102,25 @@ jobs:
         working-directory: browser-extension
       - run: npm run test:unit
         working-directory: browser-extension
+      # The firefox-mock Playwright project needs no agent, no native host and
+      # no extension install — it loads popup.html and the page fixtures over
+      # file:// with the chrome.* APIs mocked — so it runs headless here in
+      # ~15 s. The firefox-full / chrome-full projects DO install the extension
+      # and drive a real agent; those stay in the nightly Rust E2E job.
+      - name: Install Playwright Firefox
+        run: npx playwright install --with-deps firefox
+        working-directory: browser-extension
+      - name: Extension E2E (mocked, headless)
+        run: npm run test:e2e
+        working-directory: browser-extension
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            tests/browser-extension/playwright/test-results/
+          if-no-files-found: ignore
       # Build the distributable zip on every push, not only on a release tag:
       # the script asserts the artifact's shape (no dev files, required files
       # present, manifest parses), so packaging breakage surfaces here instead

@@ -24,7 +24,12 @@ export default defineConfig({
       testIgnore: /.*full\.spec\.js|.*chrome-full\.spec\.js/,
       use: {
         ...devices['Desktop Firefox'],
-        headless: false,
+        // Headed locally (easier to watch a failure), headless under CI where
+        // there is no display. Safe for this project only because these specs
+        // never install the extension: they load popup.html / fixtures over
+        // file:// with the chrome.* APIs mocked via addInitScript. The
+        // firefox-full and chrome-full projects DO install it and stay headed.
+        headless: !!process.env.CI,
       },
     },
     {
