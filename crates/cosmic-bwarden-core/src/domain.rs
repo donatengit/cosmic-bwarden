@@ -184,8 +184,14 @@ mod tests {
     #[cfg(feature = "public_suffix_list")]
     #[test]
     fn psl_registrable_domain_handles_multi_label_suffixes() {
-        assert_eq!(registrable_domain("www.example.co.uk"), Some("example.co.uk"));
-        assert_eq!(registrable_domain("account.facebook.com"), Some("facebook.com"));
+        assert_eq!(
+            registrable_domain("www.example.co.uk"),
+            Some("example.co.uk")
+        );
+        assert_eq!(
+            registrable_domain("account.facebook.com"),
+            Some("facebook.com")
+        );
         assert_eq!(registrable_domain("co.uk"), None);
         assert_eq!(registrable_domain("192.168.1.10"), None);
         assert_eq!(registrable_domain("localhost"), None);

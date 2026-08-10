@@ -75,7 +75,10 @@ async fn test_generate_password_rejects_invalid_input() -> Result<()> {
             }),
         })
         .await?;
-    assert!(matches!(res, Response::Error { .. }), "expected Error, got {res:?}");
+    assert!(
+        matches!(res, Response::Error { .. }),
+        "expected Error, got {res:?}"
+    );
 
     // Length outside 8..=32.
     let res = client
@@ -86,7 +89,10 @@ async fn test_generate_password_rejects_invalid_input() -> Result<()> {
             }),
         })
         .await?;
-    assert!(matches!(res, Response::Error { .. }), "expected Error, got {res:?}");
+    assert!(
+        matches!(res, Response::Error { .. }),
+        "expected Error, got {res:?}"
+    );
 
     Ok(())
 }
@@ -109,7 +115,10 @@ async fn test_generate_password_none_reuses_last_saved_settings() -> Result<()> 
             settings: Some(chosen),
         })
         .await?;
-    assert!(matches!(res, Response::GeneratedPassword { .. }), "unexpected {res:?}");
+    assert!(
+        matches!(res, Response::GeneratedPassword { .. }),
+        "unexpected {res:?}"
+    );
 
     // A caller that doesn't specify settings (applet quick-gen, browser
     // extension, bare CLI) must reuse exactly what was just persisted.

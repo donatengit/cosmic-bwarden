@@ -170,13 +170,9 @@ async fn test_add_note_from_stdin_utf8() -> Result<()> {
 
     // Also verify `get -S` prints the content back byte-for-byte on stdout,
     // since that's the round-trip path a user would actually redirect to a file.
-    let output = env
-        .cli_cmd()
-        .args(["get", "UTF8 Creds", "-S"])
-        .output()?;
+    let output = env.cli_cmd().args(["get", "UTF8 Creds", "-S"]).output()?;
     assert!(output.status.success());
-    let stdout = String::from_utf8(output.stdout)
-        .expect("CLI stdout should be valid UTF-8");
+    let stdout = String::from_utf8(output.stdout).expect("CLI stdout should be valid UTF-8");
     assert!(
         stdout.contains(utf8_content),
         "expected stdout to contain the UTF-8 note verbatim, got: {stdout}"
@@ -218,11 +214,8 @@ async fn test_edit_note_from_stdin() -> Result<()> {
     );
 
     let updated_content = "export API_TOKEN=abc123\nexport DB_URL=postgres://localhost/app\n";
-    let (success, _stdout, stderr) = run_cli_with_stdin(
-        &env,
-        &["edit", "Env Vars", "--stdin"],
-        updated_content,
-    )?;
+    let (success, _stdout, stderr) =
+        run_cli_with_stdin(&env, &["edit", "Env Vars", "--stdin"], updated_content)?;
     assert!(success, "CLI edit --stdin failed: {stderr}");
 
     client.send(Action::Sync).await?;
@@ -234,7 +227,10 @@ async fn test_edit_note_from_stdin() -> Result<()> {
         })
         .await?;
     let entry = if let Response::Entries { entries } = res {
-        entries.into_iter().next().expect("Env Vars entry not found")
+        entries
+            .into_iter()
+            .next()
+            .expect("Env Vars entry not found")
     } else {
         anyhow::bail!("Expected entries, got: {res:?}");
     };

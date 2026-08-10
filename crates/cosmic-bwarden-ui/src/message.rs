@@ -24,10 +24,7 @@ impl View {
     /// `matches!` blocks plus a popup `match` that disagreed on
     /// `View::PasswordGenerator`.
     pub fn is_unlocked(&self) -> bool {
-        matches!(
-            self,
-            View::Vault | View::Settings | View::PasswordGenerator
-        )
+        matches!(self, View::Vault | View::Settings | View::PasswordGenerator)
     }
 }
 

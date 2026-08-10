@@ -60,7 +60,9 @@ async fn test_add_warns_on_duplicate_but_still_creates() -> Result<()> {
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("already exists") && stderr.contains("--replace") && stderr.contains("--delete"),
+        stderr.contains("already exists")
+            && stderr.contains("--replace")
+            && stderr.contains("--delete"),
         "expected duplicate warning mentioning --replace/--delete, got: {stderr}"
     );
 

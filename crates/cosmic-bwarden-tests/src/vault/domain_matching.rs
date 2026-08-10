@@ -79,23 +79,39 @@ async fn test_sidebar_domain_filter() -> Result<()> {
     client.send(Action::Sync).await?;
 
     // Page on a subdomain surfaces the apex-host entry (the original UX gap).
-    assert_eq!(names_for_domain(&client, "account.facebook.com").await?, ["Facebook"]);
-    assert_eq!(names_for_domain(&client, "facebook.com").await?, ["Facebook"]);
+    assert_eq!(
+        names_for_domain(&client, "account.facebook.com").await?,
+        ["Facebook"]
+    );
+    assert_eq!(
+        names_for_domain(&client, "facebook.com").await?,
+        ["Facebook"]
+    );
 
     // Boundary check: look-alike hosts never match.
-    assert!(names_for_domain(&client, "notfacebook.com").await?.is_empty());
-    assert!(names_for_domain(&client, "facebook.com.evil.net").await?.is_empty());
+    assert!(names_for_domain(&client, "notfacebook.com")
+        .await?
+        .is_empty());
+    assert!(names_for_domain(&client, "facebook.com.evil.net")
+        .await?
+        .is_empty());
 
     // Multi-label public suffix never bridges unrelated sites.
     assert_eq!(names_for_domain(&client, "mybank.co.uk").await?, ["Bank"]);
     assert!(names_for_domain(&client, "evil.co.uk").await?.is_empty());
 
     // Sibling subdomains match via the PSL eTLD+1 rule (default build).
-    assert_eq!(names_for_domain(&client, "mail.google.com").await?, ["Google"]);
+    assert_eq!(
+        names_for_domain(&client, "mail.google.com").await?,
+        ["Google"]
+    );
 
     // Legacy name-only entry matches its own host, exact and subdomain.
     assert_eq!(names_for_domain(&client, "iqos.ru").await?, ["iqos.ru"]);
-    assert_eq!(names_for_domain(&client, "shop.iqos.ru").await?, ["iqos.ru"]);
+    assert_eq!(
+        names_for_domain(&client, "shop.iqos.ru").await?,
+        ["iqos.ru"]
+    );
 
     // A typed query wins over domain (popup contract).
     let res = client

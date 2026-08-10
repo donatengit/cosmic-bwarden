@@ -179,9 +179,7 @@ pub async fn handle_command(
             if *replace {
                 for dup in &duplicates {
                     let res = client
-                        .send(Action::DeleteEntry {
-                            id: dup.id.clone(),
-                        })
+                        .send(Action::DeleteEntry { id: dup.id.clone() })
                         .await?;
                     handle_response(res)?;
                     eprintln!("Replaced existing entry {} (\"{}\")", dup.id, dup.name);
