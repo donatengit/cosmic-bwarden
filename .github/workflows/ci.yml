@@ -81,8 +81,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  extension-unit:
-    name: extension unit tests
+  extension:
+    name: extension unit tests + pack
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -95,6 +95,17 @@ jobs:
         working-directory: browser-extension
       - run: npm run test:unit
         working-directory: browser-extension
+      # Build the distributable zip on every push, not only on a release tag:
+      # the script asserts the artifact's shape (no dev files, required files
+      # present, manifest parses), so packaging breakage surfaces here instead
+      # of during a release.
+      - name: Pack extension
+        run: packaging/pack-extension.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cosmic-bwarden-extension
+          path: target/cosmic-bwarden-extension.zip
+          if-no-files-found: error
 
   e2e:
     name: Rust E2E (nightly / manual)

@@ -269,15 +269,10 @@ register-browser-host:
     python3 tests/browser-extension/register_host.py
 
 # Pack the browser extension for distribution (production files only → target/)
+# Implementation lives in packaging/pack-extension.sh so that this recipe, CI,
+# and the release workflow all produce the identical artifact.
 pack-extension:
-    mkdir -p target
-    cd browser-extension && zip -r ../target/cosmic-bwarden-extension.zip . \
-        --exclude "node_modules/*" \
-        --exclude "package.json" \
-        --exclude "package-lock.json" \
-        --exclude "test-results/*" \
-        --exclude "*.test.js" \
-        --exclude "*.tmp"
+    packaging/pack-extension.sh
 
 # Setup extension testing environment (installs npm dependencies)
 test-extension-setup:

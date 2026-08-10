@@ -159,6 +159,8 @@ SSH keys must be created via the CLI (`cosmic-bwarden-cli add-ssh-key`) or the n
 just pack-extension
 ```
 
-Produces `target/cosmic-bwarden-extension.zip` — alongside the Rust build artifacts, already covered by `.gitignore`. The zip contains only the production extension files (`manifest.json`, `background.js`, `content.js`, `popup/`); dev files (`node_modules/`, `package.json`, `package-lock.json`, `test-results/`, `*.tmp`) are excluded.
+Produces `target/cosmic-bwarden-extension.zip` — alongside the Rust build artifacts, already covered by `.gitignore`. The zip contains only the production extension files (`manifest.json`, `background.js`, `content.js`, `popup/`); dev files (`node_modules/`, `package.json`, `package-lock.json`, `test-results/`, `*.test.js`, `*.tmp`, `.gitignore`) are excluded.
+
+The packing logic lives in [`packaging/pack-extension.sh`](../packaging/pack-extension.sh) and is the *only* copy: `just pack-extension`, the CI `extension` job (every push, artifact uploaded), and `release.yml` (on a tag) all invoke it. It removes any previous zip first — `zip -r` updates an existing archive rather than replacing it, so a deleted file would otherwise survive in later builds — and then asserts the result: no dev files, all required files present, `manifest.json` parses.
 
 The zip is suitable for uploading to the Chrome Web Store or Firefox Add-ons (AMO). The extension ID in `manifest.json` is `cosmic-bwarden@enikeev.com` (Firefox) — Chrome assigns its own ID on first load.

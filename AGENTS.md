@@ -193,7 +193,7 @@ The project uses `just` for all build, install, and test orchestration. Key reci
 | `just build` | Release build of all Rust crates (auto-detects TPM) |
 | `just install` | `build` + install binaries + register Firefox native host (system-wide, needs sudo) |
 | `just user-install` | Same but installs to `~/.local` (no sudo) |
-| `just pack-extension` | Zips `browser-extension/` → `target/cosmic-bwarden-extension.zip` (excludes node_modules, test artifacts). **Not part of `build`.** |
+| `just pack-extension` | Zips `browser-extension/` → `target/cosmic-bwarden-extension.zip` via `packaging/pack-extension.sh` (excludes node_modules, test artifacts; asserts the artifact's shape). **Not part of `build`.** Never inline the zip command elsewhere — CI and the release workflow call the same script. |
 | `just register-browser-host` | Registers native host pointing at debug build (dev workflow) |
 | `just test` | Full Rust test suite in order: unit → agent → CLI → UI |
 | `just test-extension-unit` | Extension JS unit tests (vitest) |

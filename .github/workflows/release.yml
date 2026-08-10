@@ -36,10 +36,9 @@ jobs:
           cargo install cargo-deb --locked
           cargo deb -p cosmic-bwarden-ui --no-build
       - name: Pack browser extension
-        run: |
-          cd browser-extension
-          zip -r ../target/cosmic-bwarden-extension.zip . \
-            -x "node_modules/*" -x "test-results/*" -x "*.test.js"
+        # Same script CI runs on every push — never inline the zip here again:
+        # the previous inline copy had drifted and shipped package.json.
+        run: packaging/pack-extension.sh
       - name: Draft release with artifacts
         uses: softprops/action-gh-release@v2
         with:
