@@ -24,9 +24,28 @@ use cosmic::Element;
 const APPLET_ICON_SVG: &[u8] =
     include_bytes!("../../../resources/icons/cosmic-bwarden-symbolic.svg");
 
+/// Locked-state sibling of `APPLET_ICON_SVG`: the same glyph with the three
+/// dots removed. State has to be carried by the silhouette, not by color —
+/// `symbolic(true)` discards the SVG's paint entirely (see above), so a
+/// different fill would render identically. Both files share a `0 0 128 128`
+/// viewBox with the same outline geometry, so the panel icon keeps its exact
+/// size and baseline across a lock/unlock; a variant that shifted would read
+/// as a rendering glitch rather than a state change.
+const APPLET_ICON_LOCKED_SVG: &[u8] =
+    include_bytes!("../../../resources/icons/cosmic-bwarden-locked-symbolic.svg");
+
 impl CosmicBWardenApp {
     pub fn applet_view(&self) -> Element<'_, Message> {
-        let icon_handle = icon::from_svg_bytes(APPLET_ICON_SVG).symbolic(true);
+        // `is_unlocked()` is false for Loading/Setup/Unlock alike, so the
+        // locked glyph also covers startup and the no-account-yet state —
+        // both are "no vault available to you right now", which is what the
+        // icon is telling the user.
+        let icon_bytes = if self.view.is_unlocked() {
+            APPLET_ICON_SVG
+        } else {
+            APPLET_ICON_LOCKED_SVG
+        };
+        let icon_handle = icon::from_svg_bytes(icon_bytes).symbolic(true);
         let btn = self
             .core
             .applet
