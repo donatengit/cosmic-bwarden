@@ -71,6 +71,7 @@ Chrome/Chromium registration is handled automatically during Playwright E2E test
 | `just test-extension-setup` | `npm install` in `browser-extension/` |
 | `just test-extension-unit` | Run Vitest unit tests (popup logic, no browser) |
 | `just test-extension-e2e` | Playwright firefox-mock project (mocked native messaging) |
+| `npm run e2e:link` | Creates the `node_modules` symlink the spec directory needs to resolve `@playwright/test`. Run automatically by every E2E entry point — see [`link-deps.js`](../tests/browser-extension/playwright/link-deps.js); you should never need it directly. |
 | `just test-extension-e2e-chrome` | Build + start Vaultwarden + agent → Chrome E2E (Playwright) |
 | `just test-extension-e2e-full` | Same but Firefox full E2E inside isolated `cosmic-comp` compositor |
 | `just test-extension-e2e-debug` | Playwright UI mode for interactive debugging |

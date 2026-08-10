@@ -282,10 +282,13 @@ test-extension-setup:
 test-extension-unit:
     cd browser-extension && npm run test:unit
 
-# Run extension E2E tests (Playwright)
+# Run extension E2E tests (Playwright, mocked — no agent needed)
+# Goes through the npm script rather than calling playwright directly, so the
+# `e2e:link` step runs: the spec dir needs a node_modules symlink to resolve
+# @playwright/test (see tests/browser-extension/playwright/link-deps.js).
 test-extension-e2e: test-extension-setup
     cd browser-extension && npx playwright install firefox
-    cd browser-extension && npx playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=firefox-mock
+    cd browser-extension && npm run test:e2e
 
 # Run full extension E2E tests with real agent and vaultwarden
 test-extension-e2e-full: build test-extension-setup
@@ -301,4 +304,5 @@ test-extension-e2e-chrome: build test-extension-setup
 test-extension-e2e-debug: test-extension-setup
     cd browser-extension && npx playwright install firefox
     bash tests/browser-extension/playwright/setup_native_host.sh
+    cd browser-extension && npm run e2e:link
     cd browser-extension && npx playwright test --config=../tests/browser-extension/playwright/playwright.config.js --ui

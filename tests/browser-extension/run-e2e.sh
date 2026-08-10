@@ -43,6 +43,11 @@ echo "Setting up native messaging host..."
 bash tests/browser-extension/playwright/setup_native_host.sh
 
 # 6. Isolation & Tests
+# The spec directory needs its node_modules symlink before playwright loads the
+# config from there (see playwright/link-deps.js) — it is gitignored, so a fresh
+# clone starts without it.
+node "$PROJECT_ROOT/tests/browser-extension/playwright/link-deps.js"
+
 KIOSK_WRAPPER="$PROJECT_ROOT/tests/browser-extension/playwright/kiosk-wrapper.sh"
 PW_BIN="$PROJECT_ROOT/browser-extension/node_modules/.bin/playwright"
 

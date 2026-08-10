@@ -46,6 +46,8 @@ echo "Installing npm dependencies..."
 cd browser-extension
 npm install --quiet
 npx playwright install chromium --quiet 2>/dev/null || true
+# Resolve @playwright/test from the spec directory (see playwright/link-deps.js).
+npm run e2e:link
 
 echo "Running Chrome extension E2E tests..."
 npx playwright test \

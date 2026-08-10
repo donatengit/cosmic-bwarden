@@ -5,9 +5,10 @@
   "private": true,
   "scripts": {
     "test:unit": "vitest run",
-    "test:e2e": "playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=firefox-mock",
-    "test:e2e-full": "playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=firefox-full",
-    "test:e2e-chrome": "playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=chrome-full"
+    "test:e2e": "npm run e2e:link && playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=firefox-mock",
+    "test:e2e-full": "npm run e2e:link && playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=firefox-full",
+    "test:e2e-chrome": "npm run e2e:link && playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=chrome-full",
+    "e2e:link": "node ../tests/browser-extension/playwright/link-deps.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.1",
