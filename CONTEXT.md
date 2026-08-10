@@ -1,4 +1,4 @@
-# Cosmic BWarden Client: Context & Architecture
+# COSMIC BWarden Client: Context & Architecture
 
 A secure, native COSMIC Bitwarden client featuring a background agent, tray applet, and flexible CLI.
 

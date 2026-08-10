@@ -1,5 +1,5 @@
 (
-    name: "CosmicBWarden",
+    name: "COSMIC BWarden",
     description: "Secure Bitwarden client for COSMIC",
     identifier: "com.enikeev.cosmic_bwarden",
     icon: "com.enikeev.cosmic_bwarden-symbolic",

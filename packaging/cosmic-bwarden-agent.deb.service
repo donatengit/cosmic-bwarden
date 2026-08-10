@@ -4,7 +4,7 @@
 # — the hardening rationale lives in the template.
 
 [Unit]
-Description=Cosmic Bitwarden Agent
+Description=COSMIC BWarden Agent
 Documentation=https://github.com/donatengit/cosmic-bwarden
 
 [Service]

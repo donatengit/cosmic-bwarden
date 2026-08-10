@@ -95,7 +95,7 @@ export async function loadFirefoxAddon(port, addonPath) {
 }
 
 /**
- * Runs a Cosmic BWarden CLI command and returns the output.
+ * Runs a COSMIC BWarden CLI command and returns the output.
  */
 export function runCli(args, env = {}) {
   const projectRoot = path.resolve(__dirname, '../../..');

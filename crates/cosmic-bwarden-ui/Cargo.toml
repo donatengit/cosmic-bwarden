@@ -6,7 +6,7 @@ license = "GPL-3.0-only"
 authors = ["Don Enikeev <donat@enikeev.net>"]
 repository = "https://github.com/donatengit/cosmic-bwarden"
 homepage = "https://github.com/donatengit/cosmic-bwarden"
-description = "CosmicBWarden panel applet and vault window"
+description = "COSMIC BWarden panel applet and vault window"
 
 [[bin]]
 name = "cosmic-applet-bwarden"

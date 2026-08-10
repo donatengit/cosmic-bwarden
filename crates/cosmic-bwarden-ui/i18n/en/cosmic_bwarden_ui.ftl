@@ -1,4 +1,4 @@
-app-title = CosmicBWarden
+app-title = COSMIC BWarden
 protocol-version-mismatch = Protocol version mismatch, please restart agent and/or this app
 
 # Generic actions / nouns
@@ -35,7 +35,7 @@ remember-email = Remember email
 advanced = Advanced
 
 # Login / setup
-welcome-title = Welcome to CosmicBWarden
+welcome-title = Welcome to COSMIC BWarden
 welcome-body = Sign in to your Bitwarden vault.
 verification-code = Verification Code
 new-device-verification = New device verification required. Please check your email.

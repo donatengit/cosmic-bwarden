@@ -24,6 +24,25 @@ Start here, then go deeper as needed:
 - **cargo check before cargo test.** Don't run expensive tests against code that won't compile.
 - **Never commit generated or temporary artifacts.** Build output, `node_modules`, test-runner results (`test-results/`, `playwright-report/`), coverage, and logs belong in `.gitignore`, never in a commit. If `git status` shows a generated path, add it to `.gitignore` rather than staging it (note: a slash-suffixed pattern matches directories only — drop the slash to also catch symlinks).
 
+## Naming (one spelling per layer)
+
+The display name drifted across three spellings before it was unified; keep each
+layer in its own lane:
+
+| Layer | Canonical form | Where |
+|---|---|---|
+| Display name (user-visible) | `COSMIC BWarden` | `.desktop` `Name=`, applet `.ron` `name:`, AppStream `<name>`, `app-title`/`welcome-title` in the FTL, systemd `Description=`, extension `manifest.json` `name`, prose in README/docs |
+| Project / binary / package | `cosmic-bwarden` | repo, crate names, `cosmic-bwarden-{agent,cli,ui,core,tests}`, deb/AUR package |
+| App ID | `com.enikeev.cosmic_bwarden` | `APP_ID`, `.desktop`/`.ron`/metainfo filenames, D-Bus path, `StartupWMClass`, native-messaging host name |
+| Code identifiers | `CosmicBWarden*` | `CosmicBWardenApp`, `CosmicBWardenConfig`, `CosmicBWardenFlags` — Rust types, never rename to match the display name |
+
+`com.system76.CosmicBWarden` appears only in the justfile's legacy-cleanup
+`rm -f` lines; it is a historical app ID, not a name — leave it byte-for-byte.
+
+Project URL: `cosmic_bwarden_core::HOMEPAGE` on the Rust side; the non-Rust
+manifests (metainfo, systemd units, `manifest.json`, `package.json`, PKGBUILD)
+carry their own copy and must be updated together if the repo ever moves.
+
 ## Versioning
 
 - **Build version**: `YYYY.MM-N-<git_id>` generated in `core/build.rs`. Reused across crates via a 30-second `target/build_version.txt` cache.

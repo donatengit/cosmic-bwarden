@@ -1,6 +1,6 @@
 # Implementation Details
 
-The **Cosmic BWarden Client** project follows a modular architecture designed for security, performance, and maintainability.
+The **COSMIC BWarden Client** project follows a modular architecture designed for security, performance, and maintainability.
 
 ## 1. core (`cosmic-bwarden-core`)
 

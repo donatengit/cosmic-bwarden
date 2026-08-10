@@ -54,7 +54,7 @@ install: build
 
     echo "Installing COSMIC applet metadata..."
     mkdir -p {{applets_dir}}
-    echo '( name: "CosmicBWarden", description: "Secure Bitwarden client for COSMIC", identifier: "com.enikeev.cosmic_bwarden", icon: "com.enikeev.cosmic_bwarden-symbolic", )' > {{applets_dir}}/com.enikeev.cosmic_bwarden.ron
+    echo '( name: "COSMIC BWarden", description: "Secure Bitwarden client for COSMIC", identifier: "com.enikeev.cosmic_bwarden", icon: "com.enikeev.cosmic_bwarden-symbolic", )' > {{applets_dir}}/com.enikeev.cosmic_bwarden.ron
 
     echo "Installing systemd user service..."
     mkdir -p {{systemd_user_dir}}
@@ -106,7 +106,7 @@ clean-install: uninstall build
 
     echo "Installing COSMIC applet metadata..."
     sudo mkdir -p {{applets_dir}}
-    sudo sh -c "echo '( name: \"CosmicBWarden\", description: \"Secure Bitwarden client for COSMIC\", identifier: \"com.enikeev.cosmic_bwarden\", icon: \"com.enikeev.cosmic_bwarden-symbolic\" )' > {{applets_dir}}/com.enikeev.cosmic_bwarden.ron"
+    sudo sh -c "echo '( name: \"COSMIC BWarden\", description: \"Secure Bitwarden client for COSMIC\", identifier: \"com.enikeev.cosmic_bwarden\", icon: \"com.enikeev.cosmic_bwarden-symbolic\" )' > {{applets_dir}}/com.enikeev.cosmic_bwarden.ron"
 
     echo "Installing systemd user service..."
     sudo mkdir -p {{systemd_user_dir}}
@@ -162,7 +162,7 @@ user-install: build
 
     echo "Installing COSMIC applet metadata to local applets..."
     mkdir -p {{local_applets}}
-    echo '( name: "CosmicBWarden", description: "Secure Bitwarden client for COSMIC", identifier: "com.enikeev.cosmic_bwarden", icon: "com.enikeev.cosmic_bwarden-symbolic", )' > {{local_applets}}/com.enikeev.cosmic_bwarden.ron
+    echo '( name: "COSMIC BWarden", description: "Secure Bitwarden client for COSMIC", identifier: "com.enikeev.cosmic_bwarden", icon: "com.enikeev.cosmic_bwarden-symbolic", )' > {{local_applets}}/com.enikeev.cosmic_bwarden.ron
     echo "Registering Firefox native messaging host..."
     python3 tests/browser-extension/register_host.py \
         --agent-path {{local_share}}/../bin/cosmic-bwarden-agent \

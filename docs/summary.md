@@ -1,6 +1,6 @@
-# Cosmic BWarden Client: Minimalistic Native COSMIC Bitwarden Client
+# COSMIC BWarden Client: Minimalistic Native COSMIC Bitwarden Client
 
-**Cosmic BWarden Client** is a high-performance, native Bitwarden client designed specifically for the COSMIC desktop environment. Built with Rust and the `libcosmic` toolkit, it provides a seamless and secure experience for managing your vault entries with a focus on speed, low memory footprint, and deep system integration.
+**COSMIC BWarden Client** is a high-performance, native Bitwarden client designed specifically for the COSMIC desktop environment. Built with Rust and the `libcosmic` toolkit, it provides a seamless and secure experience for managing your vault entries with a focus on speed, low memory footprint, and deep system integration.
 
 ## Key Features
 

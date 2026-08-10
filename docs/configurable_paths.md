@@ -1,6 +1,6 @@
 # Configurable Paths and Isolation
 
-Cosmic BWarden allows you to customize the paths for its IPC socket, SSH agent socket, and configuration file. This is useful for running multiple instances, testing, or advanced system configurations.
+COSMIC BWarden allows you to customize the paths for its IPC socket, SSH agent socket, and configuration file. This is useful for running multiple instances, testing, or advanced system configurations.
 
 ## Command Line Arguments
 

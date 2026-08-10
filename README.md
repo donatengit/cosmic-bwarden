@@ -92,7 +92,7 @@ an AUR `PKGBUILD` lives in [`packaging/`](packaging/).
 ## First run
 
 1. Add the applet: COSMIC Settings → Desktop → Panel → Configure panel applets →
-   **CosmicBWarden**.
+   **COSMIC BWarden**.
 2. Click the panel icon → **Open Vault Window** → log in (email, master password, and
    optionally your self-hosted server URL under *Advanced*).
 3. That's it — search from the applet, copy with one click. The agent keeps the vault

@@ -1,6 +1,6 @@
 # Browser Extension Integration
 
-Cosmic BWarden includes a native browser extension (currently targeting Firefox) that provides secure, high-performance vault access directly within the browser.
+COSMIC BWarden includes a native browser extension (currently targeting Firefox) that provides secure, high-performance vault access directly within the browser.
 
 ## Architecture: The Native Messaging Bridge
 

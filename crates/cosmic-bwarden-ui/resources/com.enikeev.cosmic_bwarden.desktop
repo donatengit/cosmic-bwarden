@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=CosmicBWarden
+Name=COSMIC BWarden
 Comment=Secure Bitwarden client for COSMIC
 Exec=cosmic-applet-bwarden
 Icon=com.enikeev.cosmic_bwarden-symbolic
