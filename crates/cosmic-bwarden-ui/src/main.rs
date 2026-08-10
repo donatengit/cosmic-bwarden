@@ -14,7 +14,12 @@ use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
 
 #[derive(Parser, Debug)]
-#[command(author, version = cosmic_bwarden_core::version(), about = "cosmic-bwarden: Secure COSMIC Bitwarden client")]
+#[command(
+    author,
+    version = cosmic_bwarden_core::version(),
+    about = "cosmic-bwarden: Secure COSMIC Bitwarden client",
+    after_help = cosmic_bwarden_core::help_footer()
+)]
 struct Cli {
     /// Path to the configuration file. Overrides default and environment.
     #[arg(long, env = "COSMIC_BWARDEN_CONFIG")]

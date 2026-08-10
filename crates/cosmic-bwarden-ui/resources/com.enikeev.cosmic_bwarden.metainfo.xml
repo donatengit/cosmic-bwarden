@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AppStream metadata. This is the file GNOME Software, KDE Discover, the COSMIC
+  Store, and distro package pages read to show the project's links, so it is the
+  canonical home for the homepage/bugtracker/vcs URLs on the packaging side.
+  Keep the URLs in sync with cosmic_bwarden_core::HOMEPAGE.
+
+  The <id> must match the .desktop file's basename (launchable below), or the
+  entry shows up unlaunchable in software centres.
+
+  Validate with: appstreamcli validate <this file>
+-->
+<component type="desktop-application">
+  <id>com.enikeev.cosmic_bwarden</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+
+  <name>CosmicBWarden</name>
+  <summary>Secure Bitwarden client for COSMIC</summary>
+
+  <description>
+    <p>
+      A native Bitwarden/Vaultwarden client for the COSMIC desktop, written in
+      Rust. Vault secrets live in a background agent that keeps them in
+      memory-locked, zeroized storage; the panel applet, vault window, CLI, SSH
+      agent, and browser extension are all thin clients that talk to it over a
+      peer-credential-checked Unix socket.
+    </p>
+    <p>Includes:</p>
+    <ul>
+      <li>Panel applet with search, copy, and autotype-free clipboard handling</li>
+      <li>Full vault window for browsing and editing entries</li>
+      <li>Command-line client for scripting and shell use</li>
+      <li>SSH agent serving keys stored in the vault</li>
+      <li>Firefox extension with autofill, via a native messaging host</li>
+      <li>Optional PIN unlock sealed against the TPM</li>
+    </ul>
+    <p>
+      This project is not affiliated with Bitwarden, Inc. It has not been
+      independently security-audited — see the SECURITY.md in the source
+      repository for the threat model and known accepted risks.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">com.enikeev.cosmic_bwarden.desktop</launchable>
+
+  <url type="homepage">https://github.com/donatengit/cosmic-bwarden</url>
+  <url type="bugtracker">https://github.com/donatengit/cosmic-bwarden/issues</url>
+  <url type="vcs-browser">https://github.com/donatengit/cosmic-bwarden</url>
+  <url type="contribute">https://github.com/donatengit/cosmic-bwarden/blob/main/CONTRIBUTING.md</url>
+  <url type="help">https://github.com/donatengit/cosmic-bwarden/blob/main/README.md</url>
+
+  <developer id="com.enikeev">
+    <name>Don Enikeev</name>
+  </developer>
+
+  <categories>
+    <category>Utility</category>
+    <category>Security</category>
+  </categories>
+
+  <keywords>
+    <keyword>Bitwarden</keyword>
+    <keyword>Vaultwarden</keyword>
+    <keyword>password</keyword>
+    <keyword>vault</keyword>
+    <keyword>COSMIC</keyword>
+  </keywords>
+
+  <provides>
+    <binary>cosmic-applet-bwarden</binary>
+    <binary>cosmic-bwarden-agent</binary>
+    <binary>cosmic-bwarden-cli</binary>
+  </provides>
+
+  <content_rating type="oars-1.1"/>
+</component>

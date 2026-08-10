@@ -25,7 +25,12 @@ use tokio::net::UnixListener;
 use tokio::sync::Mutex;
 
 #[derive(Parser)]
-#[command(author, version = cosmic_bwarden_core::version(), about = "cosmic-bwarden-agent: Secure background agent")]
+#[command(
+    author,
+    version = cosmic_bwarden_core::version(),
+    about = "cosmic-bwarden-agent: Secure background agent",
+    after_help = cosmic_bwarden_core::help_footer()
+)]
 struct Cli {
     /// Path to the configuration file. Overrides default and environment.
     #[arg(long, env = "COSMIC_BWARDEN_CONFIG")]

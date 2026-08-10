@@ -1,5 +1,6 @@
 [Unit]
 Description=Cosmic Bitwarden Agent
+Documentation=https://github.com/donatengit/cosmic-bwarden
 
 [Service]
 ExecStart=@BINDIR@/cosmic-bwarden-agent

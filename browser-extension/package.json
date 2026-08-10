@@ -1,8 +1,19 @@
 {
   "name": "cosmic-bwarden-extension",
   "version": "1.0.0",
-  "description": "Firefox extension for Cosmic BWarden",
+  "description": "Firefox extension for COSMIC BWarden",
   "private": true,
+  "license": "GPL-3.0-only",
+  "author": "Don Enikeev <donat@enikeev.net>",
+  "homepage": "https://github.com/donatengit/cosmic-bwarden",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/donatengit/cosmic-bwarden.git",
+    "directory": "browser-extension"
+  },
+  "bugs": {
+    "url": "https://github.com/donatengit/cosmic-bwarden/issues"
+  },
   "scripts": {
     "test:unit": "vitest run",
     "test:e2e": "npm run e2e:link && playwright test --config=../tests/browser-extension/playwright/playwright.config.js --project=firefox-mock",

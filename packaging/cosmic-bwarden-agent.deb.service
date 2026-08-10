@@ -5,6 +5,7 @@
 
 [Unit]
 Description=Cosmic Bitwarden Agent
+Documentation=https://github.com/donatengit/cosmic-bwarden
 
 [Service]
 ExecStart=/usr/bin/cosmic-bwarden-agent

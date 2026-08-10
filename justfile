@@ -3,6 +3,7 @@ bin_dir := prefix + "/bin"
 share_dir := prefix + "/share"
 applets_dir := share_dir + "/cosmic/applets"
 apps_dir := share_dir + "/applications"
+metainfo_dir := share_dir + "/metainfo"
 icons_dir := share_dir + "/icons/hicolor"
 systemd_user_dir := "/usr/lib/systemd/user"
 
@@ -12,6 +13,7 @@ real_home := `if [ -n "${SUDO_USER:-}" ]; then getent passwd "$SUDO_USER" | cut 
 local_share := real_home + "/.local/share"
 local_applets := local_share + "/cosmic/applets"
 local_apps := local_share + "/applications"
+local_metainfo := local_share + "/metainfo"
 local_icons := local_share + "/icons/hicolor"
 
 # Auto-detect TPM2 support: enable the agent's `tpm` feature when libtss2-esys is present.
@@ -38,6 +40,9 @@ install: build
     
     echo "Installing desktop entry..."
     install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop {{apps_dir}}/com.enikeev.cosmic_bwarden.desktop
+
+    echo "Installing AppStream metainfo..."
+    install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.metainfo.xml {{metainfo_dir}}/com.enikeev.cosmic_bwarden.metainfo.xml
 
     echo "Installing application icon..."
     install -Dm644 icons/black.svg {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
@@ -88,6 +93,9 @@ clean-install: uninstall build
     echo "Installing desktop entry..."
     sudo install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop {{apps_dir}}/com.enikeev.cosmic_bwarden.desktop
 
+    echo "Installing AppStream metainfo..."
+    sudo install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.metainfo.xml {{metainfo_dir}}/com.enikeev.cosmic_bwarden.metainfo.xml
+
     echo "Installing application icon..."
     sudo install -Dm644 icons/black.svg {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
     sudo install -Dm644 icons/black16.png {{icons_dir}}/16x16/apps/com.enikeev.cosmic_bwarden.png
@@ -135,6 +143,9 @@ user-install: build
     mkdir -p {{local_apps}}
     install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop {{local_apps}}/com.enikeev.cosmic_bwarden.desktop
 
+    echo "Installing AppStream metainfo to local metainfo..."
+    install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.metainfo.xml {{local_metainfo}}/com.enikeev.cosmic_bwarden.metainfo.xml
+
     echo "Installing application icon to local icons..."
     install -Dm644 icons/black.svg {{local_icons}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
     install -Dm644 icons/black16.png {{local_icons}}/16x16/apps/com.enikeev.cosmic_bwarden.png
@@ -179,6 +190,7 @@ uninstall:
     sudo rm -f {{bin_dir}}/cosmic-applet-bwarden
     sudo rm -f {{bin_dir}}/cosmic-bwarden-cli
     sudo rm -f {{apps_dir}}/com.enikeev.cosmic_bwarden.desktop
+    sudo rm -f {{metainfo_dir}}/com.enikeev.cosmic_bwarden.metainfo.xml
     sudo rm -f {{applets_dir}}/com.enikeev.cosmic_bwarden.ron
     sudo rm -f {{systemd_user_dir}}/cosmic-bwarden-agent.service
     # Legacy app-ID / binary names (transitional cleanup across renames)
@@ -199,6 +211,7 @@ uninstall:
     sudo rm -f {{icons_dir}}/128x128/apps/com.enikeev.cosmic_bwarden.png
     echo "Uninstalling from local paths..."
     rm -f {{local_apps}}/com.enikeev.cosmic_bwarden.desktop
+    rm -f {{local_metainfo}}/com.enikeev.cosmic_bwarden.metainfo.xml
     rm -f {{local_applets}}/com.enikeev.cosmic_bwarden.ron
     rm -f {{local_icons}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
     rm -f {{local_icons}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg

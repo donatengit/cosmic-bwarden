@@ -35,6 +35,10 @@ assets = [
     ["../../target/release/cosmic-applet-bwarden", "usr/bin/", "755"],
     ["../../target/release/cosmic-bwarden-cli", "usr/bin/", "755"],
     ["resources/com.enikeev.cosmic_bwarden.desktop", "usr/share/applications/", "644"],
+    # AppStream metadata — where software centres and distro package pages pick
+    # up the homepage/bugtracker/VCS links (the Homepage: control field comes
+    # from [package] homepage above; this is the richer, user-visible copy).
+    ["resources/com.enikeev.cosmic_bwarden.metainfo.xml", "usr/share/metainfo/", "644"],
     ["../../packaging/com.enikeev.cosmic_bwarden.ron", "usr/share/cosmic/applets/", "644"],
     ["../../packaging/cosmic-bwarden-agent.deb.service", "usr/lib/systemd/user/cosmic-bwarden-agent.service", "644"],
     # Mirrors `just install`'s hicolor layout (docs/cosmic_integration.md).

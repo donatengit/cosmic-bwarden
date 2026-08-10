@@ -7,14 +7,19 @@ use cosmic_bwarden_core::protocol::EntryType as ProtocolEntryType;
     version = cosmic_bwarden_core::version(),
     about = "cosmic-bwarden: A secure COSMIC Bitwarden client",
     long_about = "A secure Bitwarden client for the COSMIC desktop, featuring a background agent and CLI.",
-    after_help = "EXAMPLES:
+    after_help = format!(
+        "EXAMPLES:
   cosmic-bwarden-cli note ls
   cosmic-bwarden-cli get note \"My Note\"
   cosmic-bwarden-cli login (lists all logins)
   cosmic-bwarden-cli generate --length 20 --special --numbers
 
 Entry types (login, card, identity, note, sshkey) can be used as keywords
-anywhere in the command line."
+anywhere in the command line.
+
+{}",
+        cosmic_bwarden_core::help_footer()
+    )
 )]
 pub struct Cli {
     /// Path to the configuration file. Overrides default and environment.

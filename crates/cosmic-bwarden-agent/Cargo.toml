@@ -5,6 +5,7 @@ edition = "2021"
 license = "GPL-3.0-only"
 authors = ["Don Enikeev <donat@enikeev.net>"]
 repository = "https://github.com/donatengit/cosmic-bwarden"
+homepage = "https://github.com/donatengit/cosmic-bwarden"
 description = "Background agent holding the cosmic-bwarden vault in memory-locked storage"
 
 [dependencies]

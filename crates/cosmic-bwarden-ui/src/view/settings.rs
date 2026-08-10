@@ -89,7 +89,7 @@ impl CosmicBWardenApp {
                     .into()
             });
 
-        let mut content = cosmic::widget::column::with_capacity(3)
+        let mut content = cosmic::widget::column::with_capacity(5)
             .spacing(20)
             .push(header)
             .push(col);
@@ -99,6 +99,10 @@ impl CosmicBWardenApp {
         content = content.push(tpm_section);
 
         if !is_editing {
+            // Version and project URL are click-to-copy rather than
+            // click-to-open: the vault window has no browser-launch path, and
+            // spawning a URL handler from a password UI is a bigger surface
+            // than a bug reporter pasting two strings.
             content = content.push(
                 button::custom(
                     text::caption(format!("v{}", cosmic_bwarden_core::version()))
@@ -109,6 +113,14 @@ impl CosmicBWardenApp {
                 ))
                 .class(cosmic::theme::Button::Text)
                 .padding([2, 0]),
+            );
+            content = content.push(
+                button::custom(text::caption(cosmic_bwarden_core::HOMEPAGE).class(muted_text()))
+                    .on_press(Message::CopyToClipboard(
+                        cosmic_bwarden_core::HOMEPAGE.to_string(),
+                    ))
+                    .class(cosmic::theme::Button::Text)
+                    .padding([2, 0]),
             );
         }
 

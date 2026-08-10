@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "COSMIC BWarden",
   "version": "0.1.0",
-  "description": "Native COSMIC Bitwarden client extension",
+  "description": "Autofill from your local COSMIC BWarden vault. Requires the native cosmic-bwarden agent: github.com/donatengit/cosmic-bwarden",
   "homepage_url": "https://github.com/donatengit/cosmic-bwarden",
   "browser_specific_settings": {
     "gecko": {

@@ -34,6 +34,8 @@ package() {
   install -Dm755 target/release/cosmic-bwarden-cli "$pkgdir/usr/bin/cosmic-bwarden-cli"
   install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop \
     "$pkgdir/usr/share/applications/com.enikeev.cosmic_bwarden.desktop"
+  install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.metainfo.xml \
+    "$pkgdir/usr/share/metainfo/com.enikeev.cosmic_bwarden.metainfo.xml"
   install -Dm644 packaging/com.enikeev.cosmic_bwarden.ron \
     "$pkgdir/usr/share/cosmic/applets/com.enikeev.cosmic_bwarden.ron"
   install -Dm644 packaging/cosmic-bwarden-agent.deb.service \

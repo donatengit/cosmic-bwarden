@@ -21,6 +21,19 @@ pub fn version() -> &'static str {
     env!("COSMIC_BWARDEN_VERSION")
 }
 
+/// Canonical project URL. Single source for every user-facing surface that
+/// points people back at the source (CLI `--help`, the Settings footer, the
+/// AppStream metainfo, packaging metadata) so a repo move needs one edit here
+/// plus the non-Rust manifests, not a grep across the tree.
+pub const HOMEPAGE: &str = "https://github.com/donatengit/cosmic-bwarden";
+
+/// Trailing line for every binary's `--help`. A function rather than a `const`
+/// because `concat!` only takes literals, and duplicating the URL into a second
+/// const is exactly the drift [`HOMEPAGE`] exists to prevent.
+pub fn help_footer() -> String {
+    format!("Source, docs, and bug reports: {HOMEPAGE}")
+}
+
 /// IPC protocol version, independent of the build version. Bump ONLY on a
 /// breaking change to the wire protocol (`protocol::Action`/`Response`
 /// semantics or encoding). The build version embeds seconds-since-month-start
