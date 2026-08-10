@@ -49,6 +49,14 @@ not vulnerabilities, though better mitigations are welcome as feature proposals:
   the trust boundary on a single-user desktop; reprompts raise cost, they are not a wall.
 - Unencrypted swap can page session tokens out to disk.
 - An attacker with root, kernel access, or physical DMA is out of scope.
+- **RUSTSEC-2023-0071 (`rsa` "Marvin Attack")** — a timing sidechannel in RSA PKCS#1
+  v1.5 decryption, with no fixed release in the `rsa` 0.9 line that this (and every
+  other Rust Bitwarden client) depends on. Reachable here when unwrapping the user's
+  private key / organisation keys and in `ssh-key`. Exploiting it needs both a source
+  of chosen ciphertexts and precise timing measurement of the agent's decryptions —
+  the latter puts an attacker inside the same-UID boundary above. Tracked in
+  `docs/roadmap.md`; the ignore in `.cargo/audit.toml` comes out as soon as upstream
+  ships a fix.
 - Vulnerabilities in Bitwarden/Vaultwarden servers themselves belong to those projects.
 
 ## What this project has and hasn't had

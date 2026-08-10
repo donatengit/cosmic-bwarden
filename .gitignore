@@ -3,8 +3,13 @@
  
 # Cargo lock file — keep for binaries, exclude for libraries
 # Cargo.lock
-.cargo/
- 
+# .cargo/config.toml is machine-local (it sets -C prefer-dynamic), but
+# audit.toml is the tracked, reviewed ignore list for `cargo audit` and must
+# ship. A negation cannot re-include a file under an excluded *directory*, so
+# exclude the contents rather than the directory itself.
+.cargo/*
+!.cargo/audit.toml
+
 # Backup files from editors
 *.orig
 *.bk

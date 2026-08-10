@@ -1,0 +1,76 @@
+# cargo-audit configuration — read by `cargo audit` locally and in CI.
+#
+# Every entry below is an advisory with NO upgrade available to this workspace:
+# either upstream has published no patched release, or the patched release is
+# unreachable because a dependency we don't control pins the old major. Each
+# one records why it is not exploitable here, and what would change that.
+#
+# Rules for this file:
+#   - An ignore is a claim about reachability. Verify it with
+#     `cargo tree -p <shipped-crate> -e normal -i <crate>` before adding one.
+#   - Re-check the list whenever dependencies move; drop the entry the moment a
+#     patched version becomes reachable. A stale ignore is worse than no audit.
+#   - Never add an advisory that is reachable from cosmic-bwarden-agent,
+#     -ui, or -cli at runtime without an explicit written risk acceptance.
+
+[advisories]
+ignore = [
+    # --- Reachable in shipped binaries: accepted risk, documented ---------
+
+    # RUSTSEC-2023-0071 — rsa 0.9.x, "Marvin Attack": timing sidechannel in
+    # PKCS#1 v1.5 decryption that can leak key material to an attacker who can
+    # submit many chosen ciphertexts AND measure decryption timing precisely.
+    # No fixed release exists in the rsa 0.9 line; the RustCrypto fix is not
+    # published, and every Rust Bitwarden client (including rbw) is in the same
+    # position. Reachable here: core's RSA-OAEP unwrap of the user's private
+    # key/org keys, and ssh-key via ssh-agent-lib.
+    # Why accepted: decryption runs locally in the agent on data already held
+    # by the vault owner; there is no network-facing decryption oracle. An
+    # attacker would need a compromised/hostile server feeding chosen
+    # ciphertexts *and* a local timing channel against the agent — and a local
+    # observer of that fidelity is already inside the same-UID trust boundary
+    # documented in SECURITY.md. Tracked in docs/roadmap.md; the moment rsa
+    # ships a fixed release this entry must go.
+    "RUSTSEC-2023-0071",
+
+    # --- Build-time only (proc-macro codegen, no runtime path) ------------
+
+    # RUSTSEC-2026-0194 / RUSTSEC-2026-0195 — quick-xml quadratic parsing and
+    # unbounded namespace allocation (both DoS). Patched in >=0.41.0, pinned to
+    # 0.39.x by wayland-scanner, which we reach only through libcosmic.
+    # Reachable exclusively via `wayland-scanner (proc-macro)`: it parses the
+    # Wayland protocol XML shipped in the source tree at BUILD time. The input
+    # is a fixed local file, not attacker-controlled, and quick-xml is not
+    # linked into the runtime binary at all. Revisit on the deliberate
+    # libcosmic upgrade already on the roadmap.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+
+    # --- Test harness only: not in any shipped binary ---------------------
+
+    # RUSTSEC-2024-0336 (rustls 0.20.9 infinite loop) and RUSTSEC-2025-0009
+    # (ring 0.16.20 panic on AES overflow). Both arrive via
+    # thirtyfour -> fantoccini -> hyper-rustls 0.23, which is an OPTIONAL
+    # dependency of cosmic-bwarden-tests behind the `browser-e2e` feature.
+    # Verified absent from agent/ui/cli:
+    #   cargo tree -p cosmic-bwarden-agent -e normal -i rustls  -> 0.23.40 only
+    # Shipped code uses rustls 0.23.40 (unaffected) through reqwest.
+    "RUSTSEC-2024-0336",
+    "RUSTSEC-2025-0009",
+
+    # RUSTSEC-2025-0111 — tokio-tar PAX header parsing allows file smuggling.
+    # No patched release. Reached only by testcontainers, a dev-dependency of
+    # cosmic-bwarden-tests; the tarballs it handles are container images we
+    # build in CI, not untrusted input. Absent from all shipped binaries.
+    "RUSTSEC-2025-0111",
+
+    # RUSTSEC-2026-0118 (NSEC3 unbounded loop, no patch) and RUSTSEC-2026-0119
+    # (O(n^2) name compression, patched >=0.26.1 but pinned by
+    # hickory-resolver 0.25). hickory only enters the graph because
+    # testcontainers turns on reqwest's DNS feature, and Cargo unifies features
+    # across the workspace. The shipped binaries resolve DNS through the system
+    # resolver — verified:
+    #   cargo tree -p cosmic-bwarden-agent -e normal -i hickory-proto -> absent
+    "RUSTSEC-2026-0118",
+    "RUSTSEC-2026-0119",
+]

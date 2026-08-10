@@ -77,9 +77,16 @@ jobs:
     continue-on-error: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Run cargo-audit directly rather than via rustsec/audit-check: the
+      # reviewed ignore list lives in .cargo/audit.toml, which the CLI reads
+      # from the working directory, so CI and `cargo audit` on a laptop give
+      # identical answers. Every ignore there is justified in-file.
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: cargo audit
+        run: cargo audit
 
   extension:
     name: extension unit tests + pack

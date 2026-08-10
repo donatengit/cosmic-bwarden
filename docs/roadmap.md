@@ -11,8 +11,9 @@ forge.
       in all five crates, PKGBUILD updated. (Phase 7/8.)
 - [ ] **Finalize .deb depends on a Debian host** — `dpkg-shlibdeps` over the manual
       list in `crates/cosmic-bwarden-ui/Cargo.toml [package.metadata.deb]`.
-- [ ] **PKGBUILD**: fill `url`/`source`/`license`, pin sha256, clean-chroot build
-      (`packaging/PKGBUILD`).
+- [ ] **PKGBUILD**: `url`/`source`/`license` filled 2026-08 (repo is at
+      `github.com/donatengit/cosmic-bwarden`). Still open: pin the real sha256 once a
+      `vYYYY.MM.P` tag exists, then a clean-chroot build (`packaging/PKGBUILD`).
 - [ ] **Extension store prep**: Firefox-flavoured manifest (`background.scripts`
       event page) alongside Chrome's `service_worker`; privacy policy; AMO
       source-review notes. Submit early to reserve `cosmic-bwarden@enikeev.com`.
@@ -24,22 +25,35 @@ forge.
       old ID are orphaned and require re-login. Still **temporary** — pick a
       permanent namespace (e.g. a real domain or `io.github.<owner>`) before
       Flatpak/store publishing.
-- [ ] Scrub git history and working tree for secrets / machine-specific paths.
+- [x] Scrub git history and working tree for secrets / machine-specific paths. *(Done
+      2026-08, before the first push: swept all commits for keys, tokens, `/home/don`
+      paths and personal hostnames — only test fixtures found. No submodule or binary
+      beyond the eight icon PNGs was ever committed; `.git` is 1.4 MB.)*
 - [x] Review `docs/*_plan.md` scratch docs — keep or archive. *(Done 2026-07: completed
       plans moved to `docs/archive/`, see `docs/review/00_ground_truth.md` F3.)*
-- [ ] Add CI once on a forge (build + test + `clippy`). Note: warnings are
-      already denied at build time via `[workspace.lints]`, so CI mainly needs to
-      run the suite and clippy.
+- [x] Add CI once on a forge (build + test + `clippy`). *(Done 2026-08 with the first
+      push: `lint`, `unit`, `audit`, and `extension` run on every push/PR; the Rust E2E
+      suite runs nightly and on manual dispatch. The `extension` job also builds the
+      distributable zip so packaging breaks surface on push, not mid-release.)*
 
 ## Security / supply chain
 
 Items below tagged `[P1-n]` come from the Phase 1 security review
 (`docs/review/01_security.md`, 2026-07-04). No S0/S1 open; these are S2 hardening.
 
-- [ ] **Dependency auditing** `[P1-5]` — add `cargo-deny` (advisories + license + bans)
-      and wire `cargo audit` into the build/CI. Priority because this is a password
-      manager and it pulls `tss-esapi 8.0.0-alpha.2` (an alpha crate handling key
-      material). Track advisories against the whole tree, not just direct deps.
+- [ ] **`rsa` Marvin timing sidechannel (RUSTSEC-2023-0071)** — *accepted, not fixed
+      (2026-08)*. No patched release exists in the `rsa` 0.9 line, and RSA is reachable
+      from all three shipped binaries (core's private-key/org-key unwrap; `ssh-key` via
+      `ssh-agent-lib`). Rationale for acceptance is in `.cargo/audit.toml`, summarised
+      in SECURITY.md. **Drop the ignore and bump the moment RustCrypto ships a fix** —
+      this is the only ignored advisory that reaches shipped code.
+- [x] **Dependency auditing** `[P1-5]` — *done 2026-08*: `cargo audit` runs in CI on
+      every push (`.github/workflows/ci.yml`, `audit` job), reading the reviewed ignore
+      list at `.cargo/audit.toml` so CI and a laptop agree. Each ignore records why the
+      advisory is unreachable (build-time-only `quick-xml`; `thirtyfour`/`testcontainers`
+      test-only paths; hickory pulled in only by workspace feature unification) and was
+      verified with `cargo tree -p <shipped-crate> -e normal -i <crate>`. Still open:
+      `cargo-deny` for license + bans, which `cargo audit` does not cover.
 - [ ] Pin/track the alpha `tss-esapi` version deliberately; revisit at publish
       time — likely stable by then (owner, 2026-07), so this may reduce to a
       version bump rather than a risk assessment.
