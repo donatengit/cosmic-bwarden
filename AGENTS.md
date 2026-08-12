@@ -226,6 +226,8 @@ Source lives in `browser-extension/`. Plain vanilla JS — no bundler, no framew
 
 **Save prompt**: credentials captured at user-initiated form submit are the one exception — they live transiently in the background per-tab pending map (cleared on action/90 s TTL/tab close, never persisted or logged). "Does this login exist / did the password change" is decided inside the agent (`CheckLoginMatch`); the extension never fetches a stored secret to compare, and `SHOW_SAVE_BAR` messages to the page never carry the password. Updates go through `UpdateLoginPassword { id, password }` — never echo a `GetEntryMeta` result through `UpdateEntry`, which wipes notes (redaction sets them `None` and the merge treats `None` notes as a legitimate clear). See `docs/browser_integration.md`.
 
+**Unit-test loading gotcha**: `background-save.test.js` injects `sendToAgent` as a `new Function` parameter, but `background.js` *declares its own* `sendToAgent` (the native-messaging queue), which shadows any injected parameter — a unit test that injects it will hang forever. Load `background.js` with a fake `connectNative()` port whose `postMessage()` resolves the agent call and delivers the response through the real `onMessage` listener (see `background.test.js`).
+
 ## Justfile (task runner)
 
 The project uses `just` for all build, install, and test orchestration. Key recipes:

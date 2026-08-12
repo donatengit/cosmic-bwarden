@@ -76,8 +76,32 @@ function buildMock({ isLocked = false, tabUrl = null, entriesForQuery = null, tp
       },
       tabs: {
         query: async () => [{ id: 123, url: ${tabUrl ? `'${tabUrl}'` : 'undefined'} }],
-        sendMessage: async () => {},
+        sendMessage: async (tabId, msg) => {
+          window._sentToTab = (window._sentToTab || []).concat([{ tabId, msg }]);
+        },
         create: async (opts) => { window._tabsCreated = (window._tabsCreated || []).concat([opts]); }
+      },
+      storage: {
+        // Backed by the page's own sessionStorage: it survives reload and
+        // same-tab navigation exactly like browser.storage.session survives a
+        // popup reopen / service-worker restart. Without it, a fix that
+        // persists popup state to storage.session could never turn the
+        // close/reopen tests green — addInitScript re-runs on every
+        // navigation, so any mock-level JS object would be recreated.
+        session: {
+          async get(key) {
+            const raw = window.sessionStorage.getItem('cosmic-bwarden-test:' + key);
+            return raw !== null ? { [key]: JSON.parse(raw) } : {};
+          },
+          async set(obj) {
+            for (const [k, v] of Object.entries(obj)) {
+              window.sessionStorage.setItem('cosmic-bwarden-test:' + k, JSON.stringify(v));
+            }
+          },
+          async remove(key) {
+            window.sessionStorage.removeItem('cosmic-bwarden-test:' + key);
+          },
+        },
       }
     };
   `;
@@ -506,5 +530,107 @@ test.describe('Extension Popup — favourites', () => {
     await page.locator('#search').fill('com');
     await expect(page.locator('.entry-name', { hasText: 'pinned.com' })).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.entry-name', { hasText: 'example.com' })).not.toBeVisible();
+  });
+});
+
+test.describe('Extension Popup — add entry pre-fills the current tab domain', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(buildMock({ tabUrl: 'https://example.com/login' }));
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+  });
+
+  test('add button opens the form with the current tab domain pre-filled in Name', async ({ page }) => {
+    await page.locator('#add-btn').click();
+    await expect(page.locator('#view-edit')).toBeVisible({ timeout: 5000 });
+    expect(await page.locator('#edit-name').inputValue()).toBe('example.com');
+  });
+});
+
+test.describe('Extension Popup — state survives close/reopen (window switching)', () => {
+  // A browser popup is torn down the moment it loses focus (e.g. the
+  // context menu closes or the user switches windows); reopening it is a
+  // fresh document. Re-navigating to popup.html is the same thing from the
+  // script's point of view, so these tests use page.goto() rather than
+  // trying to close/reopen a real browser popup.
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(buildMock());
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+  });
+
+  test('restores the detail view after the popup is closed and reopened', async ({ page }) => {
+    await page.locator('.entry-actions button[title="View details"]').click();
+    await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
+
+    // Full re-navigation (not reload), see note on the search test below.
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+    await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('#detail-content')).toContainText('Test Login');
+  });
+
+  test('restores an in-progress edit draft after the popup is closed and reopened', async ({ page }) => {
+    await page.locator('#add-btn').click();
+    await page.locator('#edit-name').fill('draft name');
+    await page.locator('#edit-notes').fill('draft notes');
+
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+    await expect(page.locator('#view-edit')).toBeVisible({ timeout: 5000 });
+    expect(await page.locator('#edit-name').inputValue()).toBe('draft name');
+    expect(await page.locator('#edit-notes').inputValue()).toBe('draft notes');
+  });
+
+  test('restores the typed search query after the popup is closed and reopened', async ({ page }) => {
+    await page.locator('#search').fill('facebook');
+
+    // All three tests use full re-navigation rather than reload(): reload()
+    // would let Firefox restore input values from its form state, which could
+    // mask the lost module-level state these tests are about — a reopened
+    // popup is a brand-new document.
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+    expect(await page.locator('#search').inputValue()).toBe('facebook');
+  });
+});
+
+test.describe('Extension Popup — click-to-fill on a matching domain', () => {
+  test.beforeEach(async ({ page }) => {
+    // The popup is open on https://example.com/login and the listed entry
+    // belongs to example.com — a domain match, so clicking the row should
+    // autofill the form on the current tab, not open the site elsewhere.
+    await page.addInitScript(buildMock({
+      tabUrl: 'https://example.com/login',
+      entryMetaUri: 'example.com/login',
+    }));
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+  });
+
+  test('clicking a Login entry row on a matching domain fills the form instead of opening a new tab', async ({ page }) => {
+    await page.locator('.entry-name', { hasText: 'Test Login' }).click();
+
+    // The form on the current tab must receive FILL_FORM...
+    await page.waitForFunction(
+      () => window._sentToTab && window._sentToTab.some(m => m.msg.type === 'FILL_FORM'),
+      null, { timeout: 5000 }
+    );
+    const filled = await page.evaluate(() => window._sentToTab.find(m => m.msg.type === 'FILL_FORM'));
+    expect(filled.msg.username).toBe('testuser');
+    expect(filled.msg.password).toBe('testpassword');
+
+    // ...and no new tab may be opened.
+    expect((await page.evaluate(() => window._tabsCreated || [])).length).toBe(0);
+
+    // The full entry (with the password) is fetched via GetEntry.
+    const msgs = await page.evaluate(() => window._sentMessages);
+    expect(msgs.some(m => m && m.GetEntry)).toBe(true);
+  });
+
+  test('clicking a non-Login entry row on a matching domain still opens the detail view', async ({ page }) => {
+    const cardEntries = [
+      { id: '9', name: 'My Card', username: null, entry_type: 'Card', is_pinned: false }
+    ];
+    await page.addInitScript(buildMock({ tabUrl: 'https://example.com/login', entriesForQuery: cardEntries }));
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+
+    await page.locator('.entry-name', { hasText: 'My Card' }).click();
+    await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
+    expect((await page.evaluate(() => window._tabsCreated || [])).length).toBe(0);
   });
 });

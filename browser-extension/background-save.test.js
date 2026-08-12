@@ -272,3 +272,74 @@ describe('onBarAction', () => {
         expect(await savePrompt.getPendingSave(5)).toBeNull();
     });
 });
+
+describe('save prompt with a locked vault (Unlock & Save)', () => {
+    // A user submitting a login while the vault is locked must not lose the
+    // credential. v1 behavior was to silently drop the prompt
+    // (evaluatePendingSave cleared the pending state when vaultUsable() was
+    // false) — so after unlocking, nothing was ever offered. Desired flow:
+    // keep the pending credential while locked, and once the vault is
+    // unlocked offer Save/Update for the same submission. A fix must also
+    // leave the pending state re-evaluable after deferral (the `evaluated`
+    // flag blocks a second onTabComplete pass).
+    it('keeps the pending credential while locked, then offers save after unlock', async () => {
+        let locked = true;
+        const fakeBrowser = makeFakeBrowser();
+        const agent = makeFakeAgent((action) => {
+            if (action === 'GetConfig') return { Config: { is_locked: locked, needs_login: false } };
+            if (action.CheckLoginMatch) return { LoginMatch: { entry_id: null, name: null, password_matches: false } };
+            throw new Error('unexpected action');
+        });
+        const savePrompt = loadSavePrompt(fakeBrowser, agent);
+
+        await savePrompt.onLoginSubmitted(21, {
+            url: 'https://example.com/login', username: 'alice', password: 'hunter2',
+        });
+        await savePrompt.onTabComplete(21);
+
+        // Locked vault: the submission survives evaluation instead of being
+        // silently dropped.
+        expect(await savePrompt.getPendingSave(21)).not.toBeNull();
+
+        // User unlocks (e.g. via the applet/popup); re-evaluating the same
+        // pending credential must now surface the save bar with the
+        // save/update decision.
+        locked = false;
+        await savePrompt.onTabComplete(21);
+
+        const barMessage = fakeBrowser.tabs.sentMessages.find(m => m.message && m.message.type === 'SHOW_SAVE_BAR');
+        expect(barMessage).toBeTruthy();
+        expect(barMessage.message.mode).toBe('save'); // no matching entry → offer save
+        expect(agent.calls.some(c => c && c.CheckLoginMatch)).toBe(true);
+    });
+
+    // Same deferral, but a matching entry whose password changed must come
+    // back as an Update offer after unlock.
+    it('offers update (not save) after unlock when a matching entry exists', async () => {
+        let locked = true;
+        const fakeBrowser = makeFakeBrowser();
+        const agent = makeFakeAgent((action) => {
+            if (action === 'GetConfig') return { Config: { is_locked: locked, needs_login: false } };
+            if (action.CheckLoginMatch) {
+                return { LoginMatch: { entry_id: 'id-9', name: 'example.com', password_matches: false } };
+            }
+            throw new Error('unexpected action');
+        });
+        const savePrompt = loadSavePrompt(fakeBrowser, agent);
+
+        await savePrompt.onLoginSubmitted(22, {
+            url: 'https://example.com/login', username: 'alice', password: 'hunter2',
+        });
+        await savePrompt.onTabComplete(22);
+
+        expect(await savePrompt.getPendingSave(22)).not.toBeNull();
+
+        locked = false;
+        await savePrompt.onTabComplete(22);
+
+        const barMessage = fakeBrowser.tabs.sentMessages.find(m => m.message && m.message.type === 'SHOW_SAVE_BAR');
+        expect(barMessage).toBeTruthy();
+        expect(barMessage.message.mode).toBe('update');
+        expect(barMessage.message.entryName).toBe('example.com');
+    });
+});
