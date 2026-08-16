@@ -61,8 +61,7 @@ fn save_after_load_writes_only_owned_fields() {
     stale.tpm_enabled = false;
     stale.tpm_store_server_credentials = false;
     let _ = app.update_app(Message::ConfigReceived(Ok((
-        stale, false, true, false, false,
-    ))));
+        stale, false, true, false, false, 0, 0))));
     assert!(app.config_loaded);
 
     let _ = app.update_app(Message::SettingsEditClicked);
@@ -101,8 +100,7 @@ fn save_after_load_persists_the_server_url() {
         false,
         true,
         false,
-        false,
-    ))));
+        false, 0, 0))));
     let _ = app.update_app(Message::SettingsEditClicked);
     let _ = app.update_app(Message::SettingsServerChanged(
         "https://vault.example.com".to_string(),

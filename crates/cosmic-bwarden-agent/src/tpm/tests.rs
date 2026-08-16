@@ -173,3 +173,42 @@ async fn tpm_availability_and_diagnostics() {
         );
     }
 }
+
+/// `classify_unseal_failure` maps the TSS response codes to user-actionable
+/// categories: wrong PIN (DA attempt consumed), changed PCR state (recovery:
+/// master password), DA lockout, and everything else. No TPM required — the
+/// errors are synthesized.
+#[test]
+fn classify_unseal_failure_maps_tss_codes() {
+    use tss_esapi::error::{ReturnCode, TpmResponseCode};
+
+    let classify = |rc: u16| {
+        let err = anyhow::Error::from(tss_esapi::Error::TssError(ReturnCode::Tpm(
+            TpmResponseCode::try_from(rc).expect("valid TPM response code"),
+        )));
+        classify_unseal_failure(&err)
+    };
+
+    // TPM_RC_AUTH_FAIL (0x08E): wrong PIN, DA counter incremented.
+    assert_eq!(classify(0x08E), UnsealFailure::WrongPin);
+    // TPM_RC_POLICY_FAIL (0x09D): policy check failed (PCR state changed).
+    assert_eq!(classify(0x09D), UnsealFailure::StateChanged);
+    // TPM_RC_LOCKOUT (0x921): TPM in dictionary-attack lockout.
+    assert_eq!(classify(0x921), UnsealFailure::Lockout);
+    // Some unrelated format-one error → Other.
+    assert_eq!(classify(0x097), UnsealFailure::Other);
+
+    // The same code wrapped in anyhow `.context()` layers still classifies —
+    // this is how the error arrives at the unlock handler.
+    let wrapped = anyhow::Error::from(tss_esapi::Error::TssError(ReturnCode::Tpm(
+        TpmResponseCode::try_from(0x09D).unwrap(),
+    )))
+    .context("TPM unseal — wrong PIN, changed PCRs, or DA lockout");
+    assert_eq!(classify_unseal_failure(&wrapped), UnsealFailure::StateChanged);
+
+    // Non-TSS errors classify as Other.
+    assert_eq!(
+        classify_unseal_failure(&anyhow::anyhow!("no TPM device")),
+        UnsealFailure::Other
+    );
+}

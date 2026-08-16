@@ -37,6 +37,8 @@ pub async fn handle_get_config(state: &Arc<Mutex<State>>) -> Response {
     let has_account = state_guard.db.as_ref().is_some_and(|db| db.has_account());
     let needs_login = state_guard.db.as_ref().is_none_or(|db| db.needs_login());
     let sync_failed = state_guard.sync_failed;
+    let session_id = state_guard.session_id;
+    let lock_epoch = state_guard.lock_epoch;
 
     match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
         Ok(config) => Response::Config {
@@ -45,6 +47,8 @@ pub async fn handle_get_config(state: &Arc<Mutex<State>>) -> Response {
             has_account,
             is_locked,
             sync_failed,
+            session_id,
+            lock_epoch,
         },
         Err(e) => Response::Error {
             message: format!("failed to load config: {}", e),

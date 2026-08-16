@@ -56,6 +56,25 @@ async fn test_pin_unlock_without_server_credentials_sync_fails() -> Result<()> {
     // Local vault access works (symmetric keys unsealed from TPM).
     assert_vault_accessible(&env).await?;
 
+    // The degraded state must be visible in GetConfig IMMEDIATELY after the
+    // unlock — the agent knows sync is impossible (no token, no hash blob)
+    // and must not report a healthy unlocked vault.
+    let cfg_res = client.send(Action::GetConfig).await?;
+    match cfg_res {
+        Response::Config {
+            sync_failed,
+            is_locked,
+            ..
+        } => {
+            assert!(!is_locked, "vault must be unlocked after PIN unlock");
+            assert!(
+                sync_failed,
+                "degraded PIN unlock (no token, no hash blob) must set sync_failed"
+            );
+        }
+        other => anyhow::bail!("expected Config, got: {:?}", other),
+    }
+
     // Sync must fail — no session token available for server API call.
     let sync_res = client.send(Action::Sync).await?;
     assert!(

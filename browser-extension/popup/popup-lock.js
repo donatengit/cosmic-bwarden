@@ -24,6 +24,11 @@ const lockedFallbackBtn = document.getElementById('locked-fallback-btn');
 // error, etc.) and is shown as-is rather than mislabeled as a wrong PIN.
 const ERR_TPM_UNSEAL_FAILED = 'TPM unseal failed';
 
+// Stable error string for a PCR-state change (BIOS/firmware update, Secure
+// Boot toggle) — see cosmic_bwarden_core::protocol::ERR_TPM_STATE_CHANGED.
+// The PIN itself is fine: this must never be shown as a wrong PIN.
+const ERR_TPM_STATE_CHANGED = 'TPM state changed';
+
 // Mirrors format_secs in crates/cosmic-bwarden-ui/src/view/mod.rs.
 function formatSecs(secs) {
     if (secs === 0) return 'a moment';
@@ -55,6 +60,23 @@ function tpmDaLine(status) {
 // a plain "Incorrect PIN".
 function pinFeedbackLine(status) {
     return tpmDaLine(status) || 'Incorrect PIN';
+}
+
+// Maps an agent Error message to the feedback line shown in the locked view.
+// Pure so it is unit-testable. Rules:
+// - ERR_TPM_STATE_CHANGED (PCR change): the PIN is fine — never call it a
+//   wrong PIN; point at the master-password recovery instead.
+// - ERR_TPM_UNSEAL_FAILED: wrong PIN or DA lockout — replaced by the
+//   DA/incorrect-PIN line (the raw string is log-only).
+// - Anything else (environmental failure): shown as-is.
+function unlockErrorMessage(message, daStatus) {
+    if (message === ERR_TPM_STATE_CHANGED) {
+        return 'TPM state changed (firmware or BIOS update). Unlock with the master password in the COSMIC app, then set the PIN again.';
+    }
+    if (message === ERR_TPM_UNSEAL_FAILED) {
+        return pinFeedbackLine(daStatus);
+    }
+    return message;
 }
 
 function showLockedFeedback(text) {
@@ -121,6 +143,9 @@ async function submitPin() {
         // previously didn't, so a *successful* unlock still showed
         // "Unexpected agent response." here.
         if (resp === 'Ack' || (resp && resp.Ack)) {
+            // Tell the background the vault is now unlocked so it re-evaluates
+            // any save prompt deferred while locked (and flips the toolbar icon).
+            browser.runtime.sendMessage({ type: 'VAULT_UNLOCKED' }).catch(() => {});
             showView('list');
             return;
         }
@@ -132,9 +157,9 @@ async function submitPin() {
                 const daResp = await browser.runtime.sendMessage('GetTpmDaStatus');
                 status = daResp && daResp.TpmDaStatus ? daResp.TpmDaStatus.status : null;
             } catch { /* show the plain incorrect-PIN fallback below */ }
-            showLockedFeedback(pinFeedbackLine(status));
+            showLockedFeedback(unlockErrorMessage(message, status));
         } else {
-            showLockedFeedback(message);
+            showLockedFeedback(unlockErrorMessage(message, null));
         }
     } catch (e) {
         lockedPinInput.value = '';

@@ -1,5 +1,6 @@
 use crate::app::CosmicBWardenApp;
 use crate::message::Message;
+use crate::message::UnlockMode;
 use crate::message::View;
 use crate::message::WindowState;
 use cosmic::iced::window;
@@ -119,8 +120,7 @@ async fn test_config_received_routes_by_has_account_not_needs_login() {
         true,
         true,
         false,
-        false,
-    ))));
+        false, 0, 0))));
     assert_eq!(app.view, View::Vault);
 
     // Locked but with an account on disk -> Unlock, not Setup.
@@ -129,14 +129,12 @@ async fn test_config_received_routes_by_has_account_not_needs_login() {
         true,
         true,
         true,
-        false,
-    ))));
+        false, 0, 0))));
     assert_eq!(app.view, View::Unlock);
 
     // No account on disk at all -> Setup, regardless of is_locked.
     let _ = app.update(Message::ConfigReceived(Ok((
-        config, true, false, false, false,
-    ))));
+        config, true, false, false, false, 0, 0))));
     assert_eq!(app.view, View::Setup);
 }
 
@@ -154,8 +152,7 @@ async fn test_config_received_vault_triggers_entry_fetch() {
         false,
         true,
         false,
-        false,
-    ))));
+        false, 0, 0))));
 
     assert_eq!(app.view, View::Vault);
     assert!(
@@ -182,8 +179,7 @@ async fn test_config_received_unlocked_with_applet_popup_triggers_applet_fetch()
         false,
         true,
         false,
-        false,
-    ))));
+        false, 0, 0))));
 
     assert_eq!(app.view, View::Vault);
     assert!(
@@ -208,8 +204,7 @@ async fn test_config_received_unlocked_without_applet_popup_skips_applet_fetch()
         false,
         true,
         false,
-        false,
-    ))));
+        false, 0, 0))));
 
     assert_eq!(app.view, View::Vault);
     assert_eq!(
@@ -415,37 +410,65 @@ fn test_tpm_status_received_available_not_configured() {
     assert!(app.tpm_status_known);
     assert!(app.tpm_available);
     assert!(!app.tpm_configured);
-    assert!(!app.show_pin_unlock, "no PIN unlock when not configured");
-
-    let _ = app.view_settings();
-}
-
-#[test]
-fn test_tpm_status_received_available_and_configured() {
-    let mut app = CosmicBWardenApp::default();
-    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, false))));
-    assert!(app.tpm_status_known);
-    assert!(app.tpm_available);
-    assert!(app.tpm_configured);
-    assert!(
-        app.show_pin_unlock,
-        "PIN unlock must be enabled when configured"
+    assert_eq!(
+        app.unlock_mode,
+        UnlockMode::Password,
+        "no PIN unlock when not configured"
     );
 
     let _ = app.view_settings();
 }
 
 #[test]
+fn test_tpm_status_received_available_and_configured() {
+    // While the unlock view is showing, a configured PIN promotes the form to
+    // PIN-first.
+    let mut app = CosmicBWardenApp {
+        view: View::Unlock,
+        ..Default::default()
+    };
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, false))));
+    assert!(app.tpm_status_known);
+    assert!(app.tpm_available);
+    assert!(app.tpm_configured);
+    assert_eq!(app.unlock_mode, UnlockMode::Pin);
+
+    let _ = app.view_settings();
+}
+
+#[test]
+fn test_tpm_status_received_while_unlocked_does_not_flip_mode() {
+    // Regression (F2): TpmStatusReceived used to enable PIN unlock even while
+    // the vault was unlocked, so the next lock prompted PIN-first regardless
+    // of how the user got in. While unlocked, the mode must stay put.
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, false))));
+    assert!(app.tpm_configured);
+    assert_eq!(
+        app.unlock_mode,
+        UnlockMode::Password,
+        "unlocked: TPM status must not flip the unlock form"
+    );
+}
+
+#[test]
 fn test_tpm_status_known_set_on_error_response() {
-    // Even if CheckTpm fails (agent unreachable), we should not permanently
-    // hide the section — the Err path must not set tpm_status_known, so the
-    // "Checking…" state persists rather than flipping to "not accessible".
-    let mut app = CosmicBWardenApp::default();
+    // If CheckTpm fails (agent unreachable), the unlock form must still render:
+    // mark the status as known-unavailable so the password fallback shows
+    // instead of an endless spinner.
+    let mut app = CosmicBWardenApp {
+        view: View::Unlock,
+        ..Default::default()
+    };
     let _ = app.update(Message::TpmStatusReceived(Err(
         "agent unreachable".to_string()
     )));
-    // Err → tpm_status_known stays false; user sees "Checking…" not "not accessible".
-    assert!(!app.tpm_status_known);
+    assert!(app.tpm_status_known, "Err must mark TPM status as known");
+    assert!(!app.tpm_available);
+    assert_eq!(app.unlock_mode, UnlockMode::Password);
 }
 
 #[test]
@@ -461,8 +484,7 @@ fn test_config_received_unlocked_sets_tpm_check_pending() {
         false,
         true,  // has_account
         false, // is_locked = false → vault open path
-        false,
-    ))));
+        false, 0, 0))));
 
     assert_eq!(app.view, View::Vault);
     assert!(
@@ -504,7 +526,8 @@ fn test_master_password_unlock_offers_pin_reenable() {
     // the master-password screen (e.g. after a PIN mismatch forced a fallback).
     let mut app = CosmicBWardenApp::default();
     let _ = app.update(Message::TpmStatusReceived(Ok((true, true, false))));
-    app.show_pin_unlock = false; // fell back to master password
+    app.unlock_mode = UnlockMode::Password;
+    app.password_preferred = true; // fell back to master password
     app.login_email = "user@example.com".to_string();
     app.view = View::Unlock;
 
@@ -600,7 +623,7 @@ fn test_disable_then_enable_cycle_state() {
     // Disable clears configured + server creds and hides PIN unlock.
     let _ = app.update(Message::TpmDisableResult(Ok(())));
     assert!(!app.tpm_configured);
-    assert!(!app.show_pin_unlock);
+    assert_eq!(app.unlock_mode, UnlockMode::Password);
 
     // Re-enable: configured again, server creds fresh (off).
     let _ = app.update(Message::TpmSetupResult(Ok(())));
@@ -661,7 +684,7 @@ async fn test_pin_incorrect_flag_lifecycle() {
 
     // A failed LOGIN while the PIN flags are still set keeps its error visible
     // (regression: AuthResult must not be reclassified as a PIN failure).
-    app.show_pin_unlock = true;
+    app.unlock_mode = UnlockMode::Pin;
     app.tpm_available = true;
     let _ = app.update(Message::AuthResult(Err("invalid password".to_string())));
     assert_eq!(app.error.as_deref(), Some("invalid password"));
@@ -708,4 +731,135 @@ async fn test_applet_messages() {
 
     let _ = app.update(Message::SettingsViewClicked);
     assert_eq!(app.view, View::Settings);
+}
+
+#[test]
+fn test_stale_config_received_is_dropped() {
+    // F1: a Config snapshot computed BEFORE a lock-state transition must not
+    // be applied once a newer (session_id, lock_epoch) snapshot has been
+    // seen. This is what used to bounce users back to the lock screen right
+    // after a successful PIN unlock.
+    let mut app = CosmicBWardenApp {
+        view: View::Unlock,
+        ..Default::default()
+    };
+
+    // Newer snapshot: session 7, epoch 5, unlocked.
+    let _ = app.update(Message::ConfigReceived(Ok((
+        CosmicBWardenConfig::default(),
+        false,
+        true,
+        false,
+        false,
+        7,
+        5,
+    ))));
+    assert_eq!(app.view, View::Vault);
+    assert_eq!(app.last_config, Some((7, 5)));
+
+    // Stale snapshot: same session, epoch 4, LOCKED — must be dropped; the
+    // view must not bounce back to Unlock.
+    let _ = app.update(Message::ConfigReceived(Ok((
+        CosmicBWardenConfig::default(),
+        false,
+        true,
+        true,
+        false,
+        7,
+        4,
+    ))));
+    assert_eq!(
+        app.view,
+        View::Vault,
+        "stale snapshot must not flip the view back to Unlock"
+    );
+
+    // Equal epoch is a re-delivery of the same state, not staleness: applied.
+    let _ = app.update(Message::ConfigReceived(Ok((
+        CosmicBWardenConfig::default(),
+        false,
+        true,
+        true,
+        false,
+        7,
+        5,
+    ))));
+    assert_eq!(app.view, View::Unlock, "same-epoch snapshot is not stale");
+
+    // Different session id = agent restart (epoch resets): must be applied,
+    // not mistaken for staleness.
+    let _ = app.update(Message::ConfigReceived(Ok((
+        CosmicBWardenConfig::default(),
+        false,
+        true,
+        false,
+        false,
+        8,
+        0,
+    ))));
+    assert_eq!(app.view, View::Vault, "agent restart is not staleness");
+    assert_eq!(app.last_config, Some((8, 0)));
+}
+
+#[test]
+fn test_unlock_mode_transitions() {
+    let mut app = CosmicBWardenApp {
+        has_account: true,
+        view: View::Vault,
+        ..Default::default()
+    };
+    app.config.email = Some("user@example.com".to_string());
+
+    // Agent broadcast PinRequested (TPM PIN configured): PIN form.
+    let _ = app.update(Message::EventReceived(
+        cosmic_bwarden_core::protocol::Event::PinRequested,
+    ));
+    assert_eq!(app.unlock_mode, UnlockMode::Pin);
+    assert_eq!(app.view, View::Unlock);
+
+    // Agent broadcast UnlockRequested (no PIN configured): password form.
+    let _ = app.update(Message::EventReceived(
+        cosmic_bwarden_core::protocol::Event::UnlockRequested,
+    ));
+    assert_eq!(app.unlock_mode, UnlockMode::Password);
+
+    // Explicit "use master password instead" sticks: a later TPM status must
+    // NOT flip the form back to PIN.
+    let _ = app.update(Message::AppletUseMasterPasswordInstead);
+    assert!(app.password_preferred);
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, false))));
+    assert_eq!(
+        app.unlock_mode,
+        UnlockMode::Password,
+        "explicit choice must survive TPM status"
+    );
+}
+
+#[test]
+fn test_pin_result_state_changed_not_mislabeled() {
+    // F5: a PCR-state change (BIOS/firmware update) must never be shown as
+    // "Incorrect PIN" — the PIN is fine and no DA attempt was consumed.
+    let mut app = CosmicBWardenApp {
+        view: View::Unlock,
+        unlock_mode: UnlockMode::Pin,
+        tpm_status_known: true,
+        tpm_configured: true,
+        ..Default::default()
+    };
+    let state_changed = cosmic_bwarden_core::protocol::ERR_TPM_STATE_CHANGED.to_string();
+
+    let _ = app.update(Message::MainWindowPinResult(Err(state_changed.clone())));
+    assert!(!app.pin_incorrect, "PCR change is not a wrong PIN");
+    assert!(app.error.is_some(), "recovery guidance must be shown");
+    assert_eq!(
+        app.unlock_mode,
+        UnlockMode::Password,
+        "state change flips to the password form"
+    );
+
+    // The applet path mirrors it.
+    let _ = app.update(Message::AppletPinResult(Err(state_changed)));
+    assert!(!app.pin_incorrect);
+    assert!(app.error.is_some());
+    assert_eq!(app.unlock_mode, UnlockMode::Password);
 }

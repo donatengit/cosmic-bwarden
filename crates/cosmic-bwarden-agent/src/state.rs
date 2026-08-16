@@ -6,6 +6,24 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex as AsyncMutex;
 
+/// Fresh, random-enough per-process session id for ordering `Config`
+/// snapshots. Time since epoch (nanos) folded with the process id is
+/// sufficient: it only needs to differ across agent restarts.
+fn session_id() -> u64 {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    let pid = std::process::id() as u64;
+    // SplitMix64-style finalizer so consecutive restarts don't produce
+    // near-identical ids.
+    let mut x = nanos ^ (pid << 32);
+    x = x.wrapping_add(0x9e3779b97f4a7c15);
+    x = (x ^ (x >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+    x = (x ^ (x >> 27)).wrapping_mul(0x94d049bb133111eb);
+    x ^ (x >> 31)
+}
+
 /// A sidebar entry plus the normalized hosts it is bound to, for domain
 /// matching without per-query decryption. Hosts come from the login's URIs
 /// (skipping match type `Never`), with a hostname-shaped name as fallback for
@@ -31,9 +49,20 @@ pub struct State {
     pub shutdown_tx: Option<mpsc::UnboundedSender<()>>,
     pub unlock_requested_notified: bool,
     /// Set when any server mutation (add/update/delete/sync) fails due to a
-    /// network or backend error. Cleared by a successful sync.
+    /// network or backend error. Cleared by a successful sync. Deliberately
+    /// NOT cleared on lock: a vault that failed to sync stays failed to sync
+    /// across a lock/unlock cycle (an unlock re-auths and then syncs, which
+    /// clears it truthfully).
     pub sync_failed: bool,
     pub last_sync_error: Option<String>,
+    /// Random per-agent-session id. Reported in `Response::Config` so clients
+    /// can distinguish "older response in this session" from "agent restarted"
+    /// (see `lock_epoch`).
+    pub session_id: u64,
+    /// Number of lock-state transitions this session (lock, unlock, login,
+    /// logout). Reported in `Response::Config`; clients drop stale snapshots
+    /// by comparing (session_id, lock_epoch).
+    pub lock_epoch: u64,
     /// True when a TPM sealed blob exists for the current account.
     /// Set on startup and updated by the tpm_pin handler.
     pub tpm_configured: bool,
@@ -61,6 +90,8 @@ impl State {
             unlock_requested_notified: false,
             sync_failed: false,
             last_sync_error: None,
+            session_id: session_id(),
+            lock_epoch: 0,
             tpm_configured: false,
             refresh_lock: Arc::new(AsyncMutex::new(())),
         }
@@ -201,8 +232,11 @@ impl State {
         self.sidebar_cache.clear();
         self.pending_entry_id = None;
         self.unlock_requested_notified = false;
-        self.sync_failed = false;
-        self.last_sync_error = None;
+        // Deliberately do NOT clear sync_failed/last_sync_error here: a vault
+        // that failed to sync stays out of sync across a lock/unlock cycle.
+        // Unlock re-authenticates and then runs a sync, which clears the flag
+        // truthfully (or sets it again if that sync also fails).
+        self.bump_epoch();
         // Drop session tokens so they can't be used while locked — both
         // `locked::Token` representations zeroize on drop. The rest of `db`
         // (encrypted entries, protected keys) stays in memory so the vault
@@ -212,6 +246,13 @@ impl State {
             db.refresh_token = None;
         }
         self.broadcast(cosmic_bwarden_core::protocol::Event::Locked);
+    }
+
+    /// Record a lock-state transition (lock, unlock, login, logout) so
+    /// `Response::Config` snapshots can be ordered by clients. Call this
+    /// while holding the state lock, before broadcasting the matching event.
+    pub fn bump_epoch(&mut self) {
+        self.lock_epoch = self.lock_epoch.wrapping_add(1);
     }
 
     pub fn request_unlock(&mut self) {
@@ -225,5 +266,38 @@ impl State {
             self.broadcast(event);
             self.unlock_requested_notified = true;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `lock()` bumps the lock epoch (so stale `Config` snapshots are
+    /// detectable) and must NOT whitewash the out-of-sync state: a vault that
+    /// failed to sync stays failed across a lock.
+    #[test]
+    fn lock_bumps_epoch_and_preserves_sync_failed() {
+        let mut state = State::new();
+        state.sync_failed = true;
+        state.last_sync_error = Some("sync failed: network down".to_string());
+        let epoch_before = state.lock_epoch;
+
+        state.lock();
+
+        assert_eq!(state.lock_epoch, epoch_before + 1, "lock must bump the epoch");
+        assert!(state.sync_failed, "lock must not clear the out-of-sync flag");
+        assert!(
+            state.last_sync_error.is_some(),
+            "lock must not clear the last sync error"
+        );
+    }
+
+    /// A fresh state has a non-zero session id and epoch 0.
+    #[test]
+    fn fresh_state_session_and_epoch() {
+        let state = State::new();
+        assert_ne!(state.session_id, 0, "session id must identify the session");
+        assert_eq!(state.lock_epoch, 0);
     }
 }

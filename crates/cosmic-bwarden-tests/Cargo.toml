@@ -22,10 +22,13 @@ serde_json = "1.0"
 walkdir = "2"
 tokio-util = "0.7"
 uuid = { version = "1.0", features = ["v4"] }
+# Direct TPM access for tests that mutate PCR state (BIOS-change simulation)
+# and drive dictionary-attack lockout — only used under `tpm-smoke`.
+tss-esapi = { version = "8.0.0-alpha.2", optional = true, features = ["generate-bindings"] }
 
 [features]
 browser-e2e = ["thirtyfour", "zip"]
-tpm-smoke = []
+tpm-smoke = ["dep:tss-esapi"]
 
 [lints]
 workspace = true

@@ -58,11 +58,12 @@ impl std::fmt::Debug for Response {
                 has_account,
                 is_locked,
                 sync_failed,
+                lock_epoch,
                 ..
             } => write!(
                 f,
                 "Config {{ needs_login: {needs_login}, has_account: {has_account}, \
-                 is_locked: {is_locked}, sync_failed: {sync_failed} }}"
+                 is_locked: {is_locked}, sync_failed: {sync_failed}, lock_epoch: {lock_epoch} }}"
             ),
             Self::Entries { entries } => {
                 write!(f, "Entries {{ count: {}, <redacted> }}", entries.len())

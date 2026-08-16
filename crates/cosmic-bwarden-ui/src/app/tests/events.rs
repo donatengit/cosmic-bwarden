@@ -1,5 +1,6 @@
 use crate::app::CosmicBWardenApp;
 use crate::message::Message;
+use crate::message::UnlockMode;
 use crate::message::View;
 use cosmic::Application;
 use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
@@ -117,7 +118,7 @@ async fn test_unlock_requested_ignored_without_account() {
         View::Vault,
         "must not prompt unlock without an account"
     );
-    assert!(!app.show_pin_unlock);
+    assert_eq!(app.unlock_mode, UnlockMode::Password);
 }
 
 #[tokio::test]
@@ -129,8 +130,9 @@ async fn test_pin_requested_ignored_without_account() {
     let _ = app.update(Message::EventReceived(
         cosmic_bwarden_core::protocol::Event::PinRequested,
     ));
-    assert!(
-        !app.show_pin_unlock,
+    assert_eq!(
+        app.unlock_mode,
+        UnlockMode::Password,
         "no PIN prompt without a configured account"
     );
     assert_eq!(app.view, View::Vault);

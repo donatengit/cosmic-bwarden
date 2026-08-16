@@ -95,6 +95,7 @@ pub async fn handle_unlock(password: String, state: &Arc<Mutex<State>>) -> Respo
                 state_guard.keys = Some(keys);
                 state_guard.org_keys = Some(org_keys);
                 state_guard.master_password_hash = Some(identity.master_password_hash);
+                state_guard.bump_epoch();
 
                 state_guard.pinned_ids.clear();
                 for entry in &db.entries {
@@ -129,6 +130,7 @@ pub async fn handle_unlock(password: String, state: &Arc<Mutex<State>>) -> Respo
             // silently re-authenticate using the master-password hash we just derived.
             // The lock is intentionally released here so the network call doesn't block
             // other requests.
+            let mut can_sync = !needs_reauth;
             if needs_reauth {
                 log::info!("unlock: no session token available, attempting silent re-auth");
                 let client = cosmic_bwarden_core::api::Client::new(
@@ -151,6 +153,7 @@ pub async fn handle_unlock(password: String, state: &Arc<Mutex<State>>) -> Respo
                         {
                             Ok((access_token, refresh_token, _protected_key)) => {
                                 log::info!("unlock: silent re-auth succeeded");
+                                can_sync = true;
                                 {
                                     let mut g = state.lock().await;
                                     if let Some(db) = &mut g.db {
@@ -179,20 +182,50 @@ pub async fn handle_unlock(password: String, state: &Arc<Mutex<State>>) -> Respo
                             }
                             Err(e) => {
                                 // Server may be unreachable or require 2FA — the vault
-                                // is still usable locally; sync will fail until the user
-                                // logs out and logs back in.
-                                log::warn!(
+                                // is still usable locally, but sync is unavailable until
+                                // the next unlock. Surface it: set the out-of-sync flag
+                                // so the UI shows "Not synced" instead of lying.
+                                can_sync = false;
+                                log::error!(
                                     "unlock: silent re-auth failed (sync will be unavailable): {}",
                                     e
                                 );
                             }
                         }
                     }
-                    Err(e) => log::warn!(
-                        "unlock: could not obtain device_id for silent re-auth: {}",
-                        e
-                    ),
+                    Err(e) => {
+                        can_sync = false;
+                        log::error!(
+                            "unlock: could not obtain device_id for silent re-auth (sync will be unavailable): {}",
+                            e
+                        );
+                    }
                 }
+            }
+
+            if can_sync {
+                // Catch the vault up with the server now that we are unlocked
+                // and have a session. This also clears a stale out-of-sync flag
+                // truthfully instead of letting a lock cycle whitewash it.
+                let sync_state = Arc::clone(state);
+                tokio::spawn(async move {
+                    // If the user re-locked before this runs, a sync would fail
+                    // for lack of tokens and mark the state out-of-sync falsely.
+                    let has_token = {
+                        let g = sync_state.lock().await;
+                        g.db.as_ref().is_some_and(|db| db.access_token.is_some())
+                    };
+                    if has_token {
+                        let _ = crate::handler::vault::sync::handle_sync(&sync_state).await;
+                    }
+                });
+            } else {
+                let mut g = state.lock().await;
+                g.sync_failed = true;
+                g.last_sync_error = Some(
+                    "no session token after unlock — sync unavailable until you log in again"
+                        .to_string(),
+                );
             }
 
             Response::Ack

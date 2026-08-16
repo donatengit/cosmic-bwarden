@@ -107,17 +107,19 @@ async fn test_lock_preserves_account_unlock_restores_entries() -> Result<()> {
 
     // has_account stays true (only keys are cleared on lock, not the account record)
     let res = client.send(Action::GetConfig).await?;
-    if let Response::Config {
+    let epoch_locked = if let Response::Config {
         has_account,
         is_locked,
+        lock_epoch,
         ..
     } = res
     {
         assert!(has_account, "has_account must remain true after lock");
         assert!(is_locked, "is_locked must be true after lock");
+        lock_epoch
     } else {
         anyhow::bail!("Expected Config after lock");
-    }
+    };
 
     // GetSidebarEntries while locked must return an error, not an empty list
     let res = client
@@ -139,6 +141,26 @@ async fn test_lock_preserves_account_unlock_restores_entries() -> Result<()> {
         })
         .await?;
     assert!(matches!(res, Response::Ack), "Unlock must respond Ack");
+
+    // The lock epoch must have advanced on the unlock transition: it is what
+    // lets clients drop stale Config snapshots (see Response::Config docs).
+    let res = client.send(Action::GetConfig).await?;
+    if let Response::Config {
+        is_locked,
+        lock_epoch,
+        ..
+    } = res
+    {
+        assert!(!is_locked, "vault must be unlocked");
+        assert!(
+            lock_epoch > epoch_locked,
+            "lock_epoch must increase on unlock (locked: {}, now: {})",
+            epoch_locked,
+            lock_epoch
+        );
+    } else {
+        anyhow::bail!("Expected Config after unlock");
+    }
 
     // Entries must be accessible immediately after unlock (no re-login needed)
     let res = client

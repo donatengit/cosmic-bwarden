@@ -1,6 +1,6 @@
 use crate::app::CosmicBWardenApp;
 use crate::fl;
-use crate::message::Message;
+use crate::message::{Message, UnlockMode};
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{button, column, icon, row, secure_input, Id};
 use cosmic::Element;
@@ -14,7 +14,14 @@ pub fn pin_input_id() -> Id {
 }
 
 pub fn view(app: &CosmicBWardenApp) -> Element<'_, Message> {
-    if app.show_pin_unlock {
+    if !app.tpm_status_known {
+        // Wait for CheckTpm before offering a form — otherwise the applet
+        // would render the password field first and swap it for the PIN
+        // field when the TPM status arrives, letting a PIN user type their
+        // PIN into the password field.
+        return cosmic::widget::indeterminate_circular().into();
+    }
+    if app.unlock_mode == UnlockMode::Pin {
         let pin_input = secure_input(
             fl!("locked-need-pin"),
             &app.applet_pin,

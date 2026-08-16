@@ -2,7 +2,7 @@ use crate::app::applet_search;
 use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::{fetch_applet_search, fetch_sidebar_entries};
 use crate::app::update::auth_actions;
-use crate::message::{Message, View};
+use crate::message::{Message, UnlockMode, View};
 use cosmic::app::Task;
 use cosmic::Action;
 use cosmic_bwarden_core::agent_client::AgentClient;
@@ -38,7 +38,17 @@ pub(super) fn fetch_config_task() -> Task<Message> {
                     has_account,
                     is_locked,
                     sync_failed,
-                }) => Ok((config, needs_login, has_account, is_locked, sync_failed)),
+                    session_id,
+                    lock_epoch,
+                }) => Ok((
+                    config,
+                    needs_login,
+                    has_account,
+                    is_locked,
+                    sync_failed,
+                    session_id,
+                    lock_epoch,
+                )),
                 Ok(Response::Error { message }) => Err(message),
                 _ => Err("unexpected response".to_string()),
             }
@@ -81,7 +91,34 @@ impl CosmicBWardenApp {
         match message {
             Message::ConfigReceived(res) => {
                 match res {
-                    Ok((config, _needs_login, has_account, is_locked, sync_failed)) => {
+                    Ok((
+                        config,
+                        _needs_login,
+                        has_account,
+                        is_locked,
+                        sync_failed,
+                        session_id,
+                        lock_epoch,
+                    )) => {
+                        // Drop stale snapshots: the agent stamps every
+                        // Response::Config with (session_id, lock_epoch) and
+                        // bumps the epoch on every lock-state transition. A
+                        // response computed before a transition but delivered
+                        // after it must not flip the view back (this is what
+                        // used to bounce users to the lock screen right after
+                        // a successful PIN unlock).
+                        if let Some((last_session, last_epoch)) = self.last_config {
+                            if last_session == session_id && lock_epoch < last_epoch {
+                                tracing::debug!(
+                                    session_id,
+                                    lock_epoch,
+                                    last_epoch,
+                                    "dropping stale ConfigReceived"
+                                );
+                                return Some(Task::none());
+                            }
+                        }
+                        self.last_config = Some((session_id, lock_epoch));
                         self.config = config;
                         // Only now does `config` mirror the file; Settings may
                         // be persisted from here on (see state.config_loaded).
@@ -154,6 +191,9 @@ impl CosmicBWardenApp {
                         self.all_entries.clear();
                         self.error = None;
                         self.pin_incorrect = false;
+                        // Keep the current unlock form: a PIN-first user stays
+                        // PIN-first, and an explicit "use master password
+                        // instead" choice stays respected.
                         // Re-query config: if this was a logout rather than a
                         // plain lock, ConfigReceived will set view=Setup.
                         return Some(fetch_config_task());
@@ -165,7 +205,8 @@ impl CosmicBWardenApp {
                         if !self.unlock_prompt_ready() {
                             return Some(fetch_config_task());
                         }
-                        self.show_pin_unlock = true;
+                        self.unlock_mode = UnlockMode::Pin;
+                        self.password_preferred = false;
                         self.pin_incorrect = false;
                         self.view = View::Unlock;
                         self.selected_entry = None;
@@ -187,7 +228,7 @@ impl CosmicBWardenApp {
                         if !self.unlock_prompt_ready() {
                             return Some(fetch_config_task());
                         }
-                        self.show_pin_unlock = false;
+                        self.unlock_mode = UnlockMode::Password;
                         self.view = View::Unlock;
                         self.selected_entry = None;
                         self.editing_entry = None;
@@ -245,8 +286,17 @@ impl CosmicBWardenApp {
                         self.tpm_available = available;
                         self.tpm_configured = configured;
                         self.tpm_server_credentials = server_credentials;
-                        if configured {
-                            self.show_pin_unlock = true;
+                        // Promote the unlock form to PIN when a PIN is
+                        // configured — but only while the unlock view is
+                        // actually showing (never while unlocked, where it
+                        // used to leak a PIN-first preference into the next
+                        // lock), and never over an explicit "use master
+                        // password instead" choice.
+                        if configured
+                            && matches!(self.view, View::Unlock)
+                            && !self.password_preferred
+                        {
+                            self.unlock_mode = UnlockMode::Pin;
                         }
                         if !available {
                             self.tpm_da = None;
@@ -267,6 +317,12 @@ impl CosmicBWardenApp {
                     }
                     Err(e) => {
                         tracing::warn!("TPM status check failed: {}", e);
+                        // The agent couldn't tell us about the TPM. Treat the
+                        // status as known (unavailable) so the unlock form
+                        // doesn't wait forever: it falls back to password.
+                        self.tpm_status_known = true;
+                        self.tpm_available = false;
+                        self.tpm_configured = false;
                     }
                 }
                 Some(Task::none())
@@ -319,7 +375,17 @@ impl CosmicBWardenApp {
                                 has_account,
                                 is_locked,
                                 sync_failed,
-                            }) => Ok((config, needs_login, has_account, is_locked, sync_failed)),
+                                session_id,
+                                lock_epoch,
+                            }) => Ok((
+                                config,
+                                needs_login,
+                                has_account,
+                                is_locked,
+                                sync_failed,
+                                session_id,
+                                lock_epoch,
+                            )),
                             Ok(Response::Error { message }) => Err(message),
                             _ => Err("unexpected response".to_string()),
                         }

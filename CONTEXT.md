@@ -31,6 +31,38 @@ The project follows a modular Rust-based architecture split into specialized cra
 - **CLI check**: `cosmic-bwarden-cli version` subcommand queries the agent, prints local/agent/protocol versions, and runs `check_protocol_compatibility()` — a pure function that compares the local build version against the agent's `protocol_version`.
 - **UI display**: Version is shown muted in the applet context menu (next to "Open Vault") and in the Settings panel.
 
+## Account State & Snapshot Ordering
+
+There is no single "account state" enum — each surface derives it from flags the agent
+reports in `Response::Config` (`needs_login`/`has_account`/`is_locked`/`sync_failed`) plus
+the TPM status. Because the desktop UI applies those snapshots over an async pipe,
+ordering matters:
+
+- **Lock epoch**: the agent stamps every `Response::Config` with `(session_id, lock_epoch)`.
+  `session_id` is random per agent process; `lock_epoch` increments on every lock-state
+  transition (lock, unlock, login, logout — `State::bump_epoch()`). Clients drop any
+  snapshot older than the newest one they have applied (`CosmicBWardenApp::last_config`),
+  so a response computed before a transition can never bounce the UI back to a stale view
+  (e.g. back to the lock screen right after a successful PIN unlock). A changed
+  `session_id` (agent restart) is never treated as staleness.
+- **Out-of-sync survives locks**: `sync_failed`/`last_sync_error` are cleared ONLY by a
+  successful sync — `State::lock()` deliberately does not reset them. Both unlock paths
+  re-authenticate and then run a background sync; a failed silent re-auth (or a PIN
+  unlock with neither a session token nor a sealed server-credential hash) sets
+  `sync_failed` so the UI honestly reports "not synced" instead of whitewashing the
+  state on a lock cycle.
+- **One unlock-request path**: `Action::RequestUnlock` and the internal SSH-agent path
+  both go through `State::request_unlock()`, which broadcasts `PinRequested` when a TPM
+  PIN is configured, `UnlockRequested` otherwise, at most once per lock period. The UI
+  derives its unlock form from those events (`UnlockMode`), never from the TPM status
+  while unlocked.
+- **Unseal failure classification**: `tpm::classify_unseal_failure` distinguishes
+  `TPM_RC_AUTH_FAIL` (wrong PIN, DA attempt consumed), `TPM_RC_LOCKOUT`, and
+  `TPM_RC_POLICY_FAIL` (PCR state changed — BIOS/firmware update). Only the last maps to
+  the stable `ERR_TPM_STATE_CHANGED` message: it is recovery guidance, never an
+  "Incorrect PIN" mislabel. The PCR{0,7} seal binding itself is unchanged — a BIOS
+  change still requires a master-password unlock and PIN re-seal.
+
 ## Technical Stack
 
 - **Language**: Rust

@@ -22,7 +22,10 @@ pub(super) use cosmic_bwarden_core::protocol::{Action, EntryType, Response};
 mod cycles;
 mod errors_and_setup;
 mod full_lifecycle;
+mod lockout;
+mod restart;
 mod server_credentials;
+mod state_changed;
 
 pub(super) const EMAIL: &str = "tpm-lifecycle@example.com";
 pub(super) const PASSWORD: &str = "CorrectHorseBatteryStaple99!";

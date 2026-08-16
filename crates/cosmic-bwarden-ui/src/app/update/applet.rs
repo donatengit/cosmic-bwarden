@@ -1,11 +1,11 @@
 use crate::app::applet_search;
 use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::{
-    check_protocol_version, fetch_applet_search, fetch_applet_secret, fetch_sidebar_entries,
+    check_protocol_version, fetch_applet_search, fetch_applet_secret,
 };
 use crate::app::update::{auth_actions, generator_actions};
 use crate::fl;
-use crate::message::{Message, View};
+use crate::message::{Message, UnlockMode, View};
 use crate::view::applet::{search, unlock};
 use crate::MIN_PIN_LEN;
 use cosmic::app::Task;
@@ -21,8 +21,8 @@ use zeroize::Zeroize;
 /// TPM PIN unlock is active, the master password field otherwise. Pulled out
 /// as a pure function so the decision is unit-testable independent of the
 /// opaque `Task` returned by `text_input::focus`.
-pub(crate) fn unlock_focus_id(show_pin_unlock: bool) -> cosmic::widget::Id {
-    if show_pin_unlock {
+pub(crate) fn unlock_focus_id(mode: crate::message::UnlockMode) -> cosmic::widget::Id {
+    if mode == crate::message::UnlockMode::Pin {
         unlock::pin_input_id()
     } else {
         unlock::password_input_id()
@@ -367,37 +367,36 @@ impl CosmicBWardenApp {
                     Ok(()) => {
                         self.applet_error = None;
                         self.error = None;
-                        self.show_pin_unlock = false;
                         self.pin_incorrect = false;
                         self.view = View::Vault;
-                        self.search_id += 1;
-                        self.applet_search_id += 1;
-                        let only_pinned = applet_search::effective_only_pinned(
-                            &self.applet_search_query,
-                            self.applet_search_only_favourites,
-                        );
-                        let query = if self.applet_search_query.trim().is_empty() {
-                            None
-                        } else {
-                            Some(self.applet_search_query.clone())
-                        };
-                        Some(Task::batch(vec![
-                            fetch_sidebar_entries(self.search_id, None, None, false),
-                            fetch_applet_search(self.applet_search_id, query, only_pinned),
-                        ]))
+                        // Refresh agent state directly (epoch-stamped config)
+                        // so a stale "still locked" response cannot bounce the
+                        // popup back to the unlock view after a successful PIN.
+                        Some(Task::perform(async {}, |_| {
+                            Action::App(Message::RefreshStateInternal)
+                        }))
                     }
                     Err(e) => {
                         tracing::error!("PIN unlock failed: {}", e);
                         self.view = View::Unlock;
                         if e == cosmic_bwarden_core::protocol::ERR_TPM_UNSEAL_FAILED {
-                            // Wrong PIN / changed PCRs / DA lockout: the raw
-                            // message is log-only; the incorrect-PIN/attempts
-                            // caption is the feedback. A wrong PIN consumed a
-                            // DA attempt — reveal and refresh the counter.
+                            // Wrong PIN / DA lockout: the raw message is
+                            // log-only; the incorrect-PIN/attempts caption is
+                            // the feedback. A wrong PIN consumed a DA attempt
+                            // — reveal and refresh the counter.
                             self.applet_error = None;
                             self.error = None;
                             self.pin_incorrect = true;
                             Some(super::lifecycle::check_tpm_da_task())
+                        } else if e == cosmic_bwarden_core::protocol::ERR_TPM_STATE_CHANGED {
+                            // PCR state changed (BIOS/firmware update): the
+                            // PIN is fine. Never call this a wrong PIN — show
+                            // the recovery path.
+                            self.applet_error = None;
+                            self.error = Some(fl!("tpm-state-changed"));
+                            self.pin_incorrect = false;
+                            self.unlock_mode = UnlockMode::Password;
+                            Some(Task::none())
                         } else {
                             // Environmental failure (agent/config/account) —
                             // show it, don't mislabel it as a wrong PIN.
@@ -409,7 +408,8 @@ impl CosmicBWardenApp {
                 }
             }
             Message::AppletUseMasterPasswordInstead => {
-                self.show_pin_unlock = false;
+                self.unlock_mode = UnlockMode::Password;
+                self.password_preferred = true;
                 self.pin_incorrect = false;
                 Some(Task::none())
             }
@@ -492,7 +492,8 @@ impl CosmicBWardenApp {
                 match res {
                     Ok(()) => {
                         self.tpm_configured = false;
-                        self.show_pin_unlock = false;
+                        self.unlock_mode = UnlockMode::Password;
+                        self.password_preferred = true;
                         self.applet_error = None;
                         self.tpm_error = None;
                         // Refresh the lockout status shown in the settings pane.
@@ -535,7 +536,7 @@ impl CosmicBWardenApp {
 
         let mut tasks = Vec::new();
         tasks.push(check_protocol_version());
-        tasks.push(text_input::focus(unlock_focus_id(self.show_pin_unlock)));
+        tasks.push(text_input::focus(unlock_focus_id(self.unlock_mode)));
         tasks.push(Task::perform(
             async {
                 let agent = AgentClient::new();
@@ -546,7 +547,17 @@ impl CosmicBWardenApp {
                         has_account,
                         is_locked,
                         sync_failed,
-                    }) => Ok((config, needs_login, has_account, is_locked, sync_failed)),
+                        session_id,
+                        lock_epoch,
+                    }) => Ok((
+                        config,
+                        needs_login,
+                        has_account,
+                        is_locked,
+                        sync_failed,
+                        session_id,
+                        lock_epoch,
+                    )),
                     Ok(Response::Error { message }) => Err(message),
                     _ => Err("unexpected response".to_string()),
                 }

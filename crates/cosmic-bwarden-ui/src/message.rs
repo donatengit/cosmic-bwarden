@@ -33,12 +33,38 @@ pub enum WindowState {
     Popup,
 }
 
+/// Which unlock credential the unlock views should ask for. Derived from
+/// agent events (PinRequested/UnlockRequested) and the TPM status — see
+/// `CosmicBWardenApp::unlock_mode`. The applet and main window share this so
+/// both surfaces always offer the same form for the same state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum UnlockMode {
+    #[default]
+    Password,
+    Pin,
+}
+
 // MVU message enum: one short-lived value per event. Boxing the wide variants
 // (entry payloads) would touch every `match` arm for a transient allocation win.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum Message {
-    ConfigReceived(Result<(CosmicBWardenConfig, bool, bool, bool, bool), String>),
+    /// (config, needs_login, has_account, is_locked, sync_failed,
+    ///  session_id, lock_epoch)
+    ConfigReceived(
+        Result<
+            (
+                CosmicBWardenConfig,
+                bool,
+                bool,
+                bool,
+                bool,
+                u64,
+                u64,
+            ),
+            String,
+        >,
+    ),
 
     // Window management
     WindowClosed(window::Id),

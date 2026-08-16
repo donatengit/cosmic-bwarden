@@ -6,7 +6,7 @@ use cosmic_bwarden_core::db::Entry;
 use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
 use std::collections::{HashMap, HashSet};
 
-use crate::message::{View, WindowState};
+use crate::message::{UnlockMode, View, WindowState};
 
 /// libcosmic's `run_single_instance`/`dbus_activation` derive a D-Bus object
 /// path directly from this by replacing `.` with `/` — each dot-separated
@@ -172,18 +172,32 @@ pub struct CosmicBWardenApp {
 
     // TPM / PIN unlock state
     /// False until the first TpmStatusReceived arrives. Prevents showing
-    /// "not accessible" before the agent has been queried.
+    /// "not accessible" before the agent has been queried — and gates the
+    /// unlock form so it never renders before we know whether to offer PIN
+    /// or password (no password form flickering into a PIN form).
     pub tpm_status_known: bool,
     pub tpm_available: bool,
     pub tpm_configured: bool,
     /// True when the master_password_hash is also sealed in the TPM.
     pub tpm_server_credentials: bool,
-    /// When true, the applet unlock widget shows a PIN field instead of password.
-    pub show_pin_unlock: bool,
+    /// Which form the unlock views show. Event-driven: `PinRequested`/
+    /// `UnlockRequested` set it explicitly, `TpmStatusReceived` promotes
+    /// Password→Pin when a PIN is configured, but only while the view is
+    /// actually locked — never while unlocked (that used to make the next
+    /// unlock prompt depend on message arrival order).
+    pub unlock_mode: UnlockMode,
+    /// True after the user explicitly chose "use master password instead".
+    /// Blocks `TpmStatusReceived` from flipping the form back to PIN for the
+    /// rest of the session.
+    pub password_preferred: bool,
     pub applet_pin: String,
     pub applet_pin_revealed: bool,
     /// PIN for the main-window unlock view (View::Unlock when tpm_configured).
     pub main_window_pin: String,
+    /// (session_id, lock_epoch) of the newest applied `Response::Config`.
+    /// Older snapshots are dropped so a stale "still locked" response cannot
+    /// bounce the user back to the lock screen after a successful unlock.
+    pub last_config: Option<(u64, u64)>,
     // TPM settings dialog state
     pub show_tpm_setup_form: bool,
     pub tpm_setup_pin: String,
@@ -308,10 +322,12 @@ impl Default for CosmicBWardenApp {
             tpm_available: false,
             tpm_configured: false,
             tpm_server_credentials: false,
-            show_pin_unlock: false,
+            unlock_mode: UnlockMode::default(),
+            password_preferred: false,
             applet_pin: String::new(),
             applet_pin_revealed: false,
             main_window_pin: String::new(),
+            last_config: None,
             show_tpm_setup_form: false,
             tpm_setup_pin: String::new(),
             tpm_setup_pin_revealed: false,

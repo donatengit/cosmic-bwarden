@@ -1,6 +1,6 @@
 use crate::app::update::applet::unlock_focus_id;
 use crate::app::CosmicBWardenApp;
-use crate::message::{Message, View, WindowState};
+use crate::message::{Message, UnlockMode, View, WindowState};
 use crate::view::applet::unlock;
 use cosmic::iced::window;
 use cosmic::Application;
@@ -27,8 +27,11 @@ fn entry(id: &str, name: &str, entry_type: EntryType) -> SidebarEntry {
 
 #[test]
 fn test_unlock_focus_id_prefers_pin_when_pin_unlock_active() {
-    assert_eq!(unlock_focus_id(true), unlock::pin_input_id());
-    assert_eq!(unlock_focus_id(false), unlock::password_input_id());
+    assert_eq!(unlock_focus_id(UnlockMode::Pin), unlock::pin_input_id());
+    assert_eq!(
+        unlock_focus_id(UnlockMode::Password),
+        unlock::password_input_id()
+    );
 }
 
 #[tokio::test]

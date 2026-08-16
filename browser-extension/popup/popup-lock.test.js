@@ -22,8 +22,8 @@ document.body.innerHTML = `
 `;
 globalThis.browser = { runtime: { sendMessage: async () => ({}) } };
 
-const { formatSecs, tpmDaLine, pinFeedbackLine } = new Function(
-    `${source}\nreturn { formatSecs, tpmDaLine, pinFeedbackLine };`
+const { formatSecs, tpmDaLine, pinFeedbackLine, unlockErrorMessage } = new Function(
+    `${source}\nreturn { formatSecs, tpmDaLine, pinFeedbackLine, unlockErrorMessage };`
 )();
 
 describe('formatSecs', () => {
@@ -77,5 +77,25 @@ describe('pinFeedbackLine', () => {
     it('prefers the DA attempts-remaining line when available', () => {
         const status = { available: true, in_lockout: false, remaining: 10, max_tries: 32 };
         expect(pinFeedbackLine(status)).toContain('10 of 32');
+    });
+});
+
+describe('unlockErrorMessage', () => {
+    it('never shows a PCR-state change as an incorrect PIN', () => {
+        const line = unlockErrorMessage('TPM state changed', null);
+        expect(line).toContain('TPM state changed');
+        expect(line).toContain('master password');
+        expect(line).not.toContain('Incorrect PIN');
+    });
+
+    it('maps the unseal error to DA/incorrect-PIN feedback', () => {
+        expect(unlockErrorMessage('TPM unseal failed', null)).toBe('Incorrect PIN');
+        const status = { available: true, in_lockout: false, remaining: 9, max_tries: 32 };
+        expect(unlockErrorMessage('TPM unseal failed', status)).toContain('9 of 32');
+    });
+
+    it('passes environmental errors through verbatim', () => {
+        expect(unlockErrorMessage('no account configured', null)).toBe('no account configured');
+        expect(unlockErrorMessage('Unexpected agent response.', null)).toBe('Unexpected agent response.');
     });
 });

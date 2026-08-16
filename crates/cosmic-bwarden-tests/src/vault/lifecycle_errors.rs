@@ -344,7 +344,7 @@ async fn test_sync_fails_sets_flag_recovery_clears_it() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_sync_failed_clears_on_lock() -> Result<()> {
+async fn test_sync_failed_survives_lock() -> Result<()> {
     let env = setup_env().await?;
     std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
 
@@ -364,18 +364,20 @@ async fn test_sync_failed_clears_on_lock() -> Result<()> {
     let res = client.send(Action::GetConfig).await?;
     assert_sync_failed(&res);
 
-    // Lock must clear sync_failed
+    // Lock must NOT whitewash the out-of-sync state (F4): the local vault is
+    // still stale after a lock/unlock cycle; only a successful sync clears
+    // the flag. Unlock re-auths and then syncs, which clears it truthfully.
     client.send(Action::Lock).await?;
 
     let res = client.send(Action::GetConfig).await?;
     match res {
         Response::Config {
-            sync_failed: false,
+            sync_failed: true,
             is_locked: true,
             ..
         } => {}
         other => panic!(
-            "Expected Config {{ sync_failed: false, is_locked: true }}, got: {:?}",
+            "Expected Config {{ sync_failed: true, is_locked: true }}, got: {:?}",
             other
         ),
     }

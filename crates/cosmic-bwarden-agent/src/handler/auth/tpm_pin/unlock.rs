@@ -51,12 +51,27 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
         let vault_keys = match crate::tpm::unseal(&blob_path, &pin).await {
             Ok(k) => k,
             Err(e) => {
-                // The full chain (wrong PIN / changed PCRs / DA lockout / TSS
-                // detail) is log-only; clients key on the stable short message.
-                log::error!("TPM unseal failed: {:#}", e);
-                return Response::Error {
-                    message: cosmic_bwarden_core::protocol::ERR_TPM_UNSEAL_FAILED.to_string(),
-                };
+                // Wrong PIN / DA lockout vs. changed PCR state must be told
+                // apart: the first consumed a DA attempt (and the PIN was
+                // wrong), the second means the machine state changed and the
+                // user needs master-password unlock to re-seal. The full chain
+                // is log-only; clients key on the stable short message.
+                match crate::tpm::classify_unseal_failure(&e) {
+                    crate::tpm::UnsealFailure::StateChanged => {
+                        log::warn!("TPM unseal failed: PCR state changed: {:#}", e);
+                        return Response::Error {
+                            message: cosmic_bwarden_core::protocol::ERR_TPM_STATE_CHANGED
+                                .to_string(),
+                        };
+                    }
+                    _ => {
+                        log::error!("TPM unseal failed: {:#}", e);
+                        return Response::Error {
+                            message: cosmic_bwarden_core::protocol::ERR_TPM_UNSEAL_FAILED
+                                .to_string(),
+                        };
+                    }
+                }
             }
         };
 
@@ -137,10 +152,18 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
             let has_hash = maybe_hash.is_some();
 
             if !has_token && !has_hash {
-                log::warn!(
+                // The unlock itself succeeds, but every server operation will
+                // fail until the user logs in again — announce it instead of
+                // handing back a bare Ack that claims full success.
+                log::error!(
                     "pin unlock: no session token available for {} — \
                      server sync will fail until you log out and log in again",
                     email
+                );
+                g.sync_failed = true;
+                g.last_sync_error = Some(
+                    "no session token after PIN unlock — sync unavailable until you log in again"
+                        .to_string(),
                 );
             }
 
@@ -154,6 +177,7 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
                 }
             }
             g.db = Some(db);
+            g.bump_epoch();
             g.rebuild_sidebar_cache();
             g.broadcast(cosmic_bwarden_core::protocol::Event::Unlocked);
             !has_token && has_hash
@@ -161,6 +185,7 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
 
         // If we have a sealed hash but no session token, do a silent re-auth now
         // (same path as master-password unlock when tokens are missing).
+        let mut can_sync = !needs_reauth;
         if needs_reauth {
             log::info!("pin unlock: no session token, attempting silent re-auth via sealed hash");
             let hash = {
@@ -188,6 +213,7 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
                         {
                             Ok((access_token, refresh_token, _protected_key)) => {
                                 log::info!("pin unlock: silent re-auth succeeded");
+                                can_sync = true;
                                 {
                                     let mut g = state.lock().await;
                                     if let Some(db) = &mut g.db {
@@ -212,16 +238,44 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
                                 }
                             }
                             Err(e) => {
-                                log::warn!("pin unlock: silent re-auth failed (sync will be unavailable): {}", e);
+                                can_sync = false;
+                                log::error!("pin unlock: silent re-auth failed (sync will be unavailable): {}", e);
                             }
                         }
                     }
-                    Err(e) => log::warn!(
-                        "pin unlock: could not obtain device_id for silent re-auth: {}",
-                        e
-                    ),
+                    Err(e) => {
+                        can_sync = false;
+                        log::error!(
+                            "pin unlock: could not obtain device_id for silent re-auth: {}",
+                            e
+                        );
+                    }
                 }
             }
+        }
+
+        if can_sync {
+            // Catch the vault up with the server now that we are unlocked and
+            // have a session (clears a stale out-of-sync flag truthfully).
+            let sync_state = Arc::clone(state);
+            tokio::spawn(async move {
+                // Skip if the user re-locked before this ran: a sync without
+                // tokens would falsely mark the state out-of-sync.
+                let has_token = {
+                    let g = sync_state.lock().await;
+                    g.db.as_ref().is_some_and(|db| db.access_token.is_some())
+                };
+                if has_token {
+                    let _ = crate::handler::vault::sync::handle_sync(&sync_state).await;
+                }
+            });
+        } else {
+            let mut g = state.lock().await;
+            g.sync_failed = true;
+            g.last_sync_error = Some(
+                "no session token after PIN unlock — sync unavailable until you log in again"
+                    .to_string(),
+            );
         }
 
         log::info!("vault unlocked via TPM PIN for {}", email);

@@ -31,6 +31,58 @@ mod tests;
 
 pub use ops::{seal, seal_bytes, unseal, unseal_bytes};
 
+/// Why a TPM unseal failed, classified from the underlying TSS response code.
+/// Clients map this to user feedback: a wrong PIN and a changed PCR state must
+/// never be presented the same way (one consumed a dictionary-attack attempt,
+/// the other means the user's PIN is fine and the machine state changed).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnsealFailure {
+    /// The PIN was wrong (`TPM_RC_AUTH_FAIL`) — a dictionary-attack attempt
+    /// was consumed.
+    WrongPin,
+    /// The policy check failed (`TPM_RC_POLICY_FAIL`) — the PCR state changed
+    /// (BIOS/firmware update or Secure Boot toggle). No DA attempt consumed;
+    /// recovery is master-password unlock + re-seal.
+    StateChanged,
+    /// The TPM is in dictionary-attack lockout.
+    Lockout,
+    /// Anything else: no TPM, blob read failure, wrapper error, unexpected
+    /// response code.
+    Other,
+}
+
+/// Walk the error chain looking for the TSS response code behind the failure.
+/// `UnsealFailure::Other` when no TSS error is found.
+pub fn classify_unseal_failure(err: &anyhow::Error) -> UnsealFailure {
+    use tss_esapi::constants::return_code::{TpmFormatOneError, TpmFormatZeroWarning};
+    use tss_esapi::error::{ReturnCode, TpmFormatZeroResponseCode, TpmResponseCode};
+
+    for e in err.chain() {
+        if let Some(tss_err) = e.downcast_ref::<tss_esapi::Error>() {
+            if let tss_esapi::Error::TssError(rc) = tss_err {
+                return match rc {
+                    ReturnCode::Tpm(TpmResponseCode::FormatOne(f1)) => match f1.error_number() {
+                        TpmFormatOneError::AuthFail => UnsealFailure::WrongPin,
+                        TpmFormatOneError::PolicyFail => UnsealFailure::StateChanged,
+                        _ => UnsealFailure::Other,
+                    },
+                    ReturnCode::Tpm(TpmResponseCode::FormatZero(
+                        TpmFormatZeroResponseCode::Warning(w),
+                    )) => {
+                        if w.error_number() == TpmFormatZeroWarning::Lockout {
+                            UnsealFailure::Lockout
+                        } else {
+                            UnsealFailure::Other
+                        }
+                    }
+                    _ => UnsealFailure::Other,
+                };
+            }
+        }
+    }
+    UnsealFailure::Other
+}
+
 /// Open a TPM2 context, trying (in order) the `TSS2_TCTI` env var, the kernel
 /// resource manager, the raw device, and tpm2-abrmd. Shared by every operation.
 pub(crate) fn open_context() -> Result<Context> {

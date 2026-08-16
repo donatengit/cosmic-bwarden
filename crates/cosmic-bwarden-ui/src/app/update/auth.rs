@@ -2,7 +2,7 @@ use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::fetch_sidebar_entries;
 use crate::app::update::auth_actions;
 use crate::fl;
-use crate::message::{Message, View};
+use crate::message::{Message, UnlockMode, View};
 use crate::MIN_PIN_LEN;
 use cosmic::app::Task;
 use cosmic::Action;
@@ -76,20 +76,35 @@ impl CosmicBWardenApp {
                     Ok(()) => {
                         self.view = View::Vault;
                         self.error = None;
-                        self.show_pin_unlock = false;
                         self.pin_incorrect = false;
-                        Some(fetch_sidebar_entries(self.search_id, None, None, false))
+                        // Refresh agent state right away (GetConfig + entries)
+                        // instead of relying solely on the Event::Unlocked
+                        // broadcast: if the event subscription is delayed or
+                        // dropped, the epoch-stamped config still lets us drop
+                        // any stale "still locked" response that would
+                        // otherwise bounce the view back to Unlock.
+                        Some(Task::perform(async {}, |_| {
+                            Action::App(Message::RefreshStateInternal)
+                        }))
                     }
                     Err(e) => {
                         error!("PIN unlock failed: {}", e);
                         if e == cosmic_bwarden_core::protocol::ERR_TPM_UNSEAL_FAILED {
-                            // Wrong PIN / changed PCRs / DA lockout: the raw
-                            // message is log-only; the incorrect-PIN/attempts
-                            // caption is the feedback. A wrong PIN consumed a
-                            // DA attempt — reveal and refresh the counter.
+                            // Wrong PIN / DA lockout: the raw message is
+                            // log-only; the incorrect-PIN/attempts caption is
+                            // the feedback. A wrong PIN consumed a DA attempt
+                            // — reveal and refresh the counter.
                             self.error = None;
                             self.pin_incorrect = true;
                             Some(super::lifecycle::check_tpm_da_task())
+                        } else if e == cosmic_bwarden_core::protocol::ERR_TPM_STATE_CHANGED {
+                            // PCR state changed (BIOS/firmware update): the
+                            // PIN is fine, the machine state moved. Never call
+                            // this a wrong PIN — point at the recovery path.
+                            self.error = Some(fl!("tpm-state-changed"));
+                            self.pin_incorrect = false;
+                            self.unlock_mode = UnlockMode::Password;
+                            Some(Task::none())
                         } else {
                             // Environmental failure (agent/config/account) —
                             // show it, don't mislabel it as a wrong PIN.
@@ -177,6 +192,13 @@ impl CosmicBWardenApp {
 
                         let mut tasks =
                             vec![fetch_sidebar_entries(self.search_id, None, None, false)];
+
+                        // Same rationale as MainWindowPinResult: fetch the
+                        // epoch-stamped config directly instead of relying on
+                        // the Event::Unlocked broadcast alone.
+                        tasks.push(Task::perform(async {}, |_| {
+                            Action::App(Message::RefreshStateInternal)
+                        }));
 
                         // Master-password unlock that showed the PIN (re-)enable
                         // field: reseal the PIN (non-empty) or remove a stale PIN

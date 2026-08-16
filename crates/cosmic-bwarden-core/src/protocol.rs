@@ -377,6 +377,14 @@ pub enum Event {
 /// string to show their own short feedback; the full error chain is log-only.
 pub const ERR_TPM_UNSEAL_FAILED: &str = "TPM unseal failed";
 
+/// Stable message carried by `Response::Error` when the TPM refuses to unseal
+/// because the policy check failed — the PCR state changed (BIOS/firmware
+/// update, Secure Boot toggle). Distinct from `ERR_TPM_UNSEAL_FAILED` so
+/// clients never mislabel this as a wrong PIN (the PIN itself is fine, and
+/// the failure did NOT consume a dictionary-attack attempt). Recovery: unlock
+/// with the master password, which re-seals the PIN against the new PCR state.
+pub const ERR_TPM_STATE_CHANGED: &str = "TPM state changed";
+
 // IPC response message: transient like `Action` — see the comment there.
 #[allow(clippy::large_enum_variant)]
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -396,9 +404,21 @@ pub enum Response {
         has_account: bool,
         is_locked: bool,
         /// True when the most recent server operation failed due to a network or
-        /// backend error. Cleared by a successful sync. Visible in the UI as a
-        /// red "Not synced" button so the user knows data may be out of date.
+        /// backend error. Cleared by a successful sync — and deliberately NOT
+        /// by a lock: an out-of-sync vault stays out of sync across a
+        /// lock/unlock cycle (unlock re-auths and then syncs, which clears it
+        /// truthfully). Visible in the UI as a red "Not synced" button.
         sync_failed: bool,
+        /// Random per-agent-session identifier. Lets clients detect an agent
+        /// restart (where `lock_epoch` resets to 0) without mistaking it for
+        /// staleness.
+        session_id: u64,
+        /// Number of lock-state transitions in this agent session (lock,
+        /// unlock, login, logout each bump it). Clients drop any `Config`
+        /// response whose (session_id, lock_epoch) is older than one they
+        /// already applied — this is what prevents a stale snapshot computed
+        /// before a transition from flipping the UI back to an outdated view.
+        lock_epoch: u64,
     },
     Entries {
         entries: Vec<crate::db::Entry>,

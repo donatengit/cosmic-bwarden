@@ -53,6 +53,10 @@ enter-master-password = Please enter your master password to view this sensitive
 locked-need-password = Locked: need password
 locked-need-pin = Locked: enter PIN
 use-master-password-instead = Use master password instead
+# Shown when the TPM refuses to unseal because the PCR state changed (BIOS or
+# firmware update, Secure Boot toggle). The PIN itself is still valid; it must
+# be re-sealed against the new machine state via a master-password unlock.
+tpm-state-changed = The TPM state changed (firmware or BIOS update). Unlock with your master password and set the PIN again to re-enable PIN unlock.
 not-configured = Not logged in — open vault to sign in.
 
 # PIN unlock (TPM 2.0)

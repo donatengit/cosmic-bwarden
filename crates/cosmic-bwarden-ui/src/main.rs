@@ -136,6 +136,8 @@ impl Application for CosmicBWardenApp {
                             has_account,
                             is_locked,
                             sync_failed,
+                            session_id,
+                            lock_epoch,
                         }) => {
                             tracing::info!(
                                 needs_login,
@@ -144,7 +146,15 @@ impl Application for CosmicBWardenApp {
                                 sync_failed,
                                 "Agent config received"
                             );
-                            Ok((config, needs_login, has_account, is_locked, sync_failed))
+                            Ok((
+                                config,
+                                needs_login,
+                                has_account,
+                                is_locked,
+                                sync_failed,
+                                session_id,
+                                lock_epoch,
+                            ))
                         }
                         Ok(Response::Error { message }) => {
                             tracing::error!("Agent error: {}", message);

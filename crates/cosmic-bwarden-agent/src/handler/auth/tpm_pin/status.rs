@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 /// Query whether the TPM is available and a sealed blob is configured.
-pub async fn handle_check_tpm(_state: &Arc<Mutex<State>>) -> Response {
+pub async fn handle_check_tpm(state: &Arc<Mutex<State>>) -> Response {
     #[cfg(feature = "tpm")]
     {
         let available = crate::tpm::is_available().await;
@@ -36,6 +36,13 @@ pub async fn handle_check_tpm(_state: &Arc<Mutex<State>>) -> Response {
                 cosmic_bwarden_core::dirs::tpm_hash_blob_file(&config.server_name(), email);
             (blob_path.exists(), hash_blob_path.exists())
         };
+        // Refresh the agent-side flag from blob existence, not just at startup:
+        // if the blob was deleted/replaced (TPM reset, clear), `request_unlock`
+        // must stop offering PIN unlock instead of pointing at a dead blob.
+        {
+            let mut state_guard = state.lock().await;
+            state_guard.tpm_configured = configured;
+        }
         Response::TpmStatus {
             available,
             configured,
@@ -44,6 +51,7 @@ pub async fn handle_check_tpm(_state: &Arc<Mutex<State>>) -> Response {
     }
     #[cfg(not(feature = "tpm"))]
     {
+        let _ = state;
         Response::TpmStatus {
             available: false,
             configured: false,

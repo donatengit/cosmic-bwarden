@@ -1,6 +1,6 @@
 use crate::app::CosmicBWardenApp;
 use crate::fl;
-use crate::message::{Message, View};
+use crate::message::{Message, UnlockMode, View};
 use crate::view::style::muted_text;
 use crate::MIN_PIN_LEN;
 use cosmic::iced::Length;
@@ -121,7 +121,7 @@ impl CosmicBWardenApp {
                 .primary_action(login_btn)
                 .width(Length::Fixed(400.0))
                 .into()
-        } else if self.show_pin_unlock && self.tpm_configured {
+        } else if self.unlock_mode == UnlockMode::Pin && self.tpm_configured {
             // PIN unlock view for the main window (mirrors applet unlock PIN view).
             let mut pin_col = cosmic::widget::column::with_capacity(6).spacing(10);
 
@@ -163,6 +163,17 @@ impl CosmicBWardenApp {
                 .control(pin_col)
                 .primary_action(pin_btn)
                 .secondary_action(fallback_btn)
+                .width(Length::Fixed(400.0))
+                .into()
+        } else if !self.tpm_status_known {
+            // The unlock form renders only once BOTH GetConfig and CheckTpm
+            // have answered. Rendering the password form first and swapping
+            // it for the PIN form when the TPM status arrives used to make
+            // the form flicker — and let a PIN user type their PIN into the
+            // password field.
+            cosmic::widget::dialog()
+                .title(fl!("vault-locked"))
+                .control(cosmic::widget::indeterminate_circular())
                 .width(Length::Fixed(400.0))
                 .into()
         } else {

@@ -1418,6 +1418,7 @@ dependencies = [
  "thirtyfour",
  "tokio",
  "tokio-util",
+ "tss-esapi",
  "uuid",
  "walkdir",
  "zip",

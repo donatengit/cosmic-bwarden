@@ -168,6 +168,7 @@ pub async fn handle_login(
             state_guard.keys = Some(keys);
             state_guard.org_keys = Some(org_keys);
             state_guard.master_password_hash = Some(identity.master_password_hash);
+            state_guard.bump_epoch();
 
             state_guard.pinned_ids.clear();
             for entry in &db.entries {
