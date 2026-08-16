@@ -10,6 +10,10 @@ function showAddForm() {
     currentEntry = null;
     editForm.reset();
     editType.disabled = false;
+    // Pre-fill the current tab's domain as the default entry name (the most
+    // common new-entry flow). currentTabDomain is computed by popup.js's init
+    // from the active tab URL; the user can freely edit it afterwards.
+    editName.value = currentTabDomain || '';
     renderDynamicFields('Login');
     showView('edit');
 }
@@ -26,6 +30,11 @@ function showEditForm() {
 }
 
 editType.onchange = () => renderDynamicFields(editType.value);
+// Persist the in-progress draft so losing focus / closing the popup doesn't
+// drop the user's input (see popup-state.js). Registered after the onchange
+// handler so the fields are re-rendered before the draft is snapshotted.
+editForm.addEventListener('input', savePopupState);
+editType.addEventListener('change', savePopupState);
 
 function renderDynamicFields(type, data = {}) {
     dynamicFields.innerHTML = '';

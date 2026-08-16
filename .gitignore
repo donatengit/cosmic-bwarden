@@ -80,3 +80,8 @@ tmp_code_examples
 
 # Local scratch dir
 tmp
+
+# Machine-local backup tarballs and knowledge-base index (generated data,
+# never part of the repo)
+backups/
+kb/

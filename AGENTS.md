@@ -208,7 +208,7 @@ Source lives in `browser-extension/`. Plain vanilla JS — no bundler, no framew
 
 | File | Responsibility |
 |---|---|
-| `background.js` | Native messaging queue, badge count, theme-aware icon switching |
+| `background.js` | Native messaging queue, badge count, theme-aware + lock-state icon switching (`<theme>_locked*.png` when locked *or* logged out) |
 | `background-save.js` | Save-prompt state machine: per-tab pending credentials, save/update decision via `CheckLoginMatch` |
 | `content.js` | Form fill injected into pages |
 | `content-heuristics.js` | Shared pure DOM helpers (username-field detection, submitted-credential capture); loaded first |
@@ -218,11 +218,14 @@ Source lives in `browser-extension/`. Plain vanilla JS — no bundler, no framew
 | `popup/popup-lock.js` | Locked-vault view: TPM PIN unlock, DA lockout feedback; loaded *before* `popup.js` — see `docs/browser_integration.md`'s "Script load order gotcha" |
 | `popup/popup-detail.js` | Detail view, secret reveal/copy (on-demand via `GetPassword`) |
 | `popup/popup-edit.js` | Edit/add form, field rendering |
+| `popup/popup-state.js` | View/search/draft persistence across popup close+reopen, in `storage.session`; scoped to the tab's domain |
 | `popup/popup.css` | CSS custom properties; dark mode via `prefers-color-scheme` |
 
 **Icons**: `browser-extension/icons` is a symlink to the repo-root `icons/` folder (black*.png for light theme, white*.png for dark). `zip -r` dereferences symlinks, so `pack-extension` embeds them correctly.
 
 **Security invariant**: The detail view uses `GetEntryMeta` (no secrets). Secrets are fetched only on explicit reveal/copy (`GetPassword`/`GetTotp`) or fill (`GetEntry`). Never hold plaintext passwords in JS state from passive browsing.
+
+**Locked-vault save prompt**: a submission made while the vault is locked is *deferred*, not dropped — the pending credential stays put with `awaitingUnlock`, a `mode: 'locked'` bar offers "Unlock", and the popup's `VAULT_UNLOCKED` message re-evaluates every deferred tab into a real Save/Update bar. Two rules keep that from silently losing the credential it exists to protect: the locked bar's 30 s auto-dismiss must **not** send `dismiss` (that clears the pending — only an explicit click may), and the 90 s TTL is **restarted once** at deferral, since the original window runs from the form submit and unlocking easily outlives what's left of it.
 
 **Save prompt**: credentials captured at user-initiated form submit are the one exception — they live transiently in the background per-tab pending map (cleared on action/90 s TTL/tab close, never persisted or logged). "Does this login exist / did the password change" is decided inside the agent (`CheckLoginMatch`); the extension never fetches a stored secret to compare, and `SHOW_SAVE_BAR` messages to the page never carry the password. Updates go through `UpdateLoginPassword { id, password }` — never echo a `GetEntryMeta` result through `UpdateEntry`, which wipes notes (redaction sets them `None` and the merge treats `None` notes as a legitimate clear). See `docs/browser_integration.md`.
 

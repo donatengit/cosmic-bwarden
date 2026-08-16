@@ -108,8 +108,8 @@ The CLI supports non-interactive flags for use in scripts or CI environments:
 export COSMIC_BWARDEN_PROFILE=manual-test
 ./target/debug/cosmic-bwarden-agent &
 
-# Login without an interactive prompt
-./target/debug/cosmic-bwarden-cli login user@example.com --server http://localhost:8080 --password mypassword
+# Login (prompts for the master password)
+./target/debug/cosmic-bwarden-cli login user@example.com --server http://localhost:8080
 
 # Add an entry with a secret
 ./target/debug/cosmic-bwarden-cli add "My Secret" --username "admin" --password "supersecret"

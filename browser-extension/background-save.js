@@ -77,18 +77,39 @@ async function onLoginSubmitted(tabId, message) {
 
 async function evaluatePendingSave(tabId) {
     const pending = await getPendingSave(tabId);
-    if (!pending || pending.evaluated) return;
+    if (!pending || (pending.evaluated && !pending.awaitingUnlock)) return;
     pending.evaluated = true;
     await setPendingSave(tabId, pending);
 
     try {
         const configResp = await sendToAgent("GetConfig");
         if (!vaultUsable(configResp)) {
-            // v1: locked or logged-out vault silently drops the prompt.
-            await clearPendingSave(tabId);
+            // Locked (or logged out): don't drop the credential — the user can
+            // still unlock and then wants Save/Update for the same submission.
+            // Show a "locked" bar and leave the pending re-evaluable so an
+            // unlock (VAULT_UNLOCKED / a later tab load) re-runs evaluation.
+            if (!pending.awaitingUnlock) {
+                // Restart the TTL once, at the first deferral: the original
+                // window runs from the form submit, and whatever is left of it
+                // is no basis for how long unlocking takes. Re-arming on every
+                // later evaluation would instead keep the credential alive for
+                // as long as the tab keeps navigating.
+                browser.alarms.create(alarmName(tabId), { delayInMinutes: PENDING_TTL_MS / 60000 });
+            }
+            pending.awaitingUnlock = true;
+            pending.evaluated = false;
+            pending.mode = 'locked';
+            await setPendingSave(tabId, pending);
+            await browser.tabs.sendMessage(tabId, {
+                type: 'SHOW_SAVE_BAR',
+                mode: 'locked',
+                domain: pending.domain,
+                username: pending.username,
+            });
             return;
         }
 
+        pending.awaitingUnlock = false;
         const matchResp = await sendToAgent({
             CheckLoginMatch: {
                 domain: pending.domain,
@@ -141,6 +162,13 @@ async function onBarAction(tabId, action) {
             console.warn(`cosmic-bwarden: no pending save for tab ${tabId} on action "${action}"`);
             browser.tabs.sendMessage(tabId, { type: 'SAVE_BAR_ERROR' }).catch(() => {});
         }
+        return { Ack: true };
+    }
+
+    if (action === 'unlock' && pending.mode === 'locked') {
+        // Open the popup so the user can PIN-unlock; the pending credential
+        // stays put and is re-evaluated on VAULT_UNLOCKED.
+        try { await browser.action.openPopup(); } catch { /* popup can't open here */ }
         return { Ack: true };
     }
 
@@ -201,6 +229,20 @@ function originOf(url) {
     try { return new URL(url).origin; } catch { return null; }
 }
 
+// Re-evaluate any deferred (locked-vault) pending saves now that the vault is
+// unlocked — called from background.js on a VAULT_UNLOCKED message.
+async function onVaultUnlocked() {
+    let keys = [];
+    try {
+        const all = await browser.storage.session.get(null);
+        keys = all ? Object.keys(all) : [];
+    } catch { return; }
+    for (const key of keys) {
+        const m = /^pendingSave:(\d+)$/.exec(key);
+        if (m) await evaluatePendingSave(Number(m[1]));
+    }
+}
+
 // Fires even if the service worker was killed and restarted since the alarm
 // was scheduled — unlike setTimeout, browser.alarms survives that.
 browser.alarms.onAlarm.addListener((alarm) => {
@@ -213,6 +255,7 @@ globalThis.savePrompt = {
     onTabComplete,
     onBarAction,
     onTabRemoved,
+    onVaultUnlocked,
     // exposed for unit tests
     decideBarMode,
     vaultUsable,

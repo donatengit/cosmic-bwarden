@@ -78,16 +78,42 @@ matches but the password changed (Bitwarden-style notification bar).
 content-submit.js ──LOGIN_SUBMITTED{username,password,url}──▶ background (per-tab pending map)
    tabs.onUpdated 'complete' (or a ~2 s fallback timer for AJAX/SPA logins)
       ▼
-GetConfig → locked or needs_login? → silently drop the pending credential
+GetConfig → locked or needs_login? → defer (see "Locked vault" below)
 CheckLoginMatch{domain,username,password} → save | update | silent
       ▼
 tabs.sendMessage SHOW_SAVE_BAR{mode,domain,username,entryName}   ← never contains the password
       ▼
-content-bar.js renders the bar → SAVE_BAR_ACTION{save|update|dismiss}
+content-bar.js renders the bar → SAVE_BAR_ACTION{save|update|unlock|dismiss}
       ▼
 background: AddEntry{..., uris:[origin]}  or  UpdateLoginPassword{id,password}
 then badge refresh + HIDE_SAVE_BAR on success, SAVE_BAR_ERROR on failure
 ```
+
+### Locked vault: defer, don't drop
+
+A login submitted while the vault is locked is held, not discarded — the user
+unlocks moments later and still wants the prompt. The pending entry is marked
+`awaitingUnlock` (and left re-evaluable, since `evaluated` otherwise blocks a
+second pass), and a `mode: 'locked'` bar offers **Unlock**, which asks the
+background to `action.openPopup()`. Once unlocked, the popup sends
+`VAULT_UNLOCKED`; the background sweeps `storage.session` for every
+`pendingSave:<tabId>` key and re-evaluates each into a real Save/Update bar.
+
+Two details keep this from losing the credential as silently as the drop it
+replaced — both are regression-tested in `background-save.test.js`:
+
+- **The locked bar's 30 s auto-dismiss must not notify the background.** Routing
+  it through `SAVE_BAR_ACTION{dismiss}` clears the pending state, and opening
+  the popup and typing a PIN routinely takes longer than 30 s. The bar removes
+  itself silently; only an explicit **Dismiss** click clears the credential.
+- **The 90 s TTL is restarted once, at the first deferral.** The original alarm
+  runs from the form submit, so whatever is left of it is no basis for how long
+  unlocking takes. It is *not* re-armed on later evaluations — that would keep a
+  credential alive for as long as the tab keeps navigating.
+
+`action.openPopup()` needs a user gesture the background does not always have,
+and its failure is silent, so the locked bar's buttons stay enabled: the user
+can retry, or open the popup from the toolbar and dismiss the bar by hand.
 
 ### Agent actions
 

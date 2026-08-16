@@ -17,11 +17,16 @@ const source = readFileSync(
 function makeFakeBrowser() {
     const sessionStore = {};
     const alarms = new Map();
+    const created = new Map();
     let onAlarmListener = null;
     return {
         storage: {
             session: {
                 async get(key) {
+                    // A null/undefined key means "everything", the real API's
+                    // behaviour — onVaultUnlocked uses it to find every
+                    // deferred tab.
+                    if (key === null || key === undefined) return { ...sessionStore };
                     return Object.prototype.hasOwnProperty.call(sessionStore, key)
                         ? { [key]: sessionStore[key] }
                         : {};
@@ -31,13 +36,20 @@ function makeFakeBrowser() {
             },
         },
         alarms: {
-            create(name, info) { alarms.set(name, info); },
+            create(name, info) {
+                alarms.set(name, info);
+                created.set(name, (created.get(name) ?? 0) + 1);
+            },
             async clear(name) { return alarms.delete(name); },
             onAlarm: {
                 addListener(fn) { onAlarmListener = fn; },
             },
-            // test helper, not part of the real API
+            // test helpers, not part of the real API
             _fire(name) { if (onAlarmListener) onAlarmListener({ name }); },
+            // How many times this alarm was (re-)armed — create() on an
+            // existing name replaces it, so the count is the only way to see a
+            // TTL restart.
+            _created(name) { return created.get(name) ?? 0; },
         },
         tabs: {
             sentMessages: [],
@@ -298,8 +310,12 @@ describe('save prompt with a locked vault (Unlock & Save)', () => {
         await savePrompt.onTabComplete(21);
 
         // Locked vault: the submission survives evaluation instead of being
-        // silently dropped.
+        // silently dropped, and a "locked" bar is shown so the user knows to
+        // unlock.
         expect(await savePrompt.getPendingSave(21)).not.toBeNull();
+        expect(fakeBrowser.tabs.sentMessages.some(m =>
+            m.message && m.message.type === 'SHOW_SAVE_BAR' && m.message.mode === 'locked'
+        )).toBe(true);
 
         // User unlocks (e.g. via the applet/popup); re-evaluating the same
         // pending credential must now surface the save bar with the
@@ -307,9 +323,10 @@ describe('save prompt with a locked vault (Unlock & Save)', () => {
         locked = false;
         await savePrompt.onTabComplete(21);
 
-        const barMessage = fakeBrowser.tabs.sentMessages.find(m => m.message && m.message.type === 'SHOW_SAVE_BAR');
+        const barMessage = fakeBrowser.tabs.sentMessages.find(m =>
+            m.message && m.message.type === 'SHOW_SAVE_BAR' && m.message.mode === 'save'
+        );
         expect(barMessage).toBeTruthy();
-        expect(barMessage.message.mode).toBe('save'); // no matching entry → offer save
         expect(agent.calls.some(c => c && c.CheckLoginMatch)).toBe(true);
     });
 
@@ -337,9 +354,90 @@ describe('save prompt with a locked vault (Unlock & Save)', () => {
         locked = false;
         await savePrompt.onTabComplete(22);
 
-        const barMessage = fakeBrowser.tabs.sentMessages.find(m => m.message && m.message.type === 'SHOW_SAVE_BAR');
+        const barMessage = fakeBrowser.tabs.sentMessages.find(m =>
+            m.message && m.message.type === 'SHOW_SAVE_BAR' && m.message.mode === 'update'
+        );
         expect(barMessage).toBeTruthy();
-        expect(barMessage.message.mode).toBe('update');
         expect(barMessage.message.entryName).toBe('example.com');
+    });
+
+    // The unlock path the popup actually drives: it sends VAULT_UNLOCKED, which
+    // sweeps every deferred tab rather than waiting for a page load that may
+    // never come. Uses storage.session.get(null), so it must ignore the other
+    // keys sharing that namespace (the popup's own saved view state).
+    it('re-offers every deferred tab on VAULT_UNLOCKED, ignoring foreign keys', async () => {
+        let locked = true;
+        const fakeBrowser = makeFakeBrowser();
+        const agent = makeFakeAgent((action) => {
+            if (action === 'GetConfig') return { Config: { is_locked: locked, needs_login: false } };
+            if (action.CheckLoginMatch) return { LoginMatch: { entry_id: null, name: null, password_matches: false } };
+            throw new Error('unexpected action');
+        });
+        const savePrompt = loadSavePrompt(fakeBrowser, agent);
+
+        for (const tabId of [31, 32]) {
+            await savePrompt.onLoginSubmitted(tabId, {
+                url: 'https://example.com/login', username: 'alice', password: 'hunter2',
+            });
+            await savePrompt.onTabComplete(tabId);
+        }
+        // popup-state.js shares browser.storage.session; it must not be mistaken
+        // for a pending save.
+        await fakeBrowser.storage.session.set({ popupState: { view: 'list' } });
+
+        locked = false;
+        await savePrompt.onVaultUnlocked();
+
+        const offered = fakeBrowser.tabs.sentMessages.filter(m =>
+            m.message.type === 'SHOW_SAVE_BAR' && m.message.mode === 'save'
+        );
+        expect(offered.map(m => m.tabId).sort()).toEqual([31, 32]);
+    });
+
+    // The TTL runs from the form submit. Deferring restarts it once, so the
+    // clock the user races is "since I was told to unlock", not whatever was
+    // left over — but a tab that keeps navigating must not renew it forever.
+    it('restarts the TTL once when deferring, not on every re-evaluation', async () => {
+        const fakeBrowser = makeFakeBrowser();
+        const agent = makeFakeAgent((action) => {
+            if (action === 'GetConfig') return { Config: { is_locked: true, needs_login: false } };
+            throw new Error('unexpected action');
+        });
+        const savePrompt = loadSavePrompt(fakeBrowser, agent);
+
+        await savePrompt.onLoginSubmitted(33, {
+            url: 'https://example.com/login', username: 'alice', password: 'hunter2',
+        });
+        const afterSubmit = fakeBrowser.alarms._created('pendingSaveExpire:33');
+
+        await savePrompt.onTabComplete(33);
+        expect(fakeBrowser.alarms._created('pendingSaveExpire:33')).toBe(afterSubmit + 1);
+
+        await savePrompt.onTabComplete(33);
+        await savePrompt.onTabComplete(33);
+        expect(fakeBrowser.alarms._created('pendingSaveExpire:33')).toBe(afterSubmit + 1);
+    });
+
+    // Regression: the in-page bar auto-dismisses after 30s, and routing that
+    // timeout through 'dismiss' cleared the pending credential — losing the
+    // deferred save just as silently as the v1 drop it replaced, only 30s
+    // later. content-bar.js now times the locked bar out without notifying the
+    // background; an explicit Dismiss click must still clear it.
+    it('an explicit dismiss on the locked bar drops the credential', async () => {
+        const fakeBrowser = makeFakeBrowser();
+        const agent = makeFakeAgent((action) => {
+            if (action === 'GetConfig') return { Config: { is_locked: true, needs_login: false } };
+            throw new Error('unexpected action');
+        });
+        const savePrompt = loadSavePrompt(fakeBrowser, agent);
+
+        await savePrompt.onLoginSubmitted(34, {
+            url: 'https://example.com/login', username: 'alice', password: 'hunter2',
+        });
+        await savePrompt.onTabComplete(34);
+        expect(await savePrompt.getPendingSave(34)).not.toBeNull();
+
+        await savePrompt.onBarAction(34, 'dismiss');
+        expect(await savePrompt.getPendingSave(34)).toBeNull();
     });
 });

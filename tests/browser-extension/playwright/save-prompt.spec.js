@@ -150,6 +150,24 @@ test.describe('Save bar (content-bar.js)', () => {
     expect(messages).toEqual([{ type: 'SAVE_BAR_ACTION', action: 'update' }]);
   });
 
+  test('renders the locked bar and reports the unlock action', async ({ page }) => {
+    await showBar(page, { type: 'SHOW_SAVE_BAR', mode: 'locked', domain: 'example.com', username: 'alice' });
+
+    const bar = page.locator('#cosmic-bwarden-save-bar');
+    await expect(bar.locator('.text')).toHaveText('Unlock COSMIC BWarden to save this password for example.com');
+    await expect(bar.locator('button.primary')).toHaveText('Unlock');
+
+    await bar.locator('button.primary').click();
+    const messages = await page.evaluate(() => window._sentMessages);
+    expect(messages).toEqual([{ type: 'SAVE_BAR_ACTION', action: 'unlock' }]);
+
+    // Opening the popup needs a user gesture the background doesn't always
+    // have, and the failure is silent. Both buttons must stay live so the user
+    // can retry or dismiss instead of being left with a dead bar.
+    await expect(bar.locator('button.primary')).toBeEnabled();
+    await expect(bar.locator('button.secondary')).toBeEnabled();
+  });
+
   test('dismiss removes the bar and notifies background', async ({ page }) => {
     await showBar(page, { type: 'SHOW_SAVE_BAR', mode: 'save', domain: 'example.com', username: 'alice' });
 

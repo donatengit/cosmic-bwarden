@@ -20,17 +20,9 @@ pub fn check_protocol_compatibility(local: &str, protocol: &str) -> Result<()> {
 
 pub async fn handle_command(cli: &Cli, client: &AgentClient) -> Result<()> {
     match &cli.command {
-        Commands::Register {
-            email,
-            server,
-            password,
-        } => {
-            let password = if let Some(p) = password {
-                p.clone()
-            } else {
-                rpassword::prompt_password("Master Password: ")
-                    .context("failed to read password")?
-            };
+        Commands::Register { email, server } => {
+            let password =
+                rpassword::prompt_password("Master Password: ").context("failed to read password")?;
 
             let res = client
                 .send(Action::Register {
@@ -44,17 +36,9 @@ pub async fn handle_command(cli: &Cli, client: &AgentClient) -> Result<()> {
             handle_response(res)?;
             println!("Account created successfully");
         }
-        Commands::Login {
-            email,
-            server,
-            password,
-        } => {
-            let password = if let Some(p) = password {
-                p.clone()
-            } else {
-                rpassword::prompt_password("Master Password: ")
-                    .context("failed to read password")?
-            };
+        Commands::Login { email, server } => {
+            let password =
+                rpassword::prompt_password("Master Password: ").context("failed to read password")?;
 
             let mut res = client
                 .send(Action::Login {
@@ -158,13 +142,9 @@ pub async fn handle_command(cli: &Cli, client: &AgentClient) -> Result<()> {
                 }
             }
         }
-        Commands::Unlock { password } => {
-            let password = if let Some(p) = password {
-                p.clone()
-            } else {
-                rpassword::prompt_password("Master Password: ")
-                    .context("failed to read password")?
-            };
+        Commands::Unlock => {
+            let password =
+                rpassword::prompt_password("Master Password: ").context("failed to read password")?;
 
             let res = client.send(Action::Unlock { password }).await?;
             handle_response(res)?;

@@ -86,6 +86,9 @@ function removeSaveBar() {
 function showSaveBar({ mode, domain, entryName }) {
     removeSaveBar(); // one bar at a time
 
+    const isLocked = mode === 'locked';
+    const isUpdate = mode === 'update';
+
     _barHost = document.createElement('div');
     _barHost.id = 'cosmic-bwarden-save-bar';
     // Open shadow root: the bar carries no secrets and open roots are
@@ -101,24 +104,35 @@ function showSaveBar({ mode, domain, entryName }) {
     const text = document.createElement('span');
     text.className = 'text';
     // Page-derived strings: always textContent, never HTML.
-    text.textContent = mode === 'update'
-        ? `Update password for "${entryName}" in COSMIC BWarden?`
-        : `Save password for ${domain} in COSMIC BWarden?`;
+    text.textContent = isLocked
+        ? `Unlock COSMIC BWarden to save this password for ${domain}`
+        : (isUpdate
+            ? `Update password for "${entryName}" in COSMIC BWarden?`
+            : `Save password for ${domain} in COSMIC BWarden?`);
 
     const primary = document.createElement('button');
     primary.className = 'primary';
-    primary.textContent = mode === 'update' ? 'Update' : 'Save';
+    primary.textContent = isLocked ? 'Unlock' : (isUpdate ? 'Update' : 'Save');
 
     const dismiss = document.createElement('button');
     dismiss.className = 'secondary';
     dismiss.textContent = 'Dismiss';
 
     primary.addEventListener('click', () => {
+        if (isLocked) {
+            // Unlocking happens in the popup; the background keeps the pending
+            // credential and re-offers Save/Update once the vault is unlocked.
+            // The buttons stay live on purpose: opening the popup needs a user
+            // gesture the background doesn't always have, and a bar that can be
+            // neither retried nor dismissed is worse than one that did nothing.
+            sendBarAction('unlock');
+            return;
+        }
         primary.disabled = true;
         dismiss.disabled = true;
-        text.textContent = mode === 'update' ? 'Updating…' : 'Saving…';
+        text.textContent = isUpdate ? 'Updating…' : 'Saving…';
         // Background answers with HIDE_SAVE_BAR or SAVE_BAR_ERROR.
-        sendBarAction(mode === 'update' ? 'update' : 'save');
+        sendBarAction(isUpdate ? 'update' : 'save');
     });
     dismiss.addEventListener('click', () => {
         sendBarAction('dismiss');
@@ -131,7 +145,13 @@ function showSaveBar({ mode, domain, entryName }) {
     document.documentElement.appendChild(_barHost);
 
     _barTimer = setTimeout(() => {
-        sendBarAction('dismiss'); // let background clear its pending state
+        // The locked bar times out *silently*: 'dismiss' makes the background
+        // drop the pending credential, and unlocking (open popup, type PIN)
+        // routinely outlives this window — so a deferred save would be lost
+        // exactly the way the deferral exists to prevent. The credential stays
+        // pending until its own TTL, and VAULT_UNLOCKED re-offers it as a
+        // Save/Update bar. An explicit Dismiss click still clears it.
+        if (!isLocked) sendBarAction('dismiss');
         removeSaveBar();
     }, BAR_AUTO_DISMISS_MS);
 }

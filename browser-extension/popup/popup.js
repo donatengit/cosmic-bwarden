@@ -19,6 +19,10 @@ let currentEntry = null;
 let currentView  = 'list';
 let currentTabDomain = null;
 let favouritesOnly = false;
+// True when the currently-rendered list came from a domain match on the
+// current tab (as opposed to a search or the favourites fallback). A Login row
+// click on a domain match fills the form instead of opening the site.
+let listIsDomainMatch = false;
 
 // ── Domain helpers ────────────────────────────────────────────────────────────
 function extractDomain(url) {
@@ -62,6 +66,7 @@ function showView(view) {
     } else if (view === 'locked') {
         viewLocked.classList.remove('hidden');
     }
+    savePopupState();
 }
 
 // ── Vault list ────────────────────────────────────────────────────────────────
@@ -100,19 +105,25 @@ async function updateResults() {
 
         let entries;
         let caption = null;
+        listIsDomainMatch = false;
         if (favouritesOnly) {
             entries = await getEntries({ query, only_pinned: true });
             caption = '★ Favourites';
         } else if (query) {
             entries = await getEntries({ query });
-        } else {
-            entries = currentTabDomain
-                ? await getEntries({ domain: currentTabDomain })
-                : [];
-            if (entries.length === 0) {
+        } else if (currentTabDomain) {
+            entries = await getEntries({ domain: currentTabDomain });
+            if (entries.length > 0) {
+                // The agent matched the current tab's host; a row click should
+                // autofill rather than open the site elsewhere.
+                listIsDomainMatch = true;
+            } else {
                 entries = await getEntries({ only_pinned: true });
                 caption = '★ Favourites';
             }
+        } else {
+            entries = await getEntries({ only_pinned: true });
+            caption = '★ Favourites';
         }
         renderEntries(entries, caption);
     } catch (e) { showStatus(e.message || "Failed to communicate with agent."); }
@@ -135,10 +146,16 @@ function renderEntries(entries, caption = null) {
         const div = document.createElement('div');
         div.className = 'entry';
         // Login entries: clicking the row launches the site (its primary
-        // purpose). Other types have no URL to open, so fall back to detail.
+        // purpose) — unless the list is the current tab's domain match, in
+        // which case the click autofills the form. Other types have no URL to
+        // open, so fall back to detail.
         div.onclick = () => {
-            if (entry.entry_type === 'Login') openEntrySite(entry.id);
-            else showDetail(entry.id);
+            if (entry.entry_type === 'Login') {
+                if (listIsDomainMatch) fillEntry(entry.id);
+                else openEntrySite(entry.id);
+            } else {
+                showDetail(entry.id);
+            }
         };
 
         const info = document.createElement('div');
@@ -213,11 +230,13 @@ function getEntryType(entry) {
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
 searchInput.addEventListener('input', updateResults);
+searchInput.addEventListener('input', savePopupState);
 favBtn.onclick = () => {
     favouritesOnly = !favouritesOnly;
     favBtn.textContent = favouritesOnly ? '★' : '☆';
     favBtn.classList.toggle('active', favouritesOnly);
     updateResults();
+    savePopupState();
 };
 syncBtn.onclick = async () => { await browser.runtime.sendMessage("Sync"); updateResults(); };
 lockBtn.onclick = async () => { await browser.runtime.sendMessage("Lock"); showView('list'); };
@@ -236,5 +255,8 @@ backBtn.onclick = () => showView(currentView === 'edit' && currentEntry ? 'detai
         const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
         if (tab && tab.url) currentTabDomain = extractDomain(tab.url);
     } catch { /* no tab access */ }
-    showView('list');
+    // Restore persisted state on the next task: showDetail/showEdit/showAddForm
+    // live in popup-detail.js / popup-edit.js, which load after popup.js, so the
+    // restore must not run until those scripts have been evaluated.
+    setTimeout(() => restorePopupState(), 0);
 })();

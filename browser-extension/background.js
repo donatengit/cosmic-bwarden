@@ -66,6 +66,8 @@ function extractDomain(url) {
 }
 
 async function updateBadge(tabId, tabUrl) {
+    // Keep the lock-state icon in sync on every tab activation/update.
+    await updateLockState();
     if (!tabUrl || tabUrl.startsWith('about:') || tabUrl.startsWith('chrome:') || tabUrl.startsWith('moz-extension:')) {
         browser.action.setBadgeText({ text: '', tabId });
         return;
@@ -110,10 +112,44 @@ browser.tabs.onRemoved.addListener((tabId) => {
     } catch { /* no tabs permission or no active window */ }
 })();
 
-// ── Theme-aware icon ──────────────────────────────────────────────────────────
+// ── Theme-aware + lock-state icon ─────────────────────────────────────────────
+let currentThemeDark = false;
+
+function iconPaths(variant) {
+    return {
+        16: `icons/${variant}16.png`,
+        32: `icons/${variant}32.png`,
+        64: `icons/${variant}64.png`,
+        128: `icons/${variant}128.png`,
+    };
+}
+
 function setThemeIcon(isDark) {
+    currentThemeDark = isDark;
     const v = isDark ? 'white' : 'black';
-    browser.action.setIcon({ path: { 16: `icons/${v}16.png`, 32: `icons/${v}32.png`, 64: `icons/${v}64.png`, 128: `icons/${v}128.png` } });
+    browser.action.setIcon({ path: iconPaths(v) });
+}
+
+function setLockIcon(isDark) {
+    const v = isDark ? 'white' : 'black';
+    browser.action.setIcon({ path: iconPaths(`${v}_locked`) });
+}
+
+// Query the agent for lock state and reflect it in the toolbar icon, so the
+// icon changes shape when the vault is locked/unlocked (not just color theme).
+async function updateLockState() {
+    try {
+        const configResp = await sendToAgent("GetConfig");
+        // Same test as background-save.js's vaultUsable() (inlined: that file
+        // isn't loaded in background.js's own unit-test scope). Logged out is
+        // shown as locked too — in both states there is no vault to reach.
+        const usable = !!(configResp && configResp.Config
+            && !configResp.Config.is_locked && !configResp.Config.needs_login);
+        if (usable) setThemeIcon(currentThemeDark);
+        else setLockIcon(currentThemeDark);
+    } catch {
+        // Agent unreachable — leave the current icon alone.
+    }
 }
 
 // Firefox background page has matchMedia; Chrome MV3 service worker does not.
@@ -175,6 +211,18 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (sender.tab && typeof sender.tab.id === 'number') {
             return savePrompt.onBarAction(sender.tab.id, message.action);
         }
+        return Promise.resolve({ Ack: true });
+    }
+    if (message === 'Lock' || message === 'Logout') {
+        // Counterpart to VAULT_UNLOCKED: flip the icon as soon as the agent
+        // confirms, rather than leaving it stale until the next tab event.
+        return sendToAgent(message).then((resp) => { updateLockState(); return resp; });
+    }
+    if (message && message.type === 'VAULT_UNLOCKED') {
+        // The popup/applet unlocked the vault: re-evaluate any save prompts
+        // that were deferred while locked, and flip the toolbar icon back.
+        savePrompt.onVaultUnlocked();
+        updateLockState();
         return Promise.resolve({ Ack: true });
     }
     return sendToAgent(message);

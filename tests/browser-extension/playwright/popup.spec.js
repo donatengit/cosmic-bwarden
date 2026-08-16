@@ -75,7 +75,16 @@ function buildMock({ isLocked = false, tabUrl = null, entriesForQuery = null, tp
         })
       },
       tabs: {
-        query: async () => [{ id: 123, url: ${tabUrl ? `'${tabUrl}'` : 'undefined'} }],
+        // The baked-in URL, unless a test overrides it to simulate the popup
+        // being reopened over a different tab. The override lives in
+        // sessionStorage because addInitScript re-runs on every navigation,
+        // so anything set on window would be wiped by the re-open the
+        // close/reopen tests perform.
+        query: async () => [{
+          id: 123,
+          url: window.sessionStorage.getItem('cosmic-bwarden-test:tabUrlOverride')
+            ?? ${tabUrl ? `'${tabUrl}'` : 'undefined'}
+        }],
         sendMessage: async (tabId, msg) => {
           window._sentToTab = (window._sentToTab || []).concat([{ tabId, msg }]);
         },
@@ -576,6 +585,22 @@ test.describe('Extension Popup — state survives close/reopen (window switching
     await expect(page.locator('#view-edit')).toBeVisible({ timeout: 5000 });
     expect(await page.locator('#edit-name').inputValue()).toBe('draft name');
     expect(await page.locator('#edit-notes').inputValue()).toBe('draft notes');
+  });
+
+  test('does not restore state captured on a different tab', async ({ page }) => {
+    // Restored state is scoped to the domain it was captured on. Otherwise one
+    // detail view left open would reopen on every unrelated site for the rest
+    // of the browser session, hiding the current tab's matches.
+    await page.evaluate(() => sessionStorage.setItem('cosmic-bwarden-test:tabUrlOverride', 'https://example.com/login'));
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+    await page.locator('.entry-actions button[title="View details"]').click();
+    await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
+
+    await page.evaluate(() => sessionStorage.setItem('cosmic-bwarden-test:tabUrlOverride', 'https://unrelated.test/'));
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+
+    await expect(page.locator('#view-list')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('#view-detail')).toBeHidden();
   });
 
   test('restores the typed search query after the popup is closed and reopened', async ({ page }) => {
