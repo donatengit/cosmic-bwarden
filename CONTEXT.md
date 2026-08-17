@@ -45,10 +45,12 @@ ordering matters:
   so a response computed before a transition can never bounce the UI back to a stale view
   (e.g. back to the lock screen right after a successful PIN unlock). A changed
   `session_id` (agent restart) is never treated as staleness.
-- **Out-of-sync survives locks**: `sync_failed`/`last_sync_error` are cleared ONLY by a
-  successful sync — `State::lock()` deliberately does not reset them. Both unlock paths
-  re-authenticate and then run a background sync; a failed silent re-auth (or a PIN
-  unlock with neither a session token nor a sealed server-credential hash) sets
+- **Out-of-sync survives locks**: `sync_failed`/`last_sync_error` are cleared by a
+  successful sync, by a successful login (its initial server sync replaces the local
+  vault, so a stale flag from a previous session must not survive), and by logout
+  (account teardown) — `State::lock()` deliberately does not reset them. Both unlock
+  paths re-authenticate and then run a background sync; a failed silent re-auth (or a
+  PIN unlock with neither a session token nor a sealed server-credential hash) sets
   `sync_failed` so the UI honestly reports "not synced" instead of whitewashing the
   state on a lock cycle.
 - **One unlock-request path**: `Action::RequestUnlock` and the internal SSH-agent path

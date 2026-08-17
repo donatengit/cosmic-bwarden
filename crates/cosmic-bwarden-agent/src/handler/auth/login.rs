@@ -170,6 +170,15 @@ pub async fn handle_login(
             state_guard.master_password_hash = Some(identity.master_password_hash);
             state_guard.bump_epoch();
 
+            // The initial `client.sync` above just replaced the local vault
+            // with fresh server state, so the vault IS in sync at this point.
+            // A stale out-of-sync flag from a previous session (e.g. a
+            // degraded PIN unlock) must not survive a successful login and
+            // keep the UI showing "Not synced" — only `handle_sync` clears
+            // it otherwise.
+            state_guard.sync_failed = false;
+            state_guard.last_sync_error = None;
+
             state_guard.pinned_ids.clear();
             for entry in &db.entries {
                 if entry.favorite {

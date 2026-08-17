@@ -34,6 +34,8 @@ mod security;
 mod ssh_test_utils;
 #[cfg(test)]
 mod sync_persistence;
+#[cfg(test)]
+mod sync_state;
 #[cfg(all(test, feature = "tpm-smoke"))]
 mod tpm_lifecycle;
 #[cfg(test)]

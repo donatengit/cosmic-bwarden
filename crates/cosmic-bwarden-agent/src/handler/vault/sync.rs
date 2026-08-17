@@ -18,7 +18,8 @@ pub async fn handle_sync(state: &Arc<Mutex<State>>) -> Response {
     // Snapshot the locked state so completion can tell "the vault re-locked
     // while this sync was in flight" (nothing to record) apart from "sync
     // requested while already locked" (report the failure honestly).
-    let locked_at_entry = state.lock().await.keys.is_none();    let res = with_refresh(state, |at| async move {
+    let locked_at_entry = state.lock().await.keys.is_none();
+    let res = with_refresh(state, |at| async move {
         let config = cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy()?;
         let client =
             cosmic_bwarden_core::api::Client::new(&config.base_url(), &config.identity_url());
@@ -102,7 +103,11 @@ pub async fn handle_sync(state: &Arc<Mutex<State>>) -> Response {
             };
             log::error!(
                 "sync failed{}: {}",
-                if raced_lock { " (requested while locked)" } else { "" },
+                if raced_lock {
+                    " (requested while locked)"
+                } else {
+                    ""
+                },
                 e
             );
             Response::Error {
@@ -129,7 +134,10 @@ mod tests {
             !failed_sync_is_lock_race(true, true),
             "requested while locked is not a race"
         );
-        assert!(!failed_sync_is_lock_race(false, false), "unlocked is not a race");
+        assert!(
+            !failed_sync_is_lock_race(false, false),
+            "unlocked is not a race"
+        );
         assert!(!failed_sync_is_lock_race(false, true));
     }
 
