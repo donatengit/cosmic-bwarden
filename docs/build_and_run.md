@@ -55,8 +55,12 @@ The same binary handles both the main window and the applet tray.
 The `cosmic-bwarden-cli` provides a powerful interface for scripting and advanced management.
 
 ```bash
-# Register a new account (prompts for the master password)
+# Register a new account (prompts for the master password interactively)
 ./target/release/cosmic-bwarden-cli register user@example.com
+
+# Register/login/unlock accept --password for scripts; without it the master
+# password is prompted interactively (keeping it out of argv/shell history).
+./target/release/cosmic-bwarden-cli register user@example.com --password 'correct horse battery staple'
 
 # Add a secure note
 ./target/release/cosmic-bwarden-cli add-note "My Private Key" --note "Content of the note..."

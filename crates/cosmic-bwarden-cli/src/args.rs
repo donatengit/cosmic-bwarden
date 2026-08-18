@@ -69,6 +69,10 @@ pub enum Commands {
         /// Bitwarden server URL (e.g. https://vault.bitwarden.com)
         #[arg(short, long)]
         server: String,
+        /// Master password. Omit to be prompted interactively (keeps it out
+        /// of argv and shell history).
+        #[arg(short, long)]
+        password: Option<String>,
     },
     /// Log in to Bitwarden
     Login {
@@ -77,9 +81,18 @@ pub enum Commands {
         /// Bitwarden server URL (optional if already configured)
         #[arg(short, long)]
         server: Option<String>,
+        /// Master password. Omit to be prompted interactively (keeps it out
+        /// of argv and shell history).
+        #[arg(short, long)]
+        password: Option<String>,
     },
     /// Unlock the vault
-    Unlock,
+    Unlock {
+        /// Master password. Omit to be prompted interactively (keeps it out
+        /// of argv and shell history).
+        #[arg(short, long)]
+        password: Option<String>,
+    },
     /// Lock the vault
     Lock,
     /// Sync the vault

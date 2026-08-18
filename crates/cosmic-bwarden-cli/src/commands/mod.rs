@@ -15,7 +15,7 @@ pub async fn run(
     match &cli.command {
         Commands::Register { .. }
         | Commands::Login { .. }
-        | Commands::Unlock
+        | Commands::Unlock { .. }
         | Commands::Lock
         | Commands::Logout
         | Commands::Quit

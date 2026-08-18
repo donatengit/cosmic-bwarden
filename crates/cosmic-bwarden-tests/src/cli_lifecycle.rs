@@ -11,12 +11,22 @@ async fn test_cli_lifecycle() -> Result<()> {
     // 1. Register user
     register_user(&env.vault_url, email, password).await?;
 
-    // 2. Login (master password is prompted interactively — drive it via a pty)
-    let (success, _stdout, stderr) = env.run_cli_with_tty(
-        &["login", email, "--server", env.vault_url.as_str()],
-        &format!("{password}\n\n"),
-    )?;
-    assert!(success, "CLI login failed: {stderr}");
+    // 2. Login with --password (scriptable path; the interactive prompt is
+    //    covered by test_cli_extended_features via the pty helper).
+    let output = env
+        .cli_cmd()
+        .arg("login")
+        .arg(email)
+        .arg("--server")
+        .arg(&env.vault_url)
+        .arg("--password")
+        .arg(password)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "CLI login failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // 3. Add entry
     let output = env
