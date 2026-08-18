@@ -285,8 +285,15 @@ mod tests {
 
         state.lock();
 
-        assert_eq!(state.lock_epoch, epoch_before + 1, "lock must bump the epoch");
-        assert!(state.sync_failed, "lock must not clear the out-of-sync flag");
+        assert_eq!(
+            state.lock_epoch,
+            epoch_before + 1,
+            "lock must bump the epoch"
+        );
+        assert!(
+            state.sync_failed,
+            "lock must not clear the out-of-sync flag"
+        );
         assert!(
             state.last_sync_error.is_some(),
             "lock must not clear the last sync error"

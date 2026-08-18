@@ -130,7 +130,8 @@ async fn test_e2e_user_flow_login_and_add_note() {
     // 2. Receive config (needs login)
     let config = CosmicBWardenConfig::default();
     let _ = app.update(Message::ConfigReceived(Ok((
-        config, true, false, true, false, 0, 0))));
+        config, true, false, true, false, 0, 0,
+    ))));
     assert_eq!(app.view, View::Setup);
 
     // 3. User enters credentials
@@ -235,7 +236,10 @@ fn test_settings_flow() {
         false,
         true,
         false,
-        false, 0, 0))));
+        false,
+        0,
+        0,
+    ))));
     app.view = View::Vault;
     assert_eq!(app.config.lock_timeout, 600);
 
@@ -377,7 +381,10 @@ fn test_remember_and_auth_failure() {
         false,
         true,
         true,
-        false, 0, 0))));
+        false,
+        0,
+        0,
+    ))));
     assert_eq!(app.view, View::Unlock);
 
     app.config.email = None;

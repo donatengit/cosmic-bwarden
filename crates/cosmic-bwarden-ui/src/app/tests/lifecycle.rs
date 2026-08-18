@@ -120,7 +120,10 @@ async fn test_config_received_routes_by_has_account_not_needs_login() {
         true,
         true,
         false,
-        false, 0, 0))));
+        false,
+        0,
+        0,
+    ))));
     assert_eq!(app.view, View::Vault);
 
     // Locked but with an account on disk -> Unlock, not Setup.
@@ -129,12 +132,16 @@ async fn test_config_received_routes_by_has_account_not_needs_login() {
         true,
         true,
         true,
-        false, 0, 0))));
+        false,
+        0,
+        0,
+    ))));
     assert_eq!(app.view, View::Unlock);
 
     // No account on disk at all -> Setup, regardless of is_locked.
     let _ = app.update(Message::ConfigReceived(Ok((
-        config, true, false, false, false, 0, 0))));
+        config, true, false, false, false, 0, 0,
+    ))));
     assert_eq!(app.view, View::Setup);
 }
 
@@ -152,7 +159,10 @@ async fn test_config_received_vault_triggers_entry_fetch() {
         false,
         true,
         false,
-        false, 0, 0))));
+        false,
+        0,
+        0,
+    ))));
 
     assert_eq!(app.view, View::Vault);
     assert!(
@@ -179,7 +189,10 @@ async fn test_config_received_unlocked_with_applet_popup_triggers_applet_fetch()
         false,
         true,
         false,
-        false, 0, 0))));
+        false,
+        0,
+        0,
+    ))));
 
     assert_eq!(app.view, View::Vault);
     assert!(
@@ -204,7 +217,10 @@ async fn test_config_received_unlocked_without_applet_popup_skips_applet_fetch()
         false,
         true,
         false,
-        false, 0, 0))));
+        false,
+        0,
+        0,
+    ))));
 
     assert_eq!(app.view, View::Vault);
     assert_eq!(
@@ -484,7 +500,10 @@ fn test_config_received_unlocked_sets_tpm_check_pending() {
         false,
         true,  // has_account
         false, // is_locked = false → vault open path
-        false, 0, 0))));
+        false,
+        0,
+        0,
+    ))));
 
     assert_eq!(app.view, View::Vault);
     assert!(

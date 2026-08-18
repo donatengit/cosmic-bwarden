@@ -44,6 +44,12 @@ pub enum UnlockMode {
     Pin,
 }
 
+/// Agent config/state snapshot carried by `Message::ConfigReceived` — exactly
+/// `Response::Config`'s payload: (config, needs_login, has_account, is_locked,
+/// sync_failed, session_id, lock_epoch). Named to keep the message enum
+/// readable (and `clippy::type_complexity` quiet).
+pub type ConfigSnapshot = (CosmicBWardenConfig, bool, bool, bool, bool, u64, u64);
+
 // MVU message enum: one short-lived value per event. Boxing the wide variants
 // (entry payloads) would touch every `match` arm for a transient allocation win.
 #[allow(clippy::large_enum_variant)]
@@ -51,20 +57,7 @@ pub enum UnlockMode {
 pub enum Message {
     /// (config, needs_login, has_account, is_locked, sync_failed,
     ///  session_id, lock_epoch)
-    ConfigReceived(
-        Result<
-            (
-                CosmicBWardenConfig,
-                bool,
-                bool,
-                bool,
-                bool,
-                u64,
-                u64,
-            ),
-            String,
-        >,
-    ),
+    ConfigReceived(Result<ConfigSnapshot, String>),
 
     // Window management
     WindowClosed(window::Id),

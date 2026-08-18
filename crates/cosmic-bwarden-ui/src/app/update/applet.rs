@@ -1,8 +1,6 @@
 use crate::app::applet_search;
 use crate::app::state::CosmicBWardenApp;
-use crate::app::tasks::{
-    check_protocol_version, fetch_applet_search, fetch_applet_secret,
-};
+use crate::app::tasks::{check_protocol_version, fetch_applet_search, fetch_applet_secret};
 use crate::app::update::{auth_actions, generator_actions};
 use crate::fl;
 use crate::message::{Message, UnlockMode, View};

@@ -204,7 +204,10 @@ fn classify_unseal_failure_maps_tss_codes() {
         TpmResponseCode::try_from(0x09D).unwrap(),
     )))
     .context("TPM unseal — wrong PIN, changed PCRs, or DA lockout");
-    assert_eq!(classify_unseal_failure(&wrapped), UnsealFailure::StateChanged);
+    assert_eq!(
+        classify_unseal_failure(&wrapped),
+        UnsealFailure::StateChanged
+    );
 
     // Non-TSS errors classify as Other.
     assert_eq!(

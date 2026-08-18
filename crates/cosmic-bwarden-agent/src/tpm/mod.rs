@@ -58,26 +58,24 @@ pub fn classify_unseal_failure(err: &anyhow::Error) -> UnsealFailure {
     use tss_esapi::error::{ReturnCode, TpmFormatZeroResponseCode, TpmResponseCode};
 
     for e in err.chain() {
-        if let Some(tss_err) = e.downcast_ref::<tss_esapi::Error>() {
-            if let tss_esapi::Error::TssError(rc) = tss_err {
-                return match rc {
-                    ReturnCode::Tpm(TpmResponseCode::FormatOne(f1)) => match f1.error_number() {
-                        TpmFormatOneError::AuthFail => UnsealFailure::WrongPin,
-                        TpmFormatOneError::PolicyFail => UnsealFailure::StateChanged,
-                        _ => UnsealFailure::Other,
-                    },
-                    ReturnCode::Tpm(TpmResponseCode::FormatZero(
-                        TpmFormatZeroResponseCode::Warning(w),
-                    )) => {
-                        if w.error_number() == TpmFormatZeroWarning::Lockout {
-                            UnsealFailure::Lockout
-                        } else {
-                            UnsealFailure::Other
-                        }
-                    }
+        if let Some(tss_esapi::Error::TssError(rc)) = e.downcast_ref::<tss_esapi::Error>() {
+            return match rc {
+                ReturnCode::Tpm(TpmResponseCode::FormatOne(f1)) => match f1.error_number() {
+                    TpmFormatOneError::AuthFail => UnsealFailure::WrongPin,
+                    TpmFormatOneError::PolicyFail => UnsealFailure::StateChanged,
                     _ => UnsealFailure::Other,
-                };
-            }
+                },
+                ReturnCode::Tpm(TpmResponseCode::FormatZero(
+                    TpmFormatZeroResponseCode::Warning(w),
+                )) => {
+                    if w.error_number() == TpmFormatZeroWarning::Lockout {
+                        UnsealFailure::Lockout
+                    } else {
+                        UnsealFailure::Other
+                    }
+                }
+                _ => UnsealFailure::Other,
+            };
         }
     }
     UnsealFailure::Other

@@ -34,7 +34,11 @@ async fn test_pcr_state_change_blocks_pin_with_state_changed_error_and_recovers(
 
     // A correct PIN still works before the state change.
     let ok = unlock_with_pin(&env, PIN).await?;
-    assert!(matches!(ok, Response::Ack), "pre-change unlock failed: {:?}", ok);
+    assert!(
+        matches!(ok, Response::Ack),
+        "pre-change unlock failed: {:?}",
+        ok
+    );
     lock(&env).await?;
 
     // Simulate a BIOS/firmware update: extend PCR 7, breaking the policy

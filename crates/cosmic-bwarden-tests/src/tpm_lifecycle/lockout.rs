@@ -36,9 +36,9 @@ async fn test_da_lockout_refuses_correct_pin_and_password_fallback_works() -> Re
     let max_tries = {
         let res = client.send(Action::GetTpmDaStatus).await?;
         match res {
-            Response::TpmDaStatus { status } => status
-                .max_tries
-                .ok_or_else(|| anyhow::anyhow!("TPM reports no max_tries — cannot drive lockout"))?,
+            Response::TpmDaStatus { status } => status.max_tries.ok_or_else(|| {
+                anyhow::anyhow!("TPM reports no max_tries — cannot drive lockout")
+            })?,
             other => anyhow::bail!("expected TpmDaStatus, got: {:?}", other),
         }
     };
@@ -72,9 +72,15 @@ async fn test_da_lockout_refuses_correct_pin_and_password_fallback_works() -> Re
     let res = unlock_with_pin(&env, PIN).await?;
     match res {
         Response::Error { message } => {
-            assert_eq!(message, ERR_TPM_UNSEAL_FAILED, "lockout must map to ERR_TPM_UNSEAL_FAILED");
+            assert_eq!(
+                message, ERR_TPM_UNSEAL_FAILED,
+                "lockout must map to ERR_TPM_UNSEAL_FAILED"
+            );
         }
-        other => anyhow::bail!("expected ERR_TPM_UNSEAL_FAILED during lockout, got: {:?}", other),
+        other => anyhow::bail!(
+            "expected ERR_TPM_UNSEAL_FAILED during lockout, got: {:?}",
+            other
+        ),
     }
 
     // The vault is still locked.
