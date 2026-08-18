@@ -13,20 +13,12 @@ async fn test_cli_secret_masked() -> Result<()> {
     let password = "maskedpass123";
     register_user(&env.vault_url, email, password).await?;
 
-    // 4️⃣ Login
-    let login_out = env.cli_cmd()
-        .arg("login")
-        .arg(email)
-        .arg("--server")
-        .arg(&env.vault_url)
-        .arg("--password")
-        .arg(password)
-        .output()?;
-    assert!(
-        login_out.status.success(),
-        "CLI login failed: {}",
-        String::from_utf8_lossy(&login_out.stderr)
-    );
+    // 4️⃣ Login (master password is prompted interactively — drive it via a pty)
+    let (success, _stdout, stderr) = env.run_cli_with_tty(
+        &["login", email, "--server", env.vault_url.as_str()],
+        &format!("{password}\n\n"),
+    )?;
+    assert!(success, "CLI login failed: {stderr}");
 
     // 5️⃣ Add a Secure Note (no `-S` flag)
     let add_out = env.cli_cmd()

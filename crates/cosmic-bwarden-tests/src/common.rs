@@ -1,16 +1,18 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action, Response};
 use std::env;
+use std::io::Write;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 use testcontainers::{
     core::{IntoContainerPort, WaitFor},
     runners::AsyncRunner,
     GenericImage, ImageExt,
 };
-use tokio::time::{sleep, Duration};
+use tokio::time::sleep;
 
 pub struct TestEnv {
     // Ensure testcontainers uses Podman if available
@@ -66,23 +68,146 @@ impl TestEnv {
         Ok(cmd.spawn()?)
     }
 
-    pub fn cli_cmd(&self) -> Command {
+    pub fn cli_path(&self) -> PathBuf {
         let mut cli_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         cli_path.pop();
         cli_path.pop();
         cli_path.push("target/debug/cosmic-bwarden-cli");
+        cli_path
+    }
 
-        let mut cmd = Command::new(cli_path);
-        cmd.arg("--socket")
-            .arg(&self.socket_path)
-            .arg("--config")
-            .arg(&self.config_path)
-            .env("COSMIC_BWARDEN_PROFILE", &self.profile)
+    /// Shared environment for every CLI invocation (socket, profile, XDG
+    /// redirects into the test's temp dirs).
+    fn apply_cli_env(&self, cmd: &mut Command) {
+        cmd.env("COSMIC_BWARDEN_PROFILE", &self.profile)
             .env("XDG_CONFIG_HOME", &self.config_home)
             .env("XDG_CACHE_HOME", &self.cache_home)
             .env("XDG_DATA_HOME", &self.data_home)
             .env("XDG_RUNTIME_DIR", &self.runtime_home);
+    }
+
+    pub fn cli_cmd(&self) -> Command {
+        let mut cmd = Command::new(self.cli_path());
+        cmd.arg("--socket")
+            .arg(&self.socket_path)
+            .arg("--config")
+            .arg(&self.config_path);
+        self.apply_cli_env(&mut cmd);
         cmd
+    }
+
+    /// Runs the CLI with `stdin_content` piped in as its terminal input.
+    ///
+    /// The CLI reads the master password with `rpassword`, which on unix opens
+    /// `/dev/tty` directly — there is no stdin fallback, so a bare pipe cannot
+    /// supply the password (and would hang on a developer machine that has a
+    /// controlling terminal). util-linux `script -qefc` allocates a pty, makes
+    /// it the child's controlling terminal, forwards stdin to it, and returns
+    /// the child's exit code.
+    ///
+    /// Returns `(success, stdout, stderr)`.
+    pub fn run_cli_with_tty(
+        &self,
+        args: &[&str],
+        stdin_content: &str,
+    ) -> Result<(bool, String, String)> {
+        // Rebuild the same invocation `cli_cmd()` would produce, as one
+        // command line for `script -c` (which runs it via /bin/sh).
+        let mut argv: Vec<String> = Vec::with_capacity(args.len() + 5);
+        argv.push(self.cli_path().to_string_lossy().into_owned());
+        argv.push("--socket".to_string());
+        argv.push(self.socket_path.to_string_lossy().into_owned());
+        argv.push("--config".to_string());
+        argv.push(self.config_path.to_string_lossy().into_owned());
+        argv.extend(args.iter().map(|a| (*a).to_string()));
+        let cmdline = argv
+            .iter()
+            .map(|a| shell_quote(a))
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        let mut cmd = Command::new("script");
+        // `-E never` keeps the typed password out of the typescript/stdout even
+        // before rpassword turns the slave's echo off.
+        cmd.args(["-qE", "never", "-efc", &cmdline, "/dev/null"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        self.apply_cli_env(&mut cmd);
+
+        let mut child = cmd
+            .spawn()
+            .context("failed to spawn `script` (util-linux) to run the CLI on a pty")?;
+        let mut stdin = child.stdin.take().expect("script stdin");
+        let stdout_pipe = child.stdout.take().expect("script stdout");
+        let stderr_pipe = child.stderr.take().expect("script stderr");
+        stdin.write_all(stdin_content.as_bytes())?;
+        drop(stdin); // EOF on script's stdin: a hypothetical second prompt
+                     // resolves with an empty line instead of blocking.
+
+        // Drain the pipes on reader threads so the watchdog below can watch
+        // only `try_wait` without risking a pipe-buffer deadlock.
+        let out_reader = std::thread::spawn(move || std::io::read_to_string(stdout_pipe));
+        let err_reader = std::thread::spawn(move || std::io::read_to_string(stderr_pipe));
+
+        let deadline = Instant::now() + CLI_TTY_TIMEOUT;
+        let status = loop {
+            if let Some(status) = child
+                .try_wait()
+                .context("failed to wait for `script` (util-linux)")?
+            {
+                break status;
+            }
+            if Instant::now() >= deadline {
+                // Kill `script`: its pipes close (reader threads finish) and
+                // the pty master closes, which takes the CLI child down with
+                // SIGHUP/EIO instead of leaving it blocked on a prompt.
+                let _ = child.kill();
+                let _ = child.wait();
+                let stdout = out_reader
+                    .join()
+                    .map(|r| r.unwrap_or_default())
+                    .unwrap_or_default();
+                let stderr = err_reader
+                    .join()
+                    .map(|r| r.unwrap_or_default())
+                    .unwrap_or_default();
+                anyhow::bail!(
+                    "CLI invocation timed out after {}s and was killed\nstdout:\n{}\nstderr:\n{}",
+                    CLI_TTY_TIMEOUT.as_secs(),
+                    stdout.trim(),
+                    stderr.trim(),
+                );
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        };
+        let stdout = out_reader
+            .join()
+            .map_err(|_| anyhow::anyhow!("stdout reader thread panicked"))?
+            .context("failed to read `script` stdout")?;
+        let stderr = err_reader
+            .join()
+            .map_err(|_| anyhow::anyhow!("stderr reader thread panicked"))?
+            .context("failed to read `script` stderr")?;
+        Ok((status.success(), stdout, stderr))
+    }
+}
+
+/// Hard limit for one interactive CLI invocation under the pty. Register and
+/// login finish in seconds; this only exists so a stuck prompt or a dead agent
+/// fails the test with a diagnosis instead of hanging the whole suite.
+const CLI_TTY_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// POSIX single-quote a string for `/bin/sh -c`; leaves plain tokens alone so
+/// the command line stays readable in logs.
+fn shell_quote(s: &str) -> String {
+    if !s.is_empty()
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || "._-/:=".contains(c))
+    {
+        s.to_string()
+    } else {
+        format!("'{}'", s.replace('\'', "'\\''"))
     }
 }
 
