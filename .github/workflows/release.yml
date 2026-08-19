@@ -62,10 +62,12 @@ jobs:
   # update_url is baked into the signed XPI and the version is appended to the
   # published updates.json (fetched first so prior release entries survive).
   #
-  # Release-mode signing is strict: the tag must be vYYYY.MM.P and
-  # browser-extension/manifest.json must carry the same version — bump it and
-  # commit before tagging. A failed preflight uploads nothing to AMO, so it
-  # consumes no version.
+  # Release-mode signing is strict: the tag must be vYYYY.MM.P and the tree
+  # clean. The tag IS the version — it is injected into the staged manifest at
+  # sign time, so browser-extension/manifest.json needs no release bumps (its
+  # committed version only matters for manual store uploads via the packed
+  # zip). A failed preflight uploads nothing to AMO, so it consumes no
+  # version.
   sign-extension:
     needs: artifacts
     runs-on: ubuntu-latest

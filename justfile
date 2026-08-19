@@ -332,9 +332,11 @@ ext-check-webext: ext-deps
 #     manifest-match, or clean-tree requirements; the current files are what
 #     gets signed. Only duplicates already shipped in dist/ are refused.
 #   - release mode (EXT_SIGN_MODE=release, used by CI on v* tags): the strict
-#     tag-based preflight — HEAD must be a vYYYY.MM.P tag, manifest.json must
-#     match it, the tree must be clean. Nothing is uploaded to AMO when this
-#     fails, so a failed run consumes no version.
+#     tag-based preflight — HEAD must be a vYYYY.MM.P tag and the tree must be
+#     clean. The tag IS the version (it is injected into the staged manifest
+#     at build time), so the committed manifest.json version needs no release
+#     bumps. Nothing is uploaded to AMO when this fails, so a failed run
+#     consumes no version.
 sign-extension-preflight:
     @set -euo pipefail; \
     . packaging/load-ext-env.sh; \
@@ -354,7 +356,8 @@ sign-extension-preflight:
 # injected from EXT_UPDATE_BASE_URL when set) → lint → AMO unlisted sign →
 # dist/cosmic-bwarden-<version>.xpi, plus dist/updates.json when the base URL
 # is set. Dev mode (default) signs the current files under a timestamp
-# version; EXT_SIGN_MODE=release signs a v* tag release. Credentials (from the
+# version; EXT_SIGN_MODE=release signs a v* tag release (tag version injected
+# into the staged manifest — no manifest.json bumps needed). Credentials (from the
 # environment or browser-extension/.env) reach web-ext only through a
 # generated config trampoline referencing process.env — never on a command
 # line, in a file, or in trace output; the trampoline is removed on exit.

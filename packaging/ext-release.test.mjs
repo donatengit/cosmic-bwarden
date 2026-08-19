@@ -161,9 +161,8 @@ test("applyUpdateUrl throws when gecko settings are missing", () => {
   assert.throws(() => applyUpdateUrl(withoutGecko, "https://x"), /missing browser_specific_settings.gecko/);
 });
 
-test("preflight passes on a clean tagged HEAD with matching manifest", () => {
+test("preflight passes on a clean tagged HEAD (the tag is the version)", () => {
   const result = checkVersionPreflight({
-    manifestVersion: "2026.8.0",
     canonicalTag: "v2026.8.0",
     dirty: false,
   });
@@ -174,7 +173,6 @@ test("preflight passes on a clean tagged HEAD with matching manifest", () => {
 
 test("preflight fails when HEAD is not on a tag", () => {
   const result = checkVersionPreflight({
-    manifestVersion: "0.1.0",
     canonicalTag: null,
     dirty: false,
   });
@@ -182,20 +180,9 @@ test("preflight fails when HEAD is not on a tag", () => {
   assert.match(result.errors.join("\n"), /not on a release tag/);
 });
 
-test("preflight fails when manifest version differs from the tag", () => {
-  const result = checkVersionPreflight({
-    manifestVersion: "0.1.0",
-    canonicalTag: "v2026.8.0",
-    dirty: false,
-  });
-  assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /does not match release tag version/);
-});
-
 test("preflight fails when the tag does not match vYYYY.MM.P", () => {
   for (const badTag of ["2026.8.0", "v1.2", "va.b.c", "v2026/8/0", "v2026.08.0.1", "v2026.08.0"]) {
     const result = checkVersionPreflight({
-      manifestVersion: "2026.8.0",
       canonicalTag: badTag,
       dirty: false,
     });
@@ -207,14 +194,14 @@ test("preflight fails when the tag does not match vYYYY.MM.P", () => {
   // Three dot-separated integers after the v pass (calendar vYYYY.MM.P and
   // semver-style v0.1.0 are both valid here) when the manifest matches.
   for (const [goodTag, ver] of [["v2026.8.0", "2026.8.0"], ["v0.1.0", "0.1.0"]]) {
-    const result = checkVersionPreflight({ manifestVersion: ver, canonicalTag: goodTag, dirty: false });
+    const result = checkVersionPreflight({ canonicalTag: goodTag, dirty: false });
     assert.equal(result.ok, true, `tag ${goodTag} should pass`);
     assert.equal(result.version, ver);
   }
 });
 
 test("preflight fails on a dirty tree unless ALLOW_DIRTY", () => {
-  const base = { manifestVersion: "2026.8.0", canonicalTag: "v2026.8.0" };
+  const base = { canonicalTag: "v2026.8.0" };
   assert.equal(checkVersionPreflight({ ...base, dirty: true }).ok, false);
   assert.match(
     checkVersionPreflight({ ...base, dirty: true }).errors.join("\n"),
@@ -225,7 +212,6 @@ test("preflight fails on a dirty tree unless ALLOW_DIRTY", () => {
 
 test("preflight refuses a version already in dist/updates.json", () => {
   const result = checkVersionPreflight({
-    manifestVersion: "2026.8.0",
     canonicalTag: "v2026.8.0",
     dirty: false,
     updatesJsonVersions: ["2026.7.0", "2026.8.0"],
@@ -236,7 +222,6 @@ test("preflight refuses a version already in dist/updates.json", () => {
 
 test("preflight refuses a version whose XPI already exists in dist/", () => {
   const result = checkVersionPreflight({
-    manifestVersion: "2026.8.0",
     canonicalTag: "v2026.8.0",
     dirty: false,
     distXpiVersions: ["2026.8.0"],
@@ -247,7 +232,6 @@ test("preflight refuses a version whose XPI already exists in dist/", () => {
 
 test("preflight ignores other versions in dist/", () => {
   const result = checkVersionPreflight({
-    manifestVersion: "2026.8.0",
     canonicalTag: "v2026.8.0",
     dirty: false,
     updatesJsonVersions: ["2026.7.0"],

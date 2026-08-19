@@ -144,7 +144,6 @@ export function applyUpdateUrl(manifest, baseUrl) {
  * in dist/, gathered by the caller.
  */
 export function checkVersionPreflight({
-  manifestVersion,
   canonicalTag,
   dirty,
   allowDirty = false,
@@ -167,11 +166,10 @@ export function checkVersionPreflight({
     // duplicates) when the tag itself is well-formed — a malformed tag would
     // otherwise produce a misleading second error.
     version = stripLeadingV(canonicalTag);
-    if (manifestVersion !== version) {
-      errors.push(
-        `manifest.json version "${manifestVersion}" does not match release tag version "${version}"`
-      );
-    }
+    // The tag IS the release version: the pipeline injects it into the staged
+    // manifest at build time, so the committed manifest.json version is
+    // irrelevant for signing (it only matters for manual store uploads via
+    // the packed zip) and no match check is required here.
     if (updatesJsonVersions.includes(version)) {
       errors.push(`version ${version} already exists in dist/updates.json (AMO rejects duplicate versions)`);
     }
@@ -348,7 +346,6 @@ function preflight(args) {
   const result = dev
     ? checkDevVersion({ version: timestampVersion(), updatesJsonVersions, distXpiVersions })
     : checkVersionPreflight({
-        manifestVersion: readManifest(join(repoRoot(), "browser-extension/manifest.json")).version,
         canonicalTag: gitOutput(["describe", "--tags", "--exact-match", "HEAD"]),
         dirty: (gitOutput(["status", "--porcelain"]) ?? "") !== "",
         allowDirty,

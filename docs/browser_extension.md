@@ -186,9 +186,12 @@ the gecko `update_url` into the XPI and appends the version to
 `dist/updates.json` (the Firefox update manifest). Output paths print one
 absolute path per line for CI to capture.
 
-The strict release preflight (tag `vYYYY.MM.P` on HEAD, `manifest.json` must
-match, clean tree) is what CI uses: `EXT_SIGN_MODE=release just sign-extension`
-(or `node packaging/ext-release.mjs preflight` without `--dev`).
+The strict release preflight (tag `vYYYY.MM.P` on HEAD, clean tree) is what CI
+uses: `EXT_SIGN_MODE=release just sign-extension` (or
+`node packaging/ext-release.mjs preflight` without `--dev`). The tag is the
+version — the pipeline injects it into the staged manifest at sign time, so the
+committed `manifest.json` version needs no release bumps (it only matters for
+manual store uploads via the packed zip).
 
 ## CI/CD (GitHub Actions)
 
@@ -202,10 +205,10 @@ Every `v*` tag triggers `.github/workflows/release.yml`, whose
   signed XPI carries the gecko `update_url` and the job fetches the currently
   published `updates.json` first, so each release appends to the real update
   manifest instead of overwriting it (the first release starts empty).
-- **Release discipline**: the tag must be `vYYYY.MM.P` and
-  `browser-extension/manifest.json` must carry the same version — bump and
-  commit it before tagging. A failed preflight uploads nothing to AMO, so it
-  consumes no version.
+- **Release discipline**: just tag `vYYYY.MM.P` — the tag is the version and
+  is injected into the staged manifest at sign time, so
+  `browser-extension/manifest.json` needs no bumping. A failed preflight
+  uploads nothing to AMO, so it consumes no version.
 - **Outputs**: the signed XPI is uploaded as a workflow artifact
   (`cosmic-bwarden-signed-xpi`) and attached to the draft GitHub release next
   to the `.deb` and the source zip.
