@@ -287,6 +287,128 @@ register-browser-host:
 pack-extension:
     packaging/pack-extension.sh
 
+# ---------------------------------------------------------------------------
+# Extension signing (self-hosted / unlisted AMO channel).
+#
+# `just sign-extension` is the single user-facing target: it stages, lints,
+# signs the CURRENT files on the unlisted AMO channel under a fresh timestamp
+# version, and leaves a ready-to-install XPI in gitignored dist/. Signing
+# requires AMO credentials (env-only or browser-extension/.env) and network
+# access — it is never part of `default`.
+#
+# Dev signing versions are fresh timestamps (YYYY.M.D.mmm). For releases
+# (CI later), the strict preflight in `node packaging/ext-release.mjs
+# preflight` uses the `vYYYY.MM.P` git tag on HEAD (see
+# docs/review/07_packaging.md) and requires manifest.json to match it exactly.
+# With EXT_UPDATE_BASE_URL set, the staged update_url is baked into the XPI
+# and dist/updates.json (the Firefox update manifest) is updated in the same
+# run. Outputs print one absolute path per line for CI to capture.
+# ---------------------------------------------------------------------------
+
+# Install the pinned extension toolchain. web-ext is pinned exactly in
+# browser-extension/package.json + package-lock.json; npm install is
+# idempotent and stays offline once node_modules exists.
+ext-deps:
+    cd browser-extension && npm install --no-audit --no-fund
+
+# Fail with a clear message when the installed web-ext differs from the pinned
+# version — pre-v8/v10 flags differ, and silently passing the wrong flags to a
+# different major is exactly the failure class we want to catch here.
+ext-check-webext: ext-deps
+    @set -euo pipefail; \
+    expected="$(node -p "require('./browser-extension/package.json').devDependencies['web-ext']")"; \
+    actual="$(browser-extension/node_modules/.bin/web-ext --version)"; \
+    if [ "$actual" != "$expected" ]; then \
+        echo "error: web-ext version mismatch — installed $actual, pinned $expected" >&2; \
+        echo "Run 'just ext-deps' to sync browser-extension/node_modules." >&2; \
+        exit 1; \
+    fi
+
+# Fail fast BEFORE any build work: credentials are loaded from
+# browser-extension/.env when not already exported (explicit exports win) and
+# must be present — otherwise abort immediately with the URL where to generate
+# them. Then the version is resolved: dev signing uses a fresh timestamp
+# (YYYY.M.D.mmm) — no tag, manifest-match, or clean-tree requirements, the
+# current files are what gets signed (the strict tag-based preflight stays
+# available in `node packaging/ext-release.mjs preflight` for CI later). Only
+# duplicates already shipped in dist/ are refused.
+sign-extension-preflight:
+    @set -euo pipefail; \
+    . packaging/load-ext-env.sh; \
+    if [ -z "${WEB_EXT_API_KEY:-}" ] || [ -z "${WEB_EXT_API_SECRET:-}" ]; then \
+        echo "error: WEB_EXT_API_KEY and WEB_EXT_API_SECRET are not set." >&2; \
+        echo "Export them, or fill browser-extension/.env (template: browser-extension/.env.example)." >&2; \
+        echo "Generate credentials at https://addons.mozilla.org/developers/addon/api/key/ (used only by 'just sign-extension')." >&2; \
+        exit 1; \
+    fi; \
+    mkdir -p target; \
+    node packaging/ext-release.mjs preflight --dev > target/ext-sign-version.txt; \
+    echo "signing version: $(cat target/ext-sign-version.txt)" >&2
+
+# The whole signing flow in one target: stage the production files (update_url
+# injected from EXT_UPDATE_BASE_URL when set) → lint → AMO unlisted sign →
+# dist/cosmic-bwarden-<version>.xpi, plus dist/updates.json when the base URL
+# is set. Credentials (from the environment or browser-extension/.env) reach
+# web-ext only through a generated config trampoline referencing process.env —
+# never on a command line, in a file, or in trace output; the trampoline is
+# removed on exit.
+#
+# Polling semantics: web-ext polls the AMO version-detail API every 1 second
+# (approvalCheckInterval=1000) and --timeout covers BOTH the validation poll
+# and the wait for approval before the signed XPI is downloaded (sign.js:
+# approvalCheckTimeout falls back to timeout). Unlisted submissions get a
+# "tentatively approved" review that can take minutes, so the default window
+# is 30 minutes (web-ext's own approval default is 15); override with
+# EXT_SIGN_TIMEOUT_MS.
+#
+# Resume: web-ext saves the submission's upload uuid to
+# target/ext-stage/.amo-upload-uuid; this recipe persists it at
+# target/ext-sign-upload-uuid, so a re-run after an interruption or timeout
+# resumes the SAME AMO submission instead of uploading a new version —
+# provided the staged XPI is unchanged (web-ext compares a CRC and uploads
+# fresh on any change). Delete target/ext-sign-upload-uuid to force a fresh
+# upload.
+sign-extension: sign-extension-preflight ext-check-webext
+    @set -euo pipefail; \
+    . packaging/load-ext-env.sh; \
+    case "${EXT_SIGN_TIMEOUT_MS:-1800000}" in *[!0-9]*) echo "error: EXT_SIGN_TIMEOUT_MS must be a number of milliseconds" >&2; exit 1;; esac; \
+    packaging/ext-stage.sh; \
+    ver="$(cat target/ext-sign-version.txt)"; \
+    if [ -f target/ext-sign-upload-uuid ]; then cp -f target/ext-sign-upload-uuid target/ext-stage/.amo-upload-uuid; fi; \
+    node packaging/ext-release.mjs inject-version target/ext-stage/manifest.json "$ver"; \
+    if [ -n "${EXT_UPDATE_BASE_URL:-}" ]; then \
+        node packaging/ext-release.mjs inject-update-url target/ext-stage/manifest.json "$EXT_UPDATE_BASE_URL"; \
+    else \
+        echo "warning: EXT_UPDATE_BASE_URL unset — the XPI will not carry an update_url and no updates.json will be written (self-hosted updates won't work until a signed build has one)"; \
+    fi; \
+    browser-extension/node_modules/.bin/web-ext lint --source-dir target/ext-stage --self-hosted --no-input; \
+    cfg="$(mktemp --suffix=.cjs)"; \
+    trap 'rm -f "$cfg"' EXIT; \
+    printf 'module.exports = { sign: { apiKey: process.env.WEB_EXT_API_KEY, apiSecret: process.env.WEB_EXT_API_SECRET } };\n' > "$cfg"; \
+    mkdir -p target/ext-sign-artifacts; \
+    rm -f target/ext-sign-artifacts/*.xpi; \
+    browser-extension/node_modules/.bin/web-ext sign \
+        --source-dir target/ext-stage \
+        --channel unlisted \
+        --config "$cfg" \
+        --no-config-discovery \
+        --no-input \
+        --artifacts-dir target/ext-sign-artifacts \
+        --timeout "${EXT_SIGN_TIMEOUT_MS:-1800000}" || sign_rc=$?; \
+    cp -f target/ext-stage/.amo-upload-uuid target/ext-sign-upload-uuid 2>/dev/null || true; \
+    if [ -n "${sign_rc:-}" ]; then exit "$sign_rc"; fi; \
+    node packaging/ext-release.mjs finalize-sign target/ext-sign-artifacts "$ver" dist >/dev/null; \
+    echo "$PWD/dist/cosmic-bwarden-$ver.xpi"; \
+    if [ -n "${EXT_UPDATE_BASE_URL:-}" ]; then \
+        node packaging/ext-release.mjs updates-json "dist/cosmic-bwarden-$ver.xpi" "$EXT_UPDATE_BASE_URL" "$ver" dist/updates.json >/dev/null; \
+        echo "$PWD/dist/updates.json"; \
+    fi
+
+# Unit tests for the release pipeline's pure logic (version preflight,
+# updates.json generation, sha256) — offline, no AMO credentials.
+test-ext-release:
+    node --test "packaging/*.test.mjs"
+
 # Setup extension testing environment (installs npm dependencies)
 test-extension-setup:
     cd browser-extension && npm install

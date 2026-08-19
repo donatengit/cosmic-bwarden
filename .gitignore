@@ -1,5 +1,9 @@
 # Generated build artifacts
 /target/
+
+# Signed extension artifacts (`just sign-extension` output)
+# No trailing slash: also catches a symlink if dist is ever relinked.
+/dist
  
 # Cargo lock file — keep for binaries, exclude for libraries
 # Cargo.lock

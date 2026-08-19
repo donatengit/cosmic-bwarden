@@ -160,8 +160,92 @@ SSH keys must be created via the CLI (`cosmic-bwarden-cli add-ssh-key`) or the n
 just pack-extension
 ```
 
-Produces `target/cosmic-bwarden-extension.zip` — alongside the Rust build artifacts, already covered by `.gitignore`. The zip contains only the production extension files (`manifest.json`, `background.js`, `content.js`, `popup/`); dev files (`node_modules/`, `package.json`, `package-lock.json`, `test-results/`, `*.test.js`, `*.tmp`, `.gitignore`) are excluded.
+Produces `target/cosmic-bwarden-extension.zip` — alongside the Rust build artifacts, already covered by `.gitignore`. The zip contains only the **preselected production files**: an explicit allowlist (`manifest.json`, the `background*.js` and `content*.js` sets, every `popup/` file enumerated, `icons/`). Nothing that is not listed can ship — the previous exclude-list approach (`zip -r .` minus excludes) let `browser-extension/.env` leak into the artifact once that file came to exist.
 
-The packing logic lives in [`packaging/pack-extension.sh`](../packaging/pack-extension.sh) and is the *only* copy: `just pack-extension`, the CI `extension` job (every push, artifact uploaded), and `release.yml` (on a tag) all invoke it. It removes any previous zip first — `zip -r` updates an existing archive rather than replacing it, so a deleted file would otherwise survive in later builds — and then asserts the result: no dev files, all required files present, `manifest.json` parses.
+The packing logic lives in [`packaging/pack-extension.sh`](../packaging/pack-extension.sh) and is the *only* copy: `just pack-extension`, the CI `extension` job (every push, artifact uploaded), and `release.yml` (on a tag) all invoke it. It removes any previous zip first — `zip -r` updates an existing archive rather than replacing it, so a deleted file would otherwise survive in later builds — a listed file that does not exist fails the build, and the result is asserted: no dev or secrets files, all required files present, `manifest.json` parses.
 
 The zip is suitable for uploading to the Chrome Web Store or Firefox Add-ons (AMO). The extension ID in `manifest.json` is `cosmic-bwarden@enikeev.com` (Firefox) — Chrome assigns its own ID on first load.
+
+## Self-hosted release pipeline (unlisted AMO channel)
+
+`just sign-extension` is the single user-facing target: it stages the
+production files, lints them, signs on the AMO `unlisted` channel, and leaves
+a ready-to-install XPI in gitignored `dist/`:
+
+```bash
+just sign-extension
+# → dist/cosmic-bwarden-<version>.xpi
+```
+
+**Dev signing**: the current files are signed under a fresh **timestamp
+version** (`YYYY.M.D.mmm`, minutes-of-day as the last component — valid for
+AMO, `web-ext lint`, and Chrome) injected into the staged manifest. No git
+tag, manifest-version match, or clean-tree requirement — this is for testing
+on real AMO infrastructure. With `EXT_UPDATE_BASE_URL` set, the same run bakes
+the gecko `update_url` into the XPI and appends the version to
+`dist/updates.json` (the Firefox update manifest). Output paths print one
+absolute path per line for CI to capture.
+
+The strict release preflight (tag `vYYYY.MM.P` on HEAD, `manifest.json` must
+match, clean tree) remains available for the CI/CD workflow later:
+`node packaging/ext-release.mjs preflight` without `--dev`.
+
+- **Credentials**: read from the environment, or from the local gitignored
+  `browser-extension/.env` (template: `browser-extension/.env.example`,
+  `chmod 600`; loader:
+  [`packaging/load-ext-env.sh`](../packaging/load-ext-env.sh)). Generate them
+  at <https://addons.mozilla.org/developers/addon/api/key/>. Variables already
+  exported in the shell take precedence over the file. The file is parse-only
+  (plain `KEY=VALUE` lines, values exported literally, never evaluated) and
+  must not be world-readable. Credentials reach `web-ext` only via a generated
+  config trampoline that references `process.env` — they never appear on a
+  command line or in trace output. (As with any environment-variable
+  credential, another process of the same user could read them from the
+  signing process's environment — that is inherent to env-based auth.)
+- **Opt-in by design**: `sign-extension` is never part of `default`; it
+  requires network access (and AMO credentials — see above).
+- **Version**: dev signing uses a fresh timestamp (`YYYY.M.D.mmm`), so every
+  run is unique; re-signing the same minute hits the duplicate guard (a
+  version already shipped in `dist/` is refused — AMO rejects duplicate
+  versions). Releases (CI later) use the `vYYYY.MM.P` git tag on HEAD (the
+  same tag that triggers `release.yml`); `manifest.json`'s `version` must
+  match the tag with the `v` stripped.
+- **web-ext** is pinned exactly (`10.6.0`) in `browser-extension/package.json`
+  and version-checked at target entry — v8+ removed `--use-submission-api`,
+  `--api-url-prefix`, and `--id` and made `--channel` mandatory, so a version
+  mismatch fails loudly instead of passing flags that silently don't exist.
+- **update_url**: `sign-extension` injects
+  `browser_specific_settings.gecko.update_url = <EXT_UPDATE_BASE_URL>/updates.json`
+  into the staged manifest (the signed artifact must carry it for Firefox to
+  check for updates). A hardcoded *different* URL in the source manifest is a
+  hard error; an unset `EXT_UPDATE_BASE_URL` is a warning — the XPI still
+  signs, but without an `update_url` self-hosted updates won't work and no
+  `updates.json` is written. `EXT_UPDATE_BASE_URL` must be a plain `https://`
+  URL (no embedded credentials, query, or fragment) — it is baked into the
+  signed artifact and every `update_link`.
+- **Never add `--verbose` to the sign command**: web-ext logs its resolved
+  config (including credential values) at verbose level.
+- **Timeouts / polling**: web-ext polls the AMO version-detail API every
+  second, and its `--timeout` covers both the upload validation and the wait
+  for approval before the signed XPI is downloaded. Unlisted submissions
+  receive a "tentatively approved" review that can take minutes, so the
+  default window is 30 minutes (`EXT_SIGN_TIMEOUT_MS` to override).
+- **Resume**: if a run is interrupted or times out, re-running
+  `just sign-extension` resumes the *same* AMO submission instead of
+  uploading a new version — the upload uuid is persisted at
+  `target/ext-sign-upload-uuid`, and web-ext reuses it while the staged XPI is
+  unchanged (it re-uploads automatically if the files changed). Delete
+  `target/ext-sign-upload-uuid` to force a fresh upload. A timed-out
+  submission may still be approved afterwards at AMO; its XPI can also be
+  downloaded from the Dev Hub (Manage Status & Versions).
+- **`updates.json`** entries carry `version`, `update_link`
+  (`<EXT_UPDATE_BASE_URL>/cosmic-bwarden-<version>.xpi`), and `update_hash`
+  (`sha256:<hex>` of the signed XPI); appending a new version preserves every
+  existing entry.
+
+The version preflight, `updates.json` generation, sha256 computation, and
+`update_url` injection are pure, dependency-free functions in
+[`packaging/ext-release.mjs`](../packaging/ext-release.mjs), unit-tested offline
+with `just test-ext-release` (`node --test`) — no network, no AMO credentials.
+The `web-ext sign` call itself is the only networked step and is a thin shell
+(the `sign-extension` recipe) around that tested logic.

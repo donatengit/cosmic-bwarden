@@ -240,13 +240,15 @@ The project uses `just` for all build, install, and test orchestration. Key reci
 | `just build` | Release build of all Rust crates (auto-detects TPM) |
 | `just install` | `build` + install binaries + register Firefox native host (system-wide, needs sudo) |
 | `just user-install` | Same but installs to `~/.local` (no sudo) |
-| `just pack-extension` | Zips `browser-extension/` → `target/cosmic-bwarden-extension.zip` via `packaging/pack-extension.sh` (excludes node_modules, test artifacts; asserts the artifact's shape). **Not part of `build`.** Never inline the zip command elsewhere — CI and the release workflow call the same script. |
+| `just pack-extension` | Zips **preselected production files only** (explicit allowlist in `packaging/pack-extension.sh` — nothing unlisted can ship; the old exclude-list approach leaked `.env` once) → `target/cosmic-bwarden-extension.zip`, with shape assertions. **Not part of `build`.** Never inline the zip command elsewhere — CI and the release workflow call the same script. |
 | `just register-browser-host` | Registers native host pointing at debug build (dev workflow) |
 | `just test` | Full Rust test suite in order: unit → agent → CLI → UI |
 | `just test-extension-unit` | Extension JS unit tests (vitest) |
 | `just test-extension-e2e` | Extension Playwright E2E (Firefox, mock agent) |
 | `just test-extension-e2e-full` | Extension Playwright E2E (Firefox, real agent + Vaultwarden) |
 | `just test-extension-e2e-chrome` | Same but Chrome |
+| `just sign-extension` | The single signing entry point: stage production files → inject a fresh **timestamp version** (`YYYY.M.D.mmm`, dev signing — no tag/clean-tree requirements) and gecko `update_url` from `EXT_UPDATE_BASE_URL` → `web-ext lint` → AMO **unlisted** sign → `dist/cosmic-bwarden-<version>.xpi` (+ `dist/updates.json` when the base URL is set; append preserves entries; `update_hash` = sha256 of the signed XPI). Opt-in: requires `WEB_EXT_API_KEY`/`WEB_EXT_API_SECRET` — from the environment or the gitignored `browser-extension/.env` (parse-only loader `packaging/load-ext-env.sh`, 0600, explicit exports win; web-ext also reads the env natively via its WEB_EXT prefix, the config trampoline is belt-and-braces — never argv) — and pinned web-ext (10.6.0, checked at entry). Refuses versions already shipped in `dist/`. Prints one absolute output path per line for CI capture. The strict tag-based release preflight stays in `node packaging/ext-release.mjs preflight` (no `--dev`) for CI later |
+| `just test-ext-release` | Offline unit tests for the release pipeline's pure logic (`node --test packaging/*.test.mjs`) |
 | `just restart-panel` | Restart COSMIC panel after install |
 | `just enable-agent` | Enable + start agent systemd user service |
 
@@ -261,4 +263,5 @@ cargo test -p cosmic-bwarden-tests --features tpm-smoke -- tpm --test-threads=1
 just test-extension-unit
 just test-extension-e2e
 just pack-extension
+just test-ext-release
 ```
