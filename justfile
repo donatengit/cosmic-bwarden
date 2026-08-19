@@ -1,3 +1,8 @@
+# Run every recipe under bash, not POSIX sh: GitHub runners (ubuntu-latest)
+# have sh = dash, which rejects `set -o pipefail` and other bashisms the
+# recipes rely on. This matches what developers run locally.
+set shell := ["bash", "-cu"]
+
 prefix := "/usr/local"
 bin_dir := prefix + "/bin"
 share_dir := prefix + "/share"
