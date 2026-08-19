@@ -362,6 +362,12 @@ sign-extension-preflight:
 # generated config trampoline referencing process.env — never on a command
 # line, in a file, or in trace output; the trampoline is removed on exit.
 #
+# URL split: EXT_UPDATE_BASE_URL is baked into the signed XPI as update_url
+# (a stable always-current manifest location). EXT_UPDATE_LINK_BASE (optional,
+# defaults to EXT_UPDATE_BASE_URL) builds update_link entries in updates.json
+# and MUST be version-immutable — e.g. GitHub: update_url points at
+# .../releases/latest/download, links at .../releases/download/<tag>.
+#
 # Polling semantics: web-ext polls the AMO version-detail API every 1 second
 # (approvalCheckInterval=1000) and --timeout covers BOTH the validation poll
 # and the wait for approval before the signed XPI is downloaded (sign.js:
@@ -409,7 +415,7 @@ sign-extension: sign-extension-preflight ext-check-webext
     node packaging/ext-release.mjs finalize-sign target/ext-sign-artifacts "$ver" dist >/dev/null; \
     echo "$PWD/dist/cosmic-bwarden-$ver.xpi"; \
     if [ -n "${EXT_UPDATE_BASE_URL:-}" ]; then \
-        node packaging/ext-release.mjs updates-json "dist/cosmic-bwarden-$ver.xpi" "$EXT_UPDATE_BASE_URL" "$ver" dist/updates.json >/dev/null; \
+        node packaging/ext-release.mjs updates-json "dist/cosmic-bwarden-$ver.xpi" "$EXT_UPDATE_BASE_URL" "$ver" dist/updates.json "${EXT_UPDATE_LINK_BASE:-}" >/dev/null; \
         echo "$PWD/dist/updates.json"; \
     fi
 

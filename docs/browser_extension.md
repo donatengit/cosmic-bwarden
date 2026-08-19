@@ -201,10 +201,22 @@ Every `v*` tag triggers `.github/workflows/release.yml`, whose
 - **Repository secrets** `WEB_EXT_API_KEY` / `WEB_EXT_API_SECRET`
   (generated at <https://addons.mozilla.org/developers/addon/api/key/>) are
   injected as environment variables only.
-- **Repository variable** `EXT_UPDATE_BASE_URL` (optional): when set, the
-  signed XPI carries the gecko `update_url` and the job fetches the currently
-  published `updates.json` first, so each release appends to the real update
-  manifest instead of overwriting it (the first release starts empty).
+- **Update hosting (default: GitHub Releases)**: `update_url` is baked into
+  the XPI as
+  `https://github.com/<owner>/<repo>/releases/latest/download/updates.json` —
+  a stable, always-current manifest location that every installed version
+  polls. `update_link` entries are tag-scoped
+  (`…/releases/download/<tag>/cosmic-bwarden-<version>.xpi`) so the
+  `update_hash` always describes the exact immutable file Firefox downloads;
+  a moving "latest" link would break hash verification for older entries.
+  Each release also carries a stable-named copy
+  (`cosmic-bwarden-firefox.xpi`) for manual "latest build" downloads. Note:
+  `releases/latest/…` only resolves once the draft release is **published** —
+  publishing is the go-live step. The repository variable
+  `EXT_UPDATE_BASE_URL` overrides the base for non-GitHub hosting; the job
+  fetches the currently published `updates.json` first, so each release
+  appends to the real update manifest instead of overwriting it (the first
+  release starts empty).
 - **Release discipline**: just tag `vYYYY.MM.P` — the tag is the version and
   is injected into the staged manifest at sign time, so
   `browser-extension/manifest.json` needs no bumping. A failed preflight

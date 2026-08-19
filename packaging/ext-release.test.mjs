@@ -240,6 +240,23 @@ test("preflight ignores other versions in dist/", () => {
   assert.equal(result.ok, true);
 });
 
+test("entryFor defaults link_base to the update base and supports a linkBase override", () => {
+  const base = "https://github.com/donatengit/cosmic-bwarden/releases/latest/download";
+  const linkBase = "https://github.com/donatengit/cosmic-bwarden/releases/download/v2026.8.0";
+  const entry = entryFor({ version: "2026.8.0", baseUrl: base, sha256Hex: "abc123" });
+  assert.deepEqual(entry, {
+    version: "2026.8.0",
+    update_link: `${base}/cosmic-bwarden-2026.8.0.xpi`,
+    update_hash: "sha256:abc123",
+  });
+  const scoped = entryFor({ version: "2026.8.0", baseUrl: base, sha256Hex: "abc123", linkBase });
+  assert.deepEqual(scoped, {
+    version: "2026.8.0",
+    update_link: `${linkBase}/cosmic-bwarden-2026.8.0.xpi`,
+    update_hash: "sha256:abc123",
+  });
+});
+
 test("entryFor builds the exact Firefox update entry", () => {
   const entry = entryFor({
     version: "2026.8.0",

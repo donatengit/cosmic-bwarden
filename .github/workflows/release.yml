@@ -57,10 +57,14 @@ jobs:
   # command line): WEB_EXT_API_KEY, WEB_EXT_API_SECRET — generated at
   # https://addons.mozilla.org/developers/addon/api/key/.
   #
-  # Optional repository VARIABLE EXT_UPDATE_BASE_URL (e.g.
-  # https://updates.example.com/cosmic-bwarden): when set, the gecko
-  # update_url is baked into the signed XPI and the version is appended to the
-  # published updates.json (fetched first so prior release entries survive).
+  # Update hosting: defaults to this repo's GitHub Releases. update_url is
+  # baked into the XPI as .../releases/latest/download/updates.json (a stable
+  # always-current manifest location — note releases/latest only resolves once
+  # the draft release is PUBLISHED, which is the go-live step); update_link
+  # entries are tag-scoped (.../releases/download/<tag>/...) so each hash
+  # always describes the exact immutable file Firefox downloads. Repository
+  # VARIABLE EXT_UPDATE_BASE_URL overrides the base for non-GitHub hosting
+  # (e.g. https://updates.example.com/cosmic-bwarden).
   #
   # Release-mode signing is strict: the tag must be vYYYY.MM.P and the tree
   # clean. The tag IS the version — it is injected into the staged manifest at
@@ -86,9 +90,8 @@ jobs:
             | bash -s -- --to "$HOME/.local/bin"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Fetch the published updates.json (preserve prior release entries)
-        if: vars.EXT_UPDATE_BASE_URL != ''
         env:
-          EXT_UPDATE_BASE_URL: ${{ vars.EXT_UPDATE_BASE_URL }}
+          EXT_UPDATE_BASE_URL: ${{ vars.EXT_UPDATE_BASE_URL || format('https://github.com/{0}/releases/latest/download', github.repository) }}
         run: |
           mkdir -p dist
           curl -fsSL --retry 3 "$EXT_UPDATE_BASE_URL/updates.json" -o dist/updates.json \
@@ -97,7 +100,8 @@ jobs:
         env:
           WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
           WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
-          EXT_UPDATE_BASE_URL: ${{ vars.EXT_UPDATE_BASE_URL }}
+          EXT_UPDATE_BASE_URL: ${{ vars.EXT_UPDATE_BASE_URL || format('https://github.com/{0}/releases/latest/download', github.repository) }}
+          EXT_UPDATE_LINK_BASE: ${{ format('https://github.com/{0}/releases/download/{1}', github.repository, github.ref_name) }}
           EXT_SIGN_MODE: release
         run: just sign-extension
       - name: Upload signed XPI as a workflow artifact
@@ -113,6 +117,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${GITHUB_REF_NAME}" dist/cosmic-bwarden-*.xpi --clobber
+          # Stable "latest build" copy for manual downloads:
+          # .../releases/latest/download/cosmic-bwarden-firefox.xpi
+          cp dist/cosmic-bwarden-*.xpi dist/cosmic-bwarden-firefox.xpi
+          gh release upload "${GITHUB_REF_NAME}" dist/cosmic-bwarden-firefox.xpi --clobber
           if [ -f dist/updates.json ]; then
             gh release upload "${GITHUB_REF_NAME}" dist/updates.json --clobber
           fi

@@ -188,10 +188,17 @@ export function checkVersionPreflight({
 // ---------------------------------------------------------------------------
 // Firefox updates.json (self-hosted update manifest)
 
-export function entryFor({ version, baseUrl, sha256Hex }) {
+/**
+ * `baseUrl` drives the baked update_url (a stable, always-current manifest
+ * location, e.g. .../releases/latest/download). `linkBase` (default: baseUrl)
+ * drives update_link, which MUST be version-immutable — a moving "latest"
+ * URL would serve a different build than the hash describes once a newer
+ * release exists (GitHub: .../releases/download/<tag> is immutable).
+ */
+export function entryFor({ version, baseUrl, sha256Hex, linkBase }) {
   return {
     version,
-    update_link: `${normalizeBaseUrl(baseUrl)}/cosmic-bwarden-${version}.xpi`,
+    update_link: `${normalizeBaseUrl(linkBase ?? baseUrl)}/cosmic-bwarden-${version}.xpi`,
     update_hash: `sha256:${sha256Hex}`,
   };
 }
@@ -252,7 +259,7 @@ commands:
   inject-version <manifest-path> <version>      rewrite staged manifest version (dev signing)
   inject-update-url <manifest-path> <base-url>   rewrite staged manifest (stdout: "injected" | "unchanged")
   preflight [--dev] [--allow-dirty]             dev: timestamp version + duplicate checks; default: strict tag/version/dist preflight (stdout: the version)
-  updates-json <xpi-path> <base-url> <version> [out-path]  merge dist/updates.json (default out: dist/updates.json)
+  updates-json <xpi-path> <base-url> <version> [out-path] [link-base]  merge dist/updates.json (default out: dist/updates.json; link-base defaults to base-url)
   finalize-sign <artifacts-dir> <version> <dist-dir>
   sha256 <path>                                  print hex digest`;
 }
@@ -382,7 +389,7 @@ function injectUpdateUrl(args) {
 }
 
 async function updatesJson(args) {
-  const [xpiPath, baseUrl, version, outPath] = args;
+  const [xpiPath, baseUrl, version, outPath, linkBase] = args;
   if (!isValidVersion(version)) {
     throw new Error(`invalid version: "${version}"`);
   }
@@ -396,7 +403,12 @@ async function updatesJson(args) {
   const doc = buildUpdatesJson({
     addonId,
     existing: readUpdatesJson(out),
-    newEntry: entryFor({ version, baseUrl, sha256Hex: digest }),
+    newEntry: entryFor({
+      version,
+      baseUrl,
+      sha256Hex: digest,
+      linkBase: linkBase || undefined,
+    }),
   });
   mkdirSync(join(out, ".."), { recursive: true });
   writeFileSync(out, `${JSON.stringify(doc, null, 2)}\n`);
