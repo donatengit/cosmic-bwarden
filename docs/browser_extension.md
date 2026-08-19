@@ -198,9 +198,17 @@ manual store uploads via the packed zip).
 Every `v*` tag triggers `.github/workflows/release.yml`, whose
 `sign-extension` job runs the same pipeline as a maintainer would:
 
-- **Repository secrets** `WEB_EXT_API_KEY` / `WEB_EXT_API_SECRET`
-  (generated at <https://addons.mozilla.org/developers/addon/api/key/>) are
-  injected as environment variables only.
+- **Repository secrets** — configure in *Settings → Secrets and variables →
+  Actions*:
+  | Secret | Value |
+  |---|---|
+  | `WEB_EXT_API_KEY` | the JWT **issuer** from the AMO API page (format: `user:<id>:<counter>`) |
+  | `WEB_EXT_API_SECRET` | the JWT **secret** from the same page (hex string) |
+  They are injected as environment variables only (never argv, never files).
+  Rotate by generating a new pair at
+  <https://addons.mozilla.org/developers/addon/api/key/> and updating the two
+  secrets; the local `browser-extension/.env` must be updated in sync. The
+  signing job fails fast with a clear message if either is missing.
 - **Update hosting (default: GitHub Releases)**: `update_url` is baked into
   the XPI as
   `https://github.com/<owner>/<repo>/releases/latest/download/updates.json` —

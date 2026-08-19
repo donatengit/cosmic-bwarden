@@ -348,7 +348,8 @@ sign-extension-preflight:
     . packaging/load-ext-env.sh; \
     if [ -z "${WEB_EXT_API_KEY:-}" ] || [ -z "${WEB_EXT_API_SECRET:-}" ]; then \
         echo "error: WEB_EXT_API_KEY and WEB_EXT_API_SECRET are not set." >&2; \
-        echo "Export them, or fill browser-extension/.env (template: browser-extension/.env.example)." >&2; \
+        echo "Locally: export them, or fill browser-extension/.env (template: browser-extension/.env.example)." >&2; \
+        echo "In CI: configure them as repository secrets (Settings -> Secrets and variables -> Actions)." >&2; \
         echo "Generate credentials at https://addons.mozilla.org/developers/addon/api/key/ (used only by 'just sign-extension')." >&2; \
         exit 1; \
     fi; \
