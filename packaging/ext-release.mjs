@@ -32,6 +32,29 @@ export function stripLeadingV(tag) {
 }
 
 /**
+ * Maps a release tag to its AMO version. Firefox versions must be one to four
+ * dot-separated integers (no alphanumeric suffixes), so prereleases use the
+ * fourth component: v2026.8.0 -> "2026.8.0", v2026.8.0-alpha -> "2026.8.0.1",
+ * v2026.8.0-alpha2 -> "2026.8.0.2". The stable release of the same cycle is
+ * the NEXT patch (v2026.8.1), which compares newer than every alpha.
+ * Returns null for malformed tags.
+ */
+export function versionFromTag(tag) {
+  const match =
+    /^v((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))(-alpha([1-9][0-9]*)?)?$/.exec(tag);
+  if (!match) {
+    return null;
+  }
+  // Groups: 1 = whole base (YYYY.MM.P), 2-4 = the three components,
+  // 5 = the "-alpha[..]" suffix (undefined for stable releases),
+  // 6 = the optional counter (undefined for bare "-alpha" → counts as 1).
+  if (match[5] === undefined) {
+    return match[1];
+  }
+  return `${match[1]}.${match[6] ?? "1"}`;
+}
+
+/**
  * A bare version in AMO's manifest format: one to four dot-separated integers
  * (e.g. 2026.8.0 for releases, 2026.8.19.1233 for timestamped dev signs).
  */
@@ -157,15 +180,15 @@ export function checkVersionPreflight({
     errors.push(
       "HEAD is not on a release tag (vYYYY.MM.P) — create or check out the release tag before signing"
     );
-  } else if (!/^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(canonicalTag)) {
+  } else if (versionFromTag(canonicalTag) === null) {
     errors.push(
-      `release tag "${canonicalTag}" does not match vYYYY.MM.P (a leading "v" followed by three dot-separated integers)`
+      `release tag "${canonicalTag}" does not match vYYYY.MM.P[-alphaN] (a leading "v", three dot-separated integers, optional -alpha with a counter)`
     );
   } else {
-    // Only trust version-derived checks (filename, manifest match, dist
-    // duplicates) when the tag itself is well-formed — a malformed tag would
-    // otherwise produce a misleading second error.
-    version = stripLeadingV(canonicalTag);
+    // Only trust version-derived checks (filename and dist duplicates) when
+    // the tag itself is well-formed — a malformed tag would otherwise produce
+    // a misleading second error.
+    version = versionFromTag(canonicalTag);
     // The tag IS the release version: the pipeline injects it into the staged
     // manifest at build time, so the committed manifest.json version is
     // irrelevant for signing (it only matters for manual store uploads via

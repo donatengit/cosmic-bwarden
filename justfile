@@ -332,11 +332,12 @@ ext-check-webext: ext-deps
 #     manifest-match, or clean-tree requirements; the current files are what
 #     gets signed. Only duplicates already shipped in dist/ are refused.
 #   - release mode (EXT_SIGN_MODE=release, used by CI on v* tags): the strict
-#     tag-based preflight — HEAD must be a vYYYY.MM.P tag and the tree must be
-#     clean. The tag IS the version (it is injected into the staged manifest
-#     at build time), so the committed manifest.json version needs no release
-#     bumps. Nothing is uploaded to AMO when this fails, so a failed run
-#     consumes no version.
+#     tag-based preflight — HEAD must be a vYYYY.MM.P[-alphaN] tag and the
+#     tree must be clean. The tag IS the version (it is injected into the
+#     staged manifest at build time; alpha tags map into the numeric 4th
+#     component, e.g. v2026.8.0-alpha -> 2026.8.0.1), so the committed
+#     manifest.json version needs no release bumps. Nothing is uploaded to
+#     AMO when this fails, so a failed run consumes no version.
 sign-extension-preflight:
     @set -euo pipefail; \
     . packaging/load-ext-env.sh; \

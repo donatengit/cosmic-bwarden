@@ -217,10 +217,14 @@ Every `v*` tag triggers `.github/workflows/release.yml`, whose
   fetches the currently published `updates.json` first, so each release
   appends to the real update manifest instead of overwriting it (the first
   release starts empty).
-- **Release discipline**: just tag `vYYYY.MM.P` — the tag is the version and
-  is injected into the staged manifest at sign time, so
-  `browser-extension/manifest.json` needs no bumping. A failed preflight
-  uploads nothing to AMO, so it consumes no version.
+- **Release discipline**: just tag `vYYYY.MM.P` (or `vYYYY.MM.P-alpha`,
+  `…-alpha2`, … for prereleases) — the tag is the version and is injected into
+  the staged manifest at sign time, so `browser-extension/manifest.json` needs
+  no bumping. AMO versions are numeric only, so an `-alpha[N]` suffix maps
+  into the fourth component (`v2026.8.0-alpha` → `2026.8.0.1`); the stable
+  release of the same cycle is then the next patch (`v2026.8.1`), which
+  compares newer than all its alphas. A failed preflight uploads nothing to
+  AMO, so it consumes no version.
 - **Outputs**: the signed XPI is uploaded as a workflow artifact
   (`cosmic-bwarden-signed-xpi`) and attached to the draft GitHub release next
   to the `.deb` and the source zip.

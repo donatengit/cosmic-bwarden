@@ -10,6 +10,7 @@ import { join } from "node:path";
 import {
   stripLeadingV,
   isValidVersion,
+  versionFromTag,
   timestampVersion,
   applyVersion,
   normalizeBaseUrl,
@@ -180,24 +181,39 @@ test("preflight fails when HEAD is not on a tag", () => {
   assert.match(result.errors.join("\n"), /not on a release tag/);
 });
 
-test("preflight fails when the tag does not match vYYYY.MM.P", () => {
-  for (const badTag of ["2026.8.0", "v1.2", "va.b.c", "v2026/8/0", "v2026.08.0.1", "v2026.08.0"]) {
+test("preflight fails when the tag does not match vYYYY.MM.P[-alphaN]", () => {
+  for (const badTag of ["2026.8.0", "v1.2", "va.b.c", "v2026/8/0", "v2026.08.0.1", "v2026.08.0", "v2026.8.0-beta", "v2026.8.0-alpha0"]) {
     const result = checkVersionPreflight({
       canonicalTag: badTag,
       dirty: false,
     });
     assert.equal(result.ok, false, `tag ${badTag} should be rejected`);
-    assert.match(result.errors.join("\n"), /does not match vYYYY.MM.P/);
+    assert.match(result.errors.join("\n"), /does not match vYYYY.MM.P\[-alphaN\]/);
     // A malformed tag must not produce a misleading manifest-mismatch error.
     assert.equal(result.errors.length, 1);
   }
-  // Three dot-separated integers after the v pass (calendar vYYYY.MM.P and
-  // semver-style v0.1.0 are both valid here) when the manifest matches.
-  for (const [goodTag, ver] of [["v2026.8.0", "2026.8.0"], ["v0.1.0", "0.1.0"]]) {
+  // Calendar vYYYY.MM.P and semver-style tags pass; alpha suffixes map into
+  // the fourth version component.
+  for (const [goodTag, ver] of [
+    ["v2026.8.0", "2026.8.0"],
+    ["v0.1.0", "0.1.0"],
+    ["v2026.8.0-alpha", "2026.8.0.1"],
+    ["v2026.8.0-alpha2", "2026.8.0.2"],
+  ]) {
     const result = checkVersionPreflight({ canonicalTag: goodTag, dirty: false });
     assert.equal(result.ok, true, `tag ${goodTag} should pass`);
     assert.equal(result.version, ver);
   }
+});
+
+test("versionFromTag maps alpha suffixes into the numeric 4th component", () => {
+  assert.equal(versionFromTag("v2026.8.0"), "2026.8.0");
+  assert.equal(versionFromTag("v2026.8.0-alpha"), "2026.8.0.1");
+  assert.equal(versionFromTag("v2026.8.0-alpha3"), "2026.8.0.3");
+  assert.equal(versionFromTag("v2026.8.0-alpha10"), "2026.8.0.10");
+  assert.equal(versionFromTag("v2026.8.0-beta"), null);
+  assert.equal(versionFromTag("v2026.8.0-alpha0"), null);
+  assert.equal(versionFromTag("2026.8.0"), null);
 });
 
 test("preflight fails on a dirty tree unless ALLOW_DIRTY", () => {
