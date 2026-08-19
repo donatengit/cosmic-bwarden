@@ -187,8 +187,28 @@ the gecko `update_url` into the XPI and appends the version to
 absolute path per line for CI to capture.
 
 The strict release preflight (tag `vYYYY.MM.P` on HEAD, `manifest.json` must
-match, clean tree) remains available for the CI/CD workflow later:
-`node packaging/ext-release.mjs preflight` without `--dev`.
+match, clean tree) is what CI uses: `EXT_SIGN_MODE=release just sign-extension`
+(or `node packaging/ext-release.mjs preflight` without `--dev`).
+
+## CI/CD (GitHub Actions)
+
+Every `v*` tag triggers `.github/workflows/release.yml`, whose
+`sign-extension` job runs the same pipeline as a maintainer would:
+
+- **Repository secrets** `WEB_EXT_API_KEY` / `WEB_EXT_API_SECRET`
+  (generated at <https://addons.mozilla.org/developers/addon/api/key/>) are
+  injected as environment variables only.
+- **Repository variable** `EXT_UPDATE_BASE_URL` (optional): when set, the
+  signed XPI carries the gecko `update_url` and the job fetches the currently
+  published `updates.json` first, so each release appends to the real update
+  manifest instead of overwriting it (the first release starts empty).
+- **Release discipline**: the tag must be `vYYYY.MM.P` and
+  `browser-extension/manifest.json` must carry the same version — bump and
+  commit it before tagging. A failed preflight uploads nothing to AMO, so it
+  consumes no version.
+- **Outputs**: the signed XPI is uploaded as a workflow artifact
+  (`cosmic-bwarden-signed-xpi`) and attached to the draft GitHub release next
+  to the `.deb` and the source zip.
 
 - **Credentials**: read from the environment, or from the local gitignored
   `browser-extension/.env` (template: `browser-extension/.env.example`,

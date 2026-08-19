@@ -1,5 +1,6 @@
 # Release automation: pushing a tag `vYYYY.MM.P` builds the .deb and the
-# browser-extension zip and attaches both to a draft GitHub release.
+# browser-extension zip, signs the extension on AMO's unlisted channel, and
+# attaches everything to a draft GitHub release.
 # Versioning decision: docs/review/07_packaging.md — release tags are
 # calendar-based YYYY.MM.PATCH; the seconds-based build version stays a
 # build-info string only, and protocol compatibility rides the independent
@@ -46,3 +47,70 @@ jobs:
           files: |
             target/debian/*.deb
             target/cosmic-bwarden-extension.zip
+
+  # Signs the extension on AMO's unlisted channel via the same single-entry
+  # pipeline a maintainer runs locally (`just sign-extension` with
+  # EXT_SIGN_MODE=release) and attaches the signed XPI to the draft release
+  # above, plus a workflow artifact copy.
+  #
+  # Required repository SECRETS (env-only; the pipeline never puts them on a
+  # command line): WEB_EXT_API_KEY, WEB_EXT_API_SECRET — generated at
+  # https://addons.mozilla.org/developers/addon/api/key/.
+  #
+  # Optional repository VARIABLE EXT_UPDATE_BASE_URL (e.g.
+  # https://updates.example.com/cosmic-bwarden): when set, the gecko
+  # update_url is baked into the signed XPI and the version is appended to the
+  # published updates.json (fetched first so prior release entries survive).
+  #
+  # Release-mode signing is strict: the tag must be vYYYY.MM.P and
+  # browser-extension/manifest.json must carry the same version — bump it and
+  # commit before tagging. A failed preflight uploads nothing to AMO, so it
+  # consumes no version.
+  sign-extension:
+    needs: artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: browser-extension/package-lock.json
+      - name: Install just
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
+            | bash -s -- --to "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Fetch the published updates.json (preserve prior release entries)
+        if: vars.EXT_UPDATE_BASE_URL != ''
+        env:
+          EXT_UPDATE_BASE_URL: ${{ vars.EXT_UPDATE_BASE_URL }}
+        run: |
+          mkdir -p dist
+          curl -fsSL --retry 3 "$EXT_UPDATE_BASE_URL/updates.json" -o dist/updates.json \
+            || { echo "first release — no published updates.json yet"; rm -f dist/updates.json; }
+      - name: Sign extension on AMO (unlisted)
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
+          EXT_UPDATE_BASE_URL: ${{ vars.EXT_UPDATE_BASE_URL }}
+          EXT_SIGN_MODE: release
+        run: just sign-extension
+      - name: Upload signed XPI as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cosmic-bwarden-signed-xpi
+          path: |
+            dist/*.xpi
+            dist/updates.json
+          if-no-files-found: error
+      - name: Attach signed XPI to the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" dist/cosmic-bwarden-*.xpi --clobber
+          if [ -f dist/updates.json ]; then
+            gh release upload "${GITHUB_REF_NAME}" dist/updates.json --clobber
+          fi

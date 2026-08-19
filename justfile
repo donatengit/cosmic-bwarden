@@ -327,11 +327,14 @@ ext-check-webext: ext-deps
 # Fail fast BEFORE any build work: credentials are loaded from
 # browser-extension/.env when not already exported (explicit exports win) and
 # must be present — otherwise abort immediately with the URL where to generate
-# them. Then the version is resolved: dev signing uses a fresh timestamp
-# (YYYY.M.D.mmm) — no tag, manifest-match, or clean-tree requirements, the
-# current files are what gets signed (the strict tag-based preflight stays
-# available in `node packaging/ext-release.mjs preflight` for CI later). Only
-# duplicates already shipped in dist/ are refused.
+# them. Then the version is resolved:
+#   - dev mode (default): a fresh timestamp (YYYY.M.D.mmm) — no tag,
+#     manifest-match, or clean-tree requirements; the current files are what
+#     gets signed. Only duplicates already shipped in dist/ are refused.
+#   - release mode (EXT_SIGN_MODE=release, used by CI on v* tags): the strict
+#     tag-based preflight — HEAD must be a vYYYY.MM.P tag, manifest.json must
+#     match it, the tree must be clean. Nothing is uploaded to AMO when this
+#     fails, so a failed run consumes no version.
 sign-extension-preflight:
     @set -euo pipefail; \
     . packaging/load-ext-env.sh; \
@@ -341,17 +344,20 @@ sign-extension-preflight:
         echo "Generate credentials at https://addons.mozilla.org/developers/addon/api/key/ (used only by 'just sign-extension')." >&2; \
         exit 1; \
     fi; \
+    if [ "${EXT_SIGN_MODE:-dev}" = "release" ]; then mode=""; else mode="--dev"; fi; \
+    if [ "${ALLOW_DIRTY:-0}" = "1" ]; then allow="--allow-dirty"; else allow=""; fi; \
     mkdir -p target; \
-    node packaging/ext-release.mjs preflight --dev > target/ext-sign-version.txt; \
+    node packaging/ext-release.mjs preflight $mode $allow > target/ext-sign-version.txt; \
     echo "signing version: $(cat target/ext-sign-version.txt)" >&2
 
 # The whole signing flow in one target: stage the production files (update_url
 # injected from EXT_UPDATE_BASE_URL when set) → lint → AMO unlisted sign →
 # dist/cosmic-bwarden-<version>.xpi, plus dist/updates.json when the base URL
-# is set. Credentials (from the environment or browser-extension/.env) reach
-# web-ext only through a generated config trampoline referencing process.env —
-# never on a command line, in a file, or in trace output; the trampoline is
-# removed on exit.
+# is set. Dev mode (default) signs the current files under a timestamp
+# version; EXT_SIGN_MODE=release signs a v* tag release. Credentials (from the
+# environment or browser-extension/.env) reach web-ext only through a
+# generated config trampoline referencing process.env — never on a command
+# line, in a file, or in trace output; the trampoline is removed on exit.
 #
 # Polling semantics: web-ext polls the AMO version-detail API every 1 second
 # (approvalCheckInterval=1000) and --timeout covers BOTH the validation poll
