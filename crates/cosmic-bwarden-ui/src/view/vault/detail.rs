@@ -285,7 +285,7 @@ impl CosmicBWardenApp {
         }
         col = col.push(text::body(fl!("notes")));
 
-        let notes_editor = cosmic::widget::text_editor(&self.notes_content)
+        let notes_editor = cosmic::widget::text_editor::TextEditor::new(&self.notes_content)
             .on_action(Message::NotesAction)
             .height(Length::Fill);
         let notes_container = container(notes_editor)
