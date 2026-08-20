@@ -242,7 +242,7 @@ The project uses `just` for all build, install, and test orchestration. Key reci
 | `just user-install` | Same but installs to `~/.local` (no sudo) |
 | `just pack-extension` | Zips **preselected production files only** (explicit allowlist in `packaging/pack-extension.sh` — nothing unlisted can ship; the old exclude-list approach leaked `.env` once) → `target/cosmic-bwarden-extension.zip`, with shape assertions. **Not part of `build`.** Never inline the zip command elsewhere — CI and the release workflow call the same script. |
 | `just register-browser-host` | Registers native host pointing at debug build (dev workflow) |
-| `just test` | Full Rust test suite in order: unit → agent → CLI → UI |
+| `just test` | Full Rust test suite in order: unit → agent → CLI → UI. The E2E steps auto-ensure a container socket via `ensure-container-socket` — **podman is the primary runtime** (`systemctl --user start podman.socket`; the harness auto-detects the user socket and needs no docker group); Docker is the fallback when `DOCKER_HOST`/`/var/run/docker.sock` exists |
 | `just test-extension-unit` | Extension JS unit tests (vitest) |
 | `just test-extension-e2e` | Extension Playwright E2E (Firefox, mock agent) |
 | `just test-extension-e2e-full` | Extension Playwright E2E (Firefox, real agent + Vaultwarden) |

@@ -25,29 +25,45 @@ cargo test -p cosmic-bwarden-ui --lib
 
 ### 2. Agent & Protocol E2E
 ```bash
-sg docker -c "cargo test -p cosmic-bwarden-tests agent security vault_ops pinned_ops applet_flow -- --test-threads=1"
+just test-agent
 ```
 
 ### 3. CLI E2E
 ```bash
-sg docker -c "cargo test -p cosmic-bwarden-tests cli_lifecycle cli_secret_mask_test custom_fields_cli -- --test-threads=1"
+just test-cli
 ```
 
 ### 4. UI E2E
 ```bash
-sg docker -c "cargo test -p cosmic-bwarden-tests window_flow custom_fields_ui ui_save_flow -- --test-threads=1"
+just test-ui
+```
+
+All three just recipes run the same binary as the manual form below and
+auto-ensure a container socket first (`ensure-container-socket`); the full
+suite (every group at once) is:
+
+```bash
+cargo test -p cosmic-bwarden-tests --lib -- --test-threads=1
 ```
 
 ---
 
 ## Prerequisites
 
-1.  **Docker**: Ensure Docker is installed and the daemon is running (used by `testcontainers-rs`).
-2.  **Permissions**: Your user must have permission to access `/var/run/docker.sock`. 
-3.  **Binaries**: The agent and CLI binaries must be pre-built as the E2E tests invoke them from `target/debug`.
+1.  **Container runtime** — **podman is the primary, recommended runtime**
+    (used via `testcontainers-rs`' Docker-compatible API; no `docker` group or
+    daemon needed):
+    ```bash
+    systemctl --user start podman.socket   # socket activation; the harness auto-detects $XDG_RUNTIME_DIR/podman/podman.sock
+    ```
+    Docker works as a drop-in alternative when `DOCKER_HOST` or
+    `/var/run/docker.sock` is present. `just test-agent` (and friends)
+    auto-detects or starts the socket.
+2.  **Binaries**: The agent and CLI binaries must be pre-built as the E2E tests invoke them from `target/debug`.
     ```bash
     cargo build
     ```
+    (`just test-agent`/`test-cli`/`test-ui` rebuild them automatically.)
 
 ## Which action does the client send? (the seam)
 
