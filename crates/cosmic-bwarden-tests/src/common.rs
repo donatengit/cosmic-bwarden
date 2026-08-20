@@ -223,6 +223,57 @@ impl Drop for TestEnv {
 /// Like `setup_env` but does NOT start the agent process.
 /// The caller is responsible for starting the agent (possibly with a custom
 /// binary or extra environment variables) and assigning it to `env.agent_process`.
+/// Removes leftover E2E containers (vaultwarden, openssh-server) from
+/// interrupted or killed runs. testcontainers stops and removes its
+/// containers on normal test completion, but a SIGKILLed test process can
+/// never run Drop — under podman the Ryuk reaper does not reliably clean up
+/// either, so strays accumulate. The suite owns these images on a dev
+/// machine, so an image match is a safe removal criterion; every container
+/// started by this suite also carries the `com.enikeev.cosmic-bwarden.e2e`
+/// label for precise manual cleanup. Best-effort: failures are logged, never
+/// fatal.
+pub(crate) async fn cleanup_stale_containers() {
+    let Ok(docker) = bollard::Docker::connect_with_defaults() else {
+        return;
+    };
+    let Ok(containers) = docker
+        .list_containers(Some(bollard::container::ListContainersOptions::<String> {
+            all: true,
+            ..Default::default()
+        }))
+        .await
+    else {
+        return;
+    };
+    for c in containers {
+        let image = c.image.as_deref().unwrap_or("");
+        let is_suite_image =
+            image.contains("vaultwarden/server") || image.contains("linuxserver/openssh-server");
+        if !is_suite_image {
+            continue;
+        }
+        let name = c
+            .names
+            .as_deref()
+            .and_then(|n| n.first())
+            .cloned()
+            .unwrap_or_else(|| "<unnamed>".to_string());
+        if let Some(id) = c.id.as_deref() {
+            let _ = docker.stop_container(id, None).await;
+            let _ = docker
+                .remove_container(
+                    id,
+                    Some(bollard::container::RemoveContainerOptions {
+                        force: true,
+                        ..Default::default()
+                    }),
+                )
+                .await;
+            eprintln!("[e2e] removed stale container {name} ({image})");
+        }
+    }
+}
+
 pub async fn setup_env_no_agent() -> Result<TestEnv> {
     if env::var_os("DOCKER_HOST").is_none() {
         let mut candidates = vec!["/run/podman/podman.sock".to_string()];
@@ -236,6 +287,7 @@ pub async fn setup_env_no_agent() -> Result<TestEnv> {
             }
         }
     }
+    cleanup_stale_containers().await;
     let node = GenericImage::new("vaultwarden/server", "latest")
         .with_wait_for(WaitFor::seconds(5))
         .with_exposed_port(80.tcp())
@@ -244,7 +296,8 @@ pub async fn setup_env_no_agent() -> Result<TestEnv> {
         .with_env_var(
             "EXPERIMENTAL_CLIENT_FEATURE_FLAGS",
             "ssh-key-vault-item,ssh-agent,pm-32009-new-item-types",
-        );
+        )
+        .with_label("com.enikeev.cosmic-bwarden.e2e", "true");
 
     let container = node.start().await?;
     let host_port = container.get_host_port_ipv4(80).await?;

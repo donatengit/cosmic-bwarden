@@ -13,6 +13,7 @@ thirtyfour = { version = "0.31", optional = true }
 zip = { version = "2.1", optional = true }
 cosmic-bwarden-core = { path = "../cosmic-bwarden-core" }
 testcontainers = { version = "0.23", features = ["http_wait"] }
+bollard = "0.18"
 tokio = { version = "1", features = ["full"] }
 anyhow = "1.0"
 reqwest = { version = "0.12", features = ["json"] }

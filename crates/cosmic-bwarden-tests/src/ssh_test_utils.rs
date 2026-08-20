@@ -46,12 +46,16 @@ pub fn generate_ssh_keypair(
 pub async fn start_sshd_container(
     authorized_public_key: &str,
 ) -> Result<ContainerAsync<GenericImage>> {
+    // Sweep strays from interrupted runs (see common::cleanup_stale_containers).
+    crate::common::cleanup_stale_containers().await;
+
     let image = GenericImage::new("linuxserver/openssh-server", "latest")
         .with_wait_for(WaitFor::seconds(8))
         .with_exposed_port(2222.tcp())
         .with_env_var("PUBLIC_KEY", authorized_public_key)
         .with_env_var("USER_NAME", "testuser")
-        .with_env_var("PASSWORD_ACCESS", "false");
+        .with_env_var("PASSWORD_ACCESS", "false")
+        .with_label("com.enikeev.cosmic-bwarden.e2e", "true");
 
     let container = image.start().await?;
     let port = container.get_host_port_ipv4(2222).await?;
