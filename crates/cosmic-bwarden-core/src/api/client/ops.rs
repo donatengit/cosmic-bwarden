@@ -45,6 +45,9 @@ impl Client {
                 None
             },
             ssh_key: None,
+            bank_account: None,
+            drivers_license: None,
+            passport: None,
             fields: fields.unwrap_or_default(),
             reprompt: CipherRepromptType::None,
         };
@@ -93,6 +96,9 @@ impl Client {
                 public_key: public_key.map(String::from),
                 fingerprint: None,
             }),
+            bank_account: None,
+            drivers_license: None,
+            passport: None,
             fields: fields.unwrap_or_default(),
             reprompt: CipherRepromptType::None,
         };
@@ -148,6 +154,9 @@ impl Client {
             identity: None,
             secure_note: None,
             ssh_key: None,
+            bank_account: None,
+            drivers_license: None,
+            passport: None,
             fields: fields.unwrap_or_default(),
             reprompt: CipherRepromptType::None,
         };
@@ -216,6 +225,57 @@ impl Client {
             }),
             secure_note: None,
             ssh_key: None,
+            bank_account: None,
+            drivers_license: None,
+            passport: None,
+            fields: fields.unwrap_or_default(),
+            reprompt: CipherRepromptType::None,
+        };
+
+        let client = self.reqwest_client().await?;
+        let res = client
+            .post(self.api_url("/ciphers"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .json(&req)
+            .send()
+            .await
+            .map_err(|source| Error::Reqwest { source })?;
+
+        match res.status() {
+            reqwest::StatusCode::OK => Ok(()),
+            _ => Err(Self::request_failed("POST", res).await),
+        }
+    }
+
+    // Mirrors the Bitwarden endpoint's flat payload; a params struct is tracked
+    // in docs/roadmap.md ("API parameter structs").
+    #[allow(clippy::too_many_arguments)]
+    pub async fn add_new_type_cipher(
+        &self,
+        access_token: &str,
+        ty: u32,
+        name: &str,
+        favorite: bool,
+        bank_account: Option<CipherBankAccount>,
+        drivers_license: Option<CipherDriversLicense>,
+        passport: Option<CipherPassport>,
+        notes: Option<&str>,
+        fields: Option<Vec<CipherField>>,
+    ) -> Result<()> {
+        let req = CiphersPostReq {
+            ty,
+            folder_id: None,
+            favorite,
+            name: name.to_string(),
+            notes: notes.map(String::from),
+            login: None,
+            card: None,
+            identity: None,
+            secure_note: None,
+            ssh_key: None,
+            bank_account,
+            drivers_license,
+            passport,
             fields: fields.unwrap_or_default(),
             reprompt: CipherRepromptType::None,
         };
@@ -249,6 +309,9 @@ impl Client {
         ssh_key: Option<CipherSshKey>,
         card: Option<CipherCard>,
         identity: Option<CipherIdentity>,
+        bank_account: Option<CipherBankAccount>,
+        drivers_license: Option<CipherDriversLicense>,
+        passport: Option<CipherPassport>,
         notes: Option<&str>,
         reprompt: Option<CipherRepromptType>,
         fields: Option<Vec<CipherField>>,
@@ -270,6 +333,9 @@ impl Client {
                 None
             },
             ssh_key,
+            bank_account,
+            drivers_license,
+            passport,
             password_history: Vec::new(),
             reprompt: reprompt.unwrap_or(CipherRepromptType::None),
         };

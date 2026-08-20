@@ -54,6 +54,9 @@ async fn dispatch(action: Action, state: &Arc<Mutex<State>>) -> Response {
         | Action::AddCard { .. }
         | Action::AddIdentity { .. }
         | Action::AddSshKey { .. }
+        | Action::AddBankAccount { .. }
+        | Action::AddDriversLicense { .. }
+        | Action::AddPassport { .. }
         | Action::CheckLoginMatch { .. }
         | Action::UpdateLoginPassword { .. } => vault::handle_request(action, state).await,
         // Subscription / control actions

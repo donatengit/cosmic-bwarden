@@ -194,6 +194,158 @@ pub async fn handle_add_identity(
     add_entry_to_server(entry, state).await
 }
 
+// Mirrors the AddBankAccount IPC action's flat payload; a params struct is
+// tracked in docs/roadmap.md ("API parameter structs").
+#[allow(clippy::too_many_arguments)]
+pub async fn handle_add_bank_account(
+    name: String,
+    bank_name: Option<String>,
+    name_on_account: Option<String>,
+    account_type: Option<String>,
+    account_number: Option<Secret>,
+    routing_number: Option<Secret>,
+    branch_number: Option<String>,
+    pin: Option<Secret>,
+    swift_code: Option<String>,
+    iban: Option<String>,
+    bank_contact_phone: Option<String>,
+    notes: Option<Secret>,
+    fields: Vec<Field>,
+    state: &Arc<Mutex<State>>,
+) -> Response {
+    let entry = Entry {
+        id: String::new(),
+        org_id: None,
+        folder: None,
+        folder_id: None,
+        name,
+        favorite: false,
+        data: cosmic_bwarden_core::db::EntryData::BankAccount {
+            bank_name,
+            name_on_account,
+            account_type,
+            account_number,
+            routing_number,
+            branch_number,
+            pin,
+            swift_code,
+            iban,
+            bank_contact_phone,
+        },
+        fields,
+        notes,
+        history: Vec::new(),
+        key: None,
+        master_password_reprompt: cosmic_bwarden_core::api::CipherRepromptType::None,
+    };
+
+    add_entry_to_server(entry, state).await
+}
+
+// Mirrors the AddDriversLicense IPC action's flat payload; a params struct is
+// tracked in docs/roadmap.md ("API parameter structs").
+#[allow(clippy::too_many_arguments)]
+pub async fn handle_add_drivers_license(
+    name: String,
+    first_name: Option<String>,
+    middle_name: Option<String>,
+    last_name: Option<String>,
+    date_of_birth: Option<String>,
+    license_number: Option<Secret>,
+    issuing_country: Option<String>,
+    issuing_state: Option<String>,
+    issue_date: Option<String>,
+    expiration_date: Option<String>,
+    issuing_authority: Option<String>,
+    license_class: Option<String>,
+    notes: Option<Secret>,
+    fields: Vec<Field>,
+    state: &Arc<Mutex<State>>,
+) -> Response {
+    let entry = Entry {
+        id: String::new(),
+        org_id: None,
+        folder: None,
+        folder_id: None,
+        name,
+        favorite: false,
+        data: cosmic_bwarden_core::db::EntryData::DriversLicense {
+            first_name,
+            middle_name,
+            last_name,
+            date_of_birth,
+            license_number,
+            issuing_country,
+            issuing_state,
+            issue_date,
+            expiration_date,
+            issuing_authority,
+            license_class,
+        },
+        fields,
+        notes,
+        history: Vec::new(),
+        key: None,
+        master_password_reprompt: cosmic_bwarden_core::api::CipherRepromptType::None,
+    };
+
+    add_entry_to_server(entry, state).await
+}
+
+// Mirrors the AddPassport IPC action's flat payload; a params struct is
+// tracked in docs/roadmap.md ("API parameter structs").
+#[allow(clippy::too_many_arguments)]
+pub async fn handle_add_passport(
+    name: String,
+    surname: Option<String>,
+    given_name: Option<String>,
+    date_of_birth: Option<String>,
+    sex: Option<String>,
+    birth_place: Option<String>,
+    nationality: Option<String>,
+    issuing_country: Option<String>,
+    passport_number: Option<Secret>,
+    passport_type: Option<String>,
+    national_identification_number: Option<String>,
+    issuing_authority: Option<String>,
+    issue_date: Option<String>,
+    expiration_date: Option<String>,
+    notes: Option<Secret>,
+    fields: Vec<Field>,
+    state: &Arc<Mutex<State>>,
+) -> Response {
+    let entry = Entry {
+        id: String::new(),
+        org_id: None,
+        folder: None,
+        folder_id: None,
+        name,
+        favorite: false,
+        data: cosmic_bwarden_core::db::EntryData::Passport {
+            surname,
+            given_name,
+            date_of_birth,
+            sex,
+            birth_place,
+            nationality,
+            issuing_country,
+            passport_number,
+            passport_type,
+            national_identification_number,
+            issuing_authority,
+            issue_date,
+            expiration_date,
+        },
+        fields,
+        notes,
+        history: Vec::new(),
+        key: None,
+        master_password_reprompt: cosmic_bwarden_core::api::CipherRepromptType::None,
+    };
+
+    add_entry_to_server(entry, state).await
+}
+
 async fn add_entry_to_server(entry: Entry, state: &Arc<Mutex<State>>) -> Response {
     let entry_type = match &entry.data {
         cosmic_bwarden_core::db::EntryData::Login { .. } => "login",
@@ -201,6 +353,9 @@ async fn add_entry_to_server(entry: Entry, state: &Arc<Mutex<State>>) -> Respons
         cosmic_bwarden_core::db::EntryData::SshKey { .. } => "ssh_key",
         cosmic_bwarden_core::db::EntryData::Card { .. } => "card",
         cosmic_bwarden_core::db::EntryData::Identity { .. } => "identity",
+        cosmic_bwarden_core::db::EntryData::BankAccount { .. } => "bank_account",
+        cosmic_bwarden_core::db::EntryData::DriversLicense { .. } => "drivers_license",
+        cosmic_bwarden_core::db::EntryData::Passport { .. } => "passport",
     };
     log::debug!("entry create: type={} (id assigned by server)", entry_type);
     let config = match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {

@@ -46,6 +46,11 @@ pub enum CliEntryType {
     Note,
     #[clap(name = "sshkey")]
     SshKey,
+    #[clap(name = "bankaccount")]
+    BankAccount,
+    #[clap(name = "driverslicense")]
+    DriversLicense,
+    Passport,
 }
 
 impl From<CliEntryType> for ProtocolEntryType {
@@ -56,6 +61,9 @@ impl From<CliEntryType> for ProtocolEntryType {
             CliEntryType::Identity => ProtocolEntryType::Identity,
             CliEntryType::Note => ProtocolEntryType::SecureNote,
             CliEntryType::SshKey => ProtocolEntryType::SshKey,
+            CliEntryType::BankAccount => ProtocolEntryType::BankAccount,
+            CliEntryType::DriversLicense => ProtocolEntryType::DriversLicense,
+            CliEntryType::Passport => ProtocolEntryType::Passport,
         }
     }
 }

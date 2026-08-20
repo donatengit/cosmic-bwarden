@@ -21,6 +21,24 @@ pub fn redact_entry_secrets(entry: &mut Entry) {
         EntryData::SshKey { private_key, .. } => {
             *private_key = None;
         }
+        EntryData::BankAccount {
+            account_number,
+            routing_number,
+            pin,
+            ..
+        } => {
+            *account_number = None;
+            *routing_number = None;
+            *pin = None;
+        }
+        EntryData::DriversLicense { license_number, .. } => {
+            *license_number = None;
+        }
+        EntryData::Passport {
+            passport_number, ..
+        } => {
+            *passport_number = None;
+        }
         EntryData::SecureNote | EntryData::Identity { .. } => {}
     }
     entry.notes = None;
@@ -199,6 +217,17 @@ pub async fn handle_get_entries(
                     (EntryType::Identity, cosmic_bwarden_core::db::EntryData::Identity { .. }) => {}
                     (EntryType::SecureNote, cosmic_bwarden_core::db::EntryData::SecureNote) => (),
                     (EntryType::SshKey, cosmic_bwarden_core::db::EntryData::SshKey { .. }) => (),
+                    (
+                        EntryType::BankAccount,
+                        cosmic_bwarden_core::db::EntryData::BankAccount { .. },
+                    ) => (),
+                    (
+                        EntryType::DriversLicense,
+                        cosmic_bwarden_core::db::EntryData::DriversLicense { .. },
+                    ) => (),
+                    (EntryType::Passport, cosmic_bwarden_core::db::EntryData::Passport { .. }) => {
+                        ()
+                    }
                     _ => continue,
                 }
             }

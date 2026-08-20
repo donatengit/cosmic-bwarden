@@ -63,6 +63,12 @@ pub struct SyncResCipher {
     pub secure_note: Option<CipherSecureNote>,
     #[serde(rename = "SshKey", alias = "sshKey")]
     pub ssh_key: Option<CipherSshKey>,
+    #[serde(rename = "BankAccount", alias = "bankAccount")]
+    pub bank_account: Option<CipherBankAccount>,
+    #[serde(rename = "DriversLicense", alias = "driversLicense")]
+    pub drivers_license: Option<CipherDriversLicense>,
+    #[serde(rename = "Passport", alias = "passport")]
+    pub passport: Option<CipherPassport>,
     #[serde(rename = "Notes", alias = "notes")]
     pub notes: Option<String>,
     #[serde(rename = "PasswordHistory", alias = "passwordHistory")]
@@ -170,7 +176,64 @@ impl SyncResCipher {
                     fingerprint: ssh_key.and_then(|s| s.fingerprint.clone()),
                 }
             }
-            _ => return None,
+            6 => {
+                let bank = self.bank_account.as_ref();
+                crate::db::EntryData::BankAccount {
+                    bank_name: bank.and_then(|b| b.bank_name.clone()),
+                    name_on_account: bank.and_then(|b| b.name_on_account.clone()),
+                    account_type: bank.and_then(|b| b.account_type.clone()),
+                    account_number: bank.and_then(|b| b.account_number.clone().map(Into::into)),
+                    routing_number: bank.and_then(|b| b.routing_number.clone().map(Into::into)),
+                    branch_number: bank.and_then(|b| b.branch_number.clone()),
+                    pin: bank.and_then(|b| b.pin.clone().map(Into::into)),
+                    swift_code: bank.and_then(|b| b.swift_code.clone()),
+                    iban: bank.and_then(|b| b.iban.clone()),
+                    bank_contact_phone: bank.and_then(|b| b.bank_contact_phone.clone()),
+                }
+            }
+            7 => {
+                let dl = self.drivers_license.as_ref();
+                crate::db::EntryData::DriversLicense {
+                    first_name: dl.and_then(|d| d.first_name.clone()),
+                    middle_name: dl.and_then(|d| d.middle_name.clone()),
+                    last_name: dl.and_then(|d| d.last_name.clone()),
+                    date_of_birth: dl.and_then(|d| d.date_of_birth.clone()),
+                    license_number: dl.and_then(|d| d.license_number.clone().map(Into::into)),
+                    issuing_country: dl.and_then(|d| d.issuing_country.clone()),
+                    issuing_state: dl.and_then(|d| d.issuing_state.clone()),
+                    issue_date: dl.and_then(|d| d.issue_date.clone()),
+                    expiration_date: dl.and_then(|d| d.expiration_date.clone()),
+                    issuing_authority: dl.and_then(|d| d.issuing_authority.clone()),
+                    license_class: dl.and_then(|d| d.license_class.clone()),
+                }
+            }
+            8 => {
+                let passport = self.passport.as_ref();
+                crate::db::EntryData::Passport {
+                    surname: passport.and_then(|p| p.surname.clone()),
+                    given_name: passport.and_then(|p| p.given_name.clone()),
+                    date_of_birth: passport.and_then(|p| p.date_of_birth.clone()),
+                    sex: passport.and_then(|p| p.sex.clone()),
+                    birth_place: passport.and_then(|p| p.birth_place.clone()),
+                    nationality: passport.and_then(|p| p.nationality.clone()),
+                    issuing_country: passport.and_then(|p| p.issuing_country.clone()),
+                    passport_number: passport
+                        .and_then(|p| p.passport_number.clone().map(Into::into)),
+                    passport_type: passport.and_then(|p| p.passport_type.clone()),
+                    national_identification_number: passport
+                        .and_then(|p| p.national_identification_number.clone()),
+                    issuing_authority: passport.and_then(|p| p.issuing_authority.clone()),
+                    issue_date: passport.and_then(|p| p.issue_date.clone()),
+                    expiration_date: passport.and_then(|p| p.expiration_date.clone()),
+                }
+            }
+            unknown => {
+                // Never silently drop a cipher the server knows about: a
+                // future cipher type would otherwise vanish from the vault
+                // without a trace.
+                log::warn!("entry {}: skipping unknown cipher type {unknown}", self.id);
+                return None;
+            }
         };
         let fields = self.fields.as_ref().map_or_else(Vec::new, |fields| {
             fields
@@ -291,6 +354,62 @@ pub struct CipherSshKey {
     pub fingerprint: Option<String>,
 }
 
+/// Bitwarden v2026.7.0 cipher type 6 (`bankAccount`). Field set mirrors the
+/// official clients' `BankAccountData` (tmp_code_examples/
+/// bitwarden-official-clients/.../bank-account.data.ts).
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CipherBankAccount {
+    pub bank_name: Option<String>,
+    pub name_on_account: Option<String>,
+    pub account_type: Option<String>,
+    pub account_number: Option<String>,
+    pub routing_number: Option<String>,
+    pub branch_number: Option<String>,
+    pub pin: Option<String>,
+    pub swift_code: Option<String>,
+    pub iban: Option<String>,
+    pub bank_contact_phone: Option<String>,
+}
+
+/// Bitwarden v2026.7.0 cipher type 7 (`driversLicense`). Field set mirrors the
+/// official clients' `DriversLicenseData`.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CipherDriversLicense {
+    pub first_name: Option<String>,
+    pub middle_name: Option<String>,
+    pub last_name: Option<String>,
+    pub date_of_birth: Option<String>,
+    pub license_number: Option<String>,
+    pub issuing_country: Option<String>,
+    pub issuing_state: Option<String>,
+    pub issue_date: Option<String>,
+    pub expiration_date: Option<String>,
+    pub issuing_authority: Option<String>,
+    pub license_class: Option<String>,
+}
+
+/// Bitwarden v2026.7.0 cipher type 8 (`passport`). Field set mirrors the
+/// official clients' `PassportData`.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CipherPassport {
+    pub surname: Option<String>,
+    pub given_name: Option<String>,
+    pub date_of_birth: Option<String>,
+    pub sex: Option<String>,
+    pub birth_place: Option<String>,
+    pub nationality: Option<String>,
+    pub issuing_country: Option<String>,
+    pub passport_number: Option<String>,
+    pub passport_type: Option<String>,
+    pub national_identification_number: Option<String>,
+    pub issuing_authority: Option<String>,
+    pub issue_date: Option<String>,
+    pub expiration_date: Option<String>,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncResPasswordHistory {
@@ -321,6 +440,9 @@ pub(crate) struct CiphersPostReq {
     pub(crate) identity: Option<CipherIdentity>,
     pub(crate) secure_note: Option<CipherSecureNote>,
     pub(crate) ssh_key: Option<CipherSshKey>,
+    pub(crate) bank_account: Option<CipherBankAccount>,
+    pub(crate) drivers_license: Option<CipherDriversLicense>,
+    pub(crate) passport: Option<CipherPassport>,
     pub(crate) fields: Vec<CipherField>,
     pub(crate) reprompt: CipherRepromptType,
 }
@@ -341,6 +463,9 @@ pub(crate) struct CiphersPutReq {
     pub(crate) fields: Vec<CipherField>,
     pub(crate) secure_note: Option<CipherSecureNote>,
     pub(crate) ssh_key: Option<CipherSshKey>,
+    pub(crate) bank_account: Option<CipherBankAccount>,
+    pub(crate) drivers_license: Option<CipherDriversLicense>,
+    pub(crate) passport: Option<CipherPassport>,
     pub(crate) password_history: Vec<serde_json::Value>,
     pub(crate) reprompt: CipherRepromptType,
 }
@@ -363,4 +488,209 @@ pub enum FieldType {
 pub enum LinkedIdType {
     Username = 0,
     Password = 1,
+}
+
+#[cfg(test)]
+mod new_item_type_tests {
+    use super::*;
+
+    /// A type-6 cipher in Vaultwarden's emission shape (v2026.7.0+):
+    /// PascalCase top-level keys, camelCase typed-object keys.
+    fn bank_cipher_json() -> serde_json::Value {
+        serde_json::json!({
+            "Id": "bank-1",
+            "Type": 6,
+            "Name": "2.1.0",
+            "Favorite": false,
+            "Reprompt": 0,
+            "BankAccount": {
+                "bankName": "2.1.0",
+                "nameOnAccount": "Alice Smith",
+                "accountType": "checking",
+                "accountNumber": "2.0.account",
+                "routingNumber": "2.0.routing",
+                "branchNumber": "044",
+                "pin": "2.0.pin",
+                "swiftCode": "CHASUS33",
+                "iban": "DE89370400440532013000",
+                "bankContactPhone": "+1-555-0100"
+            }
+        })
+    }
+
+    fn dl_cipher_json() -> serde_json::Value {
+        serde_json::json!({
+            "id": "dl-1",
+            "type": 7,
+            "name": "2.1.0",
+            "favorite": false,
+            "reprompt": 0,
+            "driversLicense": {
+                "firstName": "Alice",
+                "middleName": "Q",
+                "lastName": "Smith",
+                "dateOfBirth": "1990-01-01",
+                "licenseNumber": "2.0.license",
+                "issuingCountry": "US",
+                "issuingState": "CA",
+                "issueDate": "2019-01-01",
+                "expirationDate": "2029-01-01",
+                "issuingAuthority": "DMV",
+                "licenseClass": "C"
+            }
+        })
+    }
+
+    fn passport_cipher_json() -> serde_json::Value {
+        serde_json::json!({
+            "id": "pp-1",
+            "type": 8,
+            "name": "2.1.0",
+            "favorite": false,
+            "reprompt": 0,
+            "passport": {
+                "surname": "Smith",
+                "givenName": "Alice",
+                "dateOfBirth": "1990-01-01",
+                "sex": "F",
+                "birthPlace": "Springfield",
+                "nationality": "US",
+                "issuingCountry": "US",
+                "passportNumber": "2.0.passport",
+                "passportType": "P",
+                "nationalIdentificationNumber": "NIN-123",
+                "issuingAuthority": "DOS",
+                "issueDate": "2019-01-01",
+                "expirationDate": "2029-01-01"
+            }
+        })
+    }
+
+    fn parse(value: serde_json::Value) -> SyncResCipher {
+        serde_json::from_value(value).expect("fixture must deserialize")
+    }
+
+    #[test]
+    fn type_6_bank_account_parses_all_fields() {
+        let cipher = parse(bank_cipher_json());
+        let entry = cipher.to_entry(&[]).expect("type 6 must map to an entry");
+        match entry.data {
+            crate::db::EntryData::BankAccount {
+                bank_name,
+                name_on_account,
+                account_type,
+                account_number,
+                routing_number,
+                branch_number,
+                pin,
+                swift_code,
+                iban,
+                bank_contact_phone,
+            } => {
+                assert_eq!(bank_name.as_deref(), Some("2.1.0"));
+                assert_eq!(name_on_account.as_deref(), Some("Alice Smith"));
+                assert_eq!(account_type.as_deref(), Some("checking"));
+                assert_eq!(
+                    account_number.as_ref().expect("secret").expose(),
+                    "2.0.account"
+                );
+                assert_eq!(
+                    routing_number.as_ref().expect("secret").expose(),
+                    "2.0.routing"
+                );
+                assert_eq!(branch_number.as_deref(), Some("044"));
+                assert_eq!(pin.as_ref().expect("secret").expose(), "2.0.pin");
+                assert_eq!(swift_code.as_deref(), Some("CHASUS33"));
+                assert_eq!(iban.as_deref(), Some("DE89370400440532013000"));
+                assert_eq!(bank_contact_phone.as_deref(), Some("+1-555-0100"));
+            }
+            other => panic!("expected BankAccount, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn type_7_drivers_license_parses_all_fields() {
+        let cipher = parse(dl_cipher_json());
+        let entry = cipher.to_entry(&[]).expect("type 7 must map to an entry");
+        match entry.data {
+            crate::db::EntryData::DriversLicense {
+                first_name,
+                middle_name,
+                last_name,
+                date_of_birth,
+                license_number,
+                issuing_country,
+                issuing_state,
+                issue_date,
+                expiration_date,
+                issuing_authority,
+                license_class,
+            } => {
+                assert_eq!(first_name.as_deref(), Some("Alice"));
+                assert_eq!(middle_name.as_deref(), Some("Q"));
+                assert_eq!(last_name.as_deref(), Some("Smith"));
+                assert_eq!(date_of_birth.as_deref(), Some("1990-01-01"));
+                assert_eq!(
+                    license_number.as_ref().expect("secret").expose(),
+                    "2.0.license"
+                );
+                assert_eq!(issuing_country.as_deref(), Some("US"));
+                assert_eq!(issuing_state.as_deref(), Some("CA"));
+                assert_eq!(issue_date.as_deref(), Some("2019-01-01"));
+                assert_eq!(expiration_date.as_deref(), Some("2029-01-01"));
+                assert_eq!(issuing_authority.as_deref(), Some("DMV"));
+                assert_eq!(license_class.as_deref(), Some("C"));
+            }
+            other => panic!("expected DriversLicense, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn type_8_passport_parses_all_fields() {
+        let cipher = parse(passport_cipher_json());
+        let entry = cipher.to_entry(&[]).expect("type 8 must map to an entry");
+        match entry.data {
+            crate::db::EntryData::Passport {
+                surname,
+                given_name,
+                date_of_birth,
+                sex,
+                birth_place,
+                nationality,
+                issuing_country,
+                passport_number,
+                passport_type,
+                national_identification_number,
+                issuing_authority,
+                issue_date,
+                expiration_date,
+            } => {
+                assert_eq!(surname.as_deref(), Some("Smith"));
+                assert_eq!(given_name.as_deref(), Some("Alice"));
+                assert_eq!(date_of_birth.as_deref(), Some("1990-01-01"));
+                assert_eq!(sex.as_deref(), Some("F"));
+                assert_eq!(birth_place.as_deref(), Some("Springfield"));
+                assert_eq!(nationality.as_deref(), Some("US"));
+                assert_eq!(issuing_country.as_deref(), Some("US"));
+                assert_eq!(
+                    passport_number.as_ref().expect("secret").expose(),
+                    "2.0.passport"
+                );
+                assert_eq!(passport_type.as_deref(), Some("P"));
+                assert_eq!(national_identification_number.as_deref(), Some("NIN-123"));
+                assert_eq!(issuing_authority.as_deref(), Some("DOS"));
+                assert_eq!(issue_date.as_deref(), Some("2019-01-01"));
+                assert_eq!(expiration_date.as_deref(), Some("2029-01-01"));
+            }
+            other => panic!("expected Passport, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_cipher_type_is_skipped() {
+        let mut value = bank_cipher_json();
+        value["Type"] = serde_json::json!(9);
+        let cipher = parse(value);
+        assert!(cipher.to_entry(&[]).is_none());
+    }
 }

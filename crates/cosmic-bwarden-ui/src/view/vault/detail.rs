@@ -26,6 +26,38 @@ fn field_label(key: &str) -> String {
         "Cardholder" => fl!("field-cardholder"),
         "Brand" => fl!("field-brand"),
         "Email" => fl!("field-email"),
+        // New-item types (Bitwarden v2026.7.0): bank account / driver's
+        // license / passport. Keys stay stable literals (edit dispatch and
+        // reveal-state matching); only the display is localized.
+        "Bank Name" => fl!("field-bank-name"),
+        "Name on Account" => fl!("field-name-on-account"),
+        "Account Type" => fl!("field-account-type"),
+        "Account Number" => fl!("field-account-number"),
+        "Routing Number" => fl!("field-routing-number"),
+        "Branch Number" => fl!("field-branch-number"),
+        "PIN" => fl!("field-pin"),
+        "SWIFT Code" => fl!("field-swift-code"),
+        "IBAN" => fl!("field-iban"),
+        "Bank Contact Phone" => fl!("field-bank-contact-phone"),
+        "First Name" => fl!("field-first-name"),
+        "Middle Name" => fl!("field-middle-name"),
+        "Last Name" => fl!("field-last-name"),
+        "Date of Birth" => fl!("field-date-of-birth"),
+        "License Number" => fl!("field-license-number"),
+        "Issuing Country" => fl!("field-issuing-country"),
+        "Issuing State" => fl!("field-issuing-state"),
+        "Issue Date" => fl!("field-issue-date"),
+        "Expiration Date" => fl!("field-expiration-date"),
+        "Issuing Authority" => fl!("field-issuing-authority"),
+        "License Class" => fl!("field-license-class"),
+        "Surname" => fl!("field-surname"),
+        "Given Name" => fl!("field-given-name"),
+        "Sex" => fl!("field-sex"),
+        "Birth Place" => fl!("field-birth-place"),
+        "Nationality" => fl!("field-nationality"),
+        "Passport Number" => fl!("field-passport-number"),
+        "Passport Type" => fl!("field-passport-type"),
+        "National Identification Number" => fl!("field-national-identification-number"),
         other => other.to_string(),
     }
 }
@@ -241,6 +273,235 @@ impl CosmicBWardenApp {
                     }
                     if let Some(e) = email {
                         fields_col = fields_col.push(self.view_field("Email", e, &entry.id, false));
+                    }
+                }
+                EntryData::BankAccount {
+                    bank_name,
+                    name_on_account,
+                    account_type,
+                    account_number,
+                    routing_number,
+                    branch_number,
+                    pin,
+                    swift_code,
+                    iban,
+                    bank_contact_phone,
+                } => {
+                    if let Some(v) = bank_name {
+                        fields_col =
+                            fields_col.push(self.view_field("Bank Name", v, &entry.id, false));
+                    }
+                    if let Some(v) = name_on_account {
+                        fields_col = fields_col.push(self.view_field(
+                            "Name on Account",
+                            v,
+                            &entry.id,
+                            false,
+                        ));
+                    }
+                    if let Some(v) = account_type {
+                        fields_col =
+                            fields_col.push(self.view_field("Account Type", v, &entry.id, false));
+                    }
+                    if let Some(v) = account_number {
+                        fields_col = fields_col.push(self.view_field(
+                            "Account Number",
+                            v.expose(),
+                            &entry.id,
+                            true,
+                        ));
+                    }
+                    if let Some(v) = routing_number {
+                        fields_col = fields_col.push(self.view_field(
+                            "Routing Number",
+                            v.expose(),
+                            &entry.id,
+                            true,
+                        ));
+                    }
+                    if let Some(v) = branch_number {
+                        fields_col =
+                            fields_col.push(self.view_field("Branch Number", v, &entry.id, false));
+                    }
+                    if let Some(v) = pin {
+                        fields_col =
+                            fields_col.push(self.view_field("PIN", v.expose(), &entry.id, true));
+                    }
+                    if let Some(v) = swift_code {
+                        fields_col =
+                            fields_col.push(self.view_field("SWIFT Code", v, &entry.id, false));
+                    }
+                    if let Some(v) = iban {
+                        fields_col = fields_col.push(self.view_field("IBAN", v, &entry.id, false));
+                    }
+                    if let Some(v) = bank_contact_phone {
+                        fields_col = fields_col.push(self.view_field(
+                            "Bank Contact Phone",
+                            v,
+                            &entry.id,
+                            false,
+                        ));
+                    }
+                }
+                EntryData::DriversLicense {
+                    first_name,
+                    middle_name,
+                    last_name,
+                    date_of_birth,
+                    license_number,
+                    issuing_country,
+                    issuing_state,
+                    issue_date,
+                    expiration_date,
+                    issuing_authority,
+                    license_class,
+                } => {
+                    if let Some(v) = first_name {
+                        fields_col =
+                            fields_col.push(self.view_field("First Name", v, &entry.id, false));
+                    }
+                    if let Some(v) = middle_name {
+                        fields_col =
+                            fields_col.push(self.view_field("Middle Name", v, &entry.id, false));
+                    }
+                    if let Some(v) = last_name {
+                        fields_col =
+                            fields_col.push(self.view_field("Last Name", v, &entry.id, false));
+                    }
+                    if let Some(v) = date_of_birth {
+                        fields_col =
+                            fields_col.push(self.view_field("Date of Birth", v, &entry.id, false));
+                    }
+                    if let Some(v) = license_number {
+                        fields_col = fields_col.push(self.view_field(
+                            "License Number",
+                            v.expose(),
+                            &entry.id,
+                            true,
+                        ));
+                    }
+                    if let Some(v) = issuing_country {
+                        fields_col = fields_col.push(self.view_field(
+                            "Issuing Country",
+                            v,
+                            &entry.id,
+                            false,
+                        ));
+                    }
+                    if let Some(v) = issuing_state {
+                        fields_col =
+                            fields_col.push(self.view_field("Issuing State", v, &entry.id, false));
+                    }
+                    if let Some(v) = issue_date {
+                        fields_col =
+                            fields_col.push(self.view_field("Issue Date", v, &entry.id, false));
+                    }
+                    if let Some(v) = expiration_date {
+                        fields_col = fields_col.push(self.view_field(
+                            "Expiration Date",
+                            v,
+                            &entry.id,
+                            false,
+                        ));
+                    }
+                    if let Some(v) = issuing_authority {
+                        fields_col = fields_col.push(self.view_field(
+                            "Issuing Authority",
+                            v,
+                            &entry.id,
+                            false,
+                        ));
+                    }
+                    if let Some(v) = license_class {
+                        fields_col =
+                            fields_col.push(self.view_field("License Class", v, &entry.id, false));
+                    }
+                }
+                EntryData::Passport {
+                    surname,
+                    given_name,
+                    date_of_birth,
+                    sex,
+                    birth_place,
+                    nationality,
+                    issuing_country,
+                    passport_number,
+                    passport_type,
+                    national_identification_number,
+                    issuing_authority,
+                    issue_date,
+                    expiration_date,
+                } => {
+                    if let Some(v) = surname {
+                        fields_col =
+                            fields_col.push(self.view_field("Surname", v, &entry.id, false));
+                    }
+                    if let Some(v) = given_name {
+                        fields_col =
+                            fields_col.push(self.view_field("Given Name", v, &entry.id, false));
+                    }
+                    if let Some(v) = date_of_birth {
+                        fields_col =
+                            fields_col.push(self.view_field("Date of Birth", v, &entry.id, false));
+                    }
+                    if let Some(v) = sex {
+                        fields_col = fields_col.push(self.view_field("Sex", v, &entry.id, false));
+                    }
+                    if let Some(v) = birth_place {
+                        fields_col =
+                            fields_col.push(self.view_field("Birth Place", v, &entry.id, false));
+                    }
+                    if let Some(v) = nationality {
+                        fields_col =
+                            fields_col.push(self.view_field("Nationality", v, &entry.id, false));
+                    }
+                    if let Some(v) = issuing_country {
+                        fields_col = fields_col.push(self.view_field(
+                            "Issuing Country",
+                            v,
+                            &entry.id,
+                            false,
+                        ));
+                    }
+                    if let Some(v) = passport_number {
+                        fields_col = fields_col.push(self.view_field(
+                            "Passport Number",
+                            v.expose(),
+                            &entry.id,
+                            true,
+                        ));
+                    }
+                    if let Some(v) = passport_type {
+                        fields_col =
+                            fields_col.push(self.view_field("Passport Type", v, &entry.id, false));
+                    }
+                    if let Some(v) = national_identification_number {
+                        fields_col = fields_col.push(self.view_field(
+                            "National Identification Number",
+                            v,
+                            &entry.id,
+                            false,
+                        ));
+                    }
+                    if let Some(v) = issuing_authority {
+                        fields_col = fields_col.push(self.view_field(
+                            "Issuing Authority",
+                            v,
+                            &entry.id,
+                            false,
+                        ));
+                    }
+                    if let Some(v) = issue_date {
+                        fields_col =
+                            fields_col.push(self.view_field("Issue Date", v, &entry.id, false));
+                    }
+                    if let Some(v) = expiration_date {
+                        fields_col = fields_col.push(self.view_field(
+                            "Expiration Date",
+                            v,
+                            &entry.id,
+                            false,
+                        ));
                     }
                 }
                 _ => {}

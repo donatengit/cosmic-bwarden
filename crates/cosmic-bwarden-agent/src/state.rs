@@ -199,6 +199,13 @@ impl State {
                     EntryData::Card { .. } => (None, None, EntryType::Card, Vec::new()),
                     EntryData::Identity { .. } => (None, None, EntryType::Identity, Vec::new()),
                     EntryData::SecureNote => (None, None, EntryType::SecureNote, Vec::new()),
+                    EntryData::BankAccount { .. } => {
+                        (None, None, EntryType::BankAccount, Vec::new())
+                    }
+                    EntryData::DriversLicense { .. } => {
+                        (None, None, EntryType::DriversLicense, Vec::new())
+                    }
+                    EntryData::Passport { .. } => (None, None, EntryType::Passport, Vec::new()),
                 };
 
                 cache.push(CachedSidebarEntry {

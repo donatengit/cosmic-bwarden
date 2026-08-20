@@ -174,7 +174,13 @@ impl CosmicBWardenApp {
                                 *email = Some(value.clone());
                             }
                         }
-                        EntryData::SecureNote => {}
+                        // New-item types (6-8) are read-only in the edit form
+                        // (like Card/Identity's non-primary fields); the pane
+                        // shows only name/notes for them.
+                        EntryData::BankAccount { .. }
+                        | EntryData::DriversLicense { .. }
+                        | EntryData::Passport { .. }
+                        | EntryData::SecureNote => {}
                     }
 
                     // Also check custom fields

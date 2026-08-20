@@ -13,6 +13,9 @@ fn entry_type_label(t: ProtocolEntryType) -> &'static str {
         ProtocolEntryType::Identity => "identity",
         ProtocolEntryType::SecureNote => "note",
         ProtocolEntryType::SshKey => "sshkey",
+        ProtocolEntryType::BankAccount => "bankaccount",
+        ProtocolEntryType::DriversLicense => "driverslicense",
+        ProtocolEntryType::Passport => "passport",
     }
 }
 

@@ -44,7 +44,16 @@ pub async fn update_entry_on_server(
         );
     }
 
-    let (ty, login_payload, ssh_key_payload, card_payload, identity_payload) = match &entry.data {
+    let (
+        ty,
+        login_payload,
+        ssh_key_payload,
+        card_payload,
+        identity_payload,
+        bank_payload,
+        dl_payload,
+        passport_payload,
+    ) = match &entry.data {
         cosmic_bwarden_core::db::EntryData::Login {
             username,
             password,
@@ -113,9 +122,14 @@ pub async fn update_entry_on_server(
                 None,
                 None,
                 None,
+                None,
+                None,
+                None,
             )
         }
-        cosmic_bwarden_core::db::EntryData::SecureNote => (2, None, None, None, None),
+        cosmic_bwarden_core::db::EntryData::SecureNote => {
+            (2, None, None, None, None, None, None, None)
+        }
         cosmic_bwarden_core::db::EntryData::Identity {
             title,
             first_name,
@@ -170,7 +184,7 @@ pub async fn update_entry_on_server(
                 username: encrypt(username)?,
             };
 
-            (4, None, None, None, Some(id))
+            (4, None, None, None, Some(id), None, None, None)
         }
         cosmic_bwarden_core::db::EntryData::Card {
             cardholder_name,
@@ -226,7 +240,7 @@ pub async fn update_entry_on_server(
             card.exp_year = encrypt(exp_year)?;
             card.code = encrypt_secret(code)?;
 
-            (3, None, None, Some(card), None)
+            (3, None, None, Some(card), None, None, None, None)
         }
         cosmic_bwarden_core::db::EntryData::SshKey {
             private_key,
@@ -267,7 +281,180 @@ pub async fn update_entry_on_server(
                 }),
                 None,
                 None,
+                None,
+                None,
+                None,
             )
+        }
+        cosmic_bwarden_core::db::EntryData::BankAccount {
+            bank_name,
+            name_on_account,
+            account_type,
+            account_number,
+            routing_number,
+            branch_number,
+            pin,
+            swift_code,
+            iban,
+            bank_contact_phone,
+        } => {
+            let encrypt = |s: &Option<String>| -> Result<Option<String>, String> {
+                if let Some(s) = s {
+                    Ok(Some(
+                        cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(
+                            crypt_keys,
+                            s.as_bytes(),
+                        )
+                        .map_err(|e| e.to_string())?
+                        .to_string(),
+                    ))
+                } else {
+                    Ok(None)
+                }
+            };
+            let encrypt_secret = |s: &Option<Secret>| -> Result<Option<String>, String> {
+                if let Some(s) = s {
+                    Ok(Some(
+                        cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(
+                            crypt_keys,
+                            s.expose().as_bytes(),
+                        )
+                        .map_err(|e| e.to_string())?
+                        .to_string(),
+                    ))
+                } else {
+                    Ok(None)
+                }
+            };
+            let bank = cosmic_bwarden_core::api::CipherBankAccount {
+                bank_name: encrypt(bank_name)?,
+                name_on_account: encrypt(name_on_account)?,
+                account_type: encrypt(account_type)?,
+                account_number: encrypt_secret(account_number)?,
+                routing_number: encrypt_secret(routing_number)?,
+                branch_number: encrypt(branch_number)?,
+                pin: encrypt_secret(pin)?,
+                swift_code: encrypt(swift_code)?,
+                iban: encrypt(iban)?,
+                bank_contact_phone: encrypt(bank_contact_phone)?,
+            };
+            (6, None, None, None, None, Some(bank), None, None)
+        }
+        cosmic_bwarden_core::db::EntryData::DriversLicense {
+            first_name,
+            middle_name,
+            last_name,
+            date_of_birth,
+            license_number,
+            issuing_country,
+            issuing_state,
+            issue_date,
+            expiration_date,
+            issuing_authority,
+            license_class,
+        } => {
+            let encrypt = |s: &Option<String>| -> Result<Option<String>, String> {
+                if let Some(s) = s {
+                    Ok(Some(
+                        cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(
+                            crypt_keys,
+                            s.as_bytes(),
+                        )
+                        .map_err(|e| e.to_string())?
+                        .to_string(),
+                    ))
+                } else {
+                    Ok(None)
+                }
+            };
+            let encrypt_secret = |s: &Option<Secret>| -> Result<Option<String>, String> {
+                if let Some(s) = s {
+                    Ok(Some(
+                        cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(
+                            crypt_keys,
+                            s.expose().as_bytes(),
+                        )
+                        .map_err(|e| e.to_string())?
+                        .to_string(),
+                    ))
+                } else {
+                    Ok(None)
+                }
+            };
+            let dl = cosmic_bwarden_core::api::CipherDriversLicense {
+                first_name: encrypt(first_name)?,
+                middle_name: encrypt(middle_name)?,
+                last_name: encrypt(last_name)?,
+                date_of_birth: encrypt(date_of_birth)?,
+                license_number: encrypt_secret(license_number)?,
+                issuing_country: encrypt(issuing_country)?,
+                issuing_state: encrypt(issuing_state)?,
+                issue_date: encrypt(issue_date)?,
+                expiration_date: encrypt(expiration_date)?,
+                issuing_authority: encrypt(issuing_authority)?,
+                license_class: encrypt(license_class)?,
+            };
+            (7, None, None, None, None, None, Some(dl), None)
+        }
+        cosmic_bwarden_core::db::EntryData::Passport {
+            surname,
+            given_name,
+            date_of_birth,
+            sex,
+            birth_place,
+            nationality,
+            issuing_country,
+            passport_number,
+            passport_type,
+            national_identification_number,
+            issuing_authority,
+            issue_date,
+            expiration_date,
+        } => {
+            let encrypt = |s: &Option<String>| -> Result<Option<String>, String> {
+                if let Some(s) = s {
+                    Ok(Some(
+                        cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(
+                            crypt_keys,
+                            s.as_bytes(),
+                        )
+                        .map_err(|e| e.to_string())?
+                        .to_string(),
+                    ))
+                } else {
+                    Ok(None)
+                }
+            };
+            let encrypt_secret = |s: &Option<Secret>| -> Result<Option<String>, String> {
+                if let Some(s) = s {
+                    Ok(Some(
+                        cosmic_bwarden_core::cipherstring::CipherString::encrypt_symmetric(
+                            crypt_keys,
+                            s.expose().as_bytes(),
+                        )
+                        .map_err(|e| e.to_string())?
+                        .to_string(),
+                    ))
+                } else {
+                    Ok(None)
+                }
+            };
+            let pp = cosmic_bwarden_core::api::CipherPassport {
+                surname: encrypt(surname)?,
+                given_name: encrypt(given_name)?,
+                date_of_birth: encrypt(date_of_birth)?,
+                sex: encrypt(sex)?,
+                birth_place: encrypt(birth_place)?,
+                nationality: encrypt(nationality)?,
+                issuing_country: encrypt(issuing_country)?,
+                passport_number: encrypt_secret(passport_number)?,
+                passport_type: encrypt(passport_type)?,
+                national_identification_number: encrypt(national_identification_number)?,
+                issuing_authority: encrypt(issuing_authority)?,
+                issue_date: encrypt(issue_date)?,
+                expiration_date: encrypt(expiration_date)?,
+            };
+            (8, None, None, None, None, None, None, Some(pp))
         }
     };
 
@@ -318,6 +505,9 @@ pub async fn update_entry_on_server(
         let ssh_key_payload = ssh_key_payload.clone();
         let card_payload = card_payload.clone();
         let identity_payload = identity_payload.clone();
+        let bank_payload = bank_payload.clone();
+        let dl_payload = dl_payload.clone();
+        let passport_payload = passport_payload.clone();
         let notes_enc = notes_enc.clone();
         let fields_enc = fields_enc.clone();
         let base_url = config.base_url();
@@ -335,6 +525,9 @@ pub async fn update_entry_on_server(
                     ssh_key_payload,
                     card_payload,
                     identity_payload,
+                    bank_payload,
+                    dl_payload,
+                    passport_payload,
                     notes_enc.as_deref(),
                     Some(reprompt),
                     Some(fields_enc),

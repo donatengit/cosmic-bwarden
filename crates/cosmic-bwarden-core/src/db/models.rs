@@ -224,6 +224,151 @@ impl Entry {
                     *fingerprint = d(v, "fingerprint");
                 }
             }
+            EntryData::BankAccount {
+                bank_name,
+                name_on_account,
+                account_type,
+                account_number,
+                routing_number,
+                branch_number,
+                pin,
+                swift_code,
+                iban,
+                bank_contact_phone,
+            } => {
+                if let Some(v) = bank_name.as_deref() {
+                    *bank_name = d(v, "bank_name");
+                }
+                if let Some(v) = name_on_account.as_deref() {
+                    *name_on_account = d(v, "name_on_account");
+                }
+                if let Some(v) = account_type.as_deref() {
+                    *account_type = d(v, "account_type");
+                }
+                if let Some(v) = account_number.as_ref() {
+                    *account_number = ds(v.expose(), "account_number");
+                }
+                if let Some(v) = routing_number.as_ref() {
+                    *routing_number = ds(v.expose(), "routing_number");
+                }
+                if let Some(v) = branch_number.as_deref() {
+                    *branch_number = d(v, "branch_number");
+                }
+                if let Some(v) = pin.as_ref() {
+                    *pin = ds(v.expose(), "pin");
+                }
+                if let Some(v) = swift_code.as_deref() {
+                    *swift_code = d(v, "swift_code");
+                }
+                if let Some(v) = iban.as_deref() {
+                    *iban = d(v, "iban");
+                }
+                if let Some(v) = bank_contact_phone.as_deref() {
+                    *bank_contact_phone = d(v, "bank_contact_phone");
+                }
+            }
+            EntryData::DriversLicense {
+                first_name,
+                middle_name,
+                last_name,
+                date_of_birth,
+                license_number,
+                issuing_country,
+                issuing_state,
+                issue_date,
+                expiration_date,
+                issuing_authority,
+                license_class,
+            } => {
+                if let Some(v) = first_name.as_deref() {
+                    *first_name = d(v, "first_name");
+                }
+                if let Some(v) = middle_name.as_deref() {
+                    *middle_name = d(v, "middle_name");
+                }
+                if let Some(v) = last_name.as_deref() {
+                    *last_name = d(v, "last_name");
+                }
+                if let Some(v) = date_of_birth.as_deref() {
+                    *date_of_birth = d(v, "date_of_birth");
+                }
+                if let Some(v) = license_number.as_ref() {
+                    *license_number = ds(v.expose(), "license_number");
+                }
+                if let Some(v) = issuing_country.as_deref() {
+                    *issuing_country = d(v, "issuing_country");
+                }
+                if let Some(v) = issuing_state.as_deref() {
+                    *issuing_state = d(v, "issuing_state");
+                }
+                if let Some(v) = issue_date.as_deref() {
+                    *issue_date = d(v, "issue_date");
+                }
+                if let Some(v) = expiration_date.as_deref() {
+                    *expiration_date = d(v, "expiration_date");
+                }
+                if let Some(v) = issuing_authority.as_deref() {
+                    *issuing_authority = d(v, "issuing_authority");
+                }
+                if let Some(v) = license_class.as_deref() {
+                    *license_class = d(v, "license_class");
+                }
+            }
+            EntryData::Passport {
+                surname,
+                given_name,
+                date_of_birth,
+                sex,
+                birth_place,
+                nationality,
+                issuing_country,
+                passport_number,
+                passport_type,
+                national_identification_number,
+                issuing_authority,
+                issue_date,
+                expiration_date,
+            } => {
+                if let Some(v) = surname.as_deref() {
+                    *surname = d(v, "surname");
+                }
+                if let Some(v) = given_name.as_deref() {
+                    *given_name = d(v, "given_name");
+                }
+                if let Some(v) = date_of_birth.as_deref() {
+                    *date_of_birth = d(v, "date_of_birth");
+                }
+                if let Some(v) = sex.as_deref() {
+                    *sex = d(v, "sex");
+                }
+                if let Some(v) = birth_place.as_deref() {
+                    *birth_place = d(v, "birth_place");
+                }
+                if let Some(v) = nationality.as_deref() {
+                    *nationality = d(v, "nationality");
+                }
+                if let Some(v) = issuing_country.as_deref() {
+                    *issuing_country = d(v, "issuing_country");
+                }
+                if let Some(v) = passport_number.as_ref() {
+                    *passport_number = ds(v.expose(), "passport_number");
+                }
+                if let Some(v) = passport_type.as_deref() {
+                    *passport_type = d(v, "passport_type");
+                }
+                if let Some(v) = national_identification_number.as_deref() {
+                    *national_identification_number = d(v, "national_identification_number");
+                }
+                if let Some(v) = issuing_authority.as_deref() {
+                    *issuing_authority = d(v, "issuing_authority");
+                }
+                if let Some(v) = issue_date.as_deref() {
+                    *issue_date = d(v, "issue_date");
+                }
+                if let Some(v) = expiration_date.as_deref() {
+                    *expiration_date = d(v, "expiration_date");
+                }
+            }
         }
 
         for field in &mut decrypted.fields {
@@ -365,6 +510,49 @@ pub enum EntryData {
         private_key: Option<Secret>,
         public_key: Option<String>,
         fingerprint: Option<String>,
+    },
+    /// Bitwarden v2026.7.0 cipher type 6. Read-only in the UI (like Card).
+    BankAccount {
+        bank_name: Option<String>,
+        name_on_account: Option<String>,
+        account_type: Option<String>,
+        account_number: Option<Secret>,
+        routing_number: Option<Secret>,
+        branch_number: Option<String>,
+        pin: Option<Secret>,
+        swift_code: Option<String>,
+        iban: Option<String>,
+        bank_contact_phone: Option<String>,
+    },
+    /// Bitwarden v2026.7.0 cipher type 7. Read-only in the UI (like Card).
+    DriversLicense {
+        first_name: Option<String>,
+        middle_name: Option<String>,
+        last_name: Option<String>,
+        date_of_birth: Option<String>,
+        license_number: Option<Secret>,
+        issuing_country: Option<String>,
+        issuing_state: Option<String>,
+        issue_date: Option<String>,
+        expiration_date: Option<String>,
+        issuing_authority: Option<String>,
+        license_class: Option<String>,
+    },
+    /// Bitwarden v2026.7.0 cipher type 8. Read-only in the UI (like Card).
+    Passport {
+        surname: Option<String>,
+        given_name: Option<String>,
+        date_of_birth: Option<String>,
+        sex: Option<String>,
+        birth_place: Option<String>,
+        nationality: Option<String>,
+        issuing_country: Option<String>,
+        passport_number: Option<Secret>,
+        passport_type: Option<String>,
+        national_identification_number: Option<String>,
+        issuing_authority: Option<String>,
+        issue_date: Option<String>,
+        expiration_date: Option<String>,
     },
 }
 

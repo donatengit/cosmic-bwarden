@@ -122,10 +122,12 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
       `ui/app/update/applet.rs` (572 incl. its tests) and `handler/vault/ops.rs` (469)
       are the two to split first.
 - [ ] **API/handler parameter structs** — `handle_login`, `handle_add_card`,
-      `handle_add_identity`, `Client::{add_cipher,add_ssh_key,add_card,add_identity,
-      update_cipher}`, and `vault::unlock` take 8–15 positional args (clippy
-      `too_many_arguments`, currently `#[allow]`'d with a pointer here). Introduce
-      `AddCardParams`-style structs at the wire/handler boundary; removes the allows.
+      `handle_add_identity`, `handle_add_bank_account`, `handle_add_drivers_license`,
+      `handle_add_passport`, `Client::{add_cipher,add_ssh_key,add_card,add_identity,
+      add_new_type_cipher,update_cipher}`, and `vault::unlock` take 8–15 positional
+      args (clippy `too_many_arguments`, currently `#[allow]`'d with a pointer here).
+      Introduce `AddCardParams`-style structs at the wire/handler boundary; removes
+      the allows.
 - [x] ~~KDF off the runtime thread~~ `[A3-1]` — *closed by Phase 6 measurement*
       (docs/review/06_performance.md): worst-case KDF stall is ~131 ms (Argon2id
       defaults, release), once per unlock/reprompt — acceptable on the current-thread

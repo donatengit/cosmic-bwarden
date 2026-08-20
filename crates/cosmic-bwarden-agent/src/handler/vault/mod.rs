@@ -41,6 +41,18 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
                         cosmic_bwarden_core::db::EntryData::Card {
                             number: Some(n), ..
                         } => n.expose().to_string(),
+                        cosmic_bwarden_core::db::EntryData::BankAccount {
+                            account_number: Some(n),
+                            ..
+                        } => n.expose().to_string(),
+                        cosmic_bwarden_core::db::EntryData::DriversLicense {
+                            license_number: Some(n),
+                            ..
+                        } => n.expose().to_string(),
+                        cosmic_bwarden_core::db::EntryData::Passport {
+                            passport_number: Some(n),
+                            ..
+                        } => n.expose().to_string(),
                         cosmic_bwarden_core::db::EntryData::SecureNote => match &entry.notes {
                             Some(n) => n.expose().to_string(),
                             None => {
@@ -158,6 +170,113 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
                 country,
                 email,
                 phone,
+                notes,
+                fields,
+                state,
+            )
+            .await
+        }
+        Action::AddBankAccount {
+            name,
+            bank_name,
+            name_on_account,
+            account_type,
+            account_number,
+            routing_number,
+            branch_number,
+            pin,
+            swift_code,
+            iban,
+            bank_contact_phone,
+            notes,
+            fields,
+        } => {
+            add::handle_add_bank_account(
+                name,
+                bank_name,
+                name_on_account,
+                account_type,
+                account_number,
+                routing_number,
+                branch_number,
+                pin,
+                swift_code,
+                iban,
+                bank_contact_phone,
+                notes,
+                fields,
+                state,
+            )
+            .await
+        }
+        Action::AddDriversLicense {
+            name,
+            first_name,
+            middle_name,
+            last_name,
+            date_of_birth,
+            license_number,
+            issuing_country,
+            issuing_state,
+            issue_date,
+            expiration_date,
+            issuing_authority,
+            license_class,
+            notes,
+            fields,
+        } => {
+            add::handle_add_drivers_license(
+                name,
+                first_name,
+                middle_name,
+                last_name,
+                date_of_birth,
+                license_number,
+                issuing_country,
+                issuing_state,
+                issue_date,
+                expiration_date,
+                issuing_authority,
+                license_class,
+                notes,
+                fields,
+                state,
+            )
+            .await
+        }
+        Action::AddPassport {
+            name,
+            surname,
+            given_name,
+            date_of_birth,
+            sex,
+            birth_place,
+            nationality,
+            issuing_country,
+            passport_number,
+            passport_type,
+            national_identification_number,
+            issuing_authority,
+            issue_date,
+            expiration_date,
+            notes,
+            fields,
+        } => {
+            add::handle_add_passport(
+                name,
+                surname,
+                given_name,
+                date_of_birth,
+                sex,
+                birth_place,
+                nationality,
+                issuing_country,
+                passport_number,
+                passport_type,
+                national_identification_number,
+                issuing_authority,
+                issue_date,
+                expiration_date,
                 notes,
                 fields,
                 state,

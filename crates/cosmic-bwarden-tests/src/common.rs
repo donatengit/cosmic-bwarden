@@ -243,7 +243,7 @@ pub async fn setup_env_no_agent() -> Result<TestEnv> {
         .with_env_var("I_REALLY_WANT_VOLATILE_STORAGE", "true")
         .with_env_var(
             "EXPERIMENTAL_CLIENT_FEATURE_FLAGS",
-            "ssh-key-vault-item,ssh-agent",
+            "ssh-key-vault-item,ssh-agent,pm-32009-new-item-types",
         );
 
     let container = node.start().await?;

@@ -57,6 +57,50 @@ pub fn merge_redacted_secrets(entry: &mut Entry, stored: &Entry) {
         ) if private_key.is_none() => {
             *private_key = stored_private_key.clone();
         }
+        (
+            EntryData::BankAccount {
+                account_number,
+                routing_number,
+                pin,
+                ..
+            },
+            EntryData::BankAccount {
+                account_number: stored_number,
+                routing_number: stored_routing,
+                pin: stored_pin,
+                ..
+            },
+        ) => {
+            if account_number.is_none() {
+                *account_number = stored_number.clone();
+            }
+            if routing_number.is_none() {
+                *routing_number = stored_routing.clone();
+            }
+            if pin.is_none() {
+                *pin = stored_pin.clone();
+            }
+        }
+        (
+            EntryData::DriversLicense { license_number, .. },
+            EntryData::DriversLicense {
+                license_number: stored_license_number,
+                ..
+            },
+        ) if license_number.is_none() => {
+            *license_number = stored_license_number.clone();
+        }
+        (
+            EntryData::Passport {
+                passport_number, ..
+            },
+            EntryData::Passport {
+                passport_number: stored_passport_number,
+                ..
+            },
+        ) if passport_number.is_none() => {
+            *passport_number = stored_passport_number.clone();
+        }
         _ => {}
     }
     for field in &mut entry.fields {

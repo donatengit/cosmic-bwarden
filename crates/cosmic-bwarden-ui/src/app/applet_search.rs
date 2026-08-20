@@ -90,6 +90,7 @@ pub fn build_applet_rows(entries: &[SidebarEntry]) -> Vec<AppletRow> {
                 kind: AppletRowKind::SshKey,
             }),
             EntryType::Card | EntryType::Identity => None,
+            EntryType::BankAccount | EntryType::DriversLicense | EntryType::Passport => None,
         })
         .take(APPLET_SEARCH_LIMIT)
         .collect()
