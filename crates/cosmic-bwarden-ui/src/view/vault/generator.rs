@@ -11,8 +11,64 @@ use cosmic::Element;
 const LENGTH_MIN: u32 = 8;
 const LENGTH_MAX: u32 = 32;
 
+/// Which section of the generator pane is active. Carried as the data of each
+/// `generator_tabs` model item so the view can look up the active tab.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GeneratorTab {
+    Settings,
+    History,
+}
+
+/// Tab model for the generator pane. Item order is the tab order; the
+/// Settings tab is activated both here and on every pane entry
+/// (`GeneratorViewClicked`).
+pub(crate) fn generator_tabs_model() -> cosmic::widget::segmented_button::SingleSelectModel {
+    use cosmic::widget::segmented_button::Model;
+    Model::builder()
+        .insert(|b| {
+            b.text(fl!("generator-tab-generate"))
+                .data(GeneratorTab::Settings)
+                .activate()
+        })
+        .insert(|b| {
+            b.text(fl!("generator-tab-history"))
+                .data(GeneratorTab::History)
+        })
+        .build()
+}
+
 impl CosmicBWardenApp {
     pub fn view_generator(&self) -> Element<'_, Message> {
+        let tabs = cosmic::widget::tab_bar::horizontal(&self.generator_tabs)
+            .on_activate(Message::GeneratorTabActivated);
+
+        let active_tab = self
+            .generator_tabs
+            .active_data::<GeneratorTab>()
+            .copied()
+            .unwrap_or(GeneratorTab::Settings);
+        let content = match active_tab {
+            GeneratorTab::Settings => self.view_generator_settings(),
+            GeneratorTab::History => self.view_generator_history(),
+        };
+
+        container(
+            scrollable(
+                cosmic::widget::column::with_capacity(6)
+                    .spacing(20)
+                    .push(text::title2(fl!("password-generator")))
+                    .push(tabs)
+                    .push(content),
+            )
+            .height(Length::Fill),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding(20)
+        .into()
+    }
+
+    fn view_generator_settings(&self) -> Element<'_, Message> {
         let s = &self.generator_settings;
 
         let mut options = list_column();
@@ -76,7 +132,6 @@ impl CosmicBWardenApp {
 
         let mut content = column::with_capacity(6)
             .spacing(20)
-            .push(text::title2(fl!("password-generator")))
             .push(options)
             .push(buttons)
             .push(result_row);
@@ -90,13 +145,7 @@ impl CosmicBWardenApp {
             ));
         }
 
-        content = content.push(self.view_generator_history());
-
-        container(scrollable(content).height(Length::Fill))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .padding(20)
-            .into()
+        content.into()
     }
 
     fn view_generator_history(&self) -> Element<'_, Message> {

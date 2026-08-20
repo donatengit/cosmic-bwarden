@@ -164,6 +164,9 @@ password-length = Length: { $length }
 generate = Generate
 reset = Reset
 no-password-generated-yet = No password generated yet.
+# Generator pane tab labels (tab_bar in the generator view).
+generator-tab-generate = Generate
+generator-tab-history = History
 recent-passwords = Recent Passwords (last 7 days)
 no-recent-passwords = No recent passwords.
 delete-history-entry-title = Delete Password?

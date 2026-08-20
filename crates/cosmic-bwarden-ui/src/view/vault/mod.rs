@@ -1,5 +1,5 @@
 mod detail;
-mod generator;
+pub(crate) mod generator;
 pub(crate) mod sidebar;
 
 use crate::app::state::VaultPane;

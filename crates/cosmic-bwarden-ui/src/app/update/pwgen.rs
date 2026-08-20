@@ -15,10 +15,17 @@ impl CosmicBWardenApp {
                 self.selected_entry_id = None;
                 self.selected_entry = None;
                 self.editing_entry = None;
+                // Enter the pane on the primary tab; the model's data is
+                // `GeneratorTab`, so position 0 is Settings.
+                self.generator_tabs.activate_position(0);
                 Some(Task::batch(vec![
                     fetch_generator_settings(),
                     fetch_generator_history(),
                 ]))
+            }
+            Message::GeneratorTabActivated(entity) => {
+                self.generator_tabs.activate(entity);
+                Some(Task::none())
             }
             Message::GeneratorUppercaseToggled(v) => {
                 self.generator_settings.uppercase = v;

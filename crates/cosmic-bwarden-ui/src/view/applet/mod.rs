@@ -34,6 +34,20 @@ const APPLET_ICON_SVG: &[u8] =
 const APPLET_ICON_LOCKED_SVG: &[u8] =
     include_bytes!("../../../resources/icons/cosmic-bwarden-locked-symbolic.svg");
 
+/// Size constraints for the applet popup surface, mirroring
+/// `cosmic-applet-template`'s popup: a floor that keeps the popup from
+/// collapsing and a ceiling that caps it on large panels. The width floor is
+/// the libcosmic default (360) rather than the template's 300 — our popup
+/// content is entirely `Length::Fill`-based, so a 300 floor would shrink the
+/// popup 60 px narrower instead of merely allowing it to adapt.
+pub fn applet_popup_limits() -> cosmic::iced::Limits {
+    cosmic::iced::Limits::NONE
+        .max_width(372.0)
+        .min_width(360.0)
+        .min_height(200.0)
+        .max_height(1080.0)
+}
+
 impl CosmicBWardenApp {
     pub fn applet_view(&self) -> Element<'_, Message> {
         // `is_unlocked()` is false for Loading/Setup/Unlock alike, so the

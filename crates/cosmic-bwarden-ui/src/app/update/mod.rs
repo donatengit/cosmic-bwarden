@@ -1,3 +1,4 @@
+pub mod activation;
 pub mod applet;
 pub mod auth;
 pub mod auth_actions;
@@ -142,6 +143,7 @@ impl CosmicBWardenApp {
             | Message::LoginPinChanged(_)
             | Message::LoginPinRevealToggled
             | Message::GeneratorViewClicked
+            | Message::GeneratorTabActivated(_)
             | Message::GeneratorUppercaseToggled(_)
             | Message::GeneratorLowercaseToggled(_)
             | Message::GeneratorNumbersToggled(_)

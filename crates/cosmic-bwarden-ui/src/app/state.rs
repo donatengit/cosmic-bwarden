@@ -235,6 +235,10 @@ pub struct CosmicBWardenApp {
     /// Index into `generator_history` pending delete confirmation; shown via
     /// the same dialog widget as vault-entry deletion (`view_dialogs`).
     pub generator_history_delete_pending: Option<usize>,
+    /// Tab model for the generator pane (Settings | History), backed by
+    /// `GeneratorTab` data. Reset to the Settings tab whenever the pane is
+    /// entered.
+    pub generator_tabs: widget::segmented_button::SingleSelectModel,
 
     // Clipboard auto-clear (`[P1-9]`)
     /// Bumped on every copy; a pending clear only fires if its generation is
@@ -346,6 +350,7 @@ impl Default for CosmicBWardenApp {
             generator_history_revealed: HashSet::new(),
             generator_error: None,
             generator_history_delete_pending: None,
+            generator_tabs: crate::view::vault::generator::generator_tabs_model(),
         }
     }
 }

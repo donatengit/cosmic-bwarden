@@ -211,6 +211,9 @@ pub enum Message {
 
     // Password generator pane
     GeneratorViewClicked,
+    /// Tab switch in the generator pane (Settings | History); the entity is
+    /// looked up in `state::generator_tabs` for the `GeneratorTab` data.
+    GeneratorTabActivated(widget::segmented_button::Entity),
     GeneratorUppercaseToggled(bool),
     GeneratorLowercaseToggled(bool),
     GeneratorNumbersToggled(bool),

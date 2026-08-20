@@ -103,30 +103,36 @@ impl CosmicBWardenApp {
                 Some(Task::batch(tasks))
             }
             Message::Token(update) => {
-                match update {
+                let task = match update {
                     cosmic::applet::token::subscription::TokenUpdate::Init(tx) => {
                         self.token_tx = Some(tx);
+                        Task::none()
                     }
                     cosmic::applet::token::subscription::TokenUpdate::Finished => {
                         self.token_tx = None;
+                        Task::none()
                     }
                     cosmic::applet::token::subscription::TokenUpdate::ActivationToken {
                         token,
-                        ..
+                        exec,
                     } => {
-                        if let Ok(exe) = std::env::current_exe() {
-                            let mut cmd = std::process::Command::new(exe);
-                            cmd.env("COSMIC_BWARDEN_MODE", "application");
-                            cmd.env_remove("COSMIC_PANEL_NAME");
-                            if let Some(token) = token {
-                                cmd.env("XDG_ACTIVATION_TOKEN", &token);
-                                cmd.env("DESKTOP_STARTUP_ID", &token);
+                        use crate::app::update::activation::ActivationAction;
+                        use cosmic::app::Application as _;
+                        match crate::app::update::activation::classify_activation(&exec) {
+                            ActivationAction::SpawnVault => {
+                                crate::app::update::activation::spawn_vault_app(token)
                             }
-                            tokio::spawn(cosmic::process::spawn(cmd));
+                            // Panel activation of applet quick actions runs
+                            // the same handlers as the popup's icon buttons.
+                            ActivationAction::Lock => self.update(Message::LockClicked),
+                            ActivationAction::Generate => {
+                                self.update(Message::AppletGeneratePasswordRequested)
+                            }
+                            ActivationAction::Ignore => Task::none(),
                         }
                     }
-                }
-                Some(Task::none())
+                };
+                Some(task)
             }
 
             // Inline unlock
@@ -587,6 +593,8 @@ impl CosmicBWardenApp {
                         width: bounds.width as i32,
                         height: bounds.height as i32,
                     };
+                    popup_settings.positioner.size_limits =
+                        crate::view::applet::applet_popup_limits();
                     popup_settings
                 },
                 None,

@@ -476,3 +476,50 @@ async fn test_applet_open_link_does_not_crash() {
     let _ = app.update(Message::AppletOpenLink("https://example.com".to_string()));
     assert!(app.applet_error.is_none());
 }
+
+// ── Popup size limits ─────────────────────────────────────────────────────────
+
+#[test]
+fn applet_popup_limits_keep_the_360px_floor_and_cap_at_372() {
+    let limits = crate::view::applet::applet_popup_limits();
+    let min = limits.min();
+    let max = limits.max();
+    // The 360 floor matches the libcosmic default so Fill-based popup content
+    // keeps its current width; the 372 ceiling gives wide content headroom.
+    assert_eq!(min.width, 360.0);
+    assert_eq!(max.width, 372.0);
+    assert_eq!(min.height, 200.0);
+    assert_eq!(max.height, 1080.0);
+}
+
+// ── Activation-token routing ──────────────────────────────────────────────────
+
+#[test]
+fn test_token_activation_routes_activate_lock_without_panicking() {
+    let mut app = CosmicBWardenApp::default();
+    let task = app.update(Message::Token(
+        cosmic::applet::token::subscription::TokenUpdate::ActivationToken {
+            token: None,
+            exec: "activate:lock".to_string(),
+        },
+    ));
+    let _ = task;
+    // The lock round-trip resolves asynchronously via LockResult (needs a
+    // live agent), so only the routing itself is asserted: no panic, and the
+    // applet session state is untouched.
+    assert!(app.token_tx.is_none());
+    assert_eq!(app.view, View::Loading);
+}
+
+#[test]
+fn test_token_activation_ignores_unknown_execs() {
+    let mut app = CosmicBWardenApp::default();
+    let task = app.update(Message::Token(
+        cosmic::applet::token::subscription::TokenUpdate::ActivationToken {
+            token: None,
+            exec: "activate:bogus".to_string(),
+        },
+    ));
+    let _ = task;
+    assert_eq!(app.view, View::Loading);
+}

@@ -8,6 +8,7 @@
 
 use crate::app::CosmicBWardenApp;
 use crate::message::{Message, View};
+use crate::view::vault::generator::GeneratorTab;
 use cosmic::Application;
 use cosmic_bwarden_core::protocol::{GeneratorHistoryEntry, GeneratorSettings};
 
@@ -226,4 +227,51 @@ fn deleted_err_sets_generator_error() {
         "delete failed".to_string()
     )));
     assert_eq!(app.generator_error.as_deref(), Some("delete failed"));
+}
+
+// ── Tab bar (Settings | History) ──────────────────────────────────────────────
+
+#[test]
+fn generator_tabs_default_to_settings() {
+    let app = CosmicBWardenApp::default();
+    assert_eq!(
+        app.generator_tabs.active_data::<GeneratorTab>().copied(),
+        Some(GeneratorTab::Settings)
+    );
+}
+
+#[test]
+fn generator_tab_activation_switches_tab() {
+    let mut app = CosmicBWardenApp::default();
+    let history_entity = app
+        .generator_tabs
+        .iter()
+        .find(|&e| app.generator_tabs.data::<GeneratorTab>(e) == Some(&GeneratorTab::History))
+        .expect("history tab item");
+    let _ = app.update(Message::GeneratorTabActivated(history_entity));
+    assert_eq!(
+        app.generator_tabs.active_data::<GeneratorTab>().copied(),
+        Some(GeneratorTab::History)
+    );
+}
+
+#[test]
+fn generator_view_clicked_resets_to_settings_tab() {
+    let mut app = CosmicBWardenApp::default();
+    let history_entity = app
+        .generator_tabs
+        .iter()
+        .find(|&e| app.generator_tabs.data::<GeneratorTab>(e) == Some(&GeneratorTab::History))
+        .expect("history tab item");
+    let _ = app.update(Message::GeneratorTabActivated(history_entity));
+    assert_eq!(
+        app.generator_tabs.active_data::<GeneratorTab>().copied(),
+        Some(GeneratorTab::History)
+    );
+
+    let _ = app.update(Message::GeneratorViewClicked);
+    assert_eq!(
+        app.generator_tabs.active_data::<GeneratorTab>().copied(),
+        Some(GeneratorTab::Settings)
+    );
 }
