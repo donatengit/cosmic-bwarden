@@ -11,6 +11,7 @@ Start here, then go deeper as needed:
 | [`docs/build_and_run.md`](docs/build_and_run.md) | Prerequisites, build commands, run modes |
 | [`docs/testing.md`](docs/testing.md) | Complexity-ordered testing strategy and what each test suite covers |
 | [`docs/ssh-agent.md`](docs/ssh-agent.md) | SSH agent protocol implementation and socket paths |
+| [`docs/ssh_agent_locked_message.md`](docs/ssh_agent_locked_message.md) | Locked-vault SSH identity listing and wait-on-sign (decision record) |
 | [`docs/browser_integration.md`](docs/browser_integration.md) | Native browser extension architecture and IPC protocol |
 | [`docs/public_suffix_list.md`](docs/public_suffix_list.md) | Domain-matching rules (exact / boundary-subdomain / PSL eTLD+1) and the `public_suffix_list` feature |
 | [`docs/configurable_paths.md`](docs/configurable_paths.md) | Socket, config, and SSH path overrides; multi-instance isolation |

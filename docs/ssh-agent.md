@@ -19,9 +19,16 @@ separate `ssh-agent`, `ssh-add`, or on-disk private key files needed.
 - Signing (`SSH2_AGENTC_SIGN_REQUEST`) decrypts the matching private key
   in-memory, signs the challenge, and discards it — the private key is never
   written to disk.
-- Both identity listing and signing require the vault to be **unlocked**
-  (`state.keys` populated). While locked, the agent reports zero identities
-  and refuses to sign.
+- **Listing while locked**: after the vault has been unlocked once in this
+  agent process, `ssh-add -l` still returns the same public keys. Each
+  comment is the entry name plus `[cosmic-bwarden:locked]`. A process that
+  has never been unlocked, or that has been logged out, still reports no
+  identities.
+- **Signing while locked**: the agent does not sign with vault private-key
+  material until you unlock. The sign request waits (up to 90 seconds) for
+  an unlock in the same process, then completes; if nobody unlocks, it
+  fails. See [`ssh_agent_locked_message.md`](ssh_agent_locked_message.md)
+  for the rationale.
 
 ### Socket permissions
 
@@ -79,15 +86,17 @@ that shell — cosmic-bwarden does not chain to other agents.
 
 ## 3. Verifying it works
 
-List identities (requires the vault to be unlocked):
+List identities:
 
 ```sh
 ssh-add -l
 ```
 
 You should see one line per SSH-key vault entry, with the comment set to the
-entry's name. `The agent has no identities.` while locked is expected
-behavior, not an error.
+entry's name. After a lock in the same agent process the same keys are still
+listed, with `[cosmic-bwarden:locked]` on each comment; `The agent has no
+identities.` means this process has not unlocked (or has logged out), not
+that the socket is broken.
 
 Test a real connection:
 
@@ -100,26 +109,33 @@ ssh -o IdentitiesOnly=no user@host
 
 ## 4. Lock / unlock and login / logout behavior
 
-- **Lock**: identities disappear immediately; in-flight `sign` requests fail
-  with "agent is locked". Unlocking restores access to the same keys without
-  any re-import.
+- **Lock**: public keys stay listed (comments gain `[cosmic-bwarden:locked]`);
+  in-flight `sign` requests wait for unlock in this process (90s bound)
+  rather than failing immediately. Unlocking restores signing of the same
+  keys without any re-import.
 - **SSH request while locked**: the first `ssh-add -l`/`sign` request after a
-  lock broadcasts an `UnlockRequested` event (logged at `warn` level, visible
-  via `RUST_LOG=warn`) to any subscriber, at most once per lock period. The
+  lock broadcasts `UnlockRequested` (or `PinRequested` when a TPM PIN is
+  configured), logged at `warn` and sent at most once per lock period. The
   UI primes its unlock form and sends a desktop notification (“Unlock is
   requested”, symbolic app icon). It does **not** auto-open the applet
-  popup. The request itself still fails immediately; re-run it after unlocking.
-- **Logout**: same as lock — no identities until you log back in and sync.
-  After re-login + sync, previously stored SSH keys are available again
-  (they're fetched from the server, not just the local cache).
+  popup — click the panel icon (or the notification) to type PIN/password.
+  Listing returns immediately; signing waits for that unlock.
+- **Logout**: identities disappear until you log back in and sync (the
+  in-memory public-key cache is cleared). After re-login + sync, previously
+  stored SSH keys are available again (they're fetched from the server, not
+  just the local cache).
 
 ## Troubleshooting
 
 - **`ssh-add -l` says "no identities" but the vault has an SSH key entry**:
-  make sure the vault is unlocked (`cosmic-bwarden-cli unlocked`). If it's
-  unlocked and the key still doesn't show up, check
+  this agent process has not unlocked since start (or you logged out).
+  Unlock (`cosmic-bwarden-cli unlocked` / the applet), then list again. If
+  it's unlocked and the key still doesn't show up, check
   `cosmic-bwarden-cli get "My Work Key"` returns a populated `public_key` —
   if it doesn't, the entry itself is missing key data (re-add it).
+- **`ssh-add -l` shows `[cosmic-bwarden:locked]`**: the vault is locked in
+  this process; unlock the applet or app and retry the SSH/git command
+  (a sign already in flight will complete on unlock).
 - **`sign` fails with "no matching key found"**: the public key offered by
   the SSH server during negotiation doesn't match any vault entry's stored
   public key byte-for-byte. Re-check the `public_key=` value stored in the

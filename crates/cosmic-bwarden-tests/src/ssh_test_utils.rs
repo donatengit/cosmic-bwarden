@@ -119,7 +119,21 @@ pub fn run_ssh_add_list(sock: &Path) -> Result<Output> {
 /// agent socket. Uses `BatchMode=yes` so the client never prompts and fails
 /// fast if pubkey auth via the agent doesn't succeed.
 pub fn run_ssh_command(sock: &Path, port: u16, user: &str, remote_cmd: &str) -> Result<Output> {
-    Ok(Command::new("ssh")
+    Ok(ssh_command(sock, port, user, remote_cmd).output()?)
+}
+
+/// Like [`run_ssh_command`] but killed after `timeout_secs` so a locked-agent
+/// sign wait cannot stall the caller.
+pub fn run_ssh_command_timed(
+    sock: &Path,
+    port: u16,
+    user: &str,
+    remote_cmd: &str,
+    timeout_secs: u64,
+) -> Result<Output> {
+    Ok(Command::new("timeout")
+        .args(["-s", "KILL", &timeout_secs.to_string()])
+        .arg("ssh")
         .args([
             "-o",
             "StrictHostKeyChecking=no",
@@ -138,14 +152,31 @@ pub fn run_ssh_command(sock: &Path, port: u16, user: &str, remote_cmd: &str) -> 
         .output()?)
 }
 
+fn ssh_command(sock: &Path, port: u16, user: &str, remote_cmd: &str) -> Command {
+    let mut cmd = Command::new("ssh");
+    cmd.args([
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=10",
+        "-p",
+        &port.to_string(),
+        &format!("{user}@127.0.0.1"),
+        remote_cmd,
+    ])
+    .env("SSH_AUTH_SOCK", sock);
+    cmd
+}
+
 /// Asserts that the cosmic-bwarden ssh-agent socket either does (or does
 /// not, per `expect_success`) allow a real SSH login against the given
 /// `sshd` port.
 pub fn assert_ssh_access(sock: &Path, port: u16, user: &str, expect_success: bool) -> Result<()> {
     let add_output = run_ssh_add_list(sock)?;
-    let ssh_output = run_ssh_command(sock, port, user, "echo E2E_SSH_OK")?;
-    let ssh_stdout = String::from_utf8_lossy(&ssh_output.stdout);
-    let ssh_stderr = String::from_utf8_lossy(&ssh_output.stderr);
 
     if expect_success {
         if !add_output.status.success() {
@@ -155,6 +186,9 @@ pub fn assert_ssh_access(sock: &Path, port: u16, user: &str, expect_success: boo
                 "expected ssh-add -l to list an identity, got stdout={add_stdout:?} stderr={add_stderr:?}"
             );
         }
+        let ssh_output = run_ssh_command(sock, port, user, "echo E2E_SSH_OK")?;
+        let ssh_stdout = String::from_utf8_lossy(&ssh_output.stdout);
+        let ssh_stderr = String::from_utf8_lossy(&ssh_output.stderr);
         if !ssh_output.status.success() || !ssh_stdout.contains("E2E_SSH_OK") {
             anyhow::bail!(
                 "expected ssh command to succeed, got status={:?} stdout={ssh_stdout:?} stderr={ssh_stderr:?}",
@@ -162,13 +196,27 @@ pub fn assert_ssh_access(sock: &Path, port: u16, user: &str, expect_success: boo
             );
         }
     } else {
-        if add_output.status.success() {
+        if !add_output.status.success() {
             let add_stdout = String::from_utf8_lossy(&add_output.stdout);
-            anyhow::bail!("expected ssh-add -l to report no identities, got stdout={add_stdout:?}");
+            let add_stderr = String::from_utf8_lossy(&add_output.stderr);
+            anyhow::bail!(
+                "expected ssh-add -l to list the cached identity while locked, got stdout={add_stdout:?} stderr={add_stderr:?}"
+            );
         }
+        let add_stdout = String::from_utf8_lossy(&add_output.stdout);
+        if !add_stdout.contains("[cosmic-bwarden:locked]") {
+            anyhow::bail!(
+                "expected locked comment token [cosmic-bwarden:locked] in ssh-add -l, got {add_stdout:?}"
+            );
+        }
+        // Sign waits up to 90s for unlock; bound the client so this assertion
+        // means "does not succeed while still locked", not "wait out the agent".
+        let ssh_output = run_ssh_command_timed(sock, port, user, "echo E2E_SSH_OK", 3)?;
+        let ssh_stdout = String::from_utf8_lossy(&ssh_output.stdout);
+        let ssh_stderr = String::from_utf8_lossy(&ssh_output.stderr);
         if ssh_output.status.success() || ssh_stdout.contains("E2E_SSH_OK") {
             anyhow::bail!(
-                "expected ssh command to fail, got status={:?} stdout={ssh_stdout:?} stderr={ssh_stderr:?}",
+                "expected ssh command to fail while locked, got status={:?} stdout={ssh_stdout:?} stderr={ssh_stderr:?}",
                 ssh_output.status
             );
         }

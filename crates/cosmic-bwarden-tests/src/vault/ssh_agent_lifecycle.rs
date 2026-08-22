@@ -77,10 +77,9 @@ async fn setup_with_ssh_key(email: &str, password: &str) -> Result<LifecycleEnv>
     })
 }
 
-/// While the agent is locked, the SSH agent must refuse to offer or sign
-/// with the vault key: `ssh-add -l` shows no identities and a real `ssh`
-/// connection is rejected outright (the test `sshd` has no other auth
-/// method enabled).
+/// While the agent is locked, public keys stay listed with
+/// `[cosmic-bwarden:locked]` on the comment, and a real `ssh` login must
+/// not succeed until unlock (the test `sshd` has no other auth method).
 #[tokio::test]
 async fn test_ssh_agent_locked_refuses_signing() -> Result<()> {
     let lifecycle =

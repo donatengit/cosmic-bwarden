@@ -122,6 +122,7 @@ The applet popup (`view/applet/`) is self-sufficient for everyday use without op
 
 - [`AGENTS.md`](AGENTS.md) — agent/AI guidelines, golden rules, validation commands, and the full document index
 - [`docs/ssh-agent.md`](docs/ssh-agent.md) — SSH agent protocol and socket configuration
+- [`docs/ssh_agent_locked_message.md`](docs/ssh_agent_locked_message.md) — locked-vault identity listing and wait-on-sign (decision record)
 - [`docs/browser_integration.md`](docs/browser_integration.md) — browser extension IPC
 - [`docs/configurable_paths.md`](docs/configurable_paths.md) — path overrides and multi-instance isolation
 - [`docs/cosmic_integration.md`](docs/cosmic_integration.md) — COSMIC panel applet registration

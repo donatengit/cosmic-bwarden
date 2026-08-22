@@ -1,10 +1,20 @@
+use crate::ssh_agent::identities::CachedSshIdentity;
 use cosmic_bwarden_core::db::EntryData;
 use cosmic_bwarden_core::locked;
 use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio::sync::watch;
 use tokio::sync::Mutex as AsyncMutex;
+
+/// In-process vault session for SSH-agent waiters. Not an IPC `Event`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VaultSession {
+    Locked,
+    Unlocked,
+    LoggedOut,
+}
 
 /// Fresh, random-enough per-process session id for ordering `Config`
 /// snapshots. Time since epoch (nanos) folded with the process id is
@@ -44,6 +54,13 @@ pub struct State {
     /// Pre-built list of decrypted sidebar entries. Rebuilt on unlock and after
     /// every mutation (via sync). GetSidebarEntries just filters this in-memory.
     pub sidebar_cache: Vec<CachedSidebarEntry>,
+    /// Public keys + entry names for the ssh-agent. Survives `lock()` so
+    /// `ssh-add -l` still lists identities; cleared on logout. See
+    /// `docs/ssh_agent_locked_message.md`.
+    pub ssh_identity_cache: Vec<CachedSshIdentity>,
+    /// Waiters on SSH `sign` subscribe here. `send_replace` so the value
+    /// updates even when no sign is in flight.
+    pub session_tx: watch::Sender<VaultSession>,
     pub pending_entry_id: Option<String>,
     pub subscribers: Vec<mpsc::UnboundedSender<cosmic_bwarden_core::protocol::Event>>,
     pub shutdown_tx: Option<mpsc::UnboundedSender<()>>,
@@ -84,6 +101,8 @@ impl State {
             db: None,
             pinned_ids: HashSet::new(),
             sidebar_cache: Vec::new(),
+            ssh_identity_cache: Vec::new(),
+            session_tx: watch::channel(VaultSession::LoggedOut).0,
             pending_entry_id: None,
             subscribers: Vec::new(),
             shutdown_tx: None,
@@ -225,6 +244,10 @@ impl State {
             Vec::new()
         };
         self.sidebar_cache = new_cache;
+        if self.keys.is_some() {
+            crate::ssh_agent::identities::rebuild_from_sidebar(self);
+            self.session_tx.send_replace(VaultSession::Unlocked);
+        }
     }
 
     pub fn broadcast(&mut self, event: cosmic_bwarden_core::protocol::Event) {
@@ -237,8 +260,11 @@ impl State {
         self.master_password_hash = None;
         self.pinned_ids.clear();
         self.sidebar_cache.clear();
+        // ssh_identity_cache is deliberately kept: listing while locked
+        // returns those public keys with a locked comment token.
         self.pending_entry_id = None;
         self.unlock_requested_notified = false;
+        self.session_tx.send_replace(VaultSession::Locked);
         // Deliberately do NOT clear sync_failed/last_sync_error here: a vault
         // that failed to sync stays out of sync across a lock/unlock cycle.
         // Unlock re-authenticates and then runs a sync, which clears the flag
@@ -273,6 +299,18 @@ impl State {
             self.broadcast(event);
             self.unlock_requested_notified = true;
         }
+    }
+
+    /// In-memory side of logout: lock, drop the vault DB, drop the SSH
+    /// identity cache, and wake sign-waiters so they fail instead of waiting
+    /// out the 90s bound.
+    pub fn clear_account(&mut self) {
+        self.lock();
+        self.ssh_identity_cache.clear();
+        self.db = None;
+        self.sync_failed = false;
+        self.last_sync_error = None;
+        self.session_tx.send_replace(VaultSession::LoggedOut);
     }
 }
 
@@ -313,5 +351,22 @@ mod tests {
         let state = State::new();
         assert_ne!(state.session_id, 0, "session id must identify the session");
         assert_eq!(state.lock_epoch, 0);
+    }
+
+    #[test]
+    fn lock_preserves_ssh_identity_cache_logout_clears_it() {
+        use crate::ssh_agent::identities::CachedSshIdentity;
+        let mut state = State::new();
+        state.ssh_identity_cache.push(CachedSshIdentity {
+            pubkey: ssh_agent_lib::ssh_key::public::KeyData::Ed25519(
+                ssh_agent_lib::ssh_key::public::Ed25519PublicKey([0u8; 32]),
+            ),
+            comment: "k".into(),
+        });
+        state.lock();
+        assert_eq!(state.ssh_identity_cache.len(), 1);
+        state.clear_account();
+        assert!(state.ssh_identity_cache.is_empty());
+        assert!(state.db.is_none());
     }
 }

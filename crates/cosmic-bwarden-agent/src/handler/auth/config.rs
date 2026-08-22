@@ -101,16 +101,8 @@ pub async fn handle_logout(state: &Arc<Mutex<State>>) -> Response {
         config.server_name()
     );
     let mut state_guard = state.lock().await;
-    state_guard.lock();
-    // Clear in-memory DB so the next GetConfig loads the empty on-disk
-    // record and correctly reports has_account=false.
-    state_guard.db = None;
-    // Logout tears down the account entirely, so a stale out-of-sync flag
-    // from the previous session has nothing to attach to — reset it rather
-    // than letting it leak into the next login (where `handle_login`'s
-    // initial sync would clear it truthfully anyway, but not before the UI
-    // paints one misleading frame).
-    state_guard.sync_failed = false;
-    state_guard.last_sync_error = None;
+    // lock + drop db + drop SSH identity cache + LoggedOut watch. Clears
+    // the out-of-sync flag so it cannot leak into the next login.
+    state_guard.clear_account();
     Response::Ack
 }
