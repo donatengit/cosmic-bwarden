@@ -1,3 +1,5 @@
+mod pin;
+
 use crate::args::{Cli, Commands};
 use crate::output::handle_response;
 use anyhow::{Context, Result};
@@ -119,42 +121,7 @@ pub async fn handle_command(cli: &Cli, client: &AgentClient) -> Result<()> {
 
             handle_response(res)?;
             println!("Logged in successfully");
-
-            // Offer PIN unlock setup if TPM2 is available and not yet configured.
-            if let Ok(Response::TpmStatus {
-                available: true,
-                configured: false,
-                ..
-            }) = client.send(Action::CheckTpm).await
-            {
-                eprintln!(
-                    "TPM2 available. Enter a PIN (min {} chars) to enable PIN unlock, or leave empty to skip:",
-                    cosmic_bwarden_core::MIN_PIN_LEN
-                );
-                if let Ok(pin) = rpassword::prompt_password("PIN: ") {
-                    let pin = pin.trim().to_string();
-                    if !pin.is_empty() {
-                        if pin.chars().count() < cosmic_bwarden_core::MIN_PIN_LEN {
-                            eprintln!(
-                                "PIN must be at least {} characters — skipping.",
-                                cosmic_bwarden_core::MIN_PIN_LEN
-                            );
-                        } else {
-                            let setup_res = client
-                                .send(Action::SetupTpmPinFromUnlocked { pin })
-                                .await
-                                .context("failed to set up TPM PIN")?;
-                            match setup_res {
-                                Response::Ack => println!("PIN unlock enabled."),
-                                Response::Error { message } => {
-                                    eprintln!("PIN setup failed: {}", message)
-                                }
-                                _ => eprintln!("Unexpected response from PIN setup"),
-                            }
-                        }
-                    }
-                }
-            }
+            pin::offer_after_login(client).await?;
         }
         Commands::Unlock { password } => {
             let password = match password {

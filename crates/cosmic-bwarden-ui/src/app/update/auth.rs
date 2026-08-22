@@ -115,11 +115,10 @@ impl CosmicBWardenApp {
                 }
             }
             Message::LoginSubmitted => {
-                // Validate PIN length before sending the login request.
-                if self.login_pin_enabled
-                    && !self.login_pin.is_empty()
-                    && self.login_pin.chars().count() < MIN_PIN_LEN
-                {
+                // Toggle on means they want PIN: require a long enough one
+                // rather than treating an empty box as "skip" (skip is the
+                // toggle off, and that path deletes leftover TPM blobs).
+                if self.login_pin_enabled && self.login_pin.chars().count() < MIN_PIN_LEN {
                     self.error = Some(fl!("pin-too-short", count = MIN_PIN_LEN));
                     return Some(Task::none());
                 }
@@ -200,34 +199,16 @@ impl CosmicBWardenApp {
                             Action::App(Message::RefreshStateInternal)
                         }));
 
-                        // Master-password unlock that showed the PIN (re-)enable
-                        // field: reseal the PIN (non-empty) or remove a stale PIN
-                        // blob (empty). This is how the user recovers after a TPM
-                        // mismatch forced them back to the master password.
+                        // Master-password unlock: reseal (non-empty PIN) or
+                        // remove a stale blob (empty). Login uses the same
+                        // decision via the PIN toggle — leaving it off after
+                        // logout must delete leftover TPM blobs, not keep them.
                         if apply_unlock_pin {
                             if let Some(task) = self.apply_unlock_pin_task() {
                                 tasks.push(task);
                             }
-                        }
-
-                        // If the user enabled PIN during login, set it up now.
-                        // The vault is freshly unlocked, so we use SetupTpmPinFromUnlocked
-                        // (no master password re-entry needed).
-                        if self.login_pin_enabled && !self.login_pin.is_empty() {
-                            let pin = std::mem::take(&mut self.login_pin);
-                            self.login_pin_enabled = false;
-                            self.login_pin_revealed = false;
-                            tasks.push(Task::perform(
-                                async move {
-                                    let agent = AgentClient::new();
-                                    match agent.send(auth_actions::setup_tpm_pin(pin)).await {
-                                        Ok(Response::Ack) => Ok(()),
-                                        Ok(Response::Error { message }) => Err(message),
-                                        _ => Err("unexpected response".to_string()),
-                                    }
-                                },
-                                |res| Action::App(Message::TpmSetupResult(res)),
-                            ));
+                        } else if let Some(task) = self.apply_login_pin_task() {
+                            tasks.push(task);
                         }
 
                         self.login_password.zeroize();
@@ -299,6 +280,9 @@ impl CosmicBWardenApp {
                 self.unlock_pin.zeroize();
                 self.unlock_pin_revealed = false;
                 self.unlock_pin_apply_pending = false;
+                self.login_pin.zeroize();
+                self.login_pin_enabled = false;
+                self.login_pin_revealed = false;
                 Some(Task::none())
             }
             _ => None,
@@ -314,10 +298,32 @@ impl CosmicBWardenApp {
         // including on the no-TPM path where nothing is sent.
         let pin = std::mem::take(&mut self.unlock_pin);
         self.unlock_pin_revealed = false;
+        Self::pin_intent_task(auth_actions::apply_unlock_pin(
+            self.tpm_available,
+            self.tpm_configured,
+            pin,
+        ))
+    }
 
+    /// Same reseal/clear decision as the unlock form, driven by the login
+    /// screen's PIN toggle. Consumes `self.login_pin`.
+    pub(crate) fn apply_login_pin_task(&mut self) -> Option<Task<Message>> {
+        let pin_enabled = self.login_pin_enabled;
+        self.login_pin_enabled = false;
+        self.login_pin_revealed = false;
+        let pin = std::mem::take(&mut self.login_pin);
+        Self::pin_intent_task(auth_actions::apply_login_pin(
+            self.tpm_available,
+            self.tpm_configured,
+            pin_enabled,
+            pin,
+        ))
+    }
+
+    fn pin_intent_task(intent: auth_actions::UnlockPinIntent) -> Option<Task<Message>> {
         // Each arm routes to a different result message, so the mapping to a
         // task stays here while the *decision* stays unit-testable.
-        match auth_actions::apply_unlock_pin(self.tpm_available, self.tpm_configured, pin) {
+        match intent {
             auth_actions::UnlockPinIntent::Reseal(action) => Some(Task::perform(
                 async move {
                     let agent = AgentClient::new();

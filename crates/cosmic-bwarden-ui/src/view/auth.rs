@@ -69,7 +69,11 @@ impl CosmicBWardenApp {
                 cosmic::widget::toggler(self.login_remember).on_toggle(Message::RememberChanged),
             ));
 
-            if self.tpm_available && !self.tpm_configured {
+            // Always offer PIN when a TPM is present — including after logout,
+            // when a leftover blob still makes `tpm_configured` true. Hiding
+            // the toggle in that case was the bug: the login form looked like
+            // master-password-only and the leftover PIN stayed on disk.
+            if self.tpm_available {
                 togglers = togglers.add(cosmic_settings::item(
                     fl!("enable-pin-after-login"),
                     cosmic::widget::toggler(self.login_pin_enabled)
@@ -78,8 +82,7 @@ impl CosmicBWardenApp {
             }
             login_col = login_col.push(togglers);
 
-            // PIN input + description (only shown when toggle is on)
-            if self.tpm_available && !self.tpm_configured && self.login_pin_enabled {
+            if self.tpm_available && self.login_pin_enabled {
                 login_col = login_col.push(
                     secure_input(
                         fl!("pin-min-chars", count = MIN_PIN_LEN),
@@ -93,6 +96,10 @@ impl CosmicBWardenApp {
                 );
                 login_col =
                     login_col.push(text::caption(fl!("pin-tpm-note-login")).class(muted_text()));
+            } else if self.tpm_available && self.tpm_configured {
+                // Toggle off with a leftover blob: logging in will disable PIN.
+                login_col = login_col
+                    .push(text::caption(fl!("pin-login-leftover-note")).class(muted_text()));
             }
 
             if let Some(error) = &self.error {

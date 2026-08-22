@@ -10,6 +10,7 @@
 //! `Task::perform` async block.
 
 use cosmic_bwarden_core::protocol::Action as AgentAction;
+use zeroize::Zeroize;
 
 /// Begin a session. The verification code is only meaningful when the server
 /// has demanded one, so a blank input must be sent as `None` — an empty string
@@ -110,6 +111,24 @@ pub fn apply_unlock_pin(tpm_available: bool, tpm_configured: bool, pin: String) 
     }
 }
 
+/// Map the login form's PIN toggle onto the same reseal/clear decision as the
+/// unlock form. After logout the TPM blob is still on disk (`tpm_configured`),
+/// so a login that leaves PIN off must `ClearStale` rather than silently keep
+/// leftovers. A non-empty PIN with the toggle on reseals against the new
+/// session's vault keys.
+pub fn apply_login_pin(
+    tpm_available: bool,
+    tpm_configured: bool,
+    pin_enabled: bool,
+    mut pin: String,
+) -> UnlockPinIntent {
+    if !pin_enabled {
+        pin.zeroize();
+        pin = String::new();
+    }
+    apply_unlock_pin(tpm_available, tpm_configured, pin)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,6 +219,42 @@ mod tests {
         // Nothing sealed: an empty box is not a request to disable anything.
         assert!(matches!(
             apply_unlock_pin(true, false, String::new()),
+            UnlockPinIntent::Nothing(_)
+        ));
+    }
+
+    #[test]
+    fn login_pin_off_clears_leftover_blob() {
+        // After logout the blob is still on disk. Logging in with the PIN
+        // toggle off must disable, not silently keep it.
+        assert!(matches!(
+            apply_login_pin(true, true, false, String::new()),
+            UnlockPinIntent::ClearStale(AgentAction::DisableTpmPin)
+        ));
+    }
+
+    #[test]
+    fn login_pin_off_does_nothing_when_no_blob() {
+        assert!(matches!(
+            apply_login_pin(true, false, false, String::new()),
+            UnlockPinIntent::Nothing(_)
+        ));
+    }
+
+    #[test]
+    fn login_pin_on_reseals() {
+        match apply_login_pin(true, true, true, "123456".to_string()) {
+            UnlockPinIntent::Reseal(AgentAction::SetupTpmPinFromUnlocked { pin }) => {
+                assert_eq!(pin, "123456");
+            }
+            other => panic!("expected a reseal, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn login_pin_ignored_without_tpm() {
+        assert!(matches!(
+            apply_login_pin(false, true, true, "123456".to_string()),
             UnlockPinIntent::Nothing(_)
         ));
     }

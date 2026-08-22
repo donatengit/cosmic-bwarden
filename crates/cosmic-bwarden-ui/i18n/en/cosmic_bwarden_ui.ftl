@@ -61,6 +61,10 @@ not-configured = Not logged in — open vault to sign in.
 
 # PIN unlock (TPM 2.0)
 enable-pin-after-login = Enable PIN unlock after login
+# Shown on the login form when a PIN blob from a previous session is still on
+# disk and the enable-PIN toggle is off. Logging in with the toggle off deletes
+# that leftover (vault-key blob, server-credentials blob, and config flags).
+pin-login-leftover-note = PIN unlock is still configured on this device. Enable it after login, or leave this off to remove it.
 # { $count } is the minimum PIN length.
 pin-min-chars = PIN (min { $count } characters)
 new-pin-min-chars = New PIN (min { $count } characters)

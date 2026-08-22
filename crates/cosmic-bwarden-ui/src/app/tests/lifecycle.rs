@@ -739,6 +739,93 @@ fn test_apply_unlock_pin_noop_without_tpm() {
     assert!(app.unlock_pin.is_empty());
 }
 
+#[test]
+fn test_logout_resets_login_pin_toggle_and_keeps_leftover_flag() {
+    // Logout tears down the account but the TPM blob stays on disk until the
+    // next login decides. The login form must still offer PIN (tpm_available)
+    // and record that leftovers exist (tpm_configured) so skipping PIN
+    // can disable them.
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        login_pin_enabled: true,
+        login_pin: "123456".into(),
+        tpm_available: true,
+        tpm_configured: true,
+        ..Default::default()
+    };
+    let _ = app.update(Message::LogoutResult);
+    assert_eq!(app.view, View::Setup);
+    assert!(!app.login_pin_enabled);
+    assert!(app.login_pin.is_empty());
+    assert!(app.tpm_available);
+    assert!(
+        app.tpm_configured,
+        "leftover blob is still on disk until login skip disables it"
+    );
+    let _ = app.view_auth();
+}
+
+#[test]
+fn test_apply_login_pin_task_clears_leftover() {
+    let mut app = CosmicBWardenApp {
+        tpm_available: true,
+        tpm_configured: true,
+        login_pin_enabled: false,
+        ..Default::default()
+    };
+    assert!(
+        app.apply_login_pin_task().is_some(),
+        "login with PIN off and a leftover blob must dispatch DisableTpmPin"
+    );
+    assert!(!app.login_pin_enabled);
+}
+
+#[test]
+fn test_apply_login_pin_task_noop_without_blob() {
+    let mut app = CosmicBWardenApp {
+        tpm_available: true,
+        tpm_configured: false,
+        login_pin_enabled: false,
+        ..Default::default()
+    };
+    assert!(app.apply_login_pin_task().is_none());
+}
+
+#[test]
+fn test_login_pin_too_short_is_rejected() {
+    let mut app = CosmicBWardenApp {
+        login_pin_enabled: true,
+        login_email: "user@example.com".into(),
+        login_password: "masterpw".into(),
+        ..Default::default()
+    };
+    let _ = app.update(Message::LoginSubmitted);
+    assert!(
+        app.error.is_some(),
+        "toggle on with an empty/short PIN must be rejected before login"
+    );
+    assert!(!app.auth_loading);
+}
+
+#[test]
+fn test_login_form_after_logout_still_offers_pin() {
+    // The first-login form shows "Enable PIN unlock after login" when a TPM
+    // is present. After logout a leftover blob used to hide that toggle
+    // (`tpm_available && !tpm_configured`). The toggle must stay offered.
+    let mut app = CosmicBWardenApp {
+        view: View::Setup,
+        tpm_available: true,
+        tpm_configured: true,
+        tpm_status_known: true,
+        login_email: "user@example.com".into(),
+        ..Default::default()
+    };
+    assert!(!app.login_pin_enabled);
+    let _ = app.update(Message::LoginPinEnabledToggled(true));
+    assert!(app.login_pin_enabled);
+    let _ = app.view_auth();
+}
+
 #[tokio::test]
 async fn test_applet_messages() {
     let mut app = CosmicBWardenApp::default();
