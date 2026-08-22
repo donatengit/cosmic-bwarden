@@ -93,6 +93,32 @@ async fn test_lock_logout_clears_state() {
     assert!(app.entries.is_empty());
 }
 
+#[tokio::test]
+async fn event_locked_wipes_as_thoroughly_as_lock_result() {
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        selected_entry_id: Some("1".to_string()),
+        login_password: "hunter2".into(),
+        unlock_pin: "123456".into(),
+        generator_result: Some("gen-secret".into()),
+        ..Default::default()
+    };
+    app.revealed_fields
+        .insert(("1".to_string(), "Password".to_string()));
+    app.generator_history_revealed.insert(0);
+
+    let _ = app.update(Message::EventReceived(
+        cosmic_bwarden_core::protocol::Event::Locked,
+    ));
+    assert_eq!(app.view, View::Unlock);
+    assert!(app.selected_entry_id.is_none());
+    assert!(app.revealed_fields.is_empty());
+    assert!(app.login_password.is_empty());
+    assert!(app.unlock_pin.is_empty());
+    assert!(app.generator_result.is_none());
+    assert!(app.generator_history_revealed.is_empty());
+}
+
 #[test]
 fn test_error_handling() {
     let mut app = CosmicBWardenApp::default();

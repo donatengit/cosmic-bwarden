@@ -137,6 +137,7 @@ field-card-number = Card Number
 field-cardholder = Cardholder
 field-brand = Brand
 field-email = Email
+field-ssn = SSN
 # New-item types (Bitwarden v2026.7.0): bank account / driver's license / passport fields.
 field-bank-name = Bank Name
 field-name-on-account = Name on Account

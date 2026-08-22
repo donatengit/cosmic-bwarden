@@ -9,6 +9,8 @@ pub mod unlock_notify;
 pub mod vault;
 pub mod vault_actions;
 pub mod vault_edit;
+pub mod vault_secrets;
+pub mod wipe;
 
 use crate::app::state::CosmicBWardenApp;
 use crate::fl;
@@ -35,6 +37,10 @@ impl CosmicBWardenApp {
         }
 
         if let Some(task) = self.update_vault_edit(message.clone()) {
+            return task;
+        }
+
+        if let Some(task) = self.update_vault_secrets(message.clone()) {
             return task;
         }
 
@@ -70,6 +76,7 @@ impl CosmicBWardenApp {
             | Message::EntryReceived(_)
             | Message::AddEntryRequested
             | Message::EditEntry
+            | Message::EditEntryLoaded(_)
             | Message::CancelEdit
             | Message::SaveEdit
             | Message::SaveEditResult(_)
@@ -162,7 +169,10 @@ impl CosmicBWardenApp {
             | Message::GeneratorHistoryDeleteConfirmed
             | Message::GeneratorHistoryDeleted(_)
             | Message::AppletGeneratePasswordRequested
-            | Message::AppletGeneratePasswordReceived(_) => Task::none(),
+            | Message::AppletGeneratePasswordReceived(_)
+            | Message::ToggleRevealField(_, _)
+            | Message::CopySecretField(_, _)
+            | Message::OnDemandSecretLoaded { .. } => Task::none(),
 
             Message::CopyToClipboard(text) => self.copy_to_clipboard_with_autoclear(text),
             Message::ClipboardClearElapsed(generation) => {
@@ -193,15 +203,6 @@ impl CosmicBWardenApp {
                 } else {
                     Task::none()
                 }
-            }
-            Message::ToggleRevealField(id, field) => {
-                let key = (id, field);
-                if self.revealed_fields.contains(&key) {
-                    self.revealed_fields.remove(&key);
-                } else {
-                    self.revealed_fields.insert(key);
-                }
-                Task::none()
             }
             Message::ToggleMasterPasswordReveal => {
                 self.master_password_revealed = !self.master_password_revealed;

@@ -44,16 +44,38 @@ pub enum UnlockMode {
     Pin,
 }
 
+/// Why the master-password reprompt dialog is showing. Submit must resume
+/// this intent (`GetEntry` for edit, `GetPassword`/`GetTotp`/`GetEntry` for
+/// reveal/copy) — never a bare detail `GetEntryMeta`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RepromptIntent {
+    Edit,
+    Reveal { field: String },
+    Copy { field: String },
+}
+
+/// Plaintext (or full entry) from an on-demand secret fetch. Debug-redacted.
+#[derive(Clone)]
+pub enum OnDemandPayload {
+    Password(String),
+    Totp(String),
+    Entry(Entry),
+}
+
 /// Agent config/state snapshot carried by `Message::ConfigReceived` — exactly
 /// `Response::Config`'s payload: (config, needs_login, has_account, is_locked,
 /// sync_failed, session_id, lock_epoch). Named to keep the message enum
 /// readable (and `clippy::type_complexity` quiet).
 pub type ConfigSnapshot = (CosmicBWardenConfig, bool, bool, bool, bool, u64, u64);
 
+mod debug_impls;
+
 // MVU message enum: one short-lived value per event. Boxing the wide variants
 // (entry payloads) would touch every `match` arm for a transient allocation win.
+// `Debug` is handwritten in `debug_impls` so clipboard / password / PIN / entry
+// payloads never appear in `{:?}`.
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Message {
     /// (config, needs_login, has_account, is_locked, sync_failed,
     ///  session_id, lock_epoch)
@@ -92,12 +114,22 @@ pub enum Message {
     EntryReceived(Result<Entry, String>),
     AddEntryRequested,
     EditEntry,
+    /// Full `GetEntry` result for the edit form (selection used `GetEntryMeta`).
+    EditEntryLoaded(Result<Entry, String>),
     CancelEdit,
     SaveEdit,
     EditFieldChanged(String, String), // field name, value
     EditNameChanged(String),
     EntriesReceived(u32, Result<Vec<SidebarEntry>, String>),
     CopyToClipboard(String),
+    /// Copy a secret that may not yet be in `selected_entry` (GetEntryMeta).
+    CopySecretField(String, String),
+    /// Result of GetPassword / GetTotp / GetEntry for a detail-pane secret.
+    OnDemandSecretLoaded {
+        field: String,
+        copy: bool,
+        result: Result<OnDemandPayload, String>,
+    },
     /// Auto-clear timer fired; payload is the copy generation it was armed
     /// for — stale generations (a newer copy happened since) are ignored.
     ClipboardClearElapsed(u32),

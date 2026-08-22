@@ -1,5 +1,7 @@
 use crate::app::CosmicBWardenApp;
+use crate::app::update::vault_actions;
 use crate::message::Message;
+use crate::message::RepromptIntent;
 use crate::message::View;
 use cosmic::widget;
 use cosmic::Application;
@@ -274,6 +276,7 @@ fn test_cancel_edit_restores_notes() {
     app.notes_content = widget::text_editor::Content::with_text("old-notes");
 
     let _ = app.update(Message::EditEntry);
+    let _ = app.update(Message::EditEntryLoaded(Ok(entry.clone())));
     assert!(app.editing_entry.is_some());
 
     // Simulate the user scratching out the note before hitting Cancel.
@@ -317,16 +320,112 @@ fn test_reveal_toggle() {
     let mut app = CosmicBWardenApp::default();
     let id = "entry-1".to_string();
     let field = "Password".to_string();
+    let mut entry = create_test_entry(&id, "Login");
+    if let EntryData::Login { password, .. } = &mut entry.data {
+        *password = Some("loaded".to_string().into());
+    }
+    app.selected_entry = Some(entry);
 
     assert!(!app.revealed_fields.contains(&(id.clone(), field.clone())));
 
-    // Toggle On
     let _ = app.update(Message::ToggleRevealField(id.clone(), field.clone()));
     assert!(app.revealed_fields.contains(&(id.clone(), field.clone())));
+    assert!(app.pending_secret_field.is_none());
 
-    // Toggle Off
     let _ = app.update(Message::ToggleRevealField(id.clone(), field.clone()));
     assert!(!app.revealed_fields.contains(&(id.clone(), field.clone())));
+}
+
+#[test]
+fn reveal_password_on_meta_entry_starts_get_password() {
+    let mut app = CosmicBWardenApp::default();
+    let mut entry = create_test_entry("1", "Login");
+    if let EntryData::Login { password, .. } = &mut entry.data {
+        *password = None;
+    }
+    app.selected_entry = Some(entry);
+    app.selected_entry_id = Some("1".into());
+
+    match vault_actions::on_demand_secret("Password", "1".into(), None) {
+        cosmic_bwarden_core::protocol::Action::GetPassword { id, password } => {
+            assert_eq!(id, "1");
+            assert!(password.is_none());
+        }
+        other => panic!("expected GetPassword, got {}", other.variant_name()),
+    }
+
+    let _ = app.update(Message::ToggleRevealField("1".into(), "Password".into()));
+    assert_eq!(app.pending_secret_field.as_deref(), Some("Password"));
+    assert!(!app.revealed_fields.contains(&("1".into(), "Password".into())));
+}
+
+#[test]
+fn copy_secret_on_meta_entry_starts_get_password() {
+    let mut app = CosmicBWardenApp::default();
+    let mut entry = create_test_entry("1", "Login");
+    if let EntryData::Login { password, .. } = &mut entry.data {
+        *password = None;
+    }
+    app.selected_entry = Some(entry);
+    app.selected_entry_id = Some("1".into());
+
+    let _ = app.update(Message::CopySecretField("1".into(), "Password".into()));
+    assert_eq!(app.pending_secret_field.as_deref(), Some("Password"));
+}
+
+#[test]
+fn edit_reprompt_sets_intent_and_submit_sends_get_entry() {
+    let mut app = CosmicBWardenApp {
+        selected_entry_id: Some("1".into()),
+        ..Default::default()
+    };
+    let _ = app.update(Message::EditEntryLoaded(Err("reprompt_required".into())));
+    assert_eq!(app.show_reprompt.as_deref(), Some("1"));
+    assert_eq!(app.reprompt_intent, Some(RepromptIntent::Edit));
+
+    match vault_actions::submit_reprompt_action(
+        app.reprompt_intent.as_ref(),
+        "1".into(),
+        "master".into(),
+    ) {
+        cosmic_bwarden_core::protocol::Action::GetEntry { id, password } => {
+            assert_eq!(id, "1");
+            assert_eq!(password.as_deref(), Some("master"));
+        }
+        other => panic!("expected GetEntry, got {}", other.variant_name()),
+    }
+
+    app.reprompt_password = "master".into();
+    let _ = app.update(Message::SubmitReprompt);
+    // Submit clears nothing until the agent replies; intent stays Edit so a
+    // loaded result is routed to EditEntryLoaded.
+    assert_eq!(app.reprompt_intent, Some(RepromptIntent::Edit));
+}
+
+#[test]
+fn on_demand_password_loaded_patches_entry_and_reveals() {
+    let mut app = CosmicBWardenApp::default();
+    let mut entry = create_test_entry("1", "Login");
+    if let EntryData::Login { password, .. } = &mut entry.data {
+        *password = None;
+    }
+    app.selected_entry = Some(entry);
+    app.selected_entry_id = Some("1".into());
+    app.pending_secret_field = Some("Password".into());
+
+    let _ = app.update(Message::OnDemandSecretLoaded {
+        field: "Password".into(),
+        copy: false,
+        result: Ok(crate::message::OnDemandPayload::Password("hunter2".into())),
+    });
+    match &app.selected_entry.as_ref().unwrap().data {
+        EntryData::Login { password, .. } => {
+            assert_eq!(password.as_ref().map(|s| s.expose()), Some("hunter2"));
+        }
+        _ => panic!("login"),
+    }
+    assert!(app.revealed_fields.contains(&("1".into(), "Password".into())));
+    assert!(app.pending_secret_field.is_none());
 }
 
 // --- Clipboard auto-clear ([P1-9]) state machine ---

@@ -26,6 +26,7 @@ fn field_label(key: &str) -> String {
         "Cardholder" => fl!("field-cardholder"),
         "Brand" => fl!("field-brand"),
         "Email" => fl!("field-email"),
+        "SSN" => fl!("field-ssn"),
         // New-item types (Bitwarden v2026.7.0): bank account / driver's
         // license / passport. Keys stay stable literals (edit dispatch and
         // reveal-state matching); only the display is localized.
@@ -204,39 +205,36 @@ impl CosmicBWardenApp {
                 EntryData::Login {
                     username,
                     password,
-                    totp,
                     ..
                 } => {
                     if let Some(u) = username {
                         fields_col =
                             fields_col.push(self.view_field("Username", u, &entry.id, false));
                     }
-                    if let Some(p) = password {
-                        fields_col = fields_col.push(self.view_field(
-                            "Password",
-                            p.expose(),
-                            &entry.id,
-                            true,
-                        ));
-                    }
-                    if let Some(t) = totp {
-                        fields_col =
-                            fields_col.push(self.view_field("TOTP", t.expose(), &entry.id, true));
-                    }
+                    fields_col = fields_col.push(self.view_field(
+                        "Password",
+                        password.as_ref().map(|s| s.expose()).unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
+                    fields_col = fields_col.push(self.view_field(
+                        "TOTP",
+                        self.totp_code.as_deref().unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
                 }
                 EntryData::SshKey {
                     private_key,
                     public_key,
                     ..
                 } => {
-                    if let Some(pk) = private_key {
-                        fields_col = fields_col.push(self.view_field(
-                            "Private Key",
-                            pk.expose(),
-                            &entry.id,
-                            true,
-                        ));
-                    }
+                    fields_col = fields_col.push(self.view_field(
+                        "Private Key",
+                        private_key.as_ref().map(|s| s.expose()).unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
                     if let Some(pubk) = public_key {
                         fields_col =
                             fields_col.push(self.view_field("Public Key", pubk, &entry.id, false));
@@ -248,14 +246,12 @@ impl CosmicBWardenApp {
                     brand,
                     ..
                 } => {
-                    if let Some(n) = number {
-                        fields_col = fields_col.push(self.view_field(
-                            "Card Number",
-                            n.expose(),
-                            &entry.id,
-                            true,
-                        ));
-                    }
+                    fields_col = fields_col.push(self.view_field(
+                        "Card Number",
+                        number.as_ref().map(|s| s.expose()).unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
                     if let Some(c) = cardholder_name {
                         fields_col =
                             fields_col.push(self.view_field("Cardholder", c, &entry.id, false));
@@ -265,7 +261,12 @@ impl CosmicBWardenApp {
                     }
                 }
                 EntryData::Identity {
-                    username, email, ..
+                    username,
+                    email,
+                    ssn,
+                    license_number,
+                    passport_number,
+                    ..
                 } => {
                     if let Some(u) = username {
                         fields_col =
@@ -274,6 +275,24 @@ impl CosmicBWardenApp {
                     if let Some(e) = email {
                         fields_col = fields_col.push(self.view_field("Email", e, &entry.id, false));
                     }
+                    fields_col = fields_col.push(self.view_field(
+                        "SSN",
+                        ssn.as_deref().unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
+                    fields_col = fields_col.push(self.view_field(
+                        "License Number",
+                        license_number.as_deref().unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
+                    fields_col = fields_col.push(self.view_field(
+                        "Passport Number",
+                        passport_number.as_deref().unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
                 }
                 EntryData::BankAccount {
                     bank_name,
@@ -303,37 +322,42 @@ impl CosmicBWardenApp {
                         fields_col =
                             fields_col.push(self.view_field("Account Type", v, &entry.id, false));
                     }
-                    if let Some(v) = account_number {
-                        fields_col = fields_col.push(self.view_field(
-                            "Account Number",
-                            v.expose(),
-                            &entry.id,
-                            true,
-                        ));
-                    }
-                    if let Some(v) = routing_number {
-                        fields_col = fields_col.push(self.view_field(
-                            "Routing Number",
-                            v.expose(),
-                            &entry.id,
-                            true,
-                        ));
-                    }
-                    if let Some(v) = branch_number {
-                        fields_col =
-                            fields_col.push(self.view_field("Branch Number", v, &entry.id, false));
-                    }
-                    if let Some(v) = pin {
-                        fields_col =
-                            fields_col.push(self.view_field("PIN", v.expose(), &entry.id, true));
-                    }
-                    if let Some(v) = swift_code {
-                        fields_col =
-                            fields_col.push(self.view_field("SWIFT Code", v, &entry.id, false));
-                    }
-                    if let Some(v) = iban {
-                        fields_col = fields_col.push(self.view_field("IBAN", v, &entry.id, false));
-                    }
+                    fields_col = fields_col.push(self.view_field(
+                        "Account Number",
+                        account_number.as_ref().map(|s| s.expose()).unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
+                    fields_col = fields_col.push(self.view_field(
+                        "Routing Number",
+                        routing_number.as_ref().map(|s| s.expose()).unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
+                    fields_col = fields_col.push(self.view_field(
+                        "Branch Number",
+                        branch_number.as_deref().unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
+                    fields_col = fields_col.push(self.view_field(
+                        "PIN",
+                        pin.as_ref().map(|s| s.expose()).unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
+                    fields_col = fields_col.push(self.view_field(
+                        "SWIFT Code",
+                        swift_code.as_deref().unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
+                    fields_col = fields_col.push(self.view_field(
+                        "IBAN",
+                        iban.as_deref().unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
                     if let Some(v) = bank_contact_phone {
                         fields_col = fields_col.push(self.view_field(
                             "Bank Contact Phone",
@@ -372,14 +396,12 @@ impl CosmicBWardenApp {
                         fields_col =
                             fields_col.push(self.view_field("Date of Birth", v, &entry.id, false));
                     }
-                    if let Some(v) = license_number {
-                        fields_col = fields_col.push(self.view_field(
-                            "License Number",
-                            v.expose(),
-                            &entry.id,
-                            true,
-                        ));
-                    }
+                    fields_col = fields_col.push(self.view_field(
+                        "License Number",
+                        license_number.as_ref().map(|s| s.expose()).unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
                     if let Some(v) = issuing_country {
                         fields_col = fields_col.push(self.view_field(
                             "Issuing Country",
@@ -440,10 +462,12 @@ impl CosmicBWardenApp {
                         fields_col =
                             fields_col.push(self.view_field("Given Name", v, &entry.id, false));
                     }
-                    if let Some(v) = date_of_birth {
-                        fields_col =
-                            fields_col.push(self.view_field("Date of Birth", v, &entry.id, false));
-                    }
+                    fields_col = fields_col.push(self.view_field(
+                        "Date of Birth",
+                        date_of_birth.as_deref().unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
                     if let Some(v) = sex {
                         fields_col = fields_col.push(self.view_field("Sex", v, &entry.id, false));
                     }
@@ -463,26 +487,22 @@ impl CosmicBWardenApp {
                             false,
                         ));
                     }
-                    if let Some(v) = passport_number {
-                        fields_col = fields_col.push(self.view_field(
-                            "Passport Number",
-                            v.expose(),
-                            &entry.id,
-                            true,
-                        ));
-                    }
+                    fields_col = fields_col.push(self.view_field(
+                        "Passport Number",
+                        passport_number.as_ref().map(|s| s.expose()).unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
                     if let Some(v) = passport_type {
                         fields_col =
                             fields_col.push(self.view_field("Passport Type", v, &entry.id, false));
                     }
-                    if let Some(v) = national_identification_number {
-                        fields_col = fields_col.push(self.view_field(
-                            "National Identification Number",
-                            v,
-                            &entry.id,
-                            false,
-                        ));
-                    }
+                    fields_col = fields_col.push(self.view_field(
+                        "National Identification Number",
+                        national_identification_number.as_deref().unwrap_or(""),
+                        &entry.id,
+                        true,
+                    ));
                     if let Some(v) = issuing_authority {
                         fields_col = fields_col.push(self.view_field(
                             "Issuing Authority",
@@ -508,14 +528,16 @@ impl CosmicBWardenApp {
             }
 
             for field in &entry.fields {
-                if let (Some(name), Some(value)) = (&field.name, &field.value) {
+                if let Some(name) = &field.name {
                     let is_hidden = field.ty == Some(cosmic_bwarden_core::api::FieldType::Hidden);
-                    fields_col = fields_col.push(self.view_field(
-                        name,
-                        value.expose(),
-                        &entry.id,
-                        is_hidden,
-                    ));
+                    if is_hidden || field.value.is_some() {
+                        fields_col = fields_col.push(self.view_field(
+                            name,
+                            field.value.as_ref().map(|v| v.expose()).unwrap_or(""),
+                            &entry.id,
+                            is_hidden,
+                        ));
+                    }
                 }
             }
         }
@@ -626,8 +648,11 @@ impl CosmicBWardenApp {
         }
 
         row = row.push(
-            button::icon(icon::from_name("edit-copy-symbolic"))
-                .on_press(Message::CopyToClipboard(value.to_string())),
+            button::icon(icon::from_name("edit-copy-symbolic")).on_press(if is_password {
+                Message::CopySecretField(entry_id.to_string(), label.to_string())
+            } else {
+                Message::CopyToClipboard(value.to_string())
+            }),
         );
         container(row).padding(5).into()
     }

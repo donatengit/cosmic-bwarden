@@ -54,12 +54,46 @@ impl CosmicBWardenApp {
                 Some(Task::none())
             }
             Message::EditEntry => {
-                if let Some(entry) = &self.selected_entry {
-                    self.editing_entry = Some(entry.clone());
-                    self.notes_content = cosmic::widget::text_editor::Content::with_text(
-                        entry.notes.as_deref().unwrap_or(""),
-                    );
-                    self.edit_password_revealed = false;
+                if let Some(id) = self
+                    .selected_entry
+                    .as_ref()
+                    .map(|e| e.id.clone())
+                    .or_else(|| self.selected_entry_id.clone())
+                {
+                    let action = crate::app::update::vault_actions::fetch_full_entry(id, None);
+                    Some(Task::perform(
+                        async move {
+                            let agent = AgentClient::new();
+                            match agent.send(action).await {
+                                Ok(Response::Entry { entry }) => Ok(entry),
+                                Ok(Response::Error { message }) => Err(message),
+                                _ => Err("unexpected response".to_string()),
+                            }
+                        },
+                        |res| Action::App(Message::EditEntryLoaded(res)),
+                    ))
+                } else {
+                    Some(Task::none())
+                }
+            }
+            Message::EditEntryLoaded(res) => {
+                match res {
+                    Ok(entry) => {
+                        self.notes_content = cosmic::widget::text_editor::Content::with_text(
+                            entry.notes.as_deref().unwrap_or(""),
+                        );
+                        self.editing_entry = Some(entry);
+                        self.edit_password_revealed = false;
+                        self.show_reprompt = None;
+                        self.reprompt_intent = None;
+                    }
+                    Err(e) if e == "reprompt_required" => {
+                        self.show_reprompt = self.selected_entry_id.clone();
+                        self.reprompt_intent = Some(crate::message::RepromptIntent::Edit);
+                    }
+                    Err(e) => {
+                        self.error = Some(e);
+                    }
                 }
                 Some(Task::none())
             }

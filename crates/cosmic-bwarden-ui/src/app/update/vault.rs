@@ -85,6 +85,9 @@ impl CosmicBWardenApp {
                 self.selected_entry_id = Some(id.clone());
                 self.selected_entry = None;
                 self.editing_entry = None;
+                self.totp_code = None;
+                self.pending_secret_field = None;
+                self.reprompt_intent = None;
                 self.view = View::Vault;
                 let action = vault_actions::fetch_entry(id, None);
                 Some(Task::perform(
@@ -277,25 +280,51 @@ impl CosmicBWardenApp {
             }
             Message::SubmitReprompt => {
                 if let Some(id) = self.show_reprompt.clone() {
-                    let action =
-                        vault_actions::fetch_entry(id, Some(self.reprompt_password.clone()));
-                    Some(Task::perform(
-                        async move {
-                            let agent = AgentClient::new();
-                            match agent.send(action).await {
-                                Ok(Response::Entry { entry }) => Ok(entry),
-                                Ok(Response::Error { message }) => Err(message),
-                                _ => Err("unexpected response".to_string()),
-                            }
-                        },
-                        |res| Action::App(Message::EntryReceived(res)),
-                    ))
+                    let intent = self.reprompt_intent.clone();
+                    let password = self.reprompt_password.clone();
+                    match intent {
+                        Some(crate::message::RepromptIntent::Reveal { field }) => {
+                            Some(super::vault_secrets::dispatch_on_demand(
+                                id,
+                                field,
+                                false,
+                                Some(password),
+                            ))
+                        }
+                        Some(crate::message::RepromptIntent::Copy { field }) => {
+                            Some(super::vault_secrets::dispatch_on_demand(
+                                id,
+                                field,
+                                true,
+                                Some(password),
+                            ))
+                        }
+                        Some(crate::message::RepromptIntent::Edit) | None => {
+                            let action = vault_actions::submit_reprompt_action(
+                                self.reprompt_intent.as_ref(),
+                                id,
+                                password,
+                            );
+                            Some(Task::perform(
+                                async move {
+                                    let agent = AgentClient::new();
+                                    match agent.send(action).await {
+                                        Ok(Response::Entry { entry }) => Ok(entry),
+                                        Ok(Response::Error { message }) => Err(message),
+                                        _ => Err("unexpected response".to_string()),
+                                    }
+                                },
+                                |res| Action::App(Message::EditEntryLoaded(res)),
+                            ))
+                        }
+                    }
                 } else {
                     Some(Task::none())
                 }
             }
             Message::CancelReprompt => {
                 self.show_reprompt = None;
+                self.reprompt_intent = None;
                 self.reprompt_password.zeroize();
                 self.reprompt_password_revealed = false;
                 Some(Task::none())

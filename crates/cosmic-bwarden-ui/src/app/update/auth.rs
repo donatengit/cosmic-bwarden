@@ -244,20 +244,7 @@ impl CosmicBWardenApp {
                 |_| Action::App(Message::LockResult),
             )),
             Message::LockResult => {
-                self.view = View::Unlock;
-                self.entries.clear();
-                self.selected_entry_id = None;
-                self.selected_entry = None;
-                self.editing_entry = None;
-                self.revealed_fields.clear();
-                self.error = None;
-                self.pin_incorrect = false;
-                self.main_window_pin.zeroize();
-                self.unlock_password.zeroize();
-                self.unlock_pin.zeroize();
-                self.unlock_pin_revealed = false;
-                self.unlock_pin_apply_pending = false;
-                self.login_password.zeroize();
+                self.wipe_for_lock();
                 Some(Task::none())
             }
             Message::LogoutClicked => Some(Task::perform(
@@ -269,20 +256,7 @@ impl CosmicBWardenApp {
             )),
             Message::LogoutResult => {
                 self.view = View::Setup;
-                self.entries.clear();
-                self.selected_entry_id = None;
-                self.selected_entry = None;
-                self.editing_entry = None;
-                self.revealed_fields.clear();
-                self.error = None;
-                self.pin_incorrect = false;
-                self.main_window_pin.zeroize();
-                self.unlock_pin.zeroize();
-                self.unlock_pin_revealed = false;
-                self.unlock_pin_apply_pending = false;
-                self.login_pin.zeroize();
-                self.login_pin_enabled = false;
-                self.login_pin_revealed = false;
+                self.wipe_session_secrets();
                 Some(Task::none())
             }
             _ => None,

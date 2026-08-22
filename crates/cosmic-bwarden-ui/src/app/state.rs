@@ -252,6 +252,12 @@ pub struct CosmicBWardenApp {
     /// the readback can verify the clipboard still contains it before wiping.
     /// Zeroized when the clear resolves either way.
     pub clipboard_pending_clear: Option<String>,
+    /// Why `show_reprompt` is open: edit vs reveal vs copy.
+    pub reprompt_intent: Option<crate::message::RepromptIntent>,
+    /// Field a secret fetch was started for (MVU tests assert this).
+    pub pending_secret_field: Option<String>,
+    /// Live TOTP code from `GetTotp`, not the stored seed.
+    pub totp_code: Option<String>,
 }
 
 impl Default for CosmicBWardenApp {
@@ -348,6 +354,9 @@ impl Default for CosmicBWardenApp {
             last_unlock_notify: None,
             clipboard_clear_generation: 0,
             clipboard_pending_clear: None,
+            reprompt_intent: None,
+            pending_secret_field: None,
+            totp_code: None,
             generator_settings: cosmic_bwarden_core::protocol::GeneratorSettings::default(),
             generator_result: None,
             generator_result_revealed: false,

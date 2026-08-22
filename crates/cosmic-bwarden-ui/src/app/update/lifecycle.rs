@@ -183,17 +183,10 @@ impl CosmicBWardenApp {
             Message::EventReceived(event) => {
                 match event {
                     cosmic_bwarden_core::protocol::Event::Locked => {
-                        self.view = View::Unlock;
-                        self.selected_entry = None;
-                        self.editing_entry = None;
-                        self.selected_entry_id = None;
-                        self.entries.clear();
-                        self.all_entries.clear();
-                        self.error = None;
-                        self.pin_incorrect = false;
                         // Keep the current unlock form: a PIN-first user stays
                         // PIN-first, and an explicit "use master password
                         // instead" choice stays respected.
+                        self.wipe_for_lock();
                         // Re-query config: if this was a logout rather than a
                         // plain lock, ConfigReceived will set view=Setup.
                         return Some(fetch_config_task());
