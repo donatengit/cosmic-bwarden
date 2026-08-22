@@ -105,10 +105,10 @@ ssh -o IdentitiesOnly=no user@host
   any re-import.
 - **SSH request while locked**: the first `ssh-add -l`/`sign` request after a
   lock broadcasts an `UnlockRequested` event (logged at `warn` level, visible
-  via `RUST_LOG=warn`) to any subscriber — the COSMIC applet reacts by
-  opening its popup with the unlock dialog. The request itself still fails
-  immediately; re-run it after unlocking. Further requests during the same
-  lock period don't repeat the notification.
+  via `RUST_LOG=warn`) to any subscriber, at most once per lock period. The
+  UI primes its unlock form and sends a desktop notification (“Unlock is
+  requested”, symbolic app icon). It does **not** auto-open the applet
+  popup. The request itself still fails immediately; re-run it after unlocking.
 - **Logout**: same as lock — no identities until you log back in and sync.
   After re-login + sync, previously stored SSH keys are available again
   (they're fetched from the server, not just the local cache).

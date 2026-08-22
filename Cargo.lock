@@ -1445,6 +1445,7 @@ dependencies = [
  "tracing",
  "tracing-journald",
  "tracing-subscriber",
+ "zbus 5.15.0",
  "zeroize",
 ]
 

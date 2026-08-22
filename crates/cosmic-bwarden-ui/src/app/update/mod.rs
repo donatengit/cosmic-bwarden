@@ -5,6 +5,7 @@ pub mod auth_actions;
 pub mod generator_actions;
 pub mod lifecycle;
 pub mod pwgen;
+pub mod unlock_notify;
 pub mod vault;
 pub mod vault_actions;
 pub mod vault_edit;

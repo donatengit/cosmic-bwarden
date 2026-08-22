@@ -53,6 +53,10 @@ enter-master-password = Please enter your master password to view this sensitive
 locked-need-password = Locked: need password
 locked-need-pin = Locked: enter PIN
 use-master-password-instead = Use master password instead
+# Desktop notification when SSH (or RequestUnlock) needs the vault unlocked.
+# Fixed copy — never interpolate secrets, key names, or passwords.
+unlock-requested-summary = Unlock is requested
+unlock-requested-body = Unlock the applet or app to continue.
 # Shown when the TPM refuses to unseal because the PCR state changed (BIOS or
 # firmware update, Secure Boot toggle). The PIN itself is still valid; it must
 # be re-sealed against the new machine state via a master-password unlock.

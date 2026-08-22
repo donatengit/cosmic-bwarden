@@ -199,41 +199,13 @@ impl CosmicBWardenApp {
                         return Some(fetch_config_task());
                     }
                     cosmic_bwarden_core::protocol::Event::PinRequested => {
-                        // Don't prompt to unlock when there is nothing to unlock
-                        // (no configured account/email) — unlocking would just
-                        // error. Refresh config so the UI shows the right state.
-                        if !self.unlock_prompt_ready() {
-                            return Some(fetch_config_task());
-                        }
-                        self.unlock_mode = UnlockMode::Pin;
-                        self.password_preferred = false;
-                        self.pin_incorrect = false;
-                        self.view = View::Unlock;
-                        self.selected_entry = None;
-                        self.editing_entry = None;
-                        self.selected_entry_id = None;
-                        // Note: no popup auto-open here. cosmic-panel only
-                        // forwards an applet popup to the compositor while a
-                        // panel surface is hovered/focused (xdg_shell.rs
-                        // `new_popup`); a popup opened from a broadcast event
-                        // (pointer elsewhere) is silently dropped host-side
-                        // with no popup_done, leaving `applet_popup` pointing
-                        // at a surface that was never shown — which then
-                        // swallows every subsequent icon click. Priming the
-                        // view is enough: the next click opens straight into
-                        // the PIN prompt.
-                        return Some(check_tpm_da_task());
+                        // Primes the PIN form and queues a desktop Notify
+                        // when an account is ready. Does not auto-open the
+                        // applet popup (cosmic-panel drops unfocused ones).
+                        return Some(super::unlock_notify::on_unlock_event(self, true));
                     }
                     cosmic_bwarden_core::protocol::Event::UnlockRequested => {
-                        if !self.unlock_prompt_ready() {
-                            return Some(fetch_config_task());
-                        }
-                        self.unlock_mode = UnlockMode::Password;
-                        self.view = View::Unlock;
-                        self.selected_entry = None;
-                        self.editing_entry = None;
-                        self.selected_entry_id = None;
-                        // No popup auto-open — see PinRequested above.
+                        return Some(super::unlock_notify::on_unlock_event(self, false));
                     }
                     cosmic_bwarden_core::protocol::Event::Unlocked => {
                         self.view = View::Vault;

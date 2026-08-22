@@ -58,7 +58,8 @@ ordering matters:
   both go through `State::request_unlock()`, which broadcasts `PinRequested` when a TPM
   PIN is configured, `UnlockRequested` otherwise, at most once per lock period. The UI
   derives its unlock form from those events (`UnlockMode`), never from the TPM status
-  while unlocked.
+  while unlocked, and sends a desktop `org.freedesktop.Notifications` `Notify` when an
+  account is ready (no applet-popup auto-open).
 - **Unseal failure classification**: `tpm::classify_unseal_failure` distinguishes
   `TPM_RC_AUTH_FAIL` (wrong PIN, DA attempt consumed), `TPM_RC_LOCKOUT`, and
   `TPM_RC_POLICY_FAIL` (PCR state changed — BIOS/firmware update). Only the last maps to

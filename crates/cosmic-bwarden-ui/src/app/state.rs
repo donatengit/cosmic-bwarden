@@ -217,6 +217,10 @@ pub struct CosmicBWardenApp {
     /// True when the agent reports a configured account (`has_account`). Used to
     /// avoid prompting to unlock when there is nothing to unlock (no account/email).
     pub has_account: bool,
+    /// Last desktop-notify payload decided by `EventReceived(UnlockRequested
+    /// | PinRequested)`. `None` if that event was skipped (no account). The
+    /// D-Bus task is fed this same value; tests assert against it.
+    pub last_unlock_notify: Option<crate::app::update::unlock_notify::NotifyPayload>,
 
     // Password generator pane
     /// Current draft checkbox/slider state — may differ from the device's
@@ -341,6 +345,7 @@ impl Default for CosmicBWardenApp {
             tpm_da: None,
             pin_incorrect: false,
             has_account: false,
+            last_unlock_notify: None,
             clipboard_clear_generation: 0,
             clipboard_pending_clear: None,
             generator_settings: cosmic_bwarden_core::protocol::GeneratorSettings::default(),

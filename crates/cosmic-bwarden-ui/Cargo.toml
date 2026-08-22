@@ -72,6 +72,7 @@ i18n-embed = { workspace = true }
 i18n-embed-fl = { workspace = true }
 rust-embed = { workspace = true }
 zeroize = { workspace = true }
+zbus = { workspace = true }
 
 [dev-dependencies]
 # Settings-persistence regression tests write a real config file through the

@@ -1,9 +1,23 @@
+use crate::app::update::unlock_notify::{payload_if_ready, APP_ICON};
 use crate::app::CosmicBWardenApp;
+use crate::fl;
 use crate::message::Message;
 use crate::message::UnlockMode;
 use crate::message::View;
 use cosmic::Application;
 use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
+
+fn assert_unlock_notify_payload(app: &CosmicBWardenApp) {
+    let expected = payload_if_ready(true).expect("ready account produces a payload");
+    let got = app
+        .last_unlock_notify
+        .as_ref()
+        .expect("EventReceived must record the notify payload");
+    assert_eq!(got, &expected);
+    assert_eq!(got.app_icon, APP_ICON);
+    assert_eq!(got.summary, fl!("unlock-requested-summary"));
+    assert_eq!(got.body, fl!("unlock-requested-body"));
+}
 
 #[tokio::test]
 async fn test_auth_window_transition() {
@@ -98,6 +112,29 @@ async fn test_unlock_requested_event_shows_unlock_view() {
     ));
     assert_eq!(app.view, View::Unlock);
     assert!(app.selected_entry_id.is_none());
+    assert!(app.applet_popup.is_none(), "must not auto-open the applet popup");
+    assert_unlock_notify_payload(&app);
+}
+
+#[tokio::test]
+async fn test_pin_requested_event_notifies_when_ready() {
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        selected_entry_id: Some("1".to_string()),
+        has_account: true,
+        ..Default::default()
+    };
+    app.config.email = Some("user@example.com".to_string());
+
+    let _ = app.update(Message::EventReceived(
+        cosmic_bwarden_core::protocol::Event::PinRequested,
+    ));
+    assert_eq!(app.view, View::Unlock);
+    assert_eq!(app.unlock_mode, UnlockMode::Pin);
+    assert!(!app.password_preferred);
+    assert!(!app.pin_incorrect);
+    assert!(app.applet_popup.is_none(), "must not auto-open the applet popup");
+    assert_unlock_notify_payload(&app);
 }
 
 #[tokio::test]
@@ -119,6 +156,10 @@ async fn test_unlock_requested_ignored_without_account() {
         "must not prompt unlock without an account"
     );
     assert_eq!(app.unlock_mode, UnlockMode::Password);
+    assert!(
+        app.last_unlock_notify.is_none(),
+        "must not Notify without a configured account"
+    );
 }
 
 #[tokio::test]
@@ -136,6 +177,31 @@ async fn test_pin_requested_ignored_without_account() {
         "no PIN prompt without a configured account"
     );
     assert_eq!(app.view, View::Vault);
+    assert!(
+        app.last_unlock_notify.is_none(),
+        "must not Notify without a configured account"
+    );
+}
+
+#[tokio::test]
+async fn test_unlock_requested_ignored_with_blank_email() {
+    // has_account but no usable email is the other half of unlock_prompt_ready.
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        has_account: true,
+        ..Default::default()
+    };
+    app.config.email = Some("   ".to_string());
+    assert!(!app.unlock_prompt_ready());
+
+    let _ = app.update(Message::EventReceived(
+        cosmic_bwarden_core::protocol::Event::UnlockRequested,
+    ));
+    assert_eq!(app.view, View::Vault);
+    assert!(
+        app.last_unlock_notify.is_none(),
+        "must not Notify with a blank email"
+    );
 }
 
 #[tokio::test]
