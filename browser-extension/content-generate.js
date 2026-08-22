@@ -11,7 +11,11 @@ if (typeof globalThis.browser === 'undefined') { globalThis.browser = globalThis
 // script's context-menu handler asks this content script to do the write.
 browser.runtime.onMessage.addListener((message) => {
     if (message && message.type === 'GENERATE_COPY_TO_CLIPBOARD') {
-        navigator.clipboard.writeText(message.password).catch(() => {});
+        navigator.clipboard.writeText(message.password).then(() => {
+            if (typeof scheduleClipboardClear === 'function') {
+                scheduleClipboardClear(message.password);
+            }
+        }).catch(() => {});
         return Promise.resolve({ Ack: true });
     }
 });

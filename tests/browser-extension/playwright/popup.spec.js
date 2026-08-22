@@ -10,7 +10,7 @@ const MOCK_ENTRY_META = {
 
 const MOCK_ENTRY_FULL = {
   id: '1', name: 'Test Login', entry_type: 'Login', notes: null,
-  data: { Login: { username: 'testuser', password: 'testpassword', totp: null, uris: [] } }
+  data: { Login: { username: 'testuser', password: 'testpassword', totp: null, uris: [{ uri: 'https://example.com/login' }] } }
 };
 
 // Entries returned when no query (or query=null) is sent — the full vault list.

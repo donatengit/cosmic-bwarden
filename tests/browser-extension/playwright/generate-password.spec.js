@@ -54,7 +54,7 @@ async function injectContentScripts(page, files, { generatedPassword } = {}) {
 test.describe('Generate password: clipboard relay (content-generate.js)', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(LOGIN_FIXTURE_URL);
-    await injectContentScripts(page, ['content-heuristics.js', 'content-generate.js']);
+    await injectContentScripts(page, ['content-heuristics.js', 'clipboard-clear.js', 'content-generate.js']);
   });
 
   test('GENERATE_COPY_TO_CLIPBOARD message writes the password to the clipboard', async ({ page }) => {
@@ -89,14 +89,14 @@ function iconNamesOn(page) {
 test.describe('Generate password: inline icon placement', () => {
   test('shows the icon only on the registration field, never on login password fields', async ({ page }) => {
     await page.goto(LOGIN_FIXTURE_URL);
-    await injectContentScripts(page, ['content-heuristics.js', 'content.js', 'content-generate.js']);
+    await injectContentScripts(page, ['content-heuristics.js', 'content.js', 'clipboard-clear.js', 'content-generate.js']);
 
     expect(await iconNamesOn(page)).toEqual(['reg-password']);
   });
 
   test('shows the icon on new+confirm fields but not the current-password field', async ({ page }) => {
     await page.goto(CHANGE_PASSWORD_FIXTURE_URL);
-    await injectContentScripts(page, ['content-heuristics.js', 'content.js', 'content-generate.js']);
+    await injectContentScripts(page, ['content-heuristics.js', 'content.js', 'clipboard-clear.js', 'content-generate.js']);
 
     expect(await iconNamesOn(page)).toEqual(['confirm-password', 'new-password']);
   });
@@ -107,7 +107,7 @@ test.describe('Generate password: inline icon fill-on-click', () => {
     await page.goto(CHANGE_PASSWORD_FIXTURE_URL);
     await injectContentScripts(
       page,
-      ['content-heuristics.js', 'content.js', 'content-generate.js'],
+      ['content-heuristics.js', 'content.js', 'clipboard-clear.js', 'content-generate.js'],
       { generatedPassword: 'freshly-generated-pw' }
     );
 

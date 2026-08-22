@@ -85,10 +85,25 @@ function makeFakeAgent(locked) {
 function loadBackground(fakeBrowser) {
     const fn = new Function(
         'browser',
-        `${source}\nreturn { updateBadge, setThemeIcon, extractDomain };`
+        `${source}\nreturn { updateBadge, setThemeIcon, extractDomain, isContentScriptProxyAllowed };`
     );
     return fn(fakeBrowser);
 }
+
+describe('content-script action allowlist', () => {
+    it('allows GeneratePassword from a content script', () => {
+        const agent = makeFakeAgent(false);
+        const { isContentScriptProxyAllowed } = loadBackground(makeFakeBrowser(agent));
+        expect(isContentScriptProxyAllowed({ GeneratePassword: { settings: null } })).toBe(true);
+    });
+    it('rejects GetPassword / GetEntry / Quit from a content script', () => {
+        const agent = makeFakeAgent(false);
+        const { isContentScriptProxyAllowed } = loadBackground(makeFakeBrowser(agent));
+        expect(isContentScriptProxyAllowed({ GetPassword: { id: 'x' } })).toBe(false);
+        expect(isContentScriptProxyAllowed({ GetEntry: { id: 'x' } })).toBe(false);
+        expect(isContentScriptProxyAllowed('Quit')).toBe(false);
+    });
+});
 
 describe('toolbar lock-state icon', () => {
     it('switches the action icon to the locked variant when the vault is locked', async () => {

@@ -225,5 +225,14 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         updateLockState();
         return Promise.resolve({ Ack: true });
     }
+    // Content scripts share this listener. Only generation is a legitimate
+    // content-script → agent call; everything else must come from the popup.
+    if (sender && sender.tab && !isContentScriptProxyAllowed(message)) {
+        return Promise.resolve({ Error: { message: 'action not allowed from content script' } });
+    }
     return sendToAgent(message);
 });
+
+function isContentScriptProxyAllowed(message) {
+    return !!(message && message.GeneratePassword !== undefined);
+}

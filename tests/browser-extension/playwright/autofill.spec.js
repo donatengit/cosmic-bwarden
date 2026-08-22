@@ -40,7 +40,8 @@ test.describe('Autofill Content Script', () => {
       window._contentScriptListener({
         type: 'FILL_FORM',
         username: 'autofill-user',
-        password: 'autofill-password'
+        password: 'autofill-password',
+        expectedHost: window.location.hostname || 'localhost',
       });
     });
 
@@ -50,6 +51,46 @@ test.describe('Autofill Content Script', () => {
 
     expect(usernameValue).toBe('autofill-user');
     expect(passwordValue).toBe('autofill-password');
+  });
+
+  test('does not fill hidden password inputs', async ({ page }) => {
+    await page.setContent(`
+      <form id="login-form">
+        <input type="text" name="user" id="user-field">
+        <input type="password" name="pass" id="pass-field">
+        <input type="password" name="honeypot" id="honeypot" style="display:none">
+      </form>
+    `);
+
+    const contentScript =
+      fs.readFileSync(path.join(EXTENSION_PATH, 'content-heuristics.js'), 'utf8') +
+      '\n' +
+      fs.readFileSync(path.join(EXTENSION_PATH, 'content.js'), 'utf8');
+
+    await page.evaluate((script) => {
+      window.browser = {
+        runtime: {
+          onMessage: {
+            addListener: (listener) => {
+              window._contentScriptListener = listener;
+            }
+          }
+        }
+      };
+      eval(script);
+    }, contentScript);
+
+    await page.evaluate(() => {
+      window._contentScriptListener({
+        type: 'FILL_FORM',
+        username: 'autofill-user',
+        password: 'autofill-password',
+        expectedHost: window.location.hostname || 'localhost',
+      });
+    });
+
+    expect(await page.$eval('#pass-field', el => el.value)).toBe('autofill-password');
+    expect(await page.$eval('#honeypot', el => el.value)).toBe('');
   });
 
   test('fills the username on a multi-step login page with no password field yet', async ({ page }) => {
@@ -84,7 +125,8 @@ test.describe('Autofill Content Script', () => {
       window._contentScriptListener({
         type: 'FILL_FORM',
         username: 'autofill-user',
-        password: 'autofill-password'
+        password: 'autofill-password',
+        expectedHost: window.location.hostname || 'localhost',
       });
     });
 

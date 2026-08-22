@@ -177,6 +177,29 @@ describe('onBarAction', () => {
         expect(await savePrompt.getPendingSave(7)).toBeNull();
     });
 
+    it('keeps pending save when the agent rejects so the user can retry', async () => {
+        const fakeBrowser = makeFakeBrowser();
+        const agent = makeFakeAgent((action) => {
+            if (action === 'GetConfig') return { Config: { is_locked: false, needs_login: false } };
+            if (action.CheckLoginMatch) return { LoginMatch: { entry_id: null, name: null, password_matches: false } };
+            if (action.AddEntry) return { Error: { message: 'server down' } };
+            throw new Error('unexpected action');
+        });
+        const savePrompt = loadSavePrompt(fakeBrowser, agent);
+
+        await savePrompt.onLoginSubmitted(7, {
+            url: 'https://example.com/login', username: 'alice', password: 'hunter2',
+        });
+        await savePrompt.onTabComplete(7);
+
+        const result = await savePrompt.onBarAction(7, 'save');
+        expect(result).toEqual({ Error: { message: 'server down' } });
+        expect(await savePrompt.getPendingSave(7)).not.toBeNull();
+        expect(fakeBrowser.tabs.sentMessages.at(-1)).toEqual(
+            { tabId: 7, message: { type: 'SAVE_BAR_ERROR' } },
+        );
+    });
+
     it('surfaces an error (not silence) when there is no pending save for a save/update click', async () => {
         const fakeBrowser = makeFakeBrowser();
         const savePrompt = loadSavePrompt(fakeBrowser, makeFakeAgent(() => ({ Ack: true })));

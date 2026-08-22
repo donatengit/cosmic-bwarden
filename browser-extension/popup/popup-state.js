@@ -9,6 +9,19 @@
 // popup-lock.js).
 const POPUP_STATE_KEY = 'popupState';
 
+function storedEditSecret(key) {
+    const data = currentEntry && currentEntry.data;
+    if (!data) return undefined;
+    if (data.Login && key === 'password') return data.Login.password || '';
+    if (data.Card && key === 'code') return data.Card.code || '';
+    return undefined;
+}
+
+function isUnchangedSecretField(key, value, stored) {
+    if (key !== 'password' && key !== 'code') return false;
+    return stored !== undefined && value === stored;
+}
+
 function snapshotPopupState() {
     const state = {
         // The state belongs to the tab it was captured on. Without this, one
@@ -29,7 +42,10 @@ function snapshotPopupState() {
         const fields = {};
         getFieldsForType(editType.value).forEach(f => {
             const el = document.getElementById(`f-${f.key}`);
-            if (el) fields[f.key] = el.value || '';
+            if (!el) return;
+            const value = el.value || '';
+            if (isUnchangedSecretField(f.key, value, storedEditSecret(f.key))) return;
+            fields[f.key] = value;
         });
         state.draft = {
             type: editType.value,

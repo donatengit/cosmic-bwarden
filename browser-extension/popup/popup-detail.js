@@ -46,7 +46,9 @@ function makeCopyBtn(getTextFn) {
     btn.className = 'copy-btn';
     btn.textContent = 'Copy';
     btn.addEventListener('click', async () => {
-        await navigator.clipboard.writeText(await getTextFn());
+        const text = await getTextFn();
+        await navigator.clipboard.writeText(text);
+        if (typeof scheduleClipboardClear === 'function') scheduleClipboardClear(text);
     });
     return btn;
 }

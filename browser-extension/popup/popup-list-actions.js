@@ -60,6 +60,15 @@ function isUriLike(name) {
 // same on-demand fetch pattern the detail view uses for the full entry.
 // Entries with no saved URI but a hostname-like name (e.g.
 // "account.facebook.com") open that instead, same fallback as the applet.
+function vaultUriToTabUrl(uri) {
+    if (!uri) return null;
+    const url = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(uri) ? uri : `https://${uri}`;
+    let parsed;
+    try { parsed = new URL(url); } catch { return null; }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return url;
+}
+
 async function openEntrySite(id) {
     try {
         const response = await browser.runtime.sendMessage({ "GetEntryMeta": { "id": id } });
@@ -69,7 +78,8 @@ async function openEntrySite(id) {
         let uri = uris && uris.length > 0 ? uris[0].uri : null;
         if (!uri && entry && isUriLike(entry.name)) uri = entry.name;
         if (!uri) { showStatus("No website saved for this entry."); return; }
-        const url = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(uri) ? uri : `https://${uri}`;
+        const url = vaultUriToTabUrl(uri);
+        if (!url) { showStatus("Unsupported URL scheme."); return; }
         await browser.tabs.create({ url });
         window.close();
     } catch { showStatus("Failed to open website."); }
@@ -96,7 +106,9 @@ function makeCopyDropdownBtn(entry) {
             }),
             makeDropdownItem('Copy Password', async () => {
                 const resp = await browser.runtime.sendMessage({ "GetPassword": { "id": entry.id } });
-                await navigator.clipboard.writeText(resp.Password ? resp.Password.password : '');
+                const pw = resp.Password ? resp.Password.password : '';
+                await navigator.clipboard.writeText(pw);
+                if (typeof scheduleClipboardClear === 'function') scheduleClipboardClear(pw);
             })
         );
         document.body.appendChild(menu);

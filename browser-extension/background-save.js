@@ -208,8 +208,8 @@ async function onBarAction(tabId, action) {
 
     try {
         const response = await sendToAgent(agentAction);
-        await clearPendingSave(tabId);
         if (response === 'Ack' || (response && response.Ack !== undefined)) {
+            await clearPendingSave(tabId);
             browser.tabs.sendMessage(tabId, { type: 'HIDE_SAVE_BAR' }).catch(() => {});
             updateBadge(tabId, pending.url);
             return { Ack: true };
@@ -219,7 +219,6 @@ async function onBarAction(tabId, action) {
         return response;
     } catch (e) {
         console.warn(`cosmic-bwarden: ${action} failed:`, e);
-        await clearPendingSave(tabId);
         browser.tabs.sendMessage(tabId, { type: 'SAVE_BAR_ERROR' }).catch(() => {});
         return { Error: { message: String(e) } };
     }

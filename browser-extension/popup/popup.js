@@ -191,6 +191,32 @@ function renderEntries(entries, caption = null) {
 }
 
 // ── Fill ──────────────────────────────────────────────────────────────────────
+function hostsMatchFill(tabHost, uriHost) {
+    if (!tabHost || !uriHost) return false;
+    const a = tabHost.toLowerCase();
+    const b = uriHost.toLowerCase();
+    if (a === b) return true;
+    return a.endsWith('.' + b) || b.endsWith('.' + a);
+}
+
+function hostFromVaultUri(uri) {
+    if (!uri) return null;
+    try {
+        return new URL(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(uri) ? uri : `https://${uri}`).hostname;
+    } catch { return null; }
+}
+
+function entryMatchesTab(login, tabUrl) {
+    let tabHost;
+    try { tabHost = new URL(tabUrl).hostname; } catch { return false; }
+    const uris = (login && login.uris) || [];
+    for (const u of uris) {
+        const h = hostFromVaultUri(u && u.uri);
+        if (h && hostsMatchFill(tabHost, h)) return true;
+    }
+    return false;
+}
+
 async function fillEntry(id) {
     try {
         const response = await browser.runtime.sendMessage({ "GetEntry": { "id": id, "password": null } });
@@ -198,14 +224,20 @@ async function fillEntry(id) {
             const login = response.Entry.entry.data.Login;
             if (!login) { showStatus("Not a login entry."); return; }
             const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-            if (tab) {
-                browser.tabs.sendMessage(tab.id, {
-                    type: "FILL_FORM",
-                    username: login.username || '',
-                    password: login.password || ''
-                });
-                window.close();
+            if (!tab) return;
+            if (!entryMatchesTab(login, tab.url)) {
+                showStatus("This login does not match the current site.");
+                return;
             }
+            let expectedHost = '';
+            try { expectedHost = new URL(tab.url).hostname; } catch { /* leave empty */ }
+            browser.tabs.sendMessage(tab.id, {
+                type: "FILL_FORM",
+                username: login.username || '',
+                password: login.password || '',
+                expectedHost,
+            });
+            window.close();
         }
     } catch { showStatus("Failed to fill form."); }
 }

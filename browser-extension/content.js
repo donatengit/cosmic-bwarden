@@ -2,6 +2,12 @@ if (typeof globalThis.browser === 'undefined') { globalThis.browser = globalThis
 
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === "FILL_FORM") {
+        const expected = message.expectedHost;
+        if (!expected) return;
+        if (location.hostname
+            && location.hostname.toLowerCase() !== String(expected).toLowerCase()) {
+            return;
+        }
         fillForm(message.username || '', message.password || '');
     }
 });
@@ -20,6 +26,7 @@ function fillForm(username, password) {
     }
 
     passwordInputs.forEach(passwordInput => {
+        if (typeof isVisible === 'function' && !isVisible(passwordInput)) return;
         const form = passwordInput.form || passwordInput.closest('form') || document;
 
         setInputValue(passwordInput, password);
