@@ -6,6 +6,17 @@ use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::db::{Field, Secret};
 use cosmic_bwarden_core::protocol::{Action, EntryType as ProtocolEntryType, Response};
 
+/// Which IPC action a `get` uses. Without `--show-secrets` the CLI must not
+/// pull plaintext into the process (`GetEntryMeta`); `--show-secrets` still
+/// uses the reprompt-gated `GetEntry`.
+pub(crate) fn fetch_get_action(id: String, show_secrets: bool) -> Action {
+    if show_secrets {
+        Action::GetEntry { id, password: None }
+    } else {
+        Action::GetEntryMeta { id }
+    }
+}
+
 fn entry_type_label(t: ProtocolEntryType) -> &'static str {
     match t {
         ProtocolEntryType::Login => "login",
@@ -109,10 +120,7 @@ pub async fn handle_command(
                         for entry in &mut entries {
                             let entry = if *show_secrets {
                                 let res = client
-                                    .send(Action::GetEntry {
-                                        id: entry.id.clone(),
-                                        password: None,
-                                    })
+                                    .send(fetch_get_action(entry.id.clone(), true))
                                     .await?;
                                 if let Response::Entry { entry } = res {
                                     entry
@@ -132,7 +140,9 @@ pub async fn handle_command(
                     }
                 } else {
                     let id = resolve_id(client, id_or_name, entry_type).await?;
-                    let res = client.send(Action::GetEntry { id, password: None }).await?;
+                    let res = client
+                        .send(fetch_get_action(id, *show_secrets))
+                        .await?;
 
                     let entry = match res {
                         Response::Entry { entry } => entry,
@@ -433,4 +443,29 @@ pub async fn handle_command(
         _ => unreachable!(),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod fetch_get_action_tests {
+    use super::fetch_get_action;
+    use cosmic_bwarden_core::protocol::Action;
+
+    #[test]
+    fn without_show_secrets_sends_get_entry_meta() {
+        match fetch_get_action("abc".into(), false) {
+            Action::GetEntryMeta { id } => assert_eq!(id, "abc"),
+            other => panic!("expected GetEntryMeta, got {}", other.variant_name()),
+        }
+    }
+
+    #[test]
+    fn with_show_secrets_sends_get_entry() {
+        match fetch_get_action("abc".into(), true) {
+            Action::GetEntry { id, password } => {
+                assert_eq!(id, "abc");
+                assert!(password.is_none());
+            }
+            other => panic!("expected GetEntry, got {}", other.variant_name()),
+        }
+    }
 }

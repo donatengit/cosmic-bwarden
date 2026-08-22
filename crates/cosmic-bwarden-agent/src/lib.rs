@@ -120,13 +120,7 @@ pub async fn run() -> anyhow::Result<()> {
         }
     }
 
-    // Prevent core dumps and ptrace attachment
-    #[cfg(target_os = "linux")]
-    {
-        unsafe {
-            libc::prctl(libc::PR_SET_DUMPABLE, 0);
-        }
-    }
+    disable_core_dumps();
 
     // Ensure XDG cache/runtime/data dirs exist with restrictive (0700)
     // permissions before binding any sockets inside them.
@@ -240,9 +234,12 @@ pub async fn run() -> anyhow::Result<()> {
                     log::debug!("Read request length: {}", len);
                     // Cap request size so a malformed/hostile length prefix can't
                     // drive an unbounded allocation (matches the browser host cap).
-                    const MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
-                    if len > MAX_REQUEST_BYTES {
-                        log::error!("request length {} exceeds cap {}", len, MAX_REQUEST_BYTES);
+                    if len > cosmic_bwarden_core::MAX_IPC_FRAME_BYTES {
+                        log::error!(
+                            "request length {} exceeds cap {}",
+                            len,
+                            cosmic_bwarden_core::MAX_IPC_FRAME_BYTES
+                        );
                         return;
                     }
                     let mut buf = vec![0u8; len];
@@ -299,6 +296,14 @@ pub async fn run() -> anyhow::Result<()> {
                         log::warn!("request failed: {}", message);
                     }
                     let response_bytes = postcard::to_allocvec(&response).unwrap();
+                    if response_bytes.len() > cosmic_bwarden_core::MAX_IPC_FRAME_BYTES {
+                        log::error!(
+                            "response length {} exceeds cap {}",
+                            response_bytes.len(),
+                            cosmic_bwarden_core::MAX_IPC_FRAME_BYTES
+                        );
+                        return;
+                    }
                     let len = response_bytes.len() as u32;
                     log::debug!("Writing response length: {}", len);
                     if let Err(e) = socket.write_all(&len.to_le_bytes()).await {
@@ -376,4 +381,54 @@ pub async fn run() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Interpret `prctl(PR_SET_DUMPABLE, 0)`'s return. Logs `error!` on failure
+/// so a dumpable agent is never silent (AGENTS.md). Does not abort startup.
+pub(crate) fn checked_prctl_set_undumpable(rc: libc::c_int) -> bool {
+    if rc != 0 {
+        log::error!(
+            "prctl(PR_SET_DUMPABLE, 0) failed: rc={rc} {}",
+            std::io::Error::last_os_error()
+        );
+        false
+    } else {
+        true
+    }
+}
+
+fn disable_core_dumps() {
+    #[cfg(target_os = "linux")]
+    {
+        let rc = unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0) };
+        let _ok = checked_prctl_set_undumpable(rc);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prctl_success_is_ok() {
+        assert!(checked_prctl_set_undumpable(0));
+    }
+
+    #[test]
+    fn prctl_failure_is_not_silent_ok() {
+        assert!(!checked_prctl_set_undumpable(-1));
+    }
+
+    #[test]
+    fn run_calls_disable_core_dumps_not_raw_prctl() {
+        let src = include_str!("lib.rs");
+        assert!(
+            src.contains("disable_core_dumps()"),
+            "startup must call the result-checked helper"
+        );
+        assert!(
+            src.contains("checked_prctl_set_undumpable(rc)"),
+            "prctl return must be passed to the checked helper"
+        );
+    }
 }

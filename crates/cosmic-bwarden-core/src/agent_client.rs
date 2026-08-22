@@ -89,7 +89,7 @@ impl AgentClient {
             .read_exact(&mut len_buf)
             .await
             .map_err(|e| Error::Other(format!("socket read error: {e}")))?;
-        let len = u32::from_le_bytes(len_buf) as usize;
+        let len = crate::ipc_frame_len(u32::from_le_bytes(len_buf))?;
         let mut buf = vec![0u8; len];
         socket
             .read_exact(&mut buf)
@@ -98,5 +98,38 @@ impl AgentClient {
 
         postcard::from_bytes(&buf)
             .map_err(|e| Error::Other(format!("failed to deserialize response: {e}")))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::Action;
+
+    #[tokio::test]
+    async fn do_send_rejects_oversized_response_length() {
+        use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+        let (client, mut server) = tokio::net::UnixStream::pair().unwrap();
+        tokio::spawn(async move {
+            let mut len_buf = [0u8; 4];
+            if server.read_exact(&mut len_buf).await.is_err() {
+                return;
+            }
+            let n = u32::from_le_bytes(len_buf) as usize;
+            let mut req = vec![0u8; n];
+            let _ = server.read_exact(&mut req).await;
+            let _ = server.write_all(&u32::MAX.to_le_bytes()).await;
+        });
+        let mut stream = client;
+        let err = AgentClient::do_send(&mut stream, &Action::Version).await;
+        assert!(
+            err.is_err(),
+            "claimed u32::MAX response length must not allocate"
+        );
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("exceeds cap") || msg.contains("IPC frame"),
+            "error should name the cap, got {msg}"
+        );
     }
 }

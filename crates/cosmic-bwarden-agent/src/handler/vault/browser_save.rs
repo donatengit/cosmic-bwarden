@@ -86,7 +86,7 @@ pub async fn handle_check_login_match(
 
         if entry_password
             .as_ref()
-            .is_some_and(|p| p.expose() == password)
+            .is_some_and(|p| cosmic_bwarden_core::ct_eq(p.expose().as_bytes(), password.as_bytes()))
         {
             // Credential already stored as-is: the extension stays silent.
             return Response::LoginMatch {

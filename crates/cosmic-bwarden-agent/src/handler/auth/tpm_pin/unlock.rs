@@ -19,6 +19,11 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
                 }
             }
         };
+        if let Some(msg) = super::flags::pin_unlock_blocked_reason(config.tpm_enabled) {
+            return Response::Error {
+                message: msg.to_string(),
+            };
+        }
         let email = match config.email.as_ref() {
             Some(e) => e.clone(),
             None => {

@@ -42,6 +42,30 @@ pub fn help_footer() -> String {
 /// docs/review/00_ground_truth.md F9, decision in 07_packaging.md).
 pub const PROTOCOL_VERSION: &str = "4";
 
+/// Maximum postcard-framed IPC request or response body (bytes). Shared by
+/// the agent accept loop and [`agent_client::AgentClient`] so a hostile
+/// length prefix cannot force a multi-gigabyte allocation.
+pub const MAX_IPC_FRAME_BYTES: usize = 8 * 1024 * 1024;
+
+/// Accept a framed IPC length prefix, or error without allocating the claimed size.
+pub fn ipc_frame_len(claimed: u32) -> error::Result<usize> {
+    let n = claimed as usize;
+    if n > MAX_IPC_FRAME_BYTES {
+        Err(error::Error::Other(format!(
+            "IPC frame length {n} exceeds cap {MAX_IPC_FRAME_BYTES}"
+        )))
+    } else {
+        Ok(n)
+    }
+}
+
+/// Constant-time equality for secret byte slices (reprompt hashes, login-match
+/// passwords). Length mismatch is `false`.
+pub fn ct_eq(a: &[u8], b: &[u8]) -> bool {
+    use subtle::ConstantTimeEq as _;
+    bool::from(a.ct_eq(b))
+}
+
 /// Minimum length for a TPM-unlock PIN. Single source of truth for the agent
 /// (authoritative validation), the UI (captions and submit validation), and
 /// the CLI (prompt text). Short/empty PINs offer negligible protection: the

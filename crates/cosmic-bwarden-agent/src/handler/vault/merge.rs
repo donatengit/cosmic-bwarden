@@ -62,12 +62,18 @@ pub fn merge_redacted_secrets(entry: &mut Entry, stored: &Entry) {
                 account_number,
                 routing_number,
                 pin,
+                iban,
+                swift_code,
+                branch_number,
                 ..
             },
             EntryData::BankAccount {
                 account_number: stored_number,
                 routing_number: stored_routing,
                 pin: stored_pin,
+                iban: stored_iban,
+                swift_code: stored_swift,
+                branch_number: stored_branch,
                 ..
             },
         ) => {
@@ -79,6 +85,15 @@ pub fn merge_redacted_secrets(entry: &mut Entry, stored: &Entry) {
             }
             if pin.is_none() {
                 *pin = stored_pin.clone();
+            }
+            if iban.is_none() {
+                *iban = stored_iban.clone();
+            }
+            if swift_code.is_none() {
+                *swift_code = stored_swift.clone();
+            }
+            if branch_number.is_none() {
+                *branch_number = stored_branch.clone();
             }
         }
         (
@@ -92,14 +107,51 @@ pub fn merge_redacted_secrets(entry: &mut Entry, stored: &Entry) {
         }
         (
             EntryData::Passport {
-                passport_number, ..
+                passport_number,
+                national_identification_number,
+                date_of_birth,
+                ..
             },
             EntryData::Passport {
                 passport_number: stored_passport_number,
+                national_identification_number: stored_nin,
+                date_of_birth: stored_dob,
                 ..
             },
-        ) if passport_number.is_none() => {
-            *passport_number = stored_passport_number.clone();
+        ) => {
+            if passport_number.is_none() {
+                *passport_number = stored_passport_number.clone();
+            }
+            if national_identification_number.is_none() {
+                *national_identification_number = stored_nin.clone();
+            }
+            if date_of_birth.is_none() {
+                *date_of_birth = stored_dob.clone();
+            }
+        }
+        (
+            EntryData::Identity {
+                ssn,
+                license_number,
+                passport_number,
+                ..
+            },
+            EntryData::Identity {
+                ssn: stored_ssn,
+                license_number: stored_license,
+                passport_number: stored_passport,
+                ..
+            },
+        ) => {
+            if ssn.is_none() {
+                *ssn = stored_ssn.clone();
+            }
+            if license_number.is_none() {
+                *license_number = stored_license.clone();
+            }
+            if passport_number.is_none() {
+                *passport_number = stored_passport.clone();
+            }
         }
         _ => {}
     }
@@ -193,5 +245,53 @@ mod tests {
         });
         merge_redacted_secrets(&mut redacted, &stored);
         assert_eq!(redacted.fields[0].value.as_deref(), Some("hidden-value"));
+    }
+
+    fn identity_entry(ssn: Option<&str>) -> Entry {
+        Entry {
+            id: "id1".to_string(),
+            org_id: None,
+            folder: None,
+            folder_id: None,
+            name: "e".to_string(),
+            favorite: false,
+            data: EntryData::Identity {
+                title: None,
+                first_name: None,
+                middle_name: None,
+                last_name: None,
+                address1: None,
+                address2: None,
+                address3: None,
+                city: None,
+                state: None,
+                postal_code: None,
+                country: None,
+                phone: None,
+                email: None,
+                ssn: ssn.map(str::to_string),
+                license_number: None,
+                passport_number: None,
+                username: None,
+            },
+            fields: Vec::new(),
+            notes: None,
+            history: Vec::new(),
+            key: None,
+            master_password_reprompt: CipherRepromptType::None,
+        }
+    }
+
+    #[test]
+    fn redacted_ssn_is_restored_not_cleared() {
+        let mut redacted = identity_entry(None);
+        let stored = identity_entry(Some("111-22-3333"));
+        merge_redacted_secrets(&mut redacted, &stored);
+        match &redacted.data {
+            EntryData::Identity { ssn, .. } => {
+                assert_eq!(ssn.as_deref(), Some("111-22-3333"));
+            }
+            _ => panic!("expected identity"),
+        }
     }
 }

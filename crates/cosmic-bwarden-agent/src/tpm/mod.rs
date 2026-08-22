@@ -147,10 +147,25 @@ pub async fn da_status() -> cosmic_bwarden_core::protocol::TpmDaStatus {
 }
 
 /// Deletes the sealed blob file, disabling PIN unlock for this account.
+///
+/// Missing file is success (already revoked). Any other unlink error is
+/// returned so disable cannot `Ack` a blob that is still on disk.
 pub fn clear(blob_path: &Path) -> Result<()> {
-    let _ = std::fs::remove_file(blob_path);
-    log::info!("TPM: cleared sealed blob {}", blob_path.display());
-    Ok(())
+    match std::fs::remove_file(blob_path) {
+        Ok(()) => {
+            log::info!("TPM: cleared sealed blob {}", blob_path.display());
+            Ok(())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => {
+            log::error!(
+                "TPM: failed to clear sealed blob {}: {}",
+                blob_path.display(),
+                e
+            );
+            Err(e).with_context(|| format!("failed to remove TPM blob {}", blob_path.display()))
+        }
+    }
 }
 
 /// Perform system-level checks to diagnose why TPM is unavailable.

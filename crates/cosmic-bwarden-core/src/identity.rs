@@ -31,6 +31,14 @@ impl Identity {
 
         match kdf {
             api::KdfType::Pbkdf2 => {
+                // Bitwarden's published PBKDF2 range. A hostile prelogin
+                // `iterations ≈ u32::MAX` must fail fast, not stall unlock.
+                if !(100_000..=2_000_000).contains(&iterations.get()) {
+                    return Err(Error::Other(format!(
+                        "PBKDF2 iterations {} out of allowed range (100000..=2000000)",
+                        iterations.get()
+                    )));
+                }
                 pbkdf2::pbkdf2::<hmac::Hmac<sha2::Sha256>>(
                     password.password(),
                     email.as_bytes(),
@@ -63,6 +71,12 @@ impl Identity {
                 if !(1..=16).contains(&parallelism) {
                     return Err(Error::Other(format!(
                         "Argon2id parallelism {parallelism} out of allowed range (1..=16)"
+                    )));
+                }
+                if !(2..=10).contains(&iterations.get()) {
+                    return Err(Error::Other(format!(
+                        "Argon2id iterations {} out of allowed range (2..=10)",
+                        iterations.get()
                     )));
                 }
                 let mem_kib = memory_mib.checked_mul(1024).ok_or_else(|| {
@@ -180,8 +194,33 @@ mod tests {
         .expect("in-range Argon2id params should derive a key");
         assert_eq!(id.email, "foo@bar.com");
 
-        let id2 = Identity::new("User@Example.com", &pw(), KdfType::Pbkdf2, 100, None, None)
-            .expect("PBKDF2 with valid iterations should succeed");
+        let id2 = Identity::new(
+            "User@Example.com",
+            &pw(),
+            KdfType::Pbkdf2,
+            100_000,
+            None,
+            None,
+        )
+        .expect("PBKDF2 with valid iterations should succeed");
         assert_eq!(id2.email, "user@example.com");
+    }
+
+    #[test]
+    fn pbkdf2_rejects_iterations_above_range() {
+        let r = Identity::new("a@b.com", &pw(), KdfType::Pbkdf2, 2_000_001, None, None);
+        assert!(r.is_err(), "PBKDF2 iterations above 2_000_000 must be rejected");
+    }
+
+    #[test]
+    fn pbkdf2_rejects_iterations_below_range() {
+        let r = Identity::new("a@b.com", &pw(), KdfType::Pbkdf2, 99_999, None, None);
+        assert!(r.is_err(), "PBKDF2 iterations below 100_000 must be rejected");
+    }
+
+    #[test]
+    fn argon2id_rejects_iterations_above_range() {
+        let r = Identity::new("a@b.com", &pw(), KdfType::Argon2id, 11, Some(16), Some(1));
+        assert!(r.is_err(), "Argon2id iterations above 10 must be rejected");
     }
 }

@@ -43,15 +43,19 @@ pub async fn handle_disable_tpm_pin(state: &Arc<Mutex<State>>) -> Response {
         let blob_path = cosmic_bwarden_core::dirs::tpm_blob_file(&config.server_name(), &email);
         if let Err(e) = crate::tpm::clear(&blob_path) {
             log::error!("TPM clear (vault keys) failed: {}", e);
+            return Response::Error {
+                message: format!("failed to remove TPM blob: {e}"),
+            };
         }
         // Also remove the server-credentials blob — it was sealed with the same PIN
         // and is meaningless without the vault keys blob.
         let hash_blob_path =
             cosmic_bwarden_core::dirs::tpm_hash_blob_file(&config.server_name(), &email);
-        if hash_blob_path.exists() {
-            if let Err(e) = crate::tpm::clear(&hash_blob_path) {
-                log::error!("TPM clear (server credentials) failed: {}", e);
-            }
+        if let Err(e) = crate::tpm::clear(&hash_blob_path) {
+            log::error!("TPM clear (server credentials) failed: {}", e);
+            return Response::Error {
+                message: format!("failed to remove TPM server-credentials blob: {e}"),
+            };
         }
 
         let mut updated_config = config;
@@ -59,6 +63,9 @@ pub async fn handle_disable_tpm_pin(state: &Arc<Mutex<State>>) -> Response {
         updated_config.tpm_store_server_credentials = false;
         if let Err(e) = updated_config.save_legacy() {
             log::error!("TPM disable: failed to save config: {}", e);
+            return Response::Error {
+                message: format!("failed to persist TPM disable: {e}"),
+            };
         }
 
         {

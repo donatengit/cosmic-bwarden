@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 /// Strip every on-demand secret from a decrypted entry, leaving only metadata
-/// (name, username, uris, identity/card non-secret fields, public key). Used by
+/// (name, username, uris, public key, and non-PII identity/card labels). Used by
 /// bulk/`meta` reads so secrets are never returned without an explicit, per-secret
 /// request that can enforce master-password reprompt.
 pub fn redact_entry_secrets(entry: &mut Entry) {
@@ -25,21 +25,42 @@ pub fn redact_entry_secrets(entry: &mut Entry) {
             account_number,
             routing_number,
             pin,
+            iban,
+            swift_code,
+            branch_number,
             ..
         } => {
             *account_number = None;
             *routing_number = None;
             *pin = None;
+            *iban = None;
+            *swift_code = None;
+            *branch_number = None;
         }
         EntryData::DriversLicense { license_number, .. } => {
             *license_number = None;
         }
         EntryData::Passport {
-            passport_number, ..
+            passport_number,
+            national_identification_number,
+            date_of_birth,
+            ..
         } => {
             *passport_number = None;
+            *national_identification_number = None;
+            *date_of_birth = None;
         }
-        EntryData::SecureNote | EntryData::Identity { .. } => {}
+        EntryData::Identity {
+            ssn,
+            license_number,
+            passport_number,
+            ..
+        } => {
+            *ssn = None;
+            *license_number = None;
+            *passport_number = None;
+        }
+        EntryData::SecureNote => {}
     }
     entry.notes = None;
     // Blank the value of any hidden (user-designated secret) custom field.
@@ -110,7 +131,10 @@ pub(super) fn verify_reprompt(
 
     match &state.master_password_hash {
         Some(stored_hash) => {
-            if identity.master_password_hash.hash() != stored_hash.hash() {
+            if !cosmic_bwarden_core::ct_eq(
+                identity.master_password_hash.hash(),
+                stored_hash.hash(),
+            ) {
                 Some(Response::Error {
                     message: "incorrect password".to_string(),
                 })
@@ -320,6 +344,122 @@ pub async fn handle_get_entry(
     } else {
         Response::Error {
             message: "agent is locked".to_string(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod ct_eq_site {
+    #[test]
+    fn verify_reprompt_uses_ct_eq() {
+        let src = include_str!("query.rs");
+        assert!(
+            src.contains("cosmic_bwarden_core::ct_eq"),
+            "reprompt hash compare must use ct_eq"
+        );
+        let non_ct = ["hash()", " != ", "stored_hash.hash()"].concat();
+        assert!(
+            !src.contains(&non_ct),
+            "non-CT != compare must not remain"
+        );
+    }
+}
+
+#[cfg(test)]
+mod redact_pii_tests {
+    use super::redact_entry_secrets;
+    use cosmic_bwarden_core::api::CipherRepromptType;
+    use cosmic_bwarden_core::db::{Entry, EntryData};
+
+    fn blank_entry(data: EntryData) -> Entry {
+        Entry {
+            id: "id".into(),
+            org_id: None,
+            folder: None,
+            folder_id: None,
+            name: "n".into(),
+            favorite: false,
+            data,
+            fields: Vec::new(),
+            notes: None,
+            history: Vec::new(),
+            key: None,
+            master_password_reprompt: CipherRepromptType::None,
+        }
+    }
+
+    #[test]
+    fn identity_pii_is_stripped_from_meta() {
+        let mut e = blank_entry(EntryData::Identity {
+            title: None,
+            first_name: Some("Ada".into()),
+            middle_name: None,
+            last_name: Some("Lovelace".into()),
+            address1: None,
+            address2: None,
+            address3: None,
+            city: None,
+            state: None,
+            postal_code: None,
+            country: None,
+            phone: None,
+            email: None,
+            ssn: Some("111-22-3333".into()),
+            license_number: Some("DL-9".into()),
+            passport_number: Some("P-1".into()),
+            username: Some("ada".into()),
+        });
+        redact_entry_secrets(&mut e);
+        match &e.data {
+            EntryData::Identity {
+                first_name,
+                ssn,
+                license_number,
+                passport_number,
+                username,
+                ..
+            } => {
+                assert_eq!(first_name.as_deref(), Some("Ada"));
+                assert_eq!(username.as_deref(), Some("ada"));
+                assert!(ssn.is_none());
+                assert!(license_number.is_none());
+                assert!(passport_number.is_none());
+            }
+            _ => panic!("identity"),
+        }
+    }
+
+    #[test]
+    fn bank_iban_class_is_stripped_from_meta() {
+        let mut e = blank_entry(EntryData::BankAccount {
+            bank_name: Some("Bank".into()),
+            name_on_account: None,
+            account_type: None,
+            account_number: Some("123".into()),
+            routing_number: None,
+            branch_number: Some("BR-1".into()),
+            pin: None,
+            swift_code: Some("SWFT".into()),
+            iban: Some("DE00".into()),
+            bank_contact_phone: None,
+        });
+        redact_entry_secrets(&mut e);
+        match &e.data {
+            EntryData::BankAccount {
+                bank_name,
+                iban,
+                swift_code,
+                branch_number,
+                account_number,
+                ..
+            } => {
+                assert_eq!(bank_name.as_deref(), Some("Bank"));
+                assert!(iban.is_none());
+                assert!(swift_code.is_none());
+                assert!(branch_number.is_none());
+                assert!(account_number.is_none());
+            }
+            _ => panic!("bank"),
         }
     }
 }

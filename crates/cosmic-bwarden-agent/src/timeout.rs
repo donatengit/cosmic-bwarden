@@ -2,10 +2,21 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// Wakes every CHECK_INTERVAL to see if `lock_timeout` seconds have elapsed
-/// since `last_activity`. Avoids timer churn: even frequent vault operations
-/// only update an atomic, never cancel/reschedule a sleep.
-const CHECK_INTERVAL: Duration = Duration::from_secs(300); // 5 minutes
+/// Upper bound on one sleep so a live `UpdateLockTimeout` is noticed promptly.
+const MAX_SLEEP: Duration = Duration::from_secs(30);
+
+/// Seconds until `last + timeout`, capped at [`MAX_SLEEP`]. Zero means lock now.
+pub(crate) fn remaining_sleep_secs(now: u64, last: u64, timeout: u64) -> u64 {
+    if timeout == 0 {
+        return MAX_SLEEP.as_secs();
+    }
+    let elapsed = now.saturating_sub(last);
+    if elapsed >= timeout {
+        0
+    } else {
+        (timeout - elapsed).min(MAX_SLEEP.as_secs())
+    }
+}
 
 fn now_secs() -> u64 {
     SystemTime::now()
@@ -58,7 +69,16 @@ impl AutolockTimer {
     /// Returns only when the timer handle's sender is dropped (i.e. agent shuts down).
     pub async fn run(self, state: Arc<tokio::sync::Mutex<crate::state::State>>) {
         loop {
-            tokio::time::sleep(CHECK_INTERVAL).await;
+            let timeout = self.handle.lock_timeout_secs.load(Ordering::Relaxed);
+            if timeout == 0 {
+                tokio::time::sleep(MAX_SLEEP).await;
+                continue;
+            }
+            let last = self.handle.last_activity.load(Ordering::Relaxed);
+            let sleep_secs = remaining_sleep_secs(now_secs(), last, timeout);
+            if sleep_secs > 0 {
+                tokio::time::sleep(Duration::from_secs(sleep_secs)).await;
+            }
             let timeout = self.handle.lock_timeout_secs.load(Ordering::Relaxed);
             if timeout == 0 {
                 continue;
@@ -73,7 +93,36 @@ impl AutolockTimer {
                     );
                     s.lock();
                 }
+                drop(s);
+                tokio::time::sleep(MAX_SLEEP).await;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remaining_is_zero_once_deadline_passed() {
+        assert_eq!(remaining_sleep_secs(100, 0, 5), 0);
+        assert_eq!(remaining_sleep_secs(5, 0, 5), 0);
+    }
+
+    #[test]
+    fn remaining_is_capped_at_max_sleep() {
+        assert_eq!(remaining_sleep_secs(0, 0, 5400), 30);
+        assert_eq!(remaining_sleep_secs(10, 0, 40), 30);
+    }
+
+    #[test]
+    fn remaining_matches_time_left_when_under_cap() {
+        assert_eq!(remaining_sleep_secs(10, 0, 25), 15);
+    }
+
+    #[test]
+    fn disabled_timeout_does_not_report_lock_now() {
+        assert_eq!(remaining_sleep_secs(100, 0, 0), 30);
     }
 }

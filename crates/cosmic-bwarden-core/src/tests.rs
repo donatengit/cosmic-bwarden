@@ -5,6 +5,25 @@ use crate::locked;
 use crate::protocol::Action;
 
 #[test]
+fn ipc_frame_len_rejects_oversized_without_allocating() {
+    assert_eq!(crate::ipc_frame_len(0).unwrap(), 0);
+    assert_eq!(
+        crate::ipc_frame_len(crate::MAX_IPC_FRAME_BYTES as u32).unwrap(),
+        crate::MAX_IPC_FRAME_BYTES
+    );
+    assert!(crate::ipc_frame_len(crate::MAX_IPC_FRAME_BYTES as u32 + 1).is_err());
+    assert!(crate::ipc_frame_len(u32::MAX).is_err());
+}
+
+#[test]
+fn ct_eq_compares_secret_bytes() {
+    assert!(crate::ct_eq(b"abc", b"abc"));
+    assert!(!crate::ct_eq(b"abc", b"abd"));
+    assert!(!crate::ct_eq(b"abc", b"ab"));
+    assert!(!crate::ct_eq(b"ab", b"abc"));
+}
+
+#[test]
 fn test_postcard_action() {
     let action = Action::Login {
         email: "test@example.com".to_string(),

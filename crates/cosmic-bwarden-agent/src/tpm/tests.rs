@@ -215,3 +215,39 @@ fn classify_unseal_failure_maps_tss_codes() {
         UnsealFailure::Other
     );
 }
+
+/// Filesystem-only: no TPM device. Missing blob is success; a directory
+/// (unlink of a directory fails) is an error so disable cannot Ack a live path.
+#[test]
+fn clear_missing_file_is_ok() {
+    let path = std::env::temp_dir().join(format!(
+        "cosmic_bwarden_tpm_clear_missing_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&path);
+    clear(&path).expect("NotFound must be Ok");
+}
+
+#[test]
+fn clear_directory_is_err() {
+    let dir = std::env::temp_dir().join(format!(
+        "cosmic_bwarden_tpm_clear_dir_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let err = clear(&dir);
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(err.is_err(), "unlinking a directory must fail closed");
+}
+
+#[test]
+fn clear_existing_file_is_ok() {
+    let path = std::env::temp_dir().join(format!(
+        "cosmic_bwarden_tpm_clear_file_{}",
+        std::process::id()
+    ));
+    std::fs::write(&path, b"blob").unwrap();
+    clear(&path).expect("existing file must unlink");
+    assert!(!path.exists());
+}

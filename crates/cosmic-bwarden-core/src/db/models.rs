@@ -1,6 +1,6 @@
 use crate::api;
 use std::collections::HashMap;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct Entry {
@@ -419,15 +419,9 @@ pub struct Uri {
     pub match_type: Option<api::UriMatchType>,
 }
 
-#[derive(Clone, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(transparent)]
 pub struct Secret(String);
-
-impl Zeroize for Secret {
-    fn zeroize(&mut self) {
-        self.0.zeroize();
-    }
-}
 
 impl std::fmt::Debug for Secret {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

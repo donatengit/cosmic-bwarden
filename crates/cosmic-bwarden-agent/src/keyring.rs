@@ -2,8 +2,6 @@
 use oo7::dbus::Service;
 
 #[cfg(feature = "keyring")]
-const COLLECTION_LABEL: &str = "cosmic-bwarden";
-#[cfg(feature = "keyring")]
 const APP_ID: &str = "com.enikeev.cosmic_bwarden";
 
 pub async fn store_tokens(
@@ -15,10 +13,8 @@ pub async fn store_tokens(
     #[cfg(feature = "keyring")]
     {
         let service = Service::new().await?;
-        let collection = match service.default_collection().await {
-            Ok(c) => c,
-            Err(_) => service.create_collection(COLLECTION_LABEL, None).await?,
-        };
+        // Never create a second collection that get_tokens cannot see.
+        let collection = service.default_collection().await?;
 
         let mut attributes = std::collections::HashMap::new();
         attributes.insert("app_id", APP_ID);
@@ -94,5 +90,22 @@ pub async fn delete_tokens(server: &str, email: &str) -> anyhow::Result<()> {
     {
         let _ = (server, email);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn store_and_get_share_default_collection() {
+        let src = include_str!("keyring.rs");
+        assert!(
+            src.contains("default_collection"),
+            "store/get/delete must use the default collection"
+        );
+        let create = ["create", "_", "collection"].concat();
+        assert!(
+            !src.contains(&create),
+            "must not create a second collection get_tokens cannot see"
+        );
     }
 }

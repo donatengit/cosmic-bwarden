@@ -93,16 +93,30 @@ impl CosmicBWardenConfig {
     }
 
     pub fn save_legacy(&self) -> crate::error::Result<()> {
+        use std::os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _, PermissionsExt as _};
         let file = crate::dirs::config_file();
         if let Some(parent) = file.parent() {
-            std::fs::create_dir_all(parent)?;
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(parent)?;
+            std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700))?;
         }
-        let mut fh = std::fs::File::create(&file)?;
-        fh.write_all(
-            serde_json::to_string(self)
-                .map_err(|source| crate::error::Error::Other(source.to_string()))?
-                .as_bytes(),
-        )?;
+        let json = serde_json::to_string(self)
+            .map_err(|source| crate::error::Error::Other(source.to_string()))?;
+        let tmp = file.with_extension("json.tmp");
+        {
+            let mut fh = std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(&tmp)?;
+            fh.write_all(json.as_bytes())?;
+            fh.sync_all()?;
+        }
+        std::fs::rename(&tmp, &file)?;
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600))?;
         Ok(())
     }
 
@@ -193,5 +207,49 @@ impl CosmicBWardenConfig {
         self.base_url
             .clone()
             .unwrap_or_else(|| "default".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt as _;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn save_legacy_forces_0600_file_and_0700_parent() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let prev = std::env::var_os("COSMIC_BWARDEN_CONFIG");
+        let dir = std::env::temp_dir().join(format!(
+            "cosmic-bwarden-config-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let file = dir.join("nested").join("config.json");
+        crate::dirs::set_config_override(file.clone());
+        let saved = CosmicBWardenConfig::default().save_legacy();
+        let modes = saved.as_ref().ok().and_then(|_| {
+            let mode = std::fs::metadata(&file).ok()?.permissions().mode() & 0o777;
+            let parent_mode = std::fs::metadata(file.parent().unwrap())
+                .ok()?
+                .permissions()
+                .mode()
+                & 0o777;
+            Some((mode, parent_mode))
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        match prev {
+            Some(v) => std::env::set_var("COSMIC_BWARDEN_CONFIG", v),
+            None => std::env::remove_var("COSMIC_BWARDEN_CONFIG"),
+        }
+        saved.expect("save_legacy under override");
+        let (mode, parent_mode) = modes.expect("stat config after save");
+        assert_eq!(mode, 0o600, "config file must be 0600");
+        assert_eq!(parent_mode, 0o700, "config dir must be 0700");
     }
 }

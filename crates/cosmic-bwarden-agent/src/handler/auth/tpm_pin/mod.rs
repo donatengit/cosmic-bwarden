@@ -16,6 +16,7 @@
 use cosmic_bwarden_core::protocol::Response;
 
 mod disable;
+mod flags;
 mod server_credentials;
 mod setup;
 mod status;

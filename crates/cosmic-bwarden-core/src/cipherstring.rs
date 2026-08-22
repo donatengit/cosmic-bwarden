@@ -185,15 +185,16 @@ fn decrypt_common_symmetric(
     ciphertext: &[u8],
     mac: Option<&[u8]>,
 ) -> Result<cbc::Decryptor<aes::Aes256>> {
-    if let Some(mac) = mac {
-        let mut key = hmac::Hmac::<sha2::Sha256>::new_from_slice(keys.mac_key())
-            .map_err(|source| Error::CreateHmac { source })?;
-        key.update(iv);
-        key.update(ciphertext);
+    let Some(mac) = mac else {
+        return Err(Error::InvalidMac);
+    };
+    let mut key = hmac::Hmac::<sha2::Sha256>::new_from_slice(keys.mac_key())
+        .map_err(|source| Error::CreateHmac { source })?;
+    key.update(iv);
+    key.update(ciphertext);
 
-        if key.verify(mac.into()).is_err() {
-            return Err(Error::InvalidMac);
-        }
+    if key.verify(mac.into()).is_err() {
+        return Err(Error::InvalidMac);
     }
 
     cbc::Decryptor::<aes::Aes256>::new_from_slices(keys.enc_key(), iv)
@@ -259,6 +260,18 @@ fn pkcs7_unpad(b: &[u8]) -> Option<&[u8]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn decrypt_rejects_missing_mac() {
+        let mut v = locked::Vec::new();
+        v.extend(std::iter::repeat_n(7u8, 64));
+        let keys = locked::Keys::new(v);
+        let err = decrypt_common_symmetric(&keys, &[0u8; 16], &[0u8; 16], None);
+        assert!(
+            matches!(err, Err(Error::InvalidMac)),
+            "MAC-less decrypt must fail closed, got {err:?}"
+        );
+    }
 
     #[test]
     fn type2_requires_mac() {
