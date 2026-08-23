@@ -54,10 +54,11 @@ KIOSK_WRAPPER="$PROJECT_ROOT/tests/browser-extension/playwright/kiosk-wrapper.sh
 # — no regeneration (a heredoc here previously overwrote it with a hardcoded
 # path, dirtying the working tree on every run).
 echo "Launching isolated compositor with kiosk: $KIOSK_WRAPPER"
-export WLR_BACKENDS=headless
-export SMITHAY_BACKEND=headless
-export WLR_LIBINPUT_NO_DEVICES=1
-export WLR_RENDERER=pixman
-
 # Use sh -c and pass absolute path to kiosk
+# cosmic-comp is a smithay compositor: the wlroots-style WLR_* env vars are
+# ignored. COSMIC_BACKEND selects the backend explicitly (see
+# cosmic-comp src/backend/mod.rs): winit opens a nested compositor window on
+# the current session's display — works on a real desktop (Wayland or X11)
+# and under Xvfb with software GL (LIBGL_ALWAYS_SOFTWARE=1).
+export COSMIC_BACKEND=winit
 cosmic-comp -- sh -c "$KIOSK_WRAPPER"
