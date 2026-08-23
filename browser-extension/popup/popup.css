@@ -195,8 +195,13 @@ body {
     color: var(--danger-hover);
 }
 
-/* Small icon-only button (header, list rows). */
+/* Small icon-only button (header, list rows). Standalone: it is never
+   combined with .btn, so it carries its own flex centering — without it the
+   icon sits flush left instead of centered. */
 .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 30px;
     height: 30px;
     padding: 0;

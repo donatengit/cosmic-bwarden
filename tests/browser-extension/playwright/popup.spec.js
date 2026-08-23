@@ -140,6 +140,23 @@ test.describe('Extension Popup', () => {
     expect(await page.locator('#footer').count()).toBe(0);
   });
 
+  test('icon-only buttons center their icon (regression: icon sat flush left)', async ({ page }) => {
+    // Every .btn-icon carries its own flex centering; the SVG's center must
+    // match the button's center, not hug the left edge.
+    for (const id of ['fav-btn', 'add-btn', 'sync-btn', 'lock-btn']) {
+      const btn = page.locator(`#${id}`);
+      await expect(btn).toBeVisible();
+      const btnBox = await btn.boundingBox();
+      const iconBox = await btn.locator('svg').boundingBox();
+      expect(btnBox).not.toBeNull();
+      expect(iconBox).not.toBeNull();
+      const delta = Math.abs(
+        (iconBox.x + iconBox.width / 2) - (btnBox.x + btnBox.width / 2)
+      );
+      expect(delta, `#${id} icon not centered (off by ${delta}px)`).toBeLessThanOrEqual(1);
+    }
+  });
+
   test('each Login entry row has a Fill, copy-dropdown, and view-details button', async ({ page }) => {
     await expect(page.locator('.entry-actions button[title="Autofill"]')).toBeVisible();
     await expect(page.locator('.entry-actions button[title="Copy username or password"]')).toBeVisible();
