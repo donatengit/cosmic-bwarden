@@ -15,7 +15,9 @@ cargo build -p cosmic-bwarden-agent --quiet
 python3 tests/browser-extension/register_host.py
 
 # Override wrapper to use test profile
-HOME_DIR=$(eval echo ~$USER)
+# Prefer $HOME when set (sandboxed/CI runs may point it at a writable tree);
+# fall back to the passwd entry so normal invocations behave exactly as before.
+HOME_DIR="${HOME:-$(eval echo ~$USER)}"
 MANIFEST_DIR="$HOME_DIR/.mozilla/native-messaging-hosts"
 WRAPPER_PATH="$MANIFEST_DIR/cosmic-bwarden-browser-host.sh"
 AGENT_PATH="$PROJECT_ROOT/target/debug/cosmic-bwarden-agent"

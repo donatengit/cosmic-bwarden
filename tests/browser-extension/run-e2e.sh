@@ -49,17 +49,10 @@ bash tests/browser-extension/playwright/setup_native_host.sh
 node "$PROJECT_ROOT/tests/browser-extension/playwright/link-deps.js"
 
 KIOSK_WRAPPER="$PROJECT_ROOT/tests/browser-extension/playwright/kiosk-wrapper.sh"
-PW_BIN="$PROJECT_ROOT/browser-extension/node_modules/.bin/playwright"
 
-cat <<EOF > "$KIOSK_WRAPPER"
-#!/bin/bash
-PROJECT_ROOT="$PROJECT_ROOT"
-cd "\$PROJECT_ROOT/browser-extension"
-echo "Kiosk started. Running Playwright..."
-"\$PROJECT_ROOT/browser-extension/node_modules/.bin/playwright" test --config=../tests/browser-extension/playwright/playwright.config.js --project=firefox-full "\$@"
-EOF
-chmod +x "$KIOSK_WRAPPER"
-
+# kiosk-wrapper.sh is tracked and resolves PROJECT_ROOT from its own location
+# — no regeneration (a heredoc here previously overwrote it with a hardcoded
+# path, dirtying the working tree on every run).
 echo "Launching isolated compositor with kiosk: $KIOSK_WRAPPER"
 export WLR_BACKENDS=headless
 export SMITHAY_BACKEND=headless

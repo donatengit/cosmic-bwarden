@@ -46,7 +46,9 @@ if __name__ == "__main__":
         print("This script currently only supports Linux.")
         sys.exit(1)
 
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # Script lives at <repo>/tests/browser-extension/register_host.py — three
+    # levels up is the repo root (two would land on <repo>/tests).
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     default_agent = os.path.join(project_root, "target", "debug", "cosmic-bwarden-agent")
 
     parser = argparse.ArgumentParser(description=__doc__)

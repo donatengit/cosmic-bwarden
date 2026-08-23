@@ -20,8 +20,14 @@ docker rm $CONTAINER_NAME &> /dev/null
 PORT=${1:-8080}
 echo "Starting Vaultwarden on port $PORT..."
 
+# --pids-limit 2048: some podman builds (this repo's preferred runtime, used
+# rootless via the user socket) default to pids.max=1 per container, which
+# lets the init process exist but nothing else — Vaultwarden's tokio runtime
+# then dies with "OS can't spawn worker thread". 2048 is far beyond what a
+# single Rust process needs and is harmless under a regular Docker daemon.
 docker run -d \
     --name $CONTAINER_NAME \
+    --pids-limit 2048 \
     -e SIGNUPS_ALLOWED=true \
     -e I_REALLY_WANT_VOLATILE_STORAGE=true \
     -p $PORT:80 \
