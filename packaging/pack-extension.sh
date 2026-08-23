@@ -31,7 +31,7 @@ cd "$src"
 # `zip` exits 0 even when some named files are missing, so a listed file that
 # was deleted or renamed must be caught by the required-file loop instead of
 # shipping a manifest that references nothing.
-allowlist="manifest.json background.js background-save.js content.js content-heuristics.js content-submit.js content-bar.js content-generate.js clipboard-clear.js popup/popup.css popup/popup-detail.js popup/popup-edit.js popup/popup.html popup/popup.js popup/popup-list-actions.js popup/popup-lock.js popup/popup-state.js"
+allowlist="manifest.json background.js background-save.js theme.js content.js content-heuristics.js content-submit.js content-bar.js content-generate.js clipboard-clear.js popup/popup.css popup/icons.js popup/popup-detail.js popup/popup-edit.js popup/popup.html popup/popup.js popup/popup-list-actions.js popup/popup-lock.js popup/popup-state.js"
 # shellcheck disable=SC2086
 zip -r "$out" $allowlist icons >/dev/null
 

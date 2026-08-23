@@ -23,6 +23,8 @@ let favouritesOnly = false;
 // current tab (as opposed to a search or the favourites fallback). A Login row
 // click on a domain match fills the form instead of opening the site.
 let listIsDomainMatch = false;
+// Cached GetConfig answer while the vault is known-usable (see updateResults).
+let cachedConfig = null;
 
 // ── Domain helpers ────────────────────────────────────────────────────────────
 function extractDomain(url) {
@@ -39,13 +41,28 @@ function extractDomain(url) {
 }
 
 // ── Status ────────────────────────────────────────────────────────────────────
-function showStatus(msg) {
+// `kind` is 'info' (plain muted text) or 'error' (soft danger chip) — the
+// same element carries both, so the caller names which it is.
+function showStatus(msg, kind = 'info') {
     statusDiv.textContent = msg;
+    statusDiv.classList.toggle('status-error', kind === 'error');
     statusDiv.classList.remove('hidden');
 }
 function hideStatus() { statusDiv.classList.add('hidden'); }
 
-window.onerror = (msg, url, line) => showStatus(`JS Error: ${msg} at ${line}`);
+window.onerror = (msg, url, line) => showStatus(`JS Error: ${msg} at ${line}`, 'error');
+
+// GetConfig is stable while the vault stays unlocked — cache the usable
+// answer for the popup's lifetime (one roundtrip per search keystroke
+// instead of two). A locked/needs-login answer is never cached, and the
+// Lock handler clears the cache, so the lock gate can't go stale.
+async function getConfig() {
+    if (cachedConfig && !cachedConfig.Config?.is_locked && !cachedConfig.Config?.needs_login) {
+        return cachedConfig;
+    }
+    cachedConfig = await browser.runtime.sendMessage("GetConfig");
+    return cachedConfig;
+}
 
 // ── View management ───────────────────────────────────────────────────────────
 function showView(view) {
@@ -90,7 +107,7 @@ async function updateResults() {
     // as the applet's empty-query behaviour).
     const query = searchInput.value || null;
     try {
-        const configResp = await browser.runtime.sendMessage("GetConfig");
+        const configResp = await getConfig();
         if (configResp.Config) {
             if (configResp.Config.is_locked) {
                 await browser.runtime.sendMessage("RequestUnlock");
@@ -126,7 +143,7 @@ async function updateResults() {
             caption = '★ Favourites';
         }
         renderEntries(entries, caption);
-    } catch (e) { showStatus(e.message || "Failed to communicate with agent."); }
+    } catch (e) { showStatus(e.message || "Failed to communicate with agent.", 'error'); }
 }
 
 function renderEntries(entries, caption = null) {
@@ -174,14 +191,17 @@ function renderEntries(entries, caption = null) {
         if (entry.entry_type === 'Login') {
             const fillBtn = document.createElement('button');
             fillBtn.textContent = 'Fill';
+            fillBtn.className = 'btn btn-sm';
             fillBtn.title = 'Autofill';
             fillBtn.onclick = e => { e.stopPropagation(); fillEntry(entry.id); };
             actions.append(fillBtn, makeCopyDropdownBtn(entry));
         }
 
         const viewIconBtn = document.createElement('button');
-        viewIconBtn.textContent = '👁';
+        viewIconBtn.className = 'btn-icon';
+        setIcon(viewIconBtn, 'eye');
         viewIconBtn.title = 'View details';
+        viewIconBtn.setAttribute('aria-label', 'View details');
         viewIconBtn.onclick = e => { e.stopPropagation(); showDetail(entry.id); };
 
         actions.append(viewIconBtn);
@@ -239,16 +259,10 @@ async function fillEntry(id) {
             });
             window.close();
         }
-    } catch { showStatus("Failed to fill form."); }
+    } catch { showStatus("Failed to fill form.", 'error'); }
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
-function escapeHtml(s) {
-    if (!s) return '';
-    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-}
-
 function getEntryType(entry) {
     if (!entry || !entry.data) return 'Login';
     const d = entry.data;
@@ -261,17 +275,31 @@ function getEntryType(entry) {
 }
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
-searchInput.addEventListener('input', updateResults);
+// Search is debounced: each keystroke otherwise fires two agent roundtrips
+// (GetConfig + GetSidebarEntries) against a list that is rebuilt anyway.
+let searchTimer = null;
+searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(updateResults, 150);
+});
 searchInput.addEventListener('input', savePopupState);
 favBtn.onclick = () => {
     favouritesOnly = !favouritesOnly;
-    favBtn.textContent = favouritesOnly ? '★' : '☆';
+    // The star glyph's fill is CSS-driven (#fav-btn.active svg) — only the
+    // state class and the a11y attribute change here.
     favBtn.classList.toggle('active', favouritesOnly);
+    favBtn.setAttribute('aria-pressed', String(favouritesOnly));
     updateResults();
     savePopupState();
 };
 syncBtn.onclick = async () => { await browser.runtime.sendMessage("Sync"); updateResults(); };
-lockBtn.onclick = async () => { await browser.runtime.sendMessage("Lock"); showView('list'); };
+lockBtn.onclick = async () => {
+    // The cached config says "usable"; dropping it lets the next updateResults
+    // re-check and route to the locked view instead of showing a stale list.
+    cachedConfig = null;
+    await browser.runtime.sendMessage("Lock");
+    showView('list');
+};
 addBtn.onclick = () => showAddForm();
 backBtn.onclick = () => showView(currentView === 'edit' && currentEntry ? 'detail' : 'list');
 

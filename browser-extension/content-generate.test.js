@@ -10,6 +10,12 @@ const source = readFileSync(
     path.join(path.dirname(fileURLToPath(import.meta.url)), 'content-generate.js'),
     'utf8'
 );
+// content-generate.js builds its shadow-DOM styles from theme.js's tokens
+// (themeCss on the icon host), so the theme module must be in scope.
+const themeSource = readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), 'theme.js'),
+    'utf8'
+);
 
 // The script's top-level code registers a browser.runtime.onMessage listener
 // and does an initial (harmless, empty-document) scanAndDecorate(document) —
@@ -19,7 +25,7 @@ globalThis.browser = { runtime: { onMessage: { addListener: () => {} } } };
 // Vitest files are ESM (strict mode), where eval() keeps function
 // declarations local — load through new Function and return the helpers.
 const { passwordGroupsIn } = new Function(
-    `${source}\nreturn { passwordGroupsIn };`
+    `${themeSource}\n${source}\nreturn { passwordGroupsIn };`
 )();
 
 function setBody(html) {

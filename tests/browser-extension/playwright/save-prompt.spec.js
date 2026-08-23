@@ -113,7 +113,7 @@ test.describe('Save bar (content-bar.js)', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.setContent('<h1>Some page</h1>');
-    await injectContentScripts(page, ['content-bar.js']);
+    await injectContentScripts(page, ['theme.js', 'content-bar.js']);
   });
 
   test('renders the save bar and reports the save action', async ({ page }) => {

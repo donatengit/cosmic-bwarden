@@ -8,12 +8,38 @@
 <body>
     <div id="app">
         <div id="header">
-            <button id="back-btn" class="hidden" title="Back">←</button>
-            <input type="text" id="search" placeholder="Search vault..." autofocus>
-            <button id="fav-btn" title="Show favourites only">☆</button>
-            <button id="add-btn" title="Add Entry">+</button>
-            <button id="sync-btn" title="Sync Vault">⟳</button>
-            <button id="lock-btn" title="Lock Vault">🔒</button>
+            <button id="back-btn" class="btn-icon hidden" title="Back" aria-label="Back">
+                <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M10.5 2.75 5.25 8l5.25 5.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            <input type="text" id="search" placeholder="Search vault..." autofocus spellcheck="false">
+            <button id="fav-btn" class="btn-icon" title="Show favourites only" aria-label="Show favourites only" aria-pressed="false">
+                <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M8 1.75 9.9 5.6l4.35.63-3.15 3.07.74 4.33L8 11.6l-3.84 2.03.74-4.33L1.75 6.23 6.1 5.6z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            <button id="add-btn" class="btn-icon" title="Add Entry" aria-label="Add Entry">
+                <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M8 3.5v9M3.5 8h9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </button>
+            <button id="sync-btn" class="btn-icon" title="Sync Vault" aria-label="Sync Vault">
+                <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M13.5 8a5.5 5.5 0 1 1-1.61-3.89"/>
+                        <path d="M13.5 1.75V4.5H10.75"/>
+                    </g>
+                </svg>
+            </button>
+            <button id="lock-btn" class="btn-icon" title="Lock Vault" aria-label="Lock Vault">
+                <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3.5" y="7.25" width="9" height="6.5" rx="1.5"/>
+                        <path d="M5.75 7.25v-1.5a2.25 2.25 0 0 1 4.5 0v1.5"/>
+                    </g>
+                </svg>
+            </button>
         </div>
 
         <div id="status" class="hidden"></div>
@@ -23,10 +49,10 @@
             <div id="locked-message" class="locked-message"></div>
             <div id="locked-pin-group" class="hidden">
                 <input type="password" id="locked-pin-input" placeholder="PIN" inputmode="numeric" autocomplete="off">
-                <button id="locked-unlock-btn">Unlock</button>
+                <button id="locked-unlock-btn" class="btn btn-primary">Unlock</button>
             </div>
             <div id="locked-feedback" class="hidden"></div>
-            <button id="locked-fallback-btn" class="hidden">Use master password instead</button>
+            <button id="locked-fallback-btn" class="btn hidden">Use master password instead</button>
         </div>
 
         <!-- View: List -->
@@ -38,8 +64,8 @@
         <div id="view-detail" class="hidden">
             <div id="detail-content"></div>
             <div class="view-actions">
-                <button id="edit-btn">Edit</button>
-                <button id="delete-btn" class="danger">Delete</button>
+                <button id="edit-btn" class="btn">Edit</button>
+                <button id="delete-btn" class="btn btn-danger">Delete</button>
             </div>
         </div>
 
@@ -65,8 +91,8 @@
                     <textarea id="edit-notes"></textarea>
                 </div>
                 <div class="form-actions">
-                    <button type="submit" id="save-btn">Save</button>
-                    <button type="button" id="cancel-btn">Cancel</button>
+                    <button type="submit" id="save-btn" class="btn btn-primary">Save</button>
+                    <button type="button" id="cancel-btn" class="btn">Cancel</button>
                 </div>
             </form>
         </div>
@@ -74,8 +100,10 @@
     <!-- popup-lock.js loads first: popup.js's init IIFE awaits browser.tabs.query
          and may call showLockedView() from a microtask that fires before the
          parser reaches a later <script> tag, so anything popup.js can call
-         during init must already be defined. -->
+         during init must already be defined. icons.js only defines globals
+         used inside function bodies, so it can go anywhere before popup.js. -->
     <script src="../clipboard-clear.js"></script>
+    <script src="icons.js"></script>
     <script src="popup-lock.js"></script>
     <script src="popup-list-actions.js"></script>
     <script src="popup-state.js"></script>

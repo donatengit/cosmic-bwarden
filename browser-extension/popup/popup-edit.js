@@ -48,7 +48,6 @@ function renderDynamicFields(type, data = {}) {
         group.appendChild(label);
 
         const raw = (data[type] && data[type][field.key]) || '';
-        const val = typeof raw === 'object' ? '' : escapeHtml(String(raw));
 
         if (field.type === 'password') {
             const wrap = document.createElement('div');
@@ -56,14 +55,19 @@ function renderDynamicFields(type, data = {}) {
             const inp = document.createElement('input');
             inp.type = 'password';
             inp.id = `f-${field.key}`;
-            inp.value = val;
+            // Raw string: assigned via .value, which never parses HTML —
+            // escaping here would display "&lt;" for a literal "<".
+            inp.value = typeof raw === 'object' ? '' : String(raw);
             const toggle = document.createElement('button');
             toggle.type = 'button';
-            toggle.textContent = '👁';
+            toggle.className = 'btn btn-ghost btn-sm';
+            setIcon(toggle, 'eye');
             toggle.title = 'Reveal';
+            toggle.setAttribute('aria-label', 'Reveal');
             toggle.onclick = () => {
-                inp.type = inp.type === 'password' ? 'text' : 'password';
-                toggle.textContent = inp.type === 'password' ? '👁' : '🙈';
+                const isHidden = inp.type === 'password';
+                inp.type = isHidden ? 'text' : 'password';
+                setIcon(toggle, isHidden ? 'eye-off' : 'eye');
             };
             wrap.append(inp, toggle);
             group.appendChild(wrap);
@@ -71,7 +75,7 @@ function renderDynamicFields(type, data = {}) {
             const inp = document.createElement('input');
             inp.type = field.type || 'text';
             inp.id = `f-${field.key}`;
-            inp.value = val;
+            inp.value = typeof raw === 'object' ? '' : String(raw);
             group.appendChild(inp);
         }
         dynamicFields.appendChild(group);
@@ -138,6 +142,6 @@ editForm.onsubmit = async (e) => {
         }
         const response = await browser.runtime.sendMessage(action);
         if (response === "Ack" || response.Ack) showView('list');
-        else if (response.Error) showStatus(response.Error.message);
-    } catch { showStatus("Failed to save entry."); }
+        else if (response.Error) showStatus(response.Error.message, 'error');
+    } catch { showStatus("Failed to save entry.", 'error'); }
 };

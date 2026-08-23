@@ -16,59 +16,69 @@ browser.runtime.onMessage.addListener((message) => {
 });
 
 const BAR_CSS = `
+:host {
+    all: initial;
+}
 .bar {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 2147483647;
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 16px;
-    padding: 10px 16px;
-    font-family: system-ui, -apple-system, sans-serif;
-    font-size: 14px;
-    line-height: 1.3;
-    background: #f5f5f5;
-    color: #1a1a1a;
-    border-bottom: 1px solid #c9c9c9;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    gap: 12px;
+    max-width: min(560px, calc(100vw - 24px));
+    padding: 10px 10px 10px 16px;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text);
+    background: color-mix(in oklab, var(--bg) 88%, transparent);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 .text {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 button {
     font: inherit;
-    padding: 5px 14px;
-    border-radius: 6px;
+    font-size: 13px;
+    min-height: 28px;
+    padding: 4px 12px;
+    border-radius: var(--radius-sm);
     border: 1px solid transparent;
     cursor: pointer;
 }
-button:disabled {
-    opacity: 0.6;
-    cursor: default;
-}
 .primary {
-    background: #175DDC;
-    color: #fff;
+    background: var(--accent);
+    color: var(--on-accent);
+}
+.primary:hover {
+    background: var(--accent-hover);
 }
 .secondary {
     background: transparent;
-    color: inherit;
-    border-color: #9a9a9a;
+    color: var(--text-secondary);
+    border-color: var(--border);
 }
-@media (prefers-color-scheme: dark) {
-    .bar {
-        background: #2b2b2b;
-        color: #ececec;
-        border-bottom-color: #4a4a4a;
-    }
-    .secondary {
-        border-color: #6e6e6e;
-    }
+.secondary:hover {
+    background: var(--surface);
+}
+button:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 `;
 
@@ -91,6 +101,11 @@ function showSaveBar({ mode, domain, entryName }) {
 
     _barHost = document.createElement('div');
     _barHost.id = 'cosmic-bwarden-save-bar';
+    // themeCss() (theme.js) supplies the palette as custom properties on the
+    // host; the shadow <style> consumes them via var(--...) — the same token
+    // names popup.css uses. display:block so a page rule like
+    // `div { display:none }` cannot hide the bar's shadow tree.
+    _barHost.style.cssText = 'display:block;' + themeCss();
     // Open shadow root: the bar carries no secrets and open roots are
     // pierceable by test locators; closed would not stop page removal anyway.
     const shadow = _barHost.attachShadow({ mode: 'open' });

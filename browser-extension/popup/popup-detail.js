@@ -13,7 +13,7 @@ async function showDetail(id) {
             renderDetail(currentEntry);
             showView('detail');
         }
-    } catch { showStatus("Failed to load entry."); }
+    } catch { showStatus("Failed to load entry.", 'error'); }
 }
 
 // Fetch with secrets (user explicitly entering edit mode)
@@ -24,7 +24,7 @@ async function showEdit(id) {
             currentEntry = response.Entry.entry;
             showEditForm();
         }
-    } catch { showStatus("Failed to load entry."); }
+    } catch { showStatus("Failed to load entry.", 'error'); }
 }
 
 function makeDetailItem(label, valueNode) {
@@ -43,8 +43,9 @@ function makeDetailItem(label, valueNode) {
 
 function makeCopyBtn(getTextFn) {
     const btn = document.createElement('button');
-    btn.className = 'copy-btn';
+    btn.className = 'btn btn-ghost btn-sm copy-btn';
     btn.textContent = 'Copy';
+    btn.title = 'Copy';
     btn.addEventListener('click', async () => {
         const text = await getTextFn();
         await navigator.clipboard.writeText(text);
@@ -71,14 +72,18 @@ function makeSecretRow(entryId) {
     };
 
     const revealBtn = document.createElement('button');
-    revealBtn.className = 'reveal-btn';
-    revealBtn.textContent = '👁';
+    revealBtn.className = 'btn btn-ghost btn-sm reveal-btn';
+    setIcon(revealBtn, 'eye');
     revealBtn.title = 'Reveal';
+    revealBtn.setAttribute('aria-label', 'Reveal password');
     revealBtn.addEventListener('click', async () => {
         const secret = await getSecret();
         const isHidden = span.textContent === '••••••••';
         span.textContent = isHidden ? secret : '••••••••';
-        revealBtn.textContent = isHidden ? '🙈' : '👁';
+        setIcon(revealBtn, isHidden ? 'eye-off' : 'eye');
+        // Masked secrets keep letter-spacing so the dot count reads; a
+        // revealed secret drops it (see popup.css .secret-text).
+        span.classList.toggle('revealed', !isHidden);
     });
 
     frag.append(span, revealBtn, makeCopyBtn(getSecret));
@@ -129,7 +134,7 @@ function renderDetail(entry) {
             const frag = document.createDocumentFragment();
             frag.append(document.createTextNode(pk + ' '), makeCopyBtn(() => pk));
             const item = makeDetailItem('Public Key', frag);
-            item.querySelector('.detail-value').style.cssText = 'font-size:0.7em;word-break:break-all;';
+            item.querySelector('.detail-value').classList.add('detail-value--mono');
             detailContent.appendChild(item);
         }
         if (data.SshKey.fingerprint)
@@ -142,11 +147,32 @@ function renderDetail(entry) {
 // form — showEditForm() alone would prefill the password field empty, and
 // on save that empty value overwrites the stored password with null.
 editBtn.onclick = () => currentEntry && showEdit(currentEntry.id);
+
+// Two-step delete: the first click arms the button (3 s), the second deletes.
+// Replaces the native confirm() dialog — the popup never leaves its own
+// visual language.
+let deleteArmed = false;
+let deleteArmTimer = null;
+const DELETE_ARM_LABEL = 'Confirm delete';
+
+function disarmDelete() {
+    deleteArmed = false;
+    if (deleteArmTimer) { clearTimeout(deleteArmTimer); deleteArmTimer = null; }
+    deleteBtn.textContent = 'Delete';
+}
+
 deleteBtn.onclick = async () => {
-    if (!currentEntry || !confirm("Delete this entry?")) return;
+    if (!currentEntry) return;
+    if (!deleteArmed) {
+        deleteArmed = true;
+        deleteBtn.textContent = DELETE_ARM_LABEL;
+        deleteArmTimer = setTimeout(disarmDelete, 3000);
+        return;
+    }
+    disarmDelete();
     try {
         const r = await browser.runtime.sendMessage({ "DeleteEntry": { "id": currentEntry.id } });
         if (r === "Ack" || r.Ack) showView('list');
-    } catch { showStatus("Failed to delete entry."); }
+    } catch { showStatus("Failed to delete entry.", 'error'); }
 };
 cancelBtn.onclick = () => showView(currentEntry ? 'detail' : 'list');

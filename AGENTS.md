@@ -211,16 +211,18 @@ Source lives in `browser-extension/`. Plain vanilla JS — no bundler, no framew
 |---|---|
 | `background.js` | Native messaging queue, badge count, theme-aware + lock-state icon switching (`<theme>_locked*.png` when locked *or* logged out) |
 | `background-save.js` | Save-prompt state machine: per-tab pending credentials, save/update decision via `CheckLoginMatch` |
+| `theme.js` | Design tokens (light+dark palette, radii, shadows) for the shadow-DOM surfaces — must stay in sync with `popup/popup.css`; loaded first in content scripts |
 | `content.js` | Form fill injected into pages |
 | `content-heuristics.js` | Shared pure DOM helpers (username-field detection, submitted-credential capture); loaded first |
 | `content-submit.js` | Login-form submit detection → `LOGIN_SUBMITTED` to background |
-| `content-bar.js` | In-page "Save/Update password?" notification bar (open shadow root; never receives the password) |
+| `content-bar.js` | In-page "Save/Update password?" floating card (open shadow root; never receives the password) |
 | `popup/popup.js` | View management, list rendering, fill, domain helpers |
 | `popup/popup-lock.js` | Locked-vault view: TPM PIN unlock, DA lockout feedback; loaded *before* `popup.js` — see `docs/browser_integration.md`'s "Script load order gotcha" |
 | `popup/popup-detail.js` | Detail view, secret reveal/copy (on-demand via `GetPassword`) |
 | `popup/popup-edit.js` | Edit/add form, field rendering |
 | `popup/popup-state.js` | View/search/draft persistence across popup close+reopen, in `storage.session`; scoped to the tab's domain |
-| `popup/popup.css` | CSS custom properties; dark mode via `prefers-color-scheme` |
+| `popup/icons.js` | Inline SVG icons for dynamically built buttons (monochrome, `currentColor`) — static header icons live in `popup.html` |
+| `popup/popup.css` | Popup design system: tokens, `.btn` component classes, views; dark mode via `prefers-color-scheme` |
 
 **Icons**: `browser-extension/icons` is a symlink to the repo-root `icons/` folder (black*.png for light theme, white*.png for dark). `zip -r` dereferences symlinks, so `pack-extension` embeds them correctly.
 

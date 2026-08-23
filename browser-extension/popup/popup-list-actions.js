@@ -82,7 +82,7 @@ async function openEntrySite(id) {
         if (!url) { showStatus("Unsupported URL scheme."); return; }
         await browser.tabs.create({ url });
         window.close();
-    } catch { showStatus("Failed to open website."); }
+    } catch { showStatus("Failed to open website.", 'error'); }
 }
 
 function makeCopyDropdownBtn(entry) {
@@ -90,8 +90,10 @@ function makeCopyDropdownBtn(entry) {
     wrap.className = 'copy-dropdown';
 
     const toggleBtn = document.createElement('button');
-    toggleBtn.textContent = '📋';
+    toggleBtn.className = 'btn-icon';
+    setIcon(toggleBtn, 'copy');
     toggleBtn.title = 'Copy username or password';
+    toggleBtn.setAttribute('aria-label', 'Copy username or password');
     toggleBtn.onclick = e => {
         e.stopPropagation();
         const wasOpenHere = openDropdown && openDropdown.anchorWrap === wrap;

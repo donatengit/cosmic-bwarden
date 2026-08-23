@@ -120,8 +120,10 @@ async function restorePopupState() {
     if (state) {
         searchInput.value = state.search || '';
         favouritesOnly = !!state.favouritesOnly;
-        favBtn.textContent = favouritesOnly ? '★' : '☆';
+        // The star glyph's fill is CSS-driven; only the state class and the
+        // a11y attribute are set here (mirrors popup.js's toggle handler).
         favBtn.classList.toggle('active', favouritesOnly);
+        favBtn.setAttribute('aria-pressed', String(favouritesOnly));
     }
 
     // Detail/edit restore bypasses updateResults' lock gate, so gate them here;

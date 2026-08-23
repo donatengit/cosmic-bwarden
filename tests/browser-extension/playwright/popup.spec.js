@@ -144,7 +144,7 @@ test.describe('Extension Popup', () => {
     await expect(page.locator('.entry-actions button[title="Autofill"]')).toBeVisible();
     await expect(page.locator('.entry-actions button[title="Copy username or password"]')).toBeVisible();
     await expect(page.locator('.entry-actions button[title="View details"]')).toBeVisible();
-    await expect(page.locator('.entry-actions button[title="View details"]')).toHaveText('👁');
+    await expect(page.locator('.entry-actions button[title="View details"]')).toHaveAttribute('aria-label', 'View details');
   });
 
   test('clicking a Login entry row opens its URL in a new tab', async ({ page }) => {
@@ -524,12 +524,12 @@ test.describe('Extension Popup — favourites', () => {
     await page.locator('#fav-btn').click();
     await expect(page.locator('.entry-name', { hasText: 'pinned.com' })).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.entry-name', { hasText: 'example.com' })).not.toBeVisible();
-    await expect(page.locator('#fav-btn')).toHaveText('★');
+    await expect(page.locator('#fav-btn')).toHaveAttribute('aria-pressed', 'true');
 
     // Toggle off restores the domain view.
     await page.locator('#fav-btn').click();
     await expect(page.locator('.entry-name', { hasText: 'example.com' })).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('#fav-btn')).toHaveText('☆');
+    await expect(page.locator('#fav-btn')).toHaveAttribute('aria-pressed', 'false');
   });
 
   test('typed search with toggle on searches favourites only', async ({ page }) => {

@@ -25,23 +25,32 @@ browser.runtime.onMessage.addListener((message) => {
 const ICON_SIZE = 20;
 
 const GENERATE_ICON_CSS = `
+:host {
+    all: initial;
+}
 .icon-btn {
     all: initial;
     position: fixed;
     z-index: 2147483647;
     width: ${ICON_SIZE}px;
     height: ${ICON_SIZE}px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    background: #175DDC;
-    color: #fff;
-    font: 13px system-ui, -apple-system, sans-serif;
-    line-height: ${ICON_SIZE}px;
-    text-align: center;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    background: var(--accent);
+    color: var(--on-accent);
+    box-shadow: var(--shadow-sm);
 }
-.icon-btn:hover { background: #1450b8; }
+.icon-btn:hover {
+    background: var(--accent-hover);
+}
+.icon-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
 `;
 
 // input[type=password] -> shadow-DOM host <div>. A plain Map (not WeakMap):
@@ -140,6 +149,11 @@ function makeIcon(input, group) {
     const host = document.createElement('div');
     // Identifies the host for tests/debugging; not used by any styling.
     host.setAttribute('data-cosmic-bwarden-generate-icon', input.name || input.id || '');
+    // themeCss() (theme.js) supplies the palette as custom properties on the
+    // host; the shadow <style> consumes them via var(--...) — the same token
+    // names popup.css uses. display:block so a page rule like
+    // `div { display:none }` cannot hide the icon's shadow tree.
+    host.style.cssText = 'display:block;' + themeCss();
     const shadow = host.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
     style.textContent = GENERATE_ICON_CSS;
@@ -148,7 +162,15 @@ function makeIcon(input, group) {
     btn.type = 'button';
     btn.className = 'icon-btn';
     btn.title = 'Generate password (COSMIC BWarden)';
-    btn.textContent = '⚄';
+    btn.setAttribute('aria-label', 'Generate password (COSMIC BWarden)');
+    // Inline SVG (a four-pip dice), same visual language as the popup's
+    // icons; this content script cannot see popup/icons.js.
+    btn.innerHTML =
+        '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
+        '<g fill="currentColor">' +
+        '<circle cx="5.5" cy="5.5" r="1.5"/><circle cx="10.5" cy="5.5" r="1.5"/>' +
+        '<circle cx="5.5" cy="10.5" r="1.5"/><circle cx="10.5" cy="10.5" r="1.5"/>' +
+        '</g></svg>';
     btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();

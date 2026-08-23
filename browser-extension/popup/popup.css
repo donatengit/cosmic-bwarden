@@ -1,99 +1,242 @@
+/* COSMIC BWarden popup — minimal design system.
+   Sections: 1. Tokens · 2. Base · 3. Layout · 4. Buttons · 5. Components ·
+   6. Forms · 7. Detail · 8. Locked view · 9. Utilities.
+   Token values are mirrored in theme.js for the in-page (shadow-DOM)
+   surfaces — keep the two in sync. */
+
+/* 1. Tokens ------------------------------------------------------------- */
+
 :root {
-    --bg: #f4f4f4;
-    --surface: #ffffff;
-    --surface-hover: #f5f5f5;
-    --border: #ddd;
-    --border-input: #ccc;
-    --text: #333;
-    --text-muted: #666;
-    --text-faint: #888;
-    --error-bg: #ffe0e0;
-    --error-text: #c00;
+    /* Surfaces: white chrome, hairline borders do the layering — no cards. */
+    --bg: #ffffff;
+    --surface: #f7f7f8;
+    --surface-hover: #f0f0f1;
+    --border: #e6e6e8;
+
+    /* Text (contrast-tested: secondary and tertiary pass WCAG AA on --bg). */
+    --text: #1a1a1a;
+    --text-secondary: #5c5f66;
+    --text-tertiary: #6f727a;
+
+    /* One accent, used for every primary action. */
     --accent: #175DDC;
-    --save-bg: #2e7d32;
-    --save-hover: #1b5e20;
-    --shadow: rgba(0,0,0,0.1);
+    --accent-hover: #0f4bb8;
+    --accent-tint: #eaf1fe;
+    --on-accent: #ffffff;
+
+    /* Danger, only for destructive actions. */
+    --danger: #d92d20;
+    --danger-hover: #b42318;
+    --danger-tint: #fef3f2;
+
+    /* Geometry. */
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.08);
+    --shadow: 0 4px 12px rgba(16, 24, 40, 0.12);
+
+    /* Spacing: 4px grid. */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+
+    /* Type. */
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --bg: #1e1e1e;
-        --surface: #2a2a2a;
-        --surface-hover: #333333;
-        --border: #444;
-        --border-input: #555;
-        --text: #e0e0e0;
-        --text-muted: #aaa;
-        --text-faint: #777;
-        --error-bg: #4a1a1a;
-        --error-text: #ff6b6b;
-        --accent: #5b9cf6;
-        --save-bg: #2e7d32;
-        --save-hover: #388e3c;
-        --shadow: rgba(0,0,0,0.4);
+        --bg: #171717;
+        --surface: #222326;
+        --surface-hover: #2b2c30;
+        --border: #3a3a3d;
+        --text: #f2f2f3;
+        --text-secondary: #a6a8ad;
+        --text-tertiary: #8f929a;
+        --accent: #7da6f5;
+        --accent-hover: #a3c1f8;
+        --accent-tint: #1c2c4f;
+        --on-accent: #0f172a;
+        --danger: #f97066;
+        --danger-hover: #ff9a93;
+        --danger-tint: #3d1a17;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
     }
+}
+
+/* 2. Base --------------------------------------------------------------- */
+
+* {
+    box-sizing: border-box;
 }
 
 body {
     width: 380px;
-    font-family: sans-serif;
     margin: 0;
-    padding: 10px;
+    padding: var(--space-2) var(--space-3) var(--space-3);
+    font-family: var(--font);
+    font-size: 13px;
+    line-height: 1.45;
     background: var(--bg);
     color: var(--text);
+    -webkit-font-smoothing: antialiased;
 }
+
+/* Keyboard focus ring everywhere; text inputs get a softer ring below. */
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+::placeholder {
+    color: var(--text-tertiary);
+}
+
+/* 3. Layout ------------------------------------------------------------- */
 
 #app {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--space-3);
 }
 
 #header {
     display: flex;
-    gap: 5px;
     align-items: center;
+    gap: 6px;
 }
 
 #search {
-    flex-grow: 1;
-    padding: 8px;
-    border: 1px solid var(--border-input);
-    border-radius: 4px;
-    background: var(--surface);
+    flex: 1;
+    min-width: 0;
+    height: 30px;
+    padding: 0 10px;
+    font: inherit;
+    font-size: 13px;
     color: var(--text);
-}
-
-button {
-    padding: 6px 12px;
-    cursor: pointer;
+    background: var(--bg);
     border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text);
-    border-radius: 4px;
-    font-size: 0.9em;
+    border-radius: var(--radius-sm);
 }
 
-button:hover {
+#search:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-tint);
+}
+
+/* 4. Buttons ------------------------------------------------------------ */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 6px 16px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.btn:hover {
     background: var(--surface-hover);
 }
 
-#back-btn, #add-btn, #sync-btn, #lock-btn {
-    padding: 5px 8px;
-    font-weight: bold;
+.btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+/* The single primary action color. */
+.btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+}
+
+.btn-primary:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+}
+
+/* Quiet, borderless text button (row actions, inline copy/reveal). */
+.btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+}
+
+/* Destructive only. */
+.btn-danger {
+    background: transparent;
+    color: var(--danger);
+}
+
+.btn-danger:hover {
+    background: var(--danger-tint);
+    border-color: var(--danger);
+    color: var(--danger-hover);
+}
+
+/* Small icon-only button (header, list rows). */
+.btn-icon {
+    width: 30px;
+    height: 30px;
+    padding: 0;
     flex-shrink: 0;
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-secondary);
 }
 
+.btn-icon:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+}
+
+.btn-sm {
+    min-height: 26px;
+    padding: 3px 10px;
+    font-size: 12px;
+}
+
+.icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+
+/* 5. Components --------------------------------------------------------- */
+
+/* Status line: info is plain muted text; errors get a soft tinted chip. */
 #status {
-    background: var(--error-bg);
-    color: var(--error-text);
-    padding: 8px;
-    border-radius: 4px;
-    font-size: 0.9em;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text-secondary);
 }
 
-.hidden {
-    display: none !important;
+#status.status-error {
+    color: var(--danger);
+    background: var(--danger-tint);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-3);
 }
 
 #results {
@@ -101,22 +244,35 @@ button:hover {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
 }
 
-.entry {
-    background: var(--surface);
-    padding: 10px;
+#results::-webkit-scrollbar {
+    width: 8px;
+}
+
+#results::-webkit-scrollbar-thumb {
+    background: var(--border);
     border-radius: 4px;
-    box-shadow: 0 1px 3px var(--shadow);
+}
+
+/* List rows: hairline separators, hover surface — no cards, no shadows. */
+.entry {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-1);
     cursor: pointer;
 }
 
+.entry + .entry {
+    border-top: 1px solid var(--border);
+}
+
 .entry:hover {
-    background: var(--surface-hover);
+    background: var(--surface);
 }
 
 .entry-info {
@@ -127,52 +283,48 @@ button:hover {
 }
 
 .entry-name {
-    font-weight: bold;
+    font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .entry-user {
-    font-size: 0.85em;
-    color: var(--text-muted);
+    font-size: 12px;
+    color: var(--text-secondary);
 }
 
 .entry-actions {
     display: flex;
-    gap: 4px;
+    gap: var(--space-1);
     flex-shrink: 0;
 }
 
-.entry-actions button {
-    padding: 4px 8px;
-    font-size: 0.85em;
-}
-
-/* List-row copy dropdown (Copy Username / Copy Password). The menu is
-   appended to <body> and positioned via JS (position: fixed) rather than
-   nested under .copy-dropdown, so it isn't clipped by #results' overflow. */
+/* Copy-username/password dropdown. Appended to <body>, positioned via JS
+   (position: fixed) so it isn't clipped by #results' overflow. */
 .copy-dropdown-menu {
     position: fixed;
+    z-index: 1000;
+    min-width: 150px;
+    padding: var(--space-1);
     display: flex;
     flex-direction: column;
-    background: var(--surface);
+    gap: 2px;
+    background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    box-shadow: 0 2px 6px var(--shadow);
-    z-index: 1000;
-    min-width: 130px;
-    overflow: hidden;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow);
 }
 
 .copy-dropdown-menu button {
     border: none;
-    border-radius: 0;
+    background: transparent;
     text-align: left;
-    padding: 8px 10px;
-    font-size: 0.85em;
-    background: var(--surface);
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 12px;
     color: var(--text);
+    cursor: pointer;
 }
 
 .copy-dropdown-menu button:hover {
@@ -181,97 +333,107 @@ button:hover {
 
 .no-results {
     text-align: center;
-    color: var(--text-faint);
-    padding: 20px;
+    color: var(--text-tertiary);
+    padding: var(--space-5);
 }
 
 /* Caption above the list when it shows favourites (toggle or fallback). */
 .list-caption {
-    color: var(--text-muted);
-    font-size: 0.8em;
-    padding: 6px 10px 2px;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    padding: 2px var(--space-1) var(--space-1);
 }
 
+/* The favourite star fills when active — one SVG, two states via CSS. */
 #fav-btn.active {
     color: var(--accent);
-    border-color: var(--accent);
 }
 
-/* Forms and Details */
+#fav-btn.active svg {
+    fill: currentColor;
+}
+
+/* 6. Forms -------------------------------------------------------------- */
+
 .form-group {
-    margin-bottom: 10px;
+    margin-bottom: var(--space-3);
 }
 
 .form-group label {
     display: block;
-    font-size: 0.8em;
-    color: var(--text-muted);
-    margin-bottom: 3px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
 }
 
 .form-group input,
 .form-group select,
 .form-group textarea {
     width: 100%;
-    padding: 8px;
-    border: 1px solid var(--border-input);
-    border-radius: 4px;
-    box-sizing: border-box;
-    background: var(--surface);
+    min-height: 32px;
+    padding: 6px 10px;
+    font: inherit;
+    font-size: 13px;
     color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-tint);
 }
 
 .form-group textarea {
-    height: 60px;
+    height: 64px;
     resize: vertical;
+}
+
+.password-field-wrap {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.password-field-wrap input {
+    flex-grow: 1;
+    min-width: 0;
 }
 
 .form-actions,
 .view-actions {
     display: flex;
-    gap: 10px;
-    margin-top: 15px;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
 }
 
-.form-actions button,
-.view-actions button {
-    flex-grow: 1;
+.form-actions .btn,
+.view-actions .btn {
+    flex: 1;
 }
 
-#save-btn {
-    background: var(--save-bg);
-    color: white;
-    border: none;
-}
-
-#save-btn:hover {
-    background: var(--save-hover);
-}
-
-button.danger {
-    color: var(--error-text);
-}
-
-button.danger:hover {
-    background: var(--error-bg);
-    border-color: var(--error-text);
-}
+/* 7. Detail ------------------------------------------------------------- */
 
 #detail-content {
-    background: var(--surface);
-    padding: 10px;
-    border-radius: 4px;
-    box-shadow: 0 1px 3px var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-1) 0;
 }
 
 .detail-item {
-    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }
 
 .detail-label {
-    font-size: 0.75em;
-    color: var(--text-faint);
-    text-transform: uppercase;
+    font-size: 11px;
+    color: var(--text-tertiary);
 }
 
 .detail-value {
@@ -279,69 +441,76 @@ button.danger:hover {
     display: flex;
     align-items: center;
     gap: 6px;
-    word-break: break-all;
+    overflow-wrap: anywhere;
 }
 
-.detail-value .secret-text {
-    font-family: monospace;
-    letter-spacing: 0.1em;
+/* Long machine values (SSH keys) — set from popup-detail.js. */
+.detail-value--mono {
+    font-family: var(--font-mono);
+    font-size: 11px;
 }
 
-.reveal-btn,
-.copy-btn {
-    padding: 2px 6px;
-    font-size: 0.8em;
-    flex-shrink: 0;
+/* Masked secrets keep letter-spacing so the dot count reads; a revealed
+   secret drops it — spaced-out plaintext is harder to read. */
+.secret-text {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.08em;
 }
 
-.password-field-wrap {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    width: 100%;
+.secret-text.revealed {
+    letter-spacing: 0;
 }
 
-.password-field-wrap input {
-    flex-grow: 1;
-    padding: 6px;
-    border: 1px solid var(--border-input);
-    border-radius: 4px;
-    background: var(--surface);
-    color: var(--text);
-    min-width: 0;
-}
+/* 8. Locked view -------------------------------------------------------- */
 
-/* Locked view (PIN unlock) */
 .locked-message {
-    color: var(--text-muted);
-    font-size: 0.9em;
+    color: var(--text-secondary);
+    font-size: 13px;
     text-align: center;
-    padding: 10px 0;
+    padding: var(--space-3) 0;
 }
 
 #locked-pin-group {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 #locked-pin-input {
-    flex-grow: 1;
-    padding: 8px;
-    border: 1px solid var(--border-input);
-    border-radius: 4px;
-    background: var(--surface);
+    flex: 1;
+    min-width: 0;
+    height: 32px;
+    padding: 0 10px;
+    font: inherit;
+    font-size: 13px;
+    letter-spacing: 0.15em;
     color: var(--text);
-    letter-spacing: 0.2em;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+#locked-pin-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-tint);
 }
 
 #locked-feedback {
-    color: var(--error-text);
-    font-size: 0.85em;
+    color: var(--danger);
+    font-size: 12px;
+    line-height: 1.45;
     text-align: center;
-    padding-top: 8px;
+    padding-top: var(--space-2);
 }
 
 #locked-fallback-btn {
     width: 100%;
-    margin-top: 10px;
+    margin-top: var(--space-3);
+}
+
+/* 9. Utilities ---------------------------------------------------------- */
+
+.hidden {
+    display: none !important;
 }
