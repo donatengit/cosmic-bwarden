@@ -257,8 +257,11 @@ impl CosmicBWardenApp {
                 |_| Action::App(Message::OpenVaultRequested),
             )),
             Message::AppletOpenLink(uri) => {
-                let _ = std::process::Command::new("xdg-open").arg(&uri).spawn();
-                Some(Task::none())
+                // Detached double-fork via activation::open_link, not a bare
+                // Command::spawn: the dropped-Child call this replaces left a
+                // zombie xdg-open child of the applet for the whole panel
+                // session once it exited.
+                Some(crate::app::update::activation::open_link(uri))
             }
             Message::AppletQuitMenuToggle => {
                 self.applet_quit_expanded = !self.applet_quit_expanded;
