@@ -1,5 +1,5 @@
-use crate::app::CosmicBWardenApp;
 use crate::app::update::vault_actions;
+use crate::app::CosmicBWardenApp;
 use crate::message::Message;
 use crate::message::RepromptIntent;
 use crate::message::View;
@@ -356,7 +356,9 @@ fn reveal_password_on_meta_entry_starts_get_password() {
 
     let _ = app.update(Message::ToggleRevealField("1".into(), "Password".into()));
     assert_eq!(app.pending_secret_field.as_deref(), Some("Password"));
-    assert!(!app.revealed_fields.contains(&("1".into(), "Password".into())));
+    assert!(!app
+        .revealed_fields
+        .contains(&("1".into(), "Password".into())));
 }
 
 #[test]
@@ -424,7 +426,9 @@ fn on_demand_password_loaded_patches_entry_and_reveals() {
         }
         _ => panic!("login"),
     }
-    assert!(app.revealed_fields.contains(&("1".into(), "Password".into())));
+    assert!(app
+        .revealed_fields
+        .contains(&("1".into(), "Password".into())));
     assert!(app.pending_secret_field.is_none());
 }
 

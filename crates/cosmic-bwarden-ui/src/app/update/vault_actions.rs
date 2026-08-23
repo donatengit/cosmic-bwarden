@@ -95,11 +95,7 @@ pub fn fetch_totp(id: String, reprompt_password: Option<String>) -> AgentAction 
 
 /// On-demand secret for a detail-pane field after a `GetEntryMeta` selection.
 /// Login password → `GetPassword`; TOTP → `GetTotp`; everything else → `GetEntry`.
-pub fn on_demand_secret(
-    field: &str,
-    id: String,
-    reprompt_password: Option<String>,
-) -> AgentAction {
+pub fn on_demand_secret(field: &str, id: String, reprompt_password: Option<String>) -> AgentAction {
     match field {
         "Password" => fetch_password(id, reprompt_password),
         "TOTP" => fetch_totp(id, reprompt_password),
@@ -112,24 +108,100 @@ pub fn on_demand_secret(
 pub fn secret_is_loaded(entry: &cosmic_bwarden_core::db::Entry, field: &str) -> bool {
     use cosmic_bwarden_core::db::EntryData;
     match (&entry.data, field) {
-        (EntryData::Login { password: Some(_), .. }, "Password") => true,
+        (
+            EntryData::Login {
+                password: Some(_), ..
+            },
+            "Password",
+        ) => true,
         (EntryData::Login { .. }, "TOTP") => false,
-        (EntryData::SshKey { private_key: Some(_), .. }, "Private Key") => true,
-        (EntryData::Card { number: Some(_), .. }, "Card Number") => true,
+        (
+            EntryData::SshKey {
+                private_key: Some(_),
+                ..
+            },
+            "Private Key",
+        ) => true,
+        (
+            EntryData::Card {
+                number: Some(_), ..
+            },
+            "Card Number",
+        ) => true,
         (EntryData::Card { code: Some(_), .. }, "Security Code") => true,
-        (EntryData::BankAccount { account_number: Some(_), .. }, "Account Number") => true,
-        (EntryData::BankAccount { routing_number: Some(_), .. }, "Routing Number") => true,
+        (
+            EntryData::BankAccount {
+                account_number: Some(_),
+                ..
+            },
+            "Account Number",
+        ) => true,
+        (
+            EntryData::BankAccount {
+                routing_number: Some(_),
+                ..
+            },
+            "Routing Number",
+        ) => true,
         (EntryData::BankAccount { pin: Some(_), .. }, "PIN") => true,
         (EntryData::BankAccount { iban: Some(_), .. }, "IBAN") => true,
-        (EntryData::BankAccount { swift_code: Some(_), .. }, "SWIFT Code") => true,
-        (EntryData::BankAccount { branch_number: Some(_), .. }, "Branch Number") => true,
+        (
+            EntryData::BankAccount {
+                swift_code: Some(_),
+                ..
+            },
+            "SWIFT Code",
+        ) => true,
+        (
+            EntryData::BankAccount {
+                branch_number: Some(_),
+                ..
+            },
+            "Branch Number",
+        ) => true,
         (EntryData::Identity { ssn: Some(_), .. }, "SSN") => true,
-        (EntryData::Identity { license_number: Some(_), .. }, "License Number") => true,
-        (EntryData::Identity { passport_number: Some(_), .. }, "Passport Number") => true,
-        (EntryData::DriversLicense { license_number: Some(_), .. }, "License Number") => true,
-        (EntryData::Passport { passport_number: Some(_), .. }, "Passport Number") => true,
-        (EntryData::Passport { national_identification_number: Some(_), .. }, "National Identification Number") => true,
-        (EntryData::Passport { date_of_birth: Some(_), .. }, "Date of Birth") => true,
+        (
+            EntryData::Identity {
+                license_number: Some(_),
+                ..
+            },
+            "License Number",
+        ) => true,
+        (
+            EntryData::Identity {
+                passport_number: Some(_),
+                ..
+            },
+            "Passport Number",
+        ) => true,
+        (
+            EntryData::DriversLicense {
+                license_number: Some(_),
+                ..
+            },
+            "License Number",
+        ) => true,
+        (
+            EntryData::Passport {
+                passport_number: Some(_),
+                ..
+            },
+            "Passport Number",
+        ) => true,
+        (
+            EntryData::Passport {
+                national_identification_number: Some(_),
+                ..
+            },
+            "National Identification Number",
+        ) => true,
+        (
+            EntryData::Passport {
+                date_of_birth: Some(_),
+                ..
+            },
+            "Date of Birth",
+        ) => true,
         _ => entry
             .fields
             .iter()
@@ -148,9 +220,7 @@ pub fn submit_reprompt_action(
         | Some(crate::message::RepromptIntent::Copy { field }) => {
             on_demand_secret(field, id, Some(password))
         }
-        Some(crate::message::RepromptIntent::Edit) | None => {
-            fetch_full_entry(id, Some(password))
-        }
+        Some(crate::message::RepromptIntent::Edit) | None => fetch_full_entry(id, Some(password)),
     }
 }
 
@@ -165,7 +235,7 @@ pub fn parse_on_demand_response(
         ("Password", Response::Password { password }) => Ok(OnDemandPayload::Password(password)),
         ("TOTP", Response::Totp { code }) => Ok(OnDemandPayload::Totp(code)),
         (_, Response::Entry { entry }) if field != "Password" && field != "TOTP" => {
-            Ok(OnDemandPayload::Entry(entry))
+            Ok(OnDemandPayload::Entry(Box::new(entry)))
         }
         (_, Response::Error { message }) => Err(message),
         (_, other) => Err(format!("unexpected response: {other:?}")),
@@ -175,34 +245,98 @@ pub fn parse_on_demand_response(
 pub fn field_plaintext(entry: &cosmic_bwarden_core::db::Entry, field: &str) -> Option<String> {
     use cosmic_bwarden_core::db::EntryData;
     match (&entry.data, field) {
-        (EntryData::Login { password: Some(p), .. }, "Password") => Some(p.expose().to_string()),
-        (EntryData::SshKey { private_key: Some(p), .. }, "Private Key") => {
-            Some(p.expose().to_string())
-        }
-        (EntryData::Card { number: Some(n), .. }, "Card Number") => Some(n.expose().to_string()),
-        (EntryData::BankAccount { account_number: Some(v), .. }, "Account Number") => {
-            Some(v.expose().to_string())
-        }
-        (EntryData::BankAccount { routing_number: Some(v), .. }, "Routing Number") => {
-            Some(v.expose().to_string())
-        }
+        (
+            EntryData::Login {
+                password: Some(p), ..
+            },
+            "Password",
+        ) => Some(p.expose().to_string()),
+        (
+            EntryData::SshKey {
+                private_key: Some(p),
+                ..
+            },
+            "Private Key",
+        ) => Some(p.expose().to_string()),
+        (
+            EntryData::Card {
+                number: Some(n), ..
+            },
+            "Card Number",
+        ) => Some(n.expose().to_string()),
+        (
+            EntryData::BankAccount {
+                account_number: Some(v),
+                ..
+            },
+            "Account Number",
+        ) => Some(v.expose().to_string()),
+        (
+            EntryData::BankAccount {
+                routing_number: Some(v),
+                ..
+            },
+            "Routing Number",
+        ) => Some(v.expose().to_string()),
         (EntryData::BankAccount { pin: Some(v), .. }, "PIN") => Some(v.expose().to_string()),
         (EntryData::BankAccount { iban: Some(v), .. }, "IBAN") => Some(v.clone()),
-        (EntryData::BankAccount { swift_code: Some(v), .. }, "SWIFT Code") => Some(v.clone()),
-        (EntryData::BankAccount { branch_number: Some(v), .. }, "Branch Number") => Some(v.clone()),
+        (
+            EntryData::BankAccount {
+                swift_code: Some(v),
+                ..
+            },
+            "SWIFT Code",
+        ) => Some(v.clone()),
+        (
+            EntryData::BankAccount {
+                branch_number: Some(v),
+                ..
+            },
+            "Branch Number",
+        ) => Some(v.clone()),
         (EntryData::Identity { ssn: Some(v), .. }, "SSN") => Some(v.clone()),
-        (EntryData::Identity { license_number: Some(v), .. }, "License Number") => Some(v.clone()),
-        (EntryData::Identity { passport_number: Some(v), .. }, "Passport Number") => Some(v.clone()),
-        (EntryData::DriversLicense { license_number: Some(v), .. }, "License Number") => {
-            Some(v.expose().to_string())
-        }
-        (EntryData::Passport { passport_number: Some(v), .. }, "Passport Number") => {
-            Some(v.expose().to_string())
-        }
-        (EntryData::Passport { national_identification_number: Some(v), .. }, "National Identification Number") => {
-            Some(v.clone())
-        }
-        (EntryData::Passport { date_of_birth: Some(v), .. }, "Date of Birth") => Some(v.clone()),
+        (
+            EntryData::Identity {
+                license_number: Some(v),
+                ..
+            },
+            "License Number",
+        ) => Some(v.clone()),
+        (
+            EntryData::Identity {
+                passport_number: Some(v),
+                ..
+            },
+            "Passport Number",
+        ) => Some(v.clone()),
+        (
+            EntryData::DriversLicense {
+                license_number: Some(v),
+                ..
+            },
+            "License Number",
+        ) => Some(v.expose().to_string()),
+        (
+            EntryData::Passport {
+                passport_number: Some(v),
+                ..
+            },
+            "Passport Number",
+        ) => Some(v.expose().to_string()),
+        (
+            EntryData::Passport {
+                national_identification_number: Some(v),
+                ..
+            },
+            "National Identification Number",
+        ) => Some(v.clone()),
+        (
+            EntryData::Passport {
+                date_of_birth: Some(v),
+                ..
+            },
+            "Date of Birth",
+        ) => Some(v.clone()),
         _ => entry.fields.iter().find_map(|f| {
             (f.name.as_deref() == Some(field))
                 .then(|| f.value.as_ref().map(|s| s.expose().to_string()))

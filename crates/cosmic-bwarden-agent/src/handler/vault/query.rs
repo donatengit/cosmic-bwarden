@@ -131,10 +131,8 @@ pub(super) fn verify_reprompt(
 
     match &state.master_password_hash {
         Some(stored_hash) => {
-            if !cosmic_bwarden_core::ct_eq(
-                identity.master_password_hash.hash(),
-                stored_hash.hash(),
-            ) {
+            if !cosmic_bwarden_core::ct_eq(identity.master_password_hash.hash(), stored_hash.hash())
+            {
                 Some(Response::Error {
                     message: "incorrect password".to_string(),
                 })
@@ -249,9 +247,7 @@ pub async fn handle_get_entries(
                         EntryType::DriversLicense,
                         cosmic_bwarden_core::db::EntryData::DriversLicense { .. },
                     ) => (),
-                    (EntryType::Passport, cosmic_bwarden_core::db::EntryData::Passport { .. }) => {
-                        ()
-                    }
+                    (EntryType::Passport, cosmic_bwarden_core::db::EntryData::Passport { .. }) => {}
                     _ => continue,
                 }
             }
@@ -358,10 +354,7 @@ mod ct_eq_site {
             "reprompt hash compare must use ct_eq"
         );
         let non_ct = ["hash()", " != ", "stored_hash.hash()"].concat();
-        assert!(
-            !src.contains(&non_ct),
-            "non-CT != compare must not remain"
-        );
+        assert!(!src.contains(&non_ct), "non-CT != compare must not remain");
     }
 }
 

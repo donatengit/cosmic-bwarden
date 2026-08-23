@@ -140,9 +140,7 @@ pub async fn handle_command(
                     }
                 } else {
                     let id = resolve_id(client, id_or_name, entry_type).await?;
-                    let res = client
-                        .send(fetch_get_action(id, *show_secrets))
-                        .await?;
+                    let res = client.send(fetch_get_action(id, *show_secrets)).await?;
 
                     let entry = match res {
                         Response::Entry { entry } => entry,

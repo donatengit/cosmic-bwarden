@@ -154,12 +154,9 @@ mod tests {
         // `Z< [bash] <defunct>` under other applets). The double fork must
         // reparent the real child to init (ppid != ours) or have it reaped
         // before we stop polling.
-        let pid = spawn_detached(
-            std::process::Command::new("/bin/true"),
-            "true".to_string(),
-        )
-        .await
-        .expect("spawn_detached should launch /bin/true");
+        let pid = spawn_detached(std::process::Command::new("/bin/true"), "true".to_string())
+            .await
+            .expect("spawn_detached should launch /bin/true");
         let me = std::process::id();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {

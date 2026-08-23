@@ -203,9 +203,7 @@ impl CosmicBWardenApp {
         } else {
             match &entry.data {
                 EntryData::Login {
-                    username,
-                    password,
-                    ..
+                    username, password, ..
                 } => {
                     if let Some(u) = username {
                         fields_col =

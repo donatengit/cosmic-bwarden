@@ -209,13 +209,19 @@ mod tests {
     #[test]
     fn pbkdf2_rejects_iterations_above_range() {
         let r = Identity::new("a@b.com", &pw(), KdfType::Pbkdf2, 2_000_001, None, None);
-        assert!(r.is_err(), "PBKDF2 iterations above 2_000_000 must be rejected");
+        assert!(
+            r.is_err(),
+            "PBKDF2 iterations above 2_000_000 must be rejected"
+        );
     }
 
     #[test]
     fn pbkdf2_rejects_iterations_below_range() {
         let r = Identity::new("a@b.com", &pw(), KdfType::Pbkdf2, 99_999, None, None);
-        assert!(r.is_err(), "PBKDF2 iterations below 100_000 must be rejected");
+        assert!(
+            r.is_err(),
+            "PBKDF2 iterations below 100_000 must be rejected"
+        );
     }
 
     #[test]

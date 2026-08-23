@@ -97,7 +97,7 @@ impl CosmicBWardenApp {
                     }
                     OnDemandPayload::Entry(entry) => {
                         to_copy = vault_actions::field_plaintext(&entry, &field);
-                        self.selected_entry = Some(entry);
+                        self.selected_entry = Some(*entry);
                     }
                 }
                 if let Some(id) = self.selected_entry_id.clone() {
@@ -134,7 +134,11 @@ pub(super) fn dispatch_on_demand(
             }
         },
         move |result| {
-            Action::App(Message::OnDemandSecretLoaded { field, copy, result })
+            Action::App(Message::OnDemandSecretLoaded {
+                field,
+                copy,
+                result,
+            })
         },
     )
 }

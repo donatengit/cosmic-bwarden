@@ -127,6 +127,9 @@ mod tests {
 
     #[test]
     fn leftover_pin_reseals() {
-        assert_eq!(login_pin_intent(true, true, "123456"), LoginPinIntent::Setup);
+        assert_eq!(
+            login_pin_intent(true, true, "123456"),
+            LoginPinIntent::Setup
+        );
     }
 }

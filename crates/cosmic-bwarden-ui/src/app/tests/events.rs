@@ -112,7 +112,10 @@ async fn test_unlock_requested_event_shows_unlock_view() {
     ));
     assert_eq!(app.view, View::Unlock);
     assert!(app.selected_entry_id.is_none());
-    assert!(app.applet_popup.is_none(), "must not auto-open the applet popup");
+    assert!(
+        app.applet_popup.is_none(),
+        "must not auto-open the applet popup"
+    );
     assert_unlock_notify_payload(&app);
 }
 
@@ -133,7 +136,10 @@ async fn test_pin_requested_event_notifies_when_ready() {
     assert_eq!(app.unlock_mode, UnlockMode::Pin);
     assert!(!app.password_preferred);
     assert!(!app.pin_incorrect);
-    assert!(app.applet_popup.is_none(), "must not auto-open the applet popup");
+    assert!(
+        app.applet_popup.is_none(),
+        "must not auto-open the applet popup"
+    );
     assert_unlock_notify_payload(&app);
 }
 

@@ -167,17 +167,20 @@ mod tests {
             format!("{:?}", Message::UnlockPasswordChanged(secret.to_string())),
             format!("{:?}", Message::UnlockPinChanged(secret.to_string())),
             format!("{:?}", Message::CopyToClipboard(secret.to_string())),
-            format!("{:?}", Message::ClipboardClearReadback(1, Some(secret.to_string()))),
+            format!(
+                "{:?}",
+                Message::ClipboardClearReadback(1, Some(secret.to_string()))
+            ),
             format!("{:?}", Message::RepromptPasswordChanged(secret.to_string())),
-            format!("{:?}", Message::EditFieldChanged("password".into(), secret.to_string())),
+            format!(
+                "{:?}",
+                Message::EditFieldChanged("password".into(), secret.to_string())
+            ),
             format!("{:?}", Message::LoginPinChanged(secret.to_string())),
             format!("{:?}", Message::AppletPinChanged(secret.to_string())),
             format!("{:?}", Message::MainWindowPinChanged(secret.to_string())),
             format!("{:?}", Message::TpmSetupPinChanged(secret.to_string())),
-            format!(
-                "{:?}",
-                Message::GeneratorGenerated(Ok(secret.to_string()))
-            ),
+            format!("{:?}", Message::GeneratorGenerated(Ok(secret.to_string()))),
             format!(
                 "{:?}",
                 Message::AppletGeneratePasswordReceived(Ok(secret.to_string()))
@@ -188,10 +191,7 @@ mod tests {
             ),
         ];
         for s in cases {
-            assert!(
-                !s.contains(secret),
-                "Message Debug leaked secret: {s}"
-            );
+            assert!(!s.contains(secret), "Message Debug leaked secret: {s}");
         }
         assert_eq!(
             format!("{:?}", Message::PasswordChanged(secret.to_string())),

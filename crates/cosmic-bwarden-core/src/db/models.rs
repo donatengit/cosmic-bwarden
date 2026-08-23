@@ -419,7 +419,9 @@ pub struct Uri {
     pub match_type: Option<api::UriMatchType>,
 }
 
-#[derive(Clone, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize, Zeroize, ZeroizeOnDrop)]
+#[derive(
+    Clone, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize, Zeroize, ZeroizeOnDrop,
+)]
 #[serde(transparent)]
 pub struct Secret(String);
 

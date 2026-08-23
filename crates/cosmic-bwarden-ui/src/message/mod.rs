@@ -55,11 +55,14 @@ pub enum RepromptIntent {
 }
 
 /// Plaintext (or full entry) from an on-demand secret fetch. Debug-redacted.
+/// `Entry` is boxed: the variant is ~600 bytes larger than the string
+/// variants, which trips `clippy::large-enum-variant` (workspace denies
+/// warnings) — boxing is free here because the payload is transient.
 #[derive(Clone)]
 pub enum OnDemandPayload {
     Password(String),
     Totp(String),
-    Entry(Entry),
+    Entry(Box<Entry>),
 }
 
 /// Agent config/state snapshot carried by `Message::ConfigReceived` — exactly

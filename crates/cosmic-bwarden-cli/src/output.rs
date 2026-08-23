@@ -301,7 +301,9 @@ pub fn output_entry(entry: &Entry, fields_str: &str, show_secrets: bool) -> Resu
     }
 
     for field in &entry.fields {
-        let Some(name) = field.name.as_deref() else { continue };
+        let Some(name) = field.name.as_deref() else {
+            continue;
+        };
         if !all_fields && !requested_fields.contains(name) {
             continue;
         }
