@@ -26,6 +26,7 @@ function makeFakeBrowser(agent) {
     return {
         calls,
         runtime: {
+            getURL: (p) => 'moz-extension://test-uuid/' + p,
             connectNative: () => {
                 const port = {
                     _onMessage: null,
@@ -85,7 +86,7 @@ function makeFakeAgent(locked) {
 function loadBackground(fakeBrowser) {
     const fn = new Function(
         'browser',
-        `${source}\nreturn { updateBadge, setThemeIcon, extractDomain, isContentScriptProxyAllowed };`
+        `${source}\nreturn { updateBadge, setThemeIcon, extractDomain, isContentScriptProxyAllowed, isPopupSender };`
     );
     return fn(fakeBrowser);
 }
@@ -102,6 +103,17 @@ describe('content-script action allowlist', () => {
         expect(isContentScriptProxyAllowed({ GetPassword: { id: 'x' } })).toBe(false);
         expect(isContentScriptProxyAllowed({ GetEntry: { id: 'x' } })).toBe(false);
         expect(isContentScriptProxyAllowed('Quit')).toBe(false);
+    });
+    it('allows the popup page itself even when rendered in a tab', () => {
+        // The full E2E specs open popup.html in a tab; the background must not
+        // mistake that for a web-page content script (whose sender.url is an
+        // http(s) origin that cannot forge the extension's own popup/ URL).
+        const agent = makeFakeAgent(false);
+        const { isPopupSender } = loadBackground(makeFakeBrowser(agent));
+        expect(isPopupSender({ url: 'moz-extension://test-uuid/popup/popup.html', tab: {} })).toBe(true);
+        expect(isPopupSender({ url: 'moz-extension://other/popup/popup.html', tab: {} })).toBe(false);
+        expect(isPopupSender({ url: 'https://example.com/', tab: {} })).toBe(false);
+        expect(isPopupSender(null)).toBe(false);
     });
 });
 

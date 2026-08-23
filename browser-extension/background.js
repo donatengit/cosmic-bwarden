@@ -227,7 +227,15 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     // Content scripts share this listener. Only generation is a legitimate
     // content-script → agent call; everything else must come from the popup.
-    if (sender && sender.tab && !isContentScriptProxyAllowed(message)) {
+    // The popup page itself is allowed even when rendered in a tab (specs,
+    // manual debugging): its sender.url is the extension's own popup/ origin,
+    // which no web-page content script can forge.
+    if (
+        sender
+        && sender.tab
+        && !isPopupSender(sender)
+        && !isContentScriptProxyAllowed(message)
+    ) {
         return Promise.resolve({ Error: { message: 'action not allowed from content script' } });
     }
     return sendToAgent(message);
@@ -235,4 +243,9 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 function isContentScriptProxyAllowed(message) {
     return !!(message && message.GeneratePassword !== undefined);
+}
+
+function isPopupSender(sender) {
+    if (!sender || typeof sender.url !== 'string') return false;
+    return sender.url.startsWith(browser.runtime.getURL('popup/'));
 }

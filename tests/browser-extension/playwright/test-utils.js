@@ -3,6 +3,26 @@ import path from 'path';
 import { execSync } from 'child_process';
 
 /**
+ * Parses the accumulated RDP buffer and returns the first JSON frame carrying
+ * an `addon`/`addons` field (or null). Frames are length-prefixed and may be
+ * split across data events, so the buffer may hold several of them.
+ */
+function parseFrames(buffer) {
+  const fromBrace = buffer.slice(buffer.indexOf('{'));
+  try {
+    return JSON.parse(fromBrace);
+  } catch {
+    for (const m of fromBrace.matchAll(/\d+:(\{.*?\})(?=\d+:|$)/gs)) {
+      try {
+        const f = JSON.parse(m[1]);
+        if (f && (f.addon || f.addons)) return f;
+      } catch { /* not a complete frame yet */ }
+    }
+  }
+  return null;
+}
+
+/**
  * Loads a Firefox addon temporarily via the remote debugging port.
  */
 export async function loadFirefoxAddon(port, addonPath) {
@@ -29,7 +49,9 @@ export async function loadFirefoxAddon(port, addonPath) {
   return new Promise((resolve, reject) => {
     let buffer = '';
     let addonsActorFound = false;
-    
+    let addonsActor = null;
+    let installed = false;
+
     const onData = (data) => {
       const chunk = data.toString();
       buffer += chunk;
@@ -38,10 +60,10 @@ export async function loadFirefoxAddon(port, addonPath) {
         const match = buffer.match(/"addonsActor":"([^"]+)"/);
         if (match) {
           addonsActorFound = true;
-          const actor = match[1];
-          console.log(`DEBUG: Found addonsActor: ${actor}`);
+          addonsActor = match[1];
+          console.log(`DEBUG: Found addonsActor: ${addonsActor}`);
           const installCmd = JSON.stringify({
-            to: actor,
+            to: addonsActor,
             type: 'installTemporaryAddon',
             addonPath: addonAbsPath
           });
@@ -56,9 +78,31 @@ export async function loadFirefoxAddon(port, addonPath) {
       }
 
       if (buffer.includes('"addon"')) {
-        console.log('DEBUG: Addon installed successfully');
+        // installTemporaryAddon's response carries only the manifest ID; the
+        // internal UUID (moz-extension://<uuid>/) comes from listAddons.
+        console.log('DEBUG: Addon installed, requesting listAddons...');
+        installed = true;
+        const listCmd = JSON.stringify({ to: 'root', type: 'listAddons' });
+        socket.write(`${listCmd.length}:${listCmd}`);
+        buffer = '';
+      } else if (installed) {
+        // Response to the listAddons request. Select our addon by its stable
+        // manifest ID (the list also contains system addons) and take the
+        // internal UUID from manifestURL.
+        const msg = parseFrames(buffer);
+        const addon = (msg && msg.addons || []).find(
+          (a) => a && a.id === 'cosmic-bwarden@enikeev.com'
+        );
+        const addonId = addon && addon.manifestURL ? addon.manifestURL.split('/')[2] : null;
+        if (!addonId) {
+          console.error(`DEBUG: Could not find addon URL in listAddons response: ${buffer}`);
+          cleanup();
+          reject(new Error('no addon url in listAddons response'));
+          return;
+        }
+        console.log(`DEBUG: Addon installed successfully, internal id: ${addonId}`);
         cleanup();
-        resolve(true);
+        resolve(addonId);
       }
       
       if (buffer.includes('"error"')) {

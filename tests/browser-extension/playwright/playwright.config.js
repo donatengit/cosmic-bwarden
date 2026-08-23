@@ -34,7 +34,10 @@ export default defineConfig({
     },
     {
       name: 'firefox-full',
+      // full.spec.js only — chrome-full.spec.js belongs to the chrome-full
+      // project and would otherwise match .*full\.spec\.js too and run twice.
       testMatch: /.*full\.spec\.js/,
+      testIgnore: /.*chrome-full\.spec\.js/,
       use: {
         ...devices['Desktop Firefox'],
         headless: false,

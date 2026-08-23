@@ -214,6 +214,7 @@ pub async fn handle_command(
             let mut notes = None;
             let mut private_key = None;
             let mut public_key = None;
+            let mut uris = Vec::new();
 
             for arg in args {
                 if let Some((k, v)) = arg.split_once('=') {
@@ -227,6 +228,15 @@ pub async fn handle_command(
                                 );
                             }
                             notes = Some(Secret::from(v.to_string()))
+                        }
+                        "uri" | "uris" => {
+                            // Repeatable; comma-separated values also accepted.
+                            for u in v.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                                uris.push(cosmic_bwarden_core::db::Uri {
+                                    uri: u.to_string(),
+                                    match_type: None,
+                                });
+                            }
                         }
                         "private_key" | "private" => {
                             private_key = Some(Secret::from(v.to_string()))
@@ -279,7 +289,7 @@ pub async fn handle_command(
                             notes,
                             fields,
                             totp: None,
-                            uris: Vec::new(),
+                            uris,
                         })
                         .await?
                 }

@@ -109,13 +109,15 @@ async function updateResults() {
     try {
         const configResp = await getConfig();
         if (configResp.Config) {
+            // needs_login wins over is_locked: a logged-out vault is not
+            // "locked" — there is no session to unlock.
+            if (configResp.Config.needs_login) {
+                showStatus("Not logged in.");
+                return;
+            }
             if (configResp.Config.is_locked) {
                 await browser.runtime.sendMessage("RequestUnlock");
                 await showLockedView();
-                return;
-            }
-            if (configResp.Config.needs_login) {
-                showStatus("Not logged in.");
                 return;
             }
         }

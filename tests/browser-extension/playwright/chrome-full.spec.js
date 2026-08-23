@@ -21,6 +21,36 @@ function cli(args) {
   });
 }
 
+// Vaultwarden rate-limits logins (429); retry with a backoff so repeated
+// local runs do not exhaust the budget mid-suite.
+function cliLogin() {
+  for (let i = 0; i < 5; i++) {
+    try {
+      return cli(`login --server "${VW_URL}" --password "${PASSWORD}" "${EMAIL}"`);
+    } catch (e) {
+      if (!String(e).includes('429') || i === 4) throw e;
+      execSync('sleep 5');
+    }
+  }
+  return null;
+}
+
+// The popup's default list shows domain-matched entries for the current tab
+// with a favourites fallback — in this suite the active tab is the popup
+// itself, so nothing matches. Pin each entry the tests expect to see.
+function pinEntry(name) {
+  // The popup save is optimistic; the entry may not be in the agent's DB the
+  // instant after #save-btn, so poll briefly before pinning.
+  let line = null;
+  for (let i = 0; i < 10 && !line; i++) {
+    const out = cli('list');
+    line = out.split('\n').find((l) => l.includes(name));
+    if (!line) execSync('sleep 0.3');
+  }
+  const m = line && line.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  if (m) cli(`pin ${m[0]}`);
+}
+
 function agentSocketPath() {
   const profile = process.env.COSMIC_BWARDEN_PROFILE
     ? `cosmic-bwarden-${process.env.COSMIC_BWARDEN_PROFILE}`
@@ -107,7 +137,7 @@ test.describe('Chrome Extension Full E2E', () => {
     registerNativeHost(extensionId, userDataDir);
 
     try { cli(`register --server "${VW_URL}" --password "${PASSWORD}" "${EMAIL}"`); } catch (_) {}
-    try { cli(`login --server "${VW_URL}" --password "${PASSWORD}" "${EMAIL}"`); } catch (_) {}
+    try { cliLogin(); } catch (_) {}
     cli(`unlock --password "${PASSWORD}"`);
   });
 
@@ -123,6 +153,12 @@ test.describe('Chrome Extension Full E2E', () => {
   async function openPopup(page) {
     page.on('console', m => console.log(`[popup] ${m.text()}`));
     await page.goto(`chrome-extension://${extensionId}/popup/popup.html`);
+    // The popup persists its view/draft per tab-domain (popup-state.js). In
+    // this suite every popup shares the extension's own domain, so a previous
+    // test's detail/edit view would leak into the next one; savePopupState is
+    // event-driven (not on unload), so clearing before a reload is race-free.
+    await page.evaluate(() => browser.storage.session.remove('popupState'));
+    await page.reload();
   }
 
   async function openPopupWithClipboard() {
@@ -135,7 +171,8 @@ test.describe('Chrome Extension Full E2E', () => {
   // ── 1. Basic vault list ────────────────────────────────────────────────────
 
   test('shows vault entries in popup', async () => {
-    cli('add "Chrome E2E Login" username=chrome-user password=chrome-pass');
+    cli('add "Chrome E2E Login" username=chrome-user password=chrome-pass uri=http://localhost:8080');
+    pinEntry('Chrome E2E Login');
     const page = await sharedContext.newPage();
     await openPopup(page);
     await expect(page.locator('.entry-name', { hasText: 'Chrome E2E Login' }).first()).toBeVisible({ timeout: 15000 });
@@ -147,8 +184,10 @@ test.describe('Chrome Extension Full E2E', () => {
   test('copies password to clipboard via detail view', async () => {
     const page = await openPopupWithClipboard();
     await expect(page.locator('.entry-name', { hasText: 'Chrome E2E Login' }).first()).toBeVisible({ timeout: 10000 });
-    await page.locator('.entry-name', { hasText: 'Chrome E2E Login' }).first().click();
-    const copyBtn = page.locator('#view-detail button:has-text("Copy")').first();
+    await page.locator('.entry', { hasText: 'Chrome E2E Login' }).locator('button[aria-label="View details"]').first().click();
+    // The redesign added per-field copy buttons (username first); the
+    // password is the secret row's copy button.
+    const copyBtn = page.locator('#view-detail .detail-item:has(.secret-text) button.copy-btn').first();
     await expect(copyBtn).toBeVisible({ timeout: 10000 });
     await copyBtn.click();
     await page.waitForTimeout(200);
@@ -185,17 +224,18 @@ test.describe('Chrome Extension Full E2E', () => {
   test('handles non-latin and emoji in Login entry name and fields', async () => {
     // Cyrillic, Japanese, and emoji in the entry name and values.
     cli('add "🔐 Тест テスト Login" username="пользователь@test.com" password="Пароль123!"');
+    pinEntry('🔐 Тест テスト Login');
 
     const page = await openPopupWithClipboard();
     await expect(page.locator('.entry-name', { hasText: '🔐 Тест テスト Login' }).first()).toBeVisible({ timeout: 15000 });
 
     // Detail view shows username without double-encoding.
-    await page.locator('.entry-name', { hasText: '🔐 Тест テスト Login' }).first().click();
+    await page.locator('.entry', { hasText: '🔐 Тест テスト Login' }).locator('button[aria-label="View details"]').first().click();
     await expect(page.locator('#view-detail')).not.toHaveClass(/hidden/, { timeout: 5000 });
     await expect(page.locator('#detail-content')).toContainText('пользователь@test.com');
 
     // Copy password and verify correct Unicode value.
-    const copyBtn = page.locator('#view-detail button:has-text("Copy")').first();
+    const copyBtn = page.locator('#view-detail .detail-item:has(.secret-text) button.copy-btn').first();
     await copyBtn.click();
     await page.waitForTimeout(200);
     expect(await page.evaluate(() => window.__clipboardText)).toBe('Пароль123!');
@@ -211,7 +251,7 @@ test.describe('Chrome Extension Full E2E', () => {
     // Locked state: popup shows status message.
     const lockedPage = await sharedContext.newPage();
     await openPopup(lockedPage);
-    await expect(lockedPage.locator('#status')).toHaveText('Vault is locked.', { timeout: 10000 });
+    await expect(lockedPage.locator('#locked-message')).toHaveText('Vault is locked — unlock via the COSMIC app or applet.', { timeout: 10000 });
     await lockedPage.close();
 
     cli(`unlock --password "${PASSWORD}"`);
@@ -234,7 +274,7 @@ test.describe('Chrome Extension Full E2E', () => {
     await expect(loggedOutPage.locator('#status')).toHaveText('Not logged in.', { timeout: 10000 });
     await loggedOutPage.close();
 
-    cli(`login --server "${VW_URL}" --password "${PASSWORD}" "${EMAIL}"`);
+    cliLogin();
     cli(`unlock --password "${PASSWORD}"`);
 
     // Logged-in + unlocked state: entries visible again.
@@ -268,7 +308,13 @@ test.describe('Chrome Extension Full E2E', () => {
 
     await page.locator('#save-btn').click();
 
-    // Verify entry appears in list.
+    // Wait for the save round-trip (the popup switches to the list on
+    // success); pinning before that would let the reload restore the edit
+    // draft instead of the list.
+    await expect(page.locator('#view-list')).not.toHaveClass(/hidden/, { timeout: 10000 });
+    pinEntry('Виза Тест 💳');
+    // The list rendered before the pin landed; reload so the pinned entry shows.
+    await page.reload();
     await expect(page.locator('.entry-name', { hasText: 'Виза Тест 💳' })).toBeVisible({ timeout: 10000 });
 
     // Open detail view.
@@ -316,6 +362,13 @@ test.describe('Chrome Extension Full E2E', () => {
 
     await page.locator('#save-btn').click();
 
+    // Wait for the save round-trip (the popup switches to the list on
+    // success); pinning before that would let the reload restore the edit
+    // draft instead of the list.
+    await expect(page.locator('#view-list')).not.toHaveClass(/hidden/, { timeout: 10000 });
+    pinEntry('Identity Тест 🌍');
+    // The list rendered before the pin landed; reload so the pinned entry shows.
+    await page.reload();
     await expect(page.locator('.entry-name', { hasText: 'Identity Тест 🌍' })).toBeVisible({ timeout: 10000 });
     await page.locator('.entry-name', { hasText: 'Identity Тест 🌍' }).click();
     await expect(page.locator('#view-detail')).not.toHaveClass(/hidden/, { timeout: 5000 });
@@ -336,6 +389,7 @@ test.describe('Chrome Extension Full E2E', () => {
 
   test('shows SecureNote with unicode content via CLI', async () => {
     cli('-t note add "Заметка 📝 テスト" notes="Секретная заметка. Japanese: 日本語"');
+    pinEntry('Заметка 📝 テスト');
 
     const page = await openPopupWithClipboard();
     await expect(page.locator('.entry-name', { hasText: 'Заметка 📝 テスト' }).first()).toBeVisible({ timeout: 15000 });
@@ -356,6 +410,7 @@ test.describe('Chrome Extension Full E2E', () => {
 
   test('shows SshKey entry with public key and copy button', async () => {
     cli('add-ssh-key "SSH Ключ 🔑" --private-key "ed25519-dummy-private-key" --public-key "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKeyForE2E user@тест"');
+    pinEntry('SSH Ключ 🔑');
 
     const page = await openPopupWithClipboard();
     await expect(page.locator('.entry-name', { hasText: 'SSH Ключ 🔑' }).first()).toBeVisible({ timeout: 15000 });
@@ -384,12 +439,13 @@ test.describe('Chrome Extension Full E2E', () => {
   test('edits Login entry name and username via popup form', async () => {
     // Create a dedicated entry for this test.
     cli('add "E2E Edit Target" username=before-edit password=edit-pass');
+    pinEntry('E2E Edit Target');
 
     const page = await openPopupWithClipboard();
     await expect(page.locator('.entry-name', { hasText: 'E2E Edit Target' }).first()).toBeVisible({ timeout: 15000 });
 
     // Open detail, then edit.
-    await page.locator('.entry-name', { hasText: 'E2E Edit Target' }).first().click();
+    await page.locator('.entry', { hasText: 'E2E Edit Target' }).locator('button[aria-label="View details"]').first().click();
     await expect(page.locator('#view-detail')).not.toHaveClass(/hidden/, { timeout: 5000 });
     await page.locator('#edit-btn').click();
     await expect(page.locator('#view-edit')).not.toHaveClass(/hidden/, { timeout: 5000 });
@@ -407,7 +463,7 @@ test.describe('Chrome Extension Full E2E', () => {
     await expect(page.locator('.entry-name', { hasText: 'E2E Edited 🖊️' }).first()).toBeVisible({ timeout: 10000 });
 
     // Detail view reflects changes.
-    await page.locator('.entry-name', { hasText: 'E2E Edited 🖊️' }).first().click();
+    await page.locator('.entry', { hasText: 'E2E Edited 🖊️' }).locator('button[aria-label="View details"]').first().click();
     await expect(page.locator('#detail-content')).toContainText('after-edit');
 
     await page.close();
@@ -417,15 +473,16 @@ test.describe('Chrome Extension Full E2E', () => {
 
   test('deletes entry via popup detail view', async () => {
     cli('add "E2E Delete Target" username=delete-me password=delete-pass');
+    pinEntry('E2E Delete Target');
 
     const page = await openPopupWithClipboard();
     await expect(page.locator('.entry-name', { hasText: 'E2E Delete Target' }).first()).toBeVisible({ timeout: 15000 });
 
-    await page.locator('.entry-name', { hasText: 'E2E Delete Target' }).first().click();
+    await page.locator('.entry', { hasText: 'E2E Delete Target' }).locator('button[aria-label="View details"]').first().click();
     await expect(page.locator('#view-detail')).not.toHaveClass(/hidden/, { timeout: 5000 });
 
-    // Handle window.confirm() dialog that deleteBtn triggers.
-    page.on('dialog', dialog => dialog.accept());
+    // Two-step delete: the first click arms, the second confirms.
+    await page.locator('#delete-btn').click();
     await page.locator('#delete-btn').click();
 
     // Returns to list view with entry removed.
@@ -438,9 +495,12 @@ test.describe('Chrome Extension Full E2E', () => {
   // ── 13. Search filters entries ────────────────────────────────────────────
 
   test('search filters entries by name', async () => {
-    // Ensure we have at least two distinctly-named entries.
+    // Ensure we have at least two distinctly-named entries. Pinned so the
+    // cleared-search view (favourites) still shows them.
     cli('add "SearchAlpha Entry" username=alpha password=alpha-pass');
     cli('add "SearchBeta Entry" username=beta password=beta-pass');
+    pinEntry('SearchAlpha Entry');
+    pinEntry('SearchBeta Entry');
 
     const page = await sharedContext.newPage();
     await openPopup(page);

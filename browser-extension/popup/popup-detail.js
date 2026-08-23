@@ -10,6 +10,17 @@ async function showDetail(id) {
         const response = await browser.runtime.sendMessage({ "GetEntryMeta": { "id": id } });
         if (response.Entry) {
             currentEntry = response.Entry.entry;
+            // A SecureNote's content lives in the notes field, which meta
+            // reads redact — fetch the full entry (its content) just like
+            // the edit flow does, before rendering. (EntryData::SecureNote is
+            // a unit variant, so it arrives as the string "SecureNote".)
+            const isSecureNote =
+                currentEntry.data === 'SecureNote'
+                || !!(currentEntry.data && currentEntry.data.SecureNote);
+            if (isSecureNote) {
+                const full = await browser.runtime.sendMessage({ "GetEntry": { "id": id, "password": null } });
+                if (full.Entry) currentEntry = full.Entry.entry;
+            }
             renderDetail(currentEntry);
             showView('detail');
         }
@@ -139,6 +150,8 @@ function renderDetail(entry) {
         }
         if (data.SshKey.fingerprint)
             detailContent.appendChild(makeDetailItem('Fingerprint', data.SshKey.fingerprint));
+    } else if (data === 'SecureNote' || (data && data.SecureNote)) {
+        if (entry.notes) detailContent.appendChild(makeDetailItem('Notes', entry.notes));
     }
 }
 
