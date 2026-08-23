@@ -46,9 +46,10 @@ pub fn generate_ssh_keypair(
 pub async fn start_sshd_container(
     authorized_public_key: &str,
 ) -> Result<ContainerAsync<GenericImage>> {
-    // Sweep strays from interrupted runs (see common::cleanup_stale_containers).
-    crate::common::cleanup_stale_containers().await;
-
+    // No stray sweep here on purpose: cleanup_stale_containers() removes every
+    // vaultwarden/openssh image it finds — including this test's own live
+    // vaultwarden container, which would kill the vault mid-test (the sweep
+    // belongs at setup_env/test start, where no suite container is running).
     let image = GenericImage::new("linuxserver/openssh-server", "latest")
         .with_wait_for(WaitFor::seconds(8))
         .with_exposed_port(2222.tcp())
@@ -135,6 +136,12 @@ pub fn run_ssh_command_timed(
         .args(["-s", "KILL", &timeout_secs.to_string()])
         .arg("ssh")
         .args([
+            // Ignore system/user ssh_config entirely: a real localhost pubkey
+            // handshake must not depend on host-specific config fragments
+            // (e.g. an unreadable /etc/ssh/ssh_config.d entry makes the
+            // client refuse to run at all).
+            "-F",
+            "/dev/null",
             "-o",
             "StrictHostKeyChecking=no",
             "-o",
@@ -155,6 +162,9 @@ pub fn run_ssh_command_timed(
 fn ssh_command(sock: &Path, port: u16, user: &str, remote_cmd: &str) -> Command {
     let mut cmd = Command::new("ssh");
     cmd.args([
+        // Same hermeticity as run_ssh_command_timed: no system/user config.
+        "-F",
+        "/dev/null",
         "-o",
         "StrictHostKeyChecking=no",
         "-o",

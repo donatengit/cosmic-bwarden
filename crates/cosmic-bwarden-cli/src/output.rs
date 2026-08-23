@@ -301,17 +301,20 @@ pub fn output_entry(entry: &Entry, fields_str: &str, show_secrets: bool) -> Resu
     }
 
     for field in &entry.fields {
-        if let (Some(name), Some(value)) = (&field.name, &field.value) {
-            if all_fields || requested_fields.contains(name.as_str()) {
-                let display_value = if field.ty == Some(cosmic_bwarden_core::api::FieldType::Hidden)
-                    && !show_secrets
-                {
-                    "********".to_string()
-                } else {
-                    value.expose().to_string()
-                };
-                println!("{}: {}", name, display_value);
-            }
+        let Some(name) = field.name.as_deref() else { continue };
+        if !all_fields && !requested_fields.contains(name) {
+            continue;
+        }
+        let is_hidden = field.ty == Some(cosmic_bwarden_core::api::FieldType::Hidden);
+        // A hidden field read via GetEntryMeta arrives with its value already
+        // redacted (None) — still print the masked placeholder so the field's
+        // existence is visible without ever pulling the secret into the
+        // process (see fetch_get_action). Non-hidden fields with no value are
+        // skipped, as before.
+        if is_hidden && !show_secrets {
+            println!("{}: ********", name);
+        } else if let Some(value) = &field.value {
+            println!("{}: {}", name, value.expose());
         }
     }
 
