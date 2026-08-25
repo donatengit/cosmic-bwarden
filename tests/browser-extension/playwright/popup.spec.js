@@ -4,13 +4,21 @@ import path from 'path';
 const EXTENSION_PATH = path.resolve(__dirname, '../../../browser-extension');
 
 const MOCK_ENTRY_META = {
-  id: '1', name: 'Test Login', entry_type: 'Login', notes: null,
-  data: { Login: { username: 'testuser', password: null, totp: null, uris: [] } }
+  id: '1', name: 'Test Login', entry_type: 'Login',
+  // notes and the hidden custom field's value are redacted (null) in meta —
+  // presence is signalled by `filled_secrets`, never by value.
+  notes: null,
+  data: { Login: { username: 'testuser', password: null, totp: null, uris: [] } },
+  // FieldType serializes as the repr number: Text=0, Hidden=1.
+  fields: [{ name: 'API Key', value: null, ty: 1 }]
 };
+
+const MOCK_ENTRY_FILLED_SECRETS = ['Password', 'TOTP', 'API Key'];
 
 const MOCK_ENTRY_FULL = {
   id: '1', name: 'Test Login', entry_type: 'Login', notes: null,
-  data: { Login: { username: 'testuser', password: 'testpassword', totp: null, uris: [{ uri: 'https://example.com/login' }] } }
+  data: { Login: { username: 'testuser', password: 'testpassword', totp: 'seed', uris: [{ uri: 'https://example.com/login' }] } },
+  fields: [{ name: 'API Key', value: 'sk-live-abc', ty: 1 }]
 };
 
 // Entries returned when no query (or query=null) is sent — the full vault list.
@@ -59,11 +67,17 @@ function buildMock({ isLocked = false, tabUrl = null, entriesForQuery = null, tp
           if (message && message.GetSidebarEntries)
             return { SidebarEntries: { entries: ${entries} } };
           if (message && message.GetEntryMeta)
-            return { Entry: { entry: ${JSON.stringify(entryMeta)} } };
+            return { EntryMeta: { entry: ${JSON.stringify(entryMeta)}, filled_secrets: ${JSON.stringify(MOCK_ENTRY_FILLED_SECRETS)} } };
           if (message && message.GetEntry)
             return { Entry: { entry: ${JSON.stringify(MOCK_ENTRY_FULL)} } };
           if (message && message.GetPassword)
             return { Password: { password: 'testpassword' } };
+          // TOTP codes rotate: each request returns a code that increments, so
+          // a test can prove reveal/copy refetches rather than caching the first.
+          if (message && message.GetTotp) {
+            window._totpCalls = (window._totpCalls || 0) + 1;
+            return { Totp: { code: String(100000 + window._totpCalls) } };
+          }
           if (message && message.SetTheme !== undefined) return { Ack: true };
           return { Error: { message: 'Unknown mock: ' + JSON.stringify(message) } };
         },
@@ -297,6 +311,65 @@ test.describe('Extension Popup', () => {
     await page.locator('button.copy-btn').first().click();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('testuser');
     expect(await page.evaluate(() => window._sentMessages.some(m => m && m.GetPassword))).toBe(false);
+  });
+
+  test('detail view shows a masked row for every filled secret (incl. hidden custom fields) and none for empty ones', async ({ page }) => {
+    await page.locator('.entry-actions button[title="View details"]').click();
+    await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
+
+    // Filled secrets (Password, TOTP, hidden 'API Key' custom field) each get a row.
+    const labels = await page.locator('.detail-label').allTextContents();
+    expect(labels).toContain('Password');
+    expect(labels).toContain('TOTP');
+    expect(labels).toContain('API Key');
+
+    // All masked — plaintext never shown on a passive detail read.
+    const masked = await page.locator('.secret-text').count();
+    expect(masked).toBeGreaterThanOrEqual(3);
+    for (const el of await page.locator('.secret-text').all()) {
+      expect(await el.textContent()).toBe('••••••••');
+    }
+
+    // The hidden custom field value did not leak into detail.
+    const detailText = await page.locator('#detail-content').innerText();
+    expect(detailText).not.toContain('sk-live-abc');
+  });
+
+  test('hidden custom field reveal fetches the full entry (GetEntry) and shows its value', async ({ page }) => {
+    await page.locator('.entry-actions button[title="View details"]').click();
+    await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
+
+    // Reveal rows are ordered: Password, TOTP, then the hidden 'API Key' field.
+    await page.locator('button.reveal-btn').nth(2).click();
+
+    expect(await page.evaluate(() => window._sentMessages.some(m => m && m.GetEntry))).toBe(true);
+    // Reveal rows ordered Password(0), TOTP(1), API Key(2); the API Key reveal
+    // filled slot 2 with the fetched value.
+    expect(await page.locator('.secret-text').nth(2).textContent()).toBe('sk-live-abc');
+  });
+
+  test('TOTP reveal/copy always refetches the live code (never a cached/stale one)', async ({ page }) => {
+    await page.locator('.entry-actions button[title="View details"]').click();
+    await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
+
+    // Reveal rows: Password(0), TOTP(1), API Key(2). Reveal TOTP.
+    await page.locator('button.reveal-btn').nth(1).click();
+    expect(await page.locator('.secret-text').nth(1).textContent()).toBe('100001');
+
+    // Hide and reveal again — the code has rotated to 100002, proving a fresh
+    // GetTotp round-trip rather than a memoized value.
+    await page.locator('button.reveal-btn').nth(1).click();
+    await page.locator('button.reveal-btn').nth(1).click();
+    expect(await page.locator('.secret-text').nth(1).textContent()).toBe('100002');
+
+    // Copy also refetches, not a cached code. Write to a local so we can read it back.
+    await page.evaluate(() => {
+      let clip = '';
+      navigator.clipboard.writeText = async (t) => { clip = t; };
+      navigator.clipboard.readText  = async () => clip;
+    });
+    await page.locator('.detail-item').filter({ hasText: 'TOTP' }).locator('button.copy-btn').click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('100003');
   });
 
   test('detail view Edit button re-fetches the full entry via GetEntry before opening the edit form', async ({ page }) => {

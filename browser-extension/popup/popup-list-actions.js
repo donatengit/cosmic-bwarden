@@ -72,7 +72,12 @@ function vaultUriToTabUrl(uri) {
 async function openEntrySite(id) {
     try {
         const response = await browser.runtime.sendMessage({ "GetEntryMeta": { "id": id } });
-        const entry = response.Entry && response.Entry.entry;
+        // The agent answers GetEntryMeta with EntryMeta { entry, filled_secrets }
+        // (or Entry on an older agent). Same crossing as the detail view: read
+        // the redacted entry from either shape; only its non-secret fields (the
+        // saved URI, the entry name) are needed here.
+        const entry = (response.EntryMeta && response.EntryMeta.entry)
+            || (response.Entry && response.Entry.entry);
         const login = entry && entry.data.Login;
         const uris = login && login.uris;
         let uri = uris && uris.length > 0 ? uris[0].uri : null;
