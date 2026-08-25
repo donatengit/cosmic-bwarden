@@ -71,6 +71,124 @@ pub fn redact_entry_secrets(entry: &mut Entry) {
     }
 }
 
+/// Names of the currently-filled secret slots in `entry`, as stable field keys
+/// (the same keys the UI's `field_label` mapping and the desktop detail pane
+/// use for dispatch). Computed *before* [`redact_entry_secrets`] so presence
+/// survives redaction; the values themselves are never returned. Custom
+/// (user-defined) fields appear by their plaintext `name`. Mirrors the set of
+/// slots that [`redact_entry_secrets`] blanks, plus secondary secrets the
+/// origin redaction also clears (`branch_number` here too), and `notes` (a
+/// secret-class slot) — so a detail view can render a masked row for every
+/// filled secret without ever pulling plaintext into the client.
+pub fn filled_secret_keys(entry: &Entry) -> Vec<String> {
+    use cosmic_bwarden_core::db::EntryData;
+    let mut keys: Vec<String> = Vec::new();
+    match &entry.data {
+        EntryData::Login { password, totp, .. } => {
+            if password.is_some() {
+                keys.push("Password".into());
+            }
+            if totp.is_some() {
+                keys.push("TOTP".into());
+            }
+        }
+        EntryData::Card { number, code, .. } => {
+            if number.is_some() {
+                keys.push("Card Number".into());
+            }
+            if code.is_some() {
+                keys.push("Security Code".into());
+            }
+        }
+        EntryData::SshKey { private_key, .. } => {
+            if private_key.is_some() {
+                keys.push("Private Key".into());
+            }
+        }
+        EntryData::BankAccount {
+            account_number,
+            routing_number,
+            branch_number,
+            pin,
+            swift_code,
+            iban,
+            ..
+        } => {
+            if account_number.is_some() {
+                keys.push("Account Number".into());
+            }
+            if routing_number.is_some() {
+                keys.push("Routing Number".into());
+            }
+            if branch_number.is_some() {
+                keys.push("Branch Number".into());
+            }
+            if pin.is_some() {
+                keys.push("PIN".into());
+            }
+            if swift_code.is_some() {
+                keys.push("SWIFT Code".into());
+            }
+            if iban.is_some() {
+                keys.push("IBAN".into());
+            }
+        }
+        EntryData::DriversLicense { license_number, .. } => {
+            if license_number.is_some() {
+                keys.push("License Number".into());
+            }
+        }
+        EntryData::Passport {
+            passport_number,
+            national_identification_number,
+            date_of_birth,
+            ..
+        } => {
+            if passport_number.is_some() {
+                keys.push("Passport Number".into());
+            }
+            if national_identification_number.is_some() {
+                keys.push("National Identification Number".into());
+            }
+            if date_of_birth.is_some() {
+                keys.push("Date of Birth".into());
+            }
+        }
+        EntryData::Identity {
+            ssn,
+            license_number,
+            passport_number,
+            ..
+        } => {
+            if ssn.is_some() {
+                keys.push("SSN".into());
+            }
+            if license_number.is_some() {
+                keys.push("License Number".into());
+            }
+            if passport_number.is_some() {
+                keys.push("Passport Number".into());
+            }
+        }
+        EntryData::SecureNote => {}
+    }
+    if entry.notes.is_some() {
+        keys.push("Notes".into());
+    }
+    // Hidden (user-designated secret) custom fields: their names are plain and
+    // included (the value stays redacted), but their presence must be known to
+    // render a masked row. Visible Text fields are NOT secret slots — their
+    // values already travel in the redacted meta entry, so they are omitted.
+    for field in &entry.fields {
+        if field.ty == Some(cosmic_bwarden_core::api::FieldType::Hidden) && field.value.is_some() {
+            if let Some(name) = field.name.as_deref() {
+                keys.push(name.to_string());
+            }
+        }
+    }
+    keys
+}
+
 /// Verify the master password for a reprompt-gated entry against the stored hash.
 /// Returns `Some(error)` if verification is required and failed/absent; `None` on
 /// success. Runs synchronously (KDF) while the caller holds the state lock, matching
@@ -299,8 +417,12 @@ pub async fn handle_get_entry_meta(id: String, state: &Arc<Mutex<State>>) -> Res
         let org_keys = state.org_keys.as_ref().unwrap_or(&empty_org_keys);
         if let Some(entry) = db.entries.iter().find(|e| e.id == id) {
             let mut decrypted = entry.decrypt(keys, org_keys);
+            let filled_secrets = filled_secret_keys(&decrypted);
             redact_entry_secrets(&mut decrypted);
-            Response::Entry { entry: decrypted }
+            Response::EntryMeta {
+                entry: decrypted,
+                filled_secrets,
+            }
         } else {
             Response::Error {
                 message: "entry not found".to_string(),
@@ -454,5 +576,137 @@ mod redact_pii_tests {
             }
             _ => panic!("bank"),
         }
+    }
+
+    #[test]
+    fn filled_secret_keys_reports_filled_slots_before_redaction() {
+        use super::filled_secret_keys;
+        let mut e = blank_entry(EntryData::Login {
+            username: Some("u".into()),
+            password: Some("p".into()),
+            totp: Some("seed".into()),
+            uris: Vec::new(),
+        });
+        e.notes = Some("note".into());
+        e.set_field("Token", "abc", cosmic_bwarden_core::api::FieldType::Hidden);
+        e.set_field("Public", "x", cosmic_bwarden_core::api::FieldType::Text);
+
+        let keys = filled_secret_keys(&e);
+        assert!(keys.contains(&"Password".to_string()));
+        assert!(keys.contains(&"TOTP".to_string()));
+        assert!(keys.contains(&"Notes".to_string()));
+        // Only hidden custom fields are secret slots; visible Text fields are
+        // not (their values already travel in the redacted meta entry).
+        assert!(keys.contains(&"Token".to_string()));
+        assert!(!keys.contains(&"Public".to_string()));
+
+        // After redaction the values are gone, so a *second* derivation would
+        // report fewer keys — which is exactly why handle_get_entry_meta calls
+        // filled_secret_keys before redact_entry_secrets.
+        redact_entry_secrets(&mut e);
+        let keys_after = filled_secret_keys(&e);
+        assert!(keys_after
+            .iter()
+            .find(|k| k.as_str() == "Password")
+            .is_none());
+        assert!(keys_after.iter().find(|k| k.as_str() == "Token").is_none());
+    }
+
+    #[test]
+    fn filled_secret_keys_omits_empty_slots() {
+        use super::filled_secret_keys;
+        let e = blank_entry(EntryData::Login {
+            username: None,
+            password: None,
+            totp: None,
+            uris: Vec::new(),
+        });
+        let keys = filled_secret_keys(&e);
+        assert!(!keys.contains(&"Password".to_string()));
+        assert!(!keys.contains(&"TOTP".to_string()));
+        assert!(!keys.contains(&"Notes".to_string()));
+    }
+
+    /// Cross-check that `filled_secret_keys` stays a mirror of what
+    /// `redact_entry_secrets` blanks: a reported "filled secret" must be a slot
+    /// that redaction actually clears, and a visible plaintext field must never
+    /// be reported. Keeps the two lists from drifting when a new EntryData
+    /// variant or secret field is added.
+    #[test]
+    fn filled_secret_keys_are_exactly_the_redacted_slots() {
+        use super::filled_secret_keys;
+        // Each slot is independent of locale/shape; check a few representative
+        // variants. `#[track_caller]`-free helper inlined for clarity.
+        fn assert_mirror(
+            e: &Entry,
+            expected_after_redaction_present: &[&str],
+            visible_not_listed: &[&str],
+        ) {
+            let keys = filled_secret_keys(e);
+            for k in expected_after_redaction_present {
+                // Present *before* redaction (the handler computes it pre-redact),
+                // confirmed by redact_entry_secrets actually blanking it.
+                assert!(
+                    keys.iter().any(|s| s.as_str() == *k),
+                    "expected filled_secret_keys to contain {k} (redaction blanks it)"
+                );
+            }
+            for v in visible_not_listed {
+                assert!(
+                    !keys.iter().any(|s| s.as_str() == *v),
+                    "{v} is a visible field, must not appear in filled_secret_keys"
+                );
+            }
+        }
+
+        let login = blank_entry(EntryData::Login {
+            username: Some("u".into()),
+            password: Some("p".into()),
+            totp: Some("seed".into()),
+            uris: Vec::new(),
+        });
+        assert_mirror(&login, &["Password", "TOTP"], &["Username"]);
+
+        let bank = blank_entry(EntryData::BankAccount {
+            bank_name: Some("B".into()),
+            name_on_account: None,
+            account_type: None,
+            account_number: Some("1".into()),
+            routing_number: Some("R".into()),
+            branch_number: Some("BR".into()),
+            pin: Some("p".into()),
+            swift_code: Some("SW".into()),
+            iban: Some("DE".into()),
+            bank_contact_phone: None,
+        });
+        assert_mirror(
+            &bank,
+            &[
+                "Account Number",
+                "Routing Number",
+                "PIN",
+                "IBAN",
+                "SWIFT Code",
+                "Branch Number",
+            ],
+            &["Bank Name", "Account Type"],
+        );
+
+        let card = blank_entry(EntryData::Card {
+            cardholder_name: Some("C".into()),
+            number: Some("4111".into()),
+            code: Some("123".into()),
+            brand: None,
+            exp_month: None,
+            exp_year: None,
+        });
+        assert_mirror(&card, &["Card Number", "Security Code"], &["Cardholder"]);
+
+        let ssh = blank_entry(EntryData::SshKey {
+            private_key: Some("pk".into()),
+            public_key: Some("pub".into()),
+            fingerprint: Some("fp".into()),
+        });
+        assert_mirror(&ssh, &["Private Key"], &["Public Key", "Fingerprint"]);
     }
 }
