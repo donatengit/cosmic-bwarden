@@ -95,6 +95,12 @@ impl CosmicBWardenApp {
                         let agent = AgentClient::new();
                         match agent.send(action).await {
                             Ok(Response::Entry { entry }) => Ok(entry),
+                            // A plain selection uses GetEntryMeta, which now
+                            // returns EntryMeta (redacted entry + filled_secrets).
+                            // The detail pane reads presence from the entry and
+                            // reveals secrets on demand, so only the entry is
+                            // needed here.
+                            Ok(Response::EntryMeta { entry, .. }) => Ok(entry),
                             Ok(Response::Error { message }) => Err(message),
                             _ => Err("unexpected response".to_string()),
                         }

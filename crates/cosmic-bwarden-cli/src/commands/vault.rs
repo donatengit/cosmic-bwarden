@@ -144,6 +144,12 @@ pub async fn handle_command(
 
                     let entry = match res {
                         Response::Entry { entry } => entry,
+                        // Detail read without --show-secrets: the agent returns
+                        // EntryMeta (redacted entry + filled_secrets). The CLI
+                        // prints the same redacted entry it always printed;
+                        // filled_secrets is ignored (hidden-custom-field and
+                        // secret-slot presence don't change CLI output).
+                        Response::EntryMeta { entry, .. } => entry,
                         _ => {
                             handle_response(res)?;
                             unreachable!()
