@@ -6,6 +6,7 @@
 // guidelines — no behavioral difference from being inline.
 
 use super::{Action, Response};
+use crate::db::Entry;
 
 // Manual `Debug` that never prints field values. Many `Action` variants carry
 // master passwords, PINs, TOTP secrets, and card data; the derived `Debug` would
@@ -72,6 +73,15 @@ impl std::fmt::Debug for Response {
                 write!(f, "SidebarEntries {{ count: {} }}", entries.len())
             }
             Self::Entry { .. } => f.write_str("Entry { <redacted> }"),
+            Self::EntryMeta {
+                entry,
+                filled_secrets,
+                ..
+            } => write!(
+                f,
+                "EntryMeta {{ secrets_in_entry: {}, filled_secrets: {filled_secrets:?} }}",
+                meta_secret_count(entry)
+            ),
             Self::Password { .. } => f.write_str("Password { <redacted> }"),
             Self::Totp { .. } => f.write_str("Totp { <redacted> }"),
             Self::Version {
@@ -116,4 +126,72 @@ impl std::fmt::Debug for Response {
             }
         }
     }
+}
+
+/// Count how many secret slots in `entry` are still populated. Used only for
+/// the `EntryMeta` Debug arm to convey, without printing any value, whether the
+/// caller re-sent secret-bearing data (which would contradict the redaction
+/// contract) versus the normal fully-redacted meta payload.
+fn meta_secret_count(entry: &Entry) -> usize {
+    use crate::db::EntryData;
+    let mut n = usize::from(entry.notes.is_some());
+    n += entry
+        .fields
+        .iter()
+        .filter(|f| {
+            // Only hidden (user-designated secret) custom fields count as secret
+            // slots; visible Text values already travel in the redacted entry.
+            f.ty == Some(crate::api::FieldType::Hidden) && f.value.is_some()
+        })
+        .count();
+    match &entry.data {
+        EntryData::Login { password, totp, .. } => {
+            n += usize::from(password.is_some()) + usize::from(totp.is_some())
+        }
+        EntryData::Card { number, code, .. } => {
+            n += usize::from(number.is_some()) + usize::from(code.is_some())
+        }
+        EntryData::SshKey { private_key, .. } => n += usize::from(private_key.is_some()),
+        EntryData::BankAccount {
+            account_number,
+            routing_number,
+            branch_number,
+            pin,
+            swift_code,
+            iban,
+            ..
+        } => {
+            n += usize::from(account_number.is_some())
+                + usize::from(routing_number.is_some())
+                + usize::from(branch_number.is_some())
+                + usize::from(pin.is_some())
+                + usize::from(swift_code.is_some())
+                + usize::from(iban.is_some())
+        }
+        EntryData::DriversLicense { license_number, .. } => {
+            n += usize::from(license_number.is_some())
+        }
+        EntryData::Passport {
+            passport_number,
+            national_identification_number,
+            date_of_birth,
+            ..
+        } => {
+            n += usize::from(passport_number.is_some())
+                + usize::from(national_identification_number.is_some())
+                + usize::from(date_of_birth.is_some())
+        }
+        EntryData::Identity {
+            ssn,
+            license_number,
+            passport_number,
+            ..
+        } => {
+            n += usize::from(ssn.is_some())
+                + usize::from(license_number.is_some())
+                + usize::from(passport_number.is_some())
+        }
+        EntryData::SecureNote => {}
+    }
+    n
 }

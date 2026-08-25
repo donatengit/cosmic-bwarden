@@ -486,6 +486,24 @@ pub enum Response {
     Entry {
         entry: crate::db::Entry,
     },
+    /// Detail-view response: the redacted entry (same shape `Entry` would carry
+    /// after `GetEntryMeta`) plus `filled_secrets` — the stable field keys whose
+    /// secret slots are actually filled, so a client can render masked rows for
+    /// them *without* pulling any plaintext. The values themselves are omitted
+    /// (redacted to `None` in `entry`, exactly like `GetEntryMeta`); reveal/copy
+    /// still fetches each secret on demand via `GetEntry`/`GetPassword`/`GetTotp`.
+    /// `filled_secrets` carries only key names + presence — no secret values —
+    /// so it is safe to log and to hand to any passive view.
+    EntryMeta {
+        entry: crate::db::Entry,
+        /// Stable field keys (see the UI's `field_label` mapping) that are
+        /// filled. Custom (user-defined) fields appear by their `name`, which
+        /// is the plaintext label the user gave it. Order follows the entry's
+        /// data layout (primary secret slots, then notes, then hidden custom
+        /// fields). URIs are not secrets and are not listed here — they travel
+        /// in `entry` itself.
+        filled_secrets: Vec<String>,
+    },
     Password {
         password: String,
     },

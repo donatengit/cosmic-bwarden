@@ -40,7 +40,7 @@ pub fn help_footer() -> String {
 /// plus a git id, so comparing build versions declared every rebuild
 /// "incompatible" (observed as E2E failures from stale-binary skew —
 /// docs/review/00_ground_truth.md F9, decision in 07_packaging.md).
-pub const PROTOCOL_VERSION: &str = "4";
+pub const PROTOCOL_VERSION: &str = "5";
 
 /// Maximum postcard-framed IPC request or response body (bytes). Shared by
 /// the agent accept loop and [`agent_client::AgentClient`] so a hostile
