@@ -35,6 +35,24 @@ pub(crate) fn should_suppress_popup_reopen(
         .unwrap_or(false)
 }
 
+/// Compute the popup's `anchor_rect` from the icon-click `(offset, bounds)` and
+/// clamp every side to at least 1px (as `cosmic-applet-time` does). A 0-width or
+/// negative anchor from degenerate icon bounds would produce a zero-sized
+/// positioning rect and a misplaced/never-mapped popup. `positioner.anchor_rect`
+/// is `Rectangle<i32>`; `bounds`/`offset` are in logical floats. Pure so the
+/// clamp is unit-testable without a live executor/popup surface.
+pub(crate) fn clamped_anchor_rect(
+    offset: cosmic::iced::Vector,
+    bounds: cosmic::iced::Rectangle,
+) -> cosmic::iced::Rectangle<i32> {
+    cosmic::iced::Rectangle {
+        x: (bounds.x - offset.x).max(1.0) as i32,
+        y: (bounds.y - offset.y).max(1.0) as i32,
+        width: bounds.width.max(1.0) as i32,
+        height: bounds.height.max(1.0) as i32,
+    }
+}
+
 /// Which unlock field the applet popup should autofocus: the PIN field when
 /// TPM PIN unlock is active, the master password field otherwise. Pulled out
 /// as a pure function so the decision is unit-testable independent of the
@@ -628,12 +646,12 @@ impl CosmicBWardenApp {
                         None,
                     );
                     let (offset, bounds) = anchor;
-                    popup_settings.positioner.anchor_rect = cosmic::iced::Rectangle {
-                        x: (bounds.x - offset.x) as i32,
-                        y: (bounds.y - offset.y) as i32,
-                        width: bounds.width as i32,
-                        height: bounds.height as i32,
-                    };
+                    // Clamp the anchor rectangle to at least 1px on every side
+                    // (as cosmic-applet-time does): a 0-width/0-height or negative
+                    // anchor from a degenerate icon bounds would produce a
+                    // zero-sized positioning rect and a misplaced/never-mapped
+                    // popup. `bounds` is in logical floats; cast after clamping.
+                    popup_settings.positioner.anchor_rect = clamped_anchor_rect(offset, bounds);
                     popup_settings.positioner.size_limits =
                         crate::view::applet::applet_popup_limits();
                     popup_settings

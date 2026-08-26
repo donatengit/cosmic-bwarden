@@ -1,9 +1,9 @@
 use crate::app::CosmicBWardenApp;
 use crate::fl;
 use crate::message::Message;
-use cosmic::applet::{menu_button, menu_control_padding, padded_control};
+use cosmic::applet::menu_button;
 use cosmic::iced::{Alignment, Length};
-use cosmic::widget::{button, container, icon, row, text, tooltip};
+use cosmic::widget::{button, icon, row, text, tooltip};
 use cosmic::Element;
 
 /// Top header row: "Open Vault" (or "⚠ Not synced" in red) + Lock|Logout icon buttons.
@@ -90,9 +90,9 @@ pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
 }
 
 /// Quit footer: a single "Quit" button that expands to show sub-actions.
-/// Uses libcosmic's `menu_button`/`padded_control` applet helpers so the rows
-/// carry the COSMIC `AppletMenu` style and theme-derived padding rather than a
-/// hand-rolled `button::text(...).width(Length::Fill)` per item.
+/// Every row is a `menu_button` so they carry the COSMIC `AppletMenu` style and
+/// theme-derived padding uniformly — matching how the reference applets render
+/// menu rows (no per-row indent wrapper / hardcoded padding).
 pub fn quit_footer(app: &CosmicBWardenApp) -> Vec<Element<'static, Message>> {
     let is_unlocked = app.view.is_unlocked();
 
@@ -102,10 +102,6 @@ pub fn quit_footer(app: &CosmicBWardenApp) -> Vec<Element<'static, Message>> {
         fl!("quit-menu-collapsed", label = fl!("quit"))
     };
 
-    // The indented sub-actions sit one theme `space_m` further in than the
-    // top-level toggle, so the expanded list reads as a nested menu.
-    let indent = menu_control_padding().left;
-
     let mut items: Vec<Element<'static, Message>> = vec![menu_button(text::body(label))
         .on_press(Message::AppletQuitMenuToggle)
         .into()];
@@ -113,33 +109,20 @@ pub fn quit_footer(app: &CosmicBWardenApp) -> Vec<Element<'static, Message>> {
     if app.applet_quit_expanded {
         if is_unlocked {
             items.push(
-                container(
-                    padded_control(
-                        button::text(fl!("lock-and-quit")).on_press(Message::LockAndQuit),
-                    )
-                    .width(Length::Fill),
-                )
-                .padding([0.0, 0.0, 0.0, indent])
-                .into(),
+                menu_button(text::body(fl!("lock-and-quit")))
+                    .on_press(Message::LockAndQuit)
+                    .into(),
             );
             items.push(
-                container(
-                    padded_control(
-                        button::text(fl!("logout-and-quit")).on_press(Message::LogoutAndQuit),
-                    )
-                    .width(Length::Fill),
-                )
-                .padding([0.0, 0.0, 0.0, indent])
-                .into(),
+                menu_button(text::body(fl!("logout-and-quit")))
+                    .on_press(Message::LogoutAndQuit)
+                    .into(),
             );
         }
         items.push(
-            container(
-                padded_control(button::text(fl!("just-quit")).on_press(Message::Exit))
-                    .width(Length::Fill),
-            )
-            .padding([0.0, 0.0, 0.0, indent])
-            .into(),
+            menu_button(text::body(fl!("just-quit")))
+                .on_press(Message::Exit)
+                .into(),
         );
     }
 

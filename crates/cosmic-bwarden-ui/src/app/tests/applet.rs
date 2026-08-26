@@ -552,6 +552,41 @@ async fn test_icon_click_opens_after_debounce_window_elapses() {
     assert!(app.applet_last_popup_closed_at.is_none());
 }
 
+#[test]
+fn test_clamped_anchor_rect_never_emits_zero_or_negative_dimensions() {
+    use crate::app::update::applet::clamped_anchor_rect;
+
+    // Normal case: offset subtracted, no clamping applies.
+    let normal = clamped_anchor_rect(
+        cosmic::iced::Vector { x: 5.0, y: 5.0 },
+        cosmic::iced::Rectangle {
+            x: 100.0,
+            y: 100.0,
+            width: 32.0,
+            height: 32.0,
+        },
+    );
+    assert_eq!(normal.x, 95);
+    assert_eq!(normal.y, 95);
+    assert_eq!(normal.width, 32);
+    assert_eq!(normal.height, 32);
+
+    // Degenerate / over-large offset: every side clamps to >= 1px.
+    let degenerate = clamped_anchor_rect(
+        cosmic::iced::Vector { x: 500.0, y: 500.0 },
+        cosmic::iced::Rectangle {
+            x: 0.0,
+            y: 0.0,
+            width: 0.0,
+            height: 0.0,
+        },
+    );
+    assert!(degenerate.x >= 1, "anchor x must be >= 1");
+    assert!(degenerate.y >= 1, "anchor y must be >= 1");
+    assert!(degenerate.width >= 1, "anchor width must be >= 1");
+    assert!(degenerate.height >= 1, "anchor height must be >= 1");
+}
+
 // ── Popup size limits ─────────────────────────────────────────────────────────
 
 #[test]
