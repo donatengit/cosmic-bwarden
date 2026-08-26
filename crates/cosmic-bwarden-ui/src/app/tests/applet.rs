@@ -477,6 +477,81 @@ async fn test_applet_open_link_does_not_crash() {
     assert!(app.applet_error.is_none());
 }
 
+// ── Popup reopen debounce ─────────────────────────────────────────────────────
+
+#[test]
+fn test_should_suppress_popup_reopen_within_debounce_window() {
+    use crate::app::update::applet::{
+        should_suppress_popup_reopen, APPLET_POPUP_REOPEN_DEBOUNCE_MS,
+    };
+
+    let now = std::time::Instant::now();
+
+    // No prior close → never suppress.
+    assert!(!should_suppress_popup_reopen(None, now));
+
+    // Closed 150 ms ago (within the 200 ms window) → suppress.
+    let within = now - std::time::Duration::from_millis(150);
+    assert!(should_suppress_popup_reopen(Some(within), now));
+
+    // Closed 250 ms ago (past the window) → reopen allowed.
+    let past = now - std::time::Duration::from_millis(250);
+    assert!(!should_suppress_popup_reopen(Some(past), now));
+
+    // Exactly at the boundary (200 ms) → not strictly less than 200 → reopen.
+    assert_eq!(APPLET_POPUP_REOPEN_DEBOUNCE_MS, 200);
+    let at_boundary =
+        now - std::time::Duration::from_millis(APPLET_POPUP_REOPEN_DEBOUNCE_MS as u64);
+    assert!(!should_suppress_popup_reopen(Some(at_boundary), now));
+}
+
+#[tokio::test]
+async fn test_icon_click_close_then_same_press_reopen_is_suppressed() {
+    let mut app = CosmicBWardenApp::default();
+    let id = window::Id::unique();
+    app.applet_popup = Some(id);
+    app.windows.insert(id, WindowState::Popup);
+    let offset = cosmic::iced::Vector::default();
+    let bounds = cosmic::iced::Rectangle::default();
+
+    // First click: popup is open → close path. Records the close timestamp.
+    let _ = app.update(Message::AppletIconClicked(offset, bounds));
+    assert!(
+        app.applet_popup.is_none(),
+        "first click must close the popup"
+    );
+    assert!(app.applet_last_popup_closed_at.is_some());
+
+    // Second click in the same press: must NOT reopen (no popup task, state stays closed).
+    let _ = app.update(Message::AppletIconClicked(offset, bounds));
+    assert!(
+        app.applet_popup.is_none(),
+        "same-press reopen must be suppressed"
+    );
+    assert!(
+        app.applet_last_popup_closed_at.is_none(),
+        "the suppression timestamp is consumed so the next deliberate click opens"
+    );
+}
+
+#[tokio::test]
+async fn test_icon_click_opens_after_debounce_window_elapses() {
+    use std::time::Duration;
+
+    let mut app = CosmicBWardenApp::default();
+    let offset = cosmic::iced::Vector::default();
+    let bounds = cosmic::iced::Rectangle::default();
+
+    // Simulate a close that happened longer than the debounce window ago.
+    app.applet_last_popup_closed_at = Some(std::time::Instant::now() - Duration::from_millis(500));
+
+    // A click after the window elapses opens normally (produces an open task;
+    // no panic, popup id is assigned by the popup-creation closure we don't run here).
+    let _ = app.update(Message::AppletIconClicked(offset, bounds));
+    // The reopen is not suppressed, so the close-timestamp is cleared.
+    assert!(app.applet_last_popup_closed_at.is_none());
+}
+
 // ── Popup size limits ─────────────────────────────────────────────────────────
 
 #[test]

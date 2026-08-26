@@ -1,6 +1,7 @@
 use crate::app::CosmicBWardenApp;
 use crate::fl;
 use crate::message::Message;
+use cosmic::applet::{menu_button, menu_control_padding, padded_control};
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{button, container, icon, row, text, tooltip};
 use cosmic::Element;
@@ -89,6 +90,9 @@ pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
 }
 
 /// Quit footer: a single "Quit" button that expands to show sub-actions.
+/// Uses libcosmic's `menu_button`/`padded_control` applet helpers so the rows
+/// carry the COSMIC `AppletMenu` style and theme-derived padding rather than a
+/// hand-rolled `button::text(...).width(Length::Fill)` per item.
 pub fn quit_footer(app: &CosmicBWardenApp) -> Vec<Element<'static, Message>> {
     let is_unlocked = app.view.is_unlocked();
 
@@ -98,39 +102,43 @@ pub fn quit_footer(app: &CosmicBWardenApp) -> Vec<Element<'static, Message>> {
         fl!("quit-menu-collapsed", label = fl!("quit"))
     };
 
-    let mut items: Vec<Element<'static, Message>> = vec![button::text(label)
+    // The indented sub-actions sit one theme `space_m` further in than the
+    // top-level toggle, so the expanded list reads as a nested menu.
+    let indent = menu_control_padding().left;
+
+    let mut items: Vec<Element<'static, Message>> = vec![menu_button(text::body(label))
         .on_press(Message::AppletQuitMenuToggle)
-        .width(Length::Fill)
         .into()];
 
     if app.applet_quit_expanded {
         if is_unlocked {
             items.push(
                 container(
-                    button::text(fl!("lock-and-quit"))
-                        .on_press(Message::LockAndQuit)
-                        .width(Length::Fill),
+                    padded_control(
+                        button::text(fl!("lock-and-quit")).on_press(Message::LockAndQuit),
+                    )
+                    .width(Length::Fill),
                 )
-                .padding([0, 0, 0, 16])
+                .padding([0.0, 0.0, 0.0, indent])
                 .into(),
             );
             items.push(
                 container(
-                    button::text(fl!("logout-and-quit"))
-                        .on_press(Message::LogoutAndQuit)
-                        .width(Length::Fill),
+                    padded_control(
+                        button::text(fl!("logout-and-quit")).on_press(Message::LogoutAndQuit),
+                    )
+                    .width(Length::Fill),
                 )
-                .padding([0, 0, 0, 16])
+                .padding([0.0, 0.0, 0.0, indent])
                 .into(),
             );
         }
         items.push(
             container(
-                button::text(fl!("just-quit"))
-                    .on_press(Message::Exit)
+                padded_control(button::text(fl!("just-quit")).on_press(Message::Exit))
                     .width(Length::Fill),
             )
-            .padding([0, 0, 0, 16])
+            .padding([0.0, 0.0, 0.0, indent])
             .into(),
         );
     }

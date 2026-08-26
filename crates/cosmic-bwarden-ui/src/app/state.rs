@@ -140,6 +140,13 @@ pub struct CosmicBWardenApp {
     pub applet_reprompt_password_revealed: bool,
     pub applet_toasts: widget::Toasts<crate::message::Message>,
     pub applet_quit_expanded: bool,
+    /// Monotonic timestamp of the last time the applet popup was closed by an
+    /// icon click. Used to suppress the Wayland same-press reopen race: a
+    /// single physical press can deliver a close event and then a second event
+    /// that sees the popup already gone and re-opens it, causing a flicker.
+    /// Mirrors the `last_quit` debounce in
+    /// `cosmic-ext-applet-external-monitor-brightness`.
+    pub applet_last_popup_closed_at: Option<std::time::Instant>,
 
     // Settings editing state
     pub editing_config: Option<CosmicBWardenConfig>,
@@ -314,6 +321,7 @@ impl Default for CosmicBWardenApp {
             applet_reprompt_password_revealed: false,
             applet_toasts: widget::Toasts::new(crate::message::Message::CloseToast),
             applet_quit_expanded: false,
+            applet_last_popup_closed_at: None,
             editing_config: None,
             login_pin_enabled: false,
             login_pin: String::new(),

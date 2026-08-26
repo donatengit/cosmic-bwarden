@@ -15,6 +15,26 @@ use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
 use zeroize::Zeroize;
 
+/// Debounce window for the applet popup reopen race, in milliseconds. After an
+/// icon click closes the popup, a second click within this window is treated as
+/// part of the same physical press (Wayland can deliver a close and then a
+/// follow-up event that sees the popup gone and would re-open it) and is
+/// suppressed. Mirrors `cosmic-ext-applet-external-monitor-brightness`'s
+/// 200 ms `last_quit` gate.
+pub(crate) const APPLET_POPUP_REOPEN_DEBOUNCE_MS: u128 = 200;
+
+/// True when a popup reopen should be suppressed because the popup was just
+/// closed within [`APPLET_POPUP_REOPEN_DEBOUNCE_MS`]. Pure so the toggle
+/// race logic is unit-testable without a live executor.
+pub(crate) fn should_suppress_popup_reopen(
+    last_closed_at: Option<std::time::Instant>,
+    now: std::time::Instant,
+) -> bool {
+    last_closed_at
+        .map(|t| now.duration_since(t).as_millis() < APPLET_POPUP_REOPEN_DEBOUNCE_MS)
+        .unwrap_or(false)
+}
+
 /// Which unlock field the applet popup should autofocus: the PIN field when
 /// TPM PIN unlock is active, the master password field otherwise. Pulled out
 /// as a pure function so the decision is unit-testable independent of the
@@ -38,12 +58,30 @@ impl CosmicBWardenApp {
                 if let Some(id) = self.applet_popup.take() {
                     self.windows.remove(&id);
                     tracing::info!(?id, "applet icon clicked: closing popup");
+                    // Record the close so a follow-up event in the same
+                    // physical press cannot immediately re-open the popup.
+                    self.applet_last_popup_closed_at = Some(std::time::Instant::now());
                     return Some(Task::done(cosmic::Action::Cosmic(
                         cosmic::app::Action::Surface(cosmic::surface::action::destroy_popup(id)),
                     )));
                 }
 
+                // Same-press reopen suppression: the popup was just closed and
+                // this event is likely the remainder of that same press. Swallow
+                // it once so the popup stays closed instead of flickering back
+                // open. The timestamp is cleared on the way out so the *next*
+                // deliberate click (after the window elapses) opens normally.
+                if should_suppress_popup_reopen(
+                    self.applet_last_popup_closed_at,
+                    std::time::Instant::now(),
+                ) {
+                    tracing::info!("applet icon clicked: suppressing same-press popup reopen");
+                    self.applet_last_popup_closed_at = None;
+                    return Some(Task::none());
+                }
+
                 tracing::info!("applet icon clicked: opening popup");
+                self.applet_last_popup_closed_at = None;
                 Some(self.open_applet_popup_task((offset, bounds)))
             }
             Message::Surface(action) => Some(Task::done(cosmic::Action::Cosmic(

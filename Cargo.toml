@@ -28,8 +28,14 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 postcard = { version = "1.0", features = ["alloc"] }
 zeroize = { version = "1.8", features = ["derive"] }
-libcosmic = { git = "https://github.com/pop-os/libcosmic", branch = "master" }
-cosmic-config = { git = "https://github.com/pop-os/libcosmic", branch = "master", default-features = false, features = ["macro"] }
+# Bare URL (rides master, pinned to an exact commit by Cargo.lock) rather than
+# `rev = "…"`: cosmic-panel-config's transitive cosmic-config dep uses the bare
+# URL too, and Cargo treats bare/`?branch=`/`?rev=` as distinct sources — any
+# qualifier on our side double-compiles 5 libcosmic crates. The alternative is
+# pinning a rev here for fully controlled bumps, at the cost of that duplicate
+# compilation; we chose the unified graph instead.
+libcosmic = { git = "https://github.com/pop-os/libcosmic" }
+cosmic-config = { git = "https://github.com/pop-os/libcosmic", default-features = false, features = ["macro"] }
 i18n-embed = { version = "0.16.0", features = ["fluent-system", "desktop-requester"] }
 i18n-embed-fl = "0.10"
 rust-embed = "8.11.0"

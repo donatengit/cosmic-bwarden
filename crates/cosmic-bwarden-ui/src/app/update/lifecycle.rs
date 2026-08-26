@@ -227,6 +227,12 @@ impl CosmicBWardenApp {
                 tracing::info!(?id, applet_popup = ?self.applet_popup, "window closed");
                 if self.applet_popup == Some(id) {
                     self.applet_popup = None;
+                    // Same-press reopen suppression: the compositor confirmed
+                    // the popup closed; a click in the same press must not
+                    // instantly re-open it. (This complements the icon-click
+                    // close path, which records the timestamp eagerly and is
+                    // what actually races the reopen event.)
+                    self.applet_last_popup_closed_at = Some(std::time::Instant::now());
                 }
                 self.windows.remove(&id);
                 Some(Task::none())

@@ -71,6 +71,7 @@ ordering matters:
 
 - **Language**: Rust
 - **UI Framework**: `libcosmic` 1.0.0 (MVU Architecture)
+  - **Dependency declaration (do not change casually)**: `libcosmic`/`cosmic-config` in `Cargo.toml` must stay a **bare git URL** (`git = "https://github.com/pop-os/libcosmic"`), not `rev =`/`branch =`. The `applet` feature pulls `cosmic-panel-config`, whose transitive `cosmic-config` dep uses the bare URL; Cargo treats bare / `?rev=` / `?branch=` as **distinct sources**, so adding any qualifier on our side re-compiles the libcosmic tree (binary bloat). The exact commit is pinned by `Cargo.lock`.
 - **Networking**: `reqwest`, `tokio`
 - **Security**: Memory-locked regions for secrets, AES-256-CBC, PBKDF2/Argon2id.
 - **Testing**: `testcontainers-rs` (Vaultwarden).
