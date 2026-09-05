@@ -328,7 +328,7 @@ impl CosmicBWardenApp {
                     self.applet_reprompt_id = None;
                     self.applet_reprompt_password.zeroize();
                     self.applet_error = None;
-                    Some(self.applet_copy_to_clipboard(secret))
+                    Some(self.applet_copy_to_clipboard(secret.expose().to_string()))
                 }
                 Err((id, msg)) => {
                     if msg == "reprompt_required" {
@@ -356,7 +356,7 @@ impl CosmicBWardenApp {
                 |res| Action::App(Message::AppletGeneratePasswordReceived(res)),
             )),
             Message::AppletGeneratePasswordReceived(res) => match res {
-                Ok(pw) => Some(self.applet_copy_to_clipboard(pw)),
+                Ok(pw) => Some(self.applet_copy_to_clipboard(pw.expose().to_string())),
                 Err(e) => {
                     self.applet_error = Some(e);
                     Some(Task::none())
@@ -460,6 +460,12 @@ impl CosmicBWardenApp {
                             self.pin_incorrect = false;
                             self.unlock_mode = UnlockMode::Password;
                             Some(Task::none())
+                        } else if e == cosmic_bwarden_core::protocol::ERR_TPM_BLOB_MISSING {
+                            self.applet_error = None;
+                            self.error = Some(fl!("tpm-blob-missing"));
+                            self.pin_incorrect = false;
+                            self.unlock_mode = UnlockMode::Password;
+                            Some(Task::none())
                         } else {
                             // Environmental failure (agent/config/account) —
                             // show it, don't mislabel it as a wrong PIN.
@@ -523,9 +529,6 @@ impl CosmicBWardenApp {
                 match res {
                     Ok(()) => {
                         self.tpm_configured = true;
-                        // Enabling PIN resets all TPM stores server-side, so server
-                        // credentials start disabled again — reflect that here.
-                        self.tpm_server_credentials = false;
                         self.applet_error = None;
                         self.tpm_error = None;
                         // Refresh the lockout status shown in the settings pane.

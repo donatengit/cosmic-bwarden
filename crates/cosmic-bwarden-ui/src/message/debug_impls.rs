@@ -117,8 +117,10 @@ impl Message {
             Self::TpmSetupResult(_) => "TpmSetupResult",
             Self::TpmDisableSubmitted => "TpmDisableSubmitted",
             Self::TpmDisableResult(_) => "TpmDisableResult",
-            Self::TpmServerCredentialsToggled(_) => "TpmServerCredentialsToggled",
-            Self::TpmServerCredentialsResult(_) => "TpmServerCredentialsResult",
+            Self::SessionRestoreToggle => "SessionRestoreToggle",
+            Self::SessionRestorePasswordChanged(_) => "SessionRestorePasswordChanged",
+            Self::SessionRestoreRevealToggled => "SessionRestoreRevealToggled",
+            Self::SessionRestoreSubmitted => "SessionRestoreSubmitted",
             Self::GeneratorViewClicked => "GeneratorViewClicked",
             Self::GeneratorTabActivated(_) => "GeneratorTabActivated",
             Self::GeneratorUppercaseToggled(_) => "GeneratorUppercaseToggled",
@@ -180,15 +182,16 @@ mod tests {
             format!("{:?}", Message::AppletPinChanged(secret.to_string())),
             format!("{:?}", Message::MainWindowPinChanged(secret.to_string())),
             format!("{:?}", Message::TpmSetupPinChanged(secret.to_string())),
-            format!("{:?}", Message::GeneratorGenerated(Ok(secret.to_string()))),
             format!(
                 "{:?}",
-                Message::AppletGeneratePasswordReceived(Ok(secret.to_string()))
+                Message::SessionRestorePasswordChanged(secret.to_string())
             ),
+            format!("{:?}", Message::GeneratorGenerated(Ok(secret.into()))),
             format!(
                 "{:?}",
-                Message::AppletSecretReceived(Ok(secret.to_string()))
+                Message::AppletGeneratePasswordReceived(Ok(secret.into()))
             ),
+            format!("{:?}", Message::AppletSecretReceived(Ok(secret.into()))),
         ];
         for s in cases {
             assert!(!s.contains(secret), "Message Debug leaked secret: {s}");

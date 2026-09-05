@@ -65,6 +65,10 @@ impl CosmicBWardenApp {
             | Message::UnlockPinChanged(_)
             | Message::UnlockPinRevealToggled
             | Message::AuthResult(_)
+            | Message::SessionRestoreToggle
+            | Message::SessionRestorePasswordChanged(_)
+            | Message::SessionRestoreRevealToggled
+            | Message::SessionRestoreSubmitted
             | Message::LockClicked
             | Message::LockResult
             | Message::LogoutClicked
@@ -145,8 +149,6 @@ impl CosmicBWardenApp {
             | Message::TpmSetupResult(_)
             | Message::TpmDisableSubmitted
             | Message::TpmDisableResult(_)
-            | Message::TpmServerCredentialsToggled(_)
-            | Message::TpmServerCredentialsResult(_)
             | Message::LoginPinEnabledToggled(_)
             | Message::LoginPinChanged(_)
             | Message::LoginPinRevealToggled

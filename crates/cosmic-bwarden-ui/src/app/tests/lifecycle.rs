@@ -436,7 +436,7 @@ fn test_tpm_status_unknown_shows_checking_not_inaccessible() {
 #[test]
 fn test_tpm_status_received_hardware_unavailable() {
     let mut app = CosmicBWardenApp::default();
-    let _ = app.update(Message::TpmStatusReceived(Ok((false, false, false))));
+    let _ = app.update(Message::TpmStatusReceived(Ok((false, false))));
     assert!(app.tpm_status_known);
     assert!(!app.tpm_available);
     assert!(!app.tpm_configured);
@@ -448,7 +448,7 @@ fn test_tpm_status_received_hardware_unavailable() {
 #[test]
 fn test_tpm_status_received_available_not_configured() {
     let mut app = CosmicBWardenApp::default();
-    let _ = app.update(Message::TpmStatusReceived(Ok((true, false, false))));
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, false))));
     assert!(app.tpm_status_known);
     assert!(app.tpm_available);
     assert!(!app.tpm_configured);
@@ -469,7 +469,7 @@ fn test_tpm_status_received_available_and_configured() {
         view: View::Unlock,
         ..Default::default()
     };
-    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, false))));
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, true))));
     assert!(app.tpm_status_known);
     assert!(app.tpm_available);
     assert!(app.tpm_configured);
@@ -487,7 +487,7 @@ fn test_tpm_status_received_while_unlocked_does_not_flip_mode() {
         view: View::Vault,
         ..Default::default()
     };
-    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, false))));
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, true))));
     assert!(app.tpm_configured);
     assert_eq!(
         app.unlock_mode,
@@ -553,7 +553,7 @@ fn test_settings_view_clicked_dispatches_tpm_check() {
     };
 
     // Pre-set known state from a prior check.
-    let _ = app.update(Message::TpmStatusReceived(Ok((true, false, false))));
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, false))));
     assert!(app.tpm_status_known);
 
     // Navigate to settings — this dispatches check_tpm_task (async, not awaited
@@ -570,7 +570,7 @@ fn test_master_password_unlock_offers_pin_reenable() {
     // TPM present and a (possibly stale) PIN blob configured, but the user is on
     // the master-password screen (e.g. after a PIN mismatch forced a fallback).
     let mut app = CosmicBWardenApp::default();
-    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, false))));
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, true))));
     app.unlock_mode = UnlockMode::Password;
     app.password_preferred = true; // fell back to master password
     app.login_email = "user@example.com".to_string();
@@ -593,7 +593,7 @@ fn test_master_password_unlock_offers_pin_reenable() {
 #[test]
 fn test_unlock_pin_too_short_is_rejected() {
     let mut app = CosmicBWardenApp::default();
-    let _ = app.update(Message::TpmStatusReceived(Ok((true, false, false))));
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, false))));
     let _ = app.update(Message::UnlockPinChanged("12".to_string()));
     let _ = app.update(Message::UnlockPasswordChanged("masterpw".to_string()));
     let _ = app.update(Message::UnlockSubmitted);
@@ -644,36 +644,18 @@ fn test_tpm_da_line_formatting() {
 }
 
 #[test]
-fn test_enable_pin_resets_server_credentials_toggle() {
-    // Simulate a prior state where server credentials were on, then a fresh
-    // enable (TpmSetupResult Ok). Enabling resets all TPM stores, so the UI's
-    // server-credentials flag must return to false.
-    let mut app = CosmicBWardenApp::default();
-    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, true))));
-    assert!(app.tpm_server_credentials, "precondition: server creds on");
-
-    let _ = app.update(Message::TpmSetupResult(Ok(())));
-    assert!(app.tpm_configured);
-    assert!(
-        !app.tpm_server_credentials,
-        "enabling PIN must reset server credentials to off"
-    );
-}
-
-#[test]
 fn test_disable_then_enable_cycle_state() {
     let mut app = CosmicBWardenApp::default();
-    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, true))));
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, true))));
 
-    // Disable clears configured + server creds and hides PIN unlock.
+    // Disable clears configured and hides PIN unlock.
     let _ = app.update(Message::TpmDisableResult(Ok(())));
     assert!(!app.tpm_configured);
     assert_eq!(app.unlock_mode, UnlockMode::Password);
 
-    // Re-enable: configured again, server creds fresh (off).
+    // Re-enable: configured again.
     let _ = app.update(Message::TpmSetupResult(Ok(())));
     assert!(app.tpm_configured);
-    assert!(!app.tpm_server_credentials);
 }
 
 #[tokio::test]
@@ -684,7 +666,7 @@ async fn test_pin_incorrect_flag_lifecycle() {
         ..Default::default()
     };
     app.config.email = Some("user@example.com".to_string());
-    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, false))));
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, true))));
 
     // Fresh PIN prompt: counter hidden.
     let _ = app.update(Message::EventReceived(
@@ -959,7 +941,7 @@ fn test_unlock_mode_transitions() {
     // NOT flip the form back to PIN.
     let _ = app.update(Message::AppletUseMasterPasswordInstead);
     assert!(app.password_preferred);
-    let _ = app.update(Message::TpmStatusReceived(Ok((true, true, false))));
+    let _ = app.update(Message::TpmStatusReceived(Ok((true, true))));
     assert_eq!(
         app.unlock_mode,
         UnlockMode::Password,

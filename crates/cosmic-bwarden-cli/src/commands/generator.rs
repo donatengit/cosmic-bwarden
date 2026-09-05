@@ -44,7 +44,7 @@ pub async fn handle_command(cli: &Cli, client: &AgentClient) -> Result<()> {
 
     let res = client.send(Action::GeneratePassword { settings }).await?;
     match res {
-        Response::GeneratedPassword { password } => println!("{password}"),
+        Response::GeneratedPassword { password } => println!("{}", password.expose()),
         other => handle_response(other)?,
     }
     Ok(())
@@ -66,7 +66,7 @@ async fn print_history(client: &AgentClient) -> Result<()> {
     match res {
         Response::PasswordHistory { entries } => {
             for entry in entries {
-                println!("{} | {}", entry.created_at, entry.password);
+                println!("{} | {}", entry.created_at, entry.password.expose());
             }
         }
         other => handle_response(other)?,

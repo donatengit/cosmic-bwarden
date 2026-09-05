@@ -78,7 +78,9 @@ impl Default for GeneratorSettings {
 /// regardless of which surface (UI/applet/CLI/browser) requested it.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct GeneratorHistoryEntry {
-    pub password: String,
+    /// `Secret` for zeroize-on-drop; the 7-day history is plaintext generated
+    /// passwords, same sensitivity as `Response::GeneratedPassword`.
+    pub password: crate::db::Secret,
     /// Unix epoch seconds.
     pub created_at: u64,
 }
@@ -292,12 +294,6 @@ pub enum Action {
     /// Disable PIN unlock. The vault must be currently unlocked (checked in the agent).
     /// No master password needed — being authenticated in the vault is sufficient.
     DisableTpmPin,
-    /// Seal the in-memory master_password_hash into a separate TPM blob (no PIN required
-    /// for this blob — it is TPM-bound only). Enables silent server re-auth after PIN unlock.
-    /// Fails if the vault was not unlocked with master password (hash not in memory).
-    EnableTpmServerCredentials,
-    /// Remove the TPM-sealed server-credentials blob, disabling silent re-auth.
-    DisableTpmServerCredentials,
     CheckTpm,
     /// Returns system-level diagnostic checks explaining why TPM may be unavailable.
     CheckTpmDiagnostics,
@@ -394,8 +390,6 @@ impl Action {
             Self::SetupTpmPinFromUnlocked { .. } => "SetupTpmPinFromUnlocked",
             Self::UnlockWithPin { .. } => "UnlockWithPin",
             Self::DisableTpmPin => "DisableTpmPin",
-            Self::EnableTpmServerCredentials => "EnableTpmServerCredentials",
-            Self::DisableTpmServerCredentials => "DisableTpmServerCredentials",
             Self::CheckTpm => "CheckTpm",
             Self::CheckTpmDiagnostics => "CheckTpmDiagnostics",
             Self::GetTpmDaStatus => "GetTpmDaStatus",
@@ -433,6 +427,17 @@ pub enum Event {
 /// (wrong PIN, changed PCRs, or DA lockout). Clients compare against this exact
 /// string to show their own short feedback; the full error chain is log-only.
 pub const ERR_TPM_UNSEAL_FAILED: &str = "TPM unseal failed";
+
+/// The vault is open but no server session could be minted. Clients key on this
+/// stable prefix to offer "restore session" rather than the blunt logout, so the
+/// human-readable reason after it is free to change.
+pub const ERR_NO_SESSION: &str = "no server session";
+
+/// PIN unlock is enabled in config but the sealed blob is gone (server URL
+/// changed, TPM reset, blob deleted). Distinct from `ERR_TPM_UNSEAL_FAILED` so
+/// the user is not told their PIN was wrong — retrying only burns TPM
+/// dictionary-attack attempts against a blob that no longer exists.
+pub const ERR_TPM_BLOB_MISSING: &str = "TPM sealed blob missing";
 
 /// Stable message carried by `Response::Error` when the TPM refuses to unseal
 /// because the policy check failed — the PCR state changed (BIOS/firmware
@@ -504,11 +509,18 @@ pub enum Response {
         /// in `entry` itself.
         filled_secrets: Vec<String>,
     },
+    /// A decrypted secret (login password, SSH private key, card/passport
+    /// number, or a secure note's body). `Secret` rather than `String`: it is
+    /// `ZeroizeOnDrop`, so the plaintext is scrubbed when the response is
+    /// dropped instead of lingering in freed heap. `#[serde(transparent)]`
+    /// keeps the wire bytes identical to a bare string.
     Password {
-        password: String,
+        password: crate::db::Secret,
     },
+    /// A generated TOTP code. Short-lived, but still a live credential — same
+    /// zeroize-on-drop treatment as `Password`.
     Totp {
-        code: String,
+        code: crate::db::Secret,
     },
     Version {
         version: String,
@@ -521,8 +533,6 @@ pub enum Response {
     TpmStatus {
         available: bool,
         configured: bool,
-        /// True when the master_password_hash is also sealed (enables silent server re-auth).
-        server_credentials: bool,
     },
     /// System-level diagnostic checks: (label, passed, hint) triples.
     TpmDiagnostics {
@@ -543,8 +553,9 @@ pub enum Response {
         password_matches: bool,
     },
     /// A freshly generated password. Never logged verbatim (see `debug_impls`).
+    /// `Secret` for the zeroize-on-drop behaviour; see `Response::Password`.
     GeneratedPassword {
-        password: String,
+        password: crate::db::Secret,
     },
     /// Answer to `GetGeneratorSettings`.
     GeneratorSettings {

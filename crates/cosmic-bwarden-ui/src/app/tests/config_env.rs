@@ -28,7 +28,6 @@ pub fn account_config() -> CosmicBWardenConfig {
         lock_timeout: 5400,
         persist_session: true,
         tpm_enabled: true,
-        tpm_store_server_credentials: true,
         ..CosmicBWardenConfig::default()
     }
 }

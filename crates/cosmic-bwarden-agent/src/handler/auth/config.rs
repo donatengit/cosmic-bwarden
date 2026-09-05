@@ -90,6 +90,9 @@ pub async fn handle_logout(state: &Arc<Mutex<State>>) -> Response {
                 }
             });
         }
+        if let Err(e) = crate::session_store::clear(&config.server_name(), email) {
+            log::error!("failed to clear the session envelope on logout: {:#}", e);
+        }
         let db = cosmic_bwarden_core::db::Db::new();
         if let Err(e) = db.save(&config.server_name(), email) {
             log::error!("failed to clear vault DB on logout: {}", e);

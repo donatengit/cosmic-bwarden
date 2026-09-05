@@ -48,7 +48,6 @@ pub struct CachedSidebarEntry {
 pub struct State {
     pub keys: Option<locked::Keys>,
     pub org_keys: Option<HashMap<String, locked::Keys>>,
-    pub master_password_hash: Option<locked::PasswordHash>,
     pub db: Option<cosmic_bwarden_core::db::Db>,
     pub pinned_ids: HashSet<String>,
     /// Pre-built list of decrypted sidebar entries. Rebuilt on unlock and after
@@ -97,7 +96,6 @@ impl State {
         Self {
             keys: None,
             org_keys: None,
-            master_password_hash: None,
             db: None,
             pinned_ids: HashSet::new(),
             sidebar_cache: Vec::new(),
@@ -257,7 +255,6 @@ impl State {
     pub fn lock(&mut self) {
         self.keys = None;
         self.org_keys = None;
-        self.master_password_hash = None;
         self.pinned_ids.clear();
         self.sidebar_cache.clear();
         // ssh_identity_cache is deliberately kept: listing while locked

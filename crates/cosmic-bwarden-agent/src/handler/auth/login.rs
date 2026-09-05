@@ -163,11 +163,30 @@ pub async fn handle_login(
             .collect::<std::collections::HashMap<_, _>>(),
     ) {
         Ok((keys, org_keys)) => {
+            // Persist the refresh token so a PIN unlock after a restart can
+            // restore this session without the master password. Non-fatal:
+            // the login itself already succeeded.
+            match db.refresh_token.as_ref() {
+                Some(rt) => {
+                    if let Err(e) = crate::session_store::save(
+                        &keys,
+                        &config.server_name(),
+                        &email,
+                        rt.expose(),
+                    ) {
+                        log::error!("login: failed to persist the session envelope: {:#}", e);
+                    }
+                }
+                None => log::error!(
+                    "login: server returned no refresh token — a PIN unlock after \
+                     restart will have no session to restore"
+                ),
+            }
+
             let mut state_guard = state.lock().await;
 
             state_guard.keys = Some(keys);
             state_guard.org_keys = Some(org_keys);
-            state_guard.master_password_hash = Some(identity.master_password_hash);
             state_guard.bump_epoch();
 
             // The initial `client.sync` above just replaced the local vault

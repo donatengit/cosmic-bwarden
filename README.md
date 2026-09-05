@@ -109,8 +109,15 @@ and register the native host with `just register-browser-host` (dev) or `just in
   (`mlock`) buffers, zeroized on lock/drop; `PR_SET_DUMPABLE=0`; sockets are `0600` with
   per-connection same-UID (`SO_PEERCRED`) checks.
 - The **on-disk cache** stores only server-encrypted data (AES-256-CBC + HMAC-SHA256,
-  encrypt-then-MAC, verified before decrypt). Session tokens go to the Secret Service
-  keyring, never to the JSON cache.
+  encrypt-then-MAC, verified before decrypt). Session tokens never reach that JSON
+  cache (`#[serde(skip)]`). The refresh token is persisted separately in the
+  **session envelope** — XChaCha20-Poly1305 under a key derived from the vault keys,
+  so it is readable only after an unlock (and, with PIN unlock, only once the TPM has
+  released those keys). The Secret Service keyring is an additional opt-in store,
+  built only with the `keyring` cargo feature and used only when "remember me" is on.
+- **The master password is never stored**, in any form. It is turned into a hash for
+  the duration of one login request and dropped; when the saved session expires you
+  are asked for it again.
 - **Out of scope**: a hostile process running *as your user* can ultimately reach the
   agent — same-UID is the trust boundary on a single-user desktop, and master-password
   reprompts raise the cost of an attack rather than preventing it. Unencrypted swap can

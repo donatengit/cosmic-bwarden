@@ -72,8 +72,8 @@ pin-login-leftover-note = PIN unlock is still configured on this device. Enable 
 # { $count } is the minimum PIN length.
 pin-min-chars = PIN (min { $count } characters)
 new-pin-min-chars = New PIN (min { $count } characters)
-pin-tpm-note-login = Secured by your device's hardware chip (TPM 2.0) — your PIN only works on this computer.
-pin-tpm-note-settings = Secured by your device's hardware chip — PIN only works on this computer.
+pin-tpm-note-login = Secured by your device's hardware chip (TPM 2.0) — your PIN only works on this computer. Your sign-in session is saved encrypted so sync keeps working; your master password is never stored.
+pin-tpm-note-settings = Secured by your device's hardware chip — PIN only works on this computer. Your sign-in session is saved encrypted so sync keeps working; your master password is never stored.
 pin-reenable-note = Re-enable PIN unlock: enter a new PIN, or leave empty to turn PIN unlock off.
 pin-optional-note = Optionally set a PIN to unlock this device quickly — leave empty to skip.
 pin-empty-to-disable = PIN — empty to disable
@@ -85,14 +85,14 @@ pin-incorrect = Incorrect PIN
 pin-unlock-title = PIN Unlock (TPM 2.0)
 pin-unlock = PIN unlock
 new-pin = New PIN
+pin = PIN
+tpm-blob-missing = PIN unlock is enabled, but its sealed data is gone from this device (the server address changed, or the TPM was reset). Unlock with your master password, then set up your PIN again.
 checking-tpm = Checking TPM availability…
 tpm-not-accessible = TPM 2.0 is not accessible (hardware missing or no permission).
 status-active = Active
 status-not-configured = Not configured
 disable-pin-unlock = Disable PIN unlock
 pin-will-be-removed = PIN unlock will be removed from this device.
-store-hashed-password-tpm = Store hashed password in this device TPM chip
-store-hashed-password-tpm-note = Fewer master password prompts after PIN unlock. Trade-off: if your PIN is compromised, anyone with physical access to this device can modify your Bitwarden account without knowing your master password.
 
 # TPM dictionary-attack lockout status
 duration-moment = a moment
@@ -117,7 +117,9 @@ filter-ssh-keys = SSH
 no-entries-found = No entries found
 no-pinned-entries = No pinned entries
 no-results = No results
-session-expired = Session expired — log in
+session-expired = Session expired — restore it
+restore-session = Restore session
+restore-session-note = Your vault is still open; only the server session expired. Enter your master password to restore syncing — no need to log out.
 not-synced = ⚠ Not synced
 select-entry = Select an entry
 

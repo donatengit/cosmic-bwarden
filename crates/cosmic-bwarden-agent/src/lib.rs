@@ -2,6 +2,7 @@ mod handler;
 mod keyring;
 mod logind;
 mod server;
+mod session_store;
 mod ssh_agent;
 mod state;
 mod timeout;
@@ -46,6 +47,38 @@ struct Cli {
 
     #[arg(hide = true)]
     browser_host: Option<String>,
+}
+
+/// Delete the pre-v7 TPM-sealed master-password-hash blob if one is still on
+/// disk. Best-effort and idempotent: a failure is logged loudly (it leaves a
+/// credential behind) but must never stop the agent from starting.
+fn remove_legacy_hash_blob(cfg: &cosmic_bwarden_core::config::CosmicBWardenConfig) {
+    use sha2::{Digest as _, Sha256};
+    let Some(email) = cfg.email.as_deref() else {
+        return;
+    };
+    // The path is reconstructed here because `dirs::tpm_hash_blob_file` was
+    // removed with the feature; this is the only place that still needs it.
+    let mut h = Sha256::new();
+    h.update(cfg.server_name().as_bytes());
+    h.update(b"\0");
+    h.update(email.as_bytes());
+    let path = cosmic_bwarden_core::dirs::data_dir().join(format!(
+        "tpm_sealed_hash_{}.bin",
+        &format!("{:x}", h.finalize())[..16]
+    ));
+
+    match std::fs::remove_file(&path) {
+        Ok(()) => log::info!(
+            "removed the obsolete TPM master-password-hash blob {}",
+            path.display()
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => log::error!(
+            "failed to remove the obsolete TPM master-password-hash blob {}: {e}",
+            path.display()
+        ),
+    }
 }
 
 /// Agent entry point. Both the `cosmic-bwarden-agent` and (TPM-enabled)
@@ -94,6 +127,17 @@ pub async fn run() -> anyhow::Result<()> {
     // Load configuration to check for additional overrides
     let config =
         cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy().unwrap_or_default();
+
+    // `keyring` is an opt-in cargo feature and no build recipe enables it by
+    // default, so a config asking for session persistence can silently get
+    // none — which surfaces much later as a failed sync after a PIN unlock.
+    // Say it once, at startup, where it is cheap to notice.
+    #[cfg(not(feature = "keyring"))]
+    if config.persist_session {
+        log::warn!(
+            "persist_session is enabled in config, but this build has no keyring support:              session tokens will not be written to the Secret Service. Rebuild with              `--features cosmic-bwarden-agent/keyring`, or rely on the session envelope              (which works either way)."
+        );
+    }
 
     // Config overrides apply ONLY if CLI/Env was not set
     if args.socket.is_none() && std::env::var("COSMIC_BWARDEN_SOCKET").is_err() {
@@ -171,6 +215,14 @@ pub async fn run() -> anyhow::Result<()> {
         // Done at startup so request_unlock() knows whether to broadcast
         // PinRequested or UnlockRequested before the first unlock attempt.
         if let Ok(cfg) = cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
+            // One-time cleanup: older versions sealed the master-password hash
+            // beside the vault-key blob so a PIN unlock could re-auth silently.
+            // That is gone — sync now restores from the refresh-token envelope,
+            // and an expired one prompts for the master password instead — so
+            // the leftover must be deleted rather than left on disk holding a
+            // credential nothing will ever use again.
+            remove_legacy_hash_blob(&cfg);
+
             if cfg.tpm_enabled {
                 if let Some(email) = &cfg.email {
                     let blob_path =
@@ -430,5 +482,46 @@ mod tests {
             src.contains("checked_prctl_set_undumpable(rc)"),
             "prctl return must be passed to the checked helper"
         );
+    }
+}
+
+#[cfg(test)]
+mod legacy_hash_blob_tests {
+    use super::remove_legacy_hash_blob;
+    use cosmic_bwarden_core::config::CosmicBWardenConfig;
+
+    /// The migration must find the blob the removed feature actually wrote:
+    /// `tpm_sealed_hash_<sha256hex16(server ‖ \0 ‖ email)>.bin`, the same
+    /// account key `dirs::account_hash` produces. A drifted derivation would
+    /// silently leave a master-password credential on disk forever.
+    #[test]
+    fn removes_the_blob_at_the_account_hashed_path() {
+        let profile = format!("test-legacy-blob-{}", std::process::id());
+        let prev = std::env::var_os("COSMIC_BWARDEN_PROFILE");
+        std::env::set_var("COSMIC_BWARDEN_PROFILE", &profile);
+
+        let cfg = CosmicBWardenConfig {
+            email: Some("user@example.com".to_string()),
+            base_url: Some("https://vault.example".to_string()),
+            ..Default::default()
+        };
+
+        let dir = cosmic_bwarden_core::dirs::data_dir();
+        std::fs::create_dir_all(&dir).expect("data dir");
+        let path = dir.join(format!(
+            "tpm_sealed_hash_{}.bin",
+            cosmic_bwarden_core::dirs::account_hash(&cfg.server_name(), "user@example.com")
+        ));
+        std::fs::write(&path, b"legacy").expect("seed blob");
+
+        remove_legacy_hash_blob(&cfg);
+        let gone = !path.exists();
+
+        let _ = std::fs::remove_dir_all(&dir);
+        match prev {
+            Some(v) => std::env::set_var("COSMIC_BWARDEN_PROFILE", v),
+            None => std::env::remove_var("COSMIC_BWARDEN_PROFILE"),
+        }
+        assert!(gone, "the obsolete hash blob must be deleted");
     }
 }

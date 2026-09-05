@@ -33,28 +33,28 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
                     let password = match entry.data {
                         cosmic_bwarden_core::db::EntryData::Login {
                             password: Some(p), ..
-                        } => p.expose().to_string(),
+                        } => p,
                         cosmic_bwarden_core::db::EntryData::SshKey {
                             private_key: Some(pk),
                             ..
-                        } => pk.expose().to_string(),
+                        } => pk,
                         cosmic_bwarden_core::db::EntryData::Card {
                             number: Some(n), ..
-                        } => n.expose().to_string(),
+                        } => n,
                         cosmic_bwarden_core::db::EntryData::BankAccount {
                             account_number: Some(n),
                             ..
-                        } => n.expose().to_string(),
+                        } => n,
                         cosmic_bwarden_core::db::EntryData::DriversLicense {
                             license_number: Some(n),
                             ..
-                        } => n.expose().to_string(),
+                        } => n,
                         cosmic_bwarden_core::db::EntryData::Passport {
                             passport_number: Some(n),
                             ..
-                        } => n.expose().to_string(),
+                        } => n,
                         cosmic_bwarden_core::db::EntryData::SecureNote => match &entry.notes {
-                            Some(n) => n.expose().to_string(),
+                            Some(n) => n.clone(),
                             None => {
                                 return Response::Error {
                                     message: "entry has no notes".to_string(),

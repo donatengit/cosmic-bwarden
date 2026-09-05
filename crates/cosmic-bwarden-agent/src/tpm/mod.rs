@@ -17,7 +17,7 @@
 //! Layout:
 //! - [`policy`] — TPM object templates + PolicyPCR/PolicyAuthValue digest.
 //! - [`blob`] — on-disk sealed-blob format (v2) marshalling.
-//! - [`ops`] — seal/unseal of raw bytes and vault keys (public API).
+//! - [`ops`] — seal/unseal of the vault keys (public API).
 
 use anyhow::{Context as _, Result};
 use std::path::Path;
@@ -29,7 +29,7 @@ mod policy;
 #[cfg(test)]
 mod tests;
 
-pub use ops::{seal, seal_bytes, unseal, unseal_bytes};
+pub use ops::{seal, unseal};
 
 /// Why a TPM unseal failed, classified from the underlying TSS response code.
 /// Clients map this to user feedback: a wrong PIN and a changed PCR state must
@@ -81,12 +81,34 @@ pub fn classify_unseal_failure(err: &anyhow::Error) -> UnsealFailure {
     UnsealFailure::Other
 }
 
-/// Open a TPM2 context, trying (in order) the `TSS2_TCTI` env var, the kernel
-/// resource manager, the raw device, and tpm2-abrmd. Shared by every operation.
+/// Open a TPM2 context, trying (in order) an explicit TCTI from the
+/// environment, the kernel resource manager, the raw device, and tpm2-abrmd.
+/// Shared by every operation.
 pub(crate) fn open_context() -> Result<Context> {
-    // 1. Honour TSS2_TCTI env var (used by tests to point at swtpm).
-    if let Ok(tcti) = TctiNameConf::from_environment_variable() {
+    // 1. Honour an explicitly configured TCTI (the E2E suite points this at
+    //    swtpm). `TctiNameConf::from_environment_variable` reads
+    //    TPM2TOOLS_TCTI/TCTI/TEST_TCTI — NOT TSS2_TCTI — so read TSS2_TCTI
+    //    ourselves first; it is the name the harness and our docs use.
+    //
+    //    Both arms FAIL CLOSED: if a TCTI is configured but unusable we return
+    //    the error rather than falling through to the hardware below. Falling
+    //    through is how the TPM E2E suite silently ran against a developer's
+    //    real TPM and drove it into dictionary-attack lockout.
+    //    An empty value means "unset" and is ignored, so exporting
+    //    `TSS2_TCTI=` cannot brick a production agent.
+    if let Some(spec) = std::env::var("TSS2_TCTI")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+    {
+        log::debug!("TPM: using TCTI from TSS2_TCTI ({spec})");
+        let tcti = spec
+            .parse::<TctiNameConf>()
+            .map_err(|e| anyhow::anyhow!("invalid TSS2_TCTI {spec:?}: {e}"))?;
         return Context::new(tcti).context("failed to open TPM context (from TSS2_TCTI)");
+    }
+    if let Ok(tcti) = TctiNameConf::from_environment_variable() {
+        return Context::new(tcti)
+            .context("failed to open TPM context (from TPM2TOOLS_TCTI/TCTI/TEST_TCTI)");
     }
     // 2. Kernel TPM resource manager — preferred for user-space (needs `tss` group).
     // 3. Raw character device — needs root or `tss` user.

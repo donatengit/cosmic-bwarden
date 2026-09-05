@@ -69,6 +69,10 @@ These must never regress. Treat violations as build-blocking bugs.
 - **Socket perms**: Create Unix sockets with mode `0600`.
 - **Persistent IPC connections**: The agent keeps client connections alive across multiple requests (one `tokio::spawn` per connected socket, inner `loop` for subsequent requests). Subscribe connections are long-lived; all others reuse the same socket until the client disconnects.
 - **Sensitive memory**: Use memory-locked storage for all key material and plaintext secrets.
+- **Plaintext secrets cross IPC as `db::Secret`, never `String`** (review-blocking). `Secret` is `ZeroizeOnDrop`, so the plaintext is scrubbed when the response is dropped instead of lingering in freed heap. It is `#[serde(transparent)]`, so this costs nothing on the wire — `protocol::tests::secret_fields_are_wire_identical_to_plain_strings` pins that, and no version bump is needed to adopt it. Applies to `Response::{Password, Totp, GeneratedPassword}` and `GeneratorHistoryEntry::password`; propagate it through client state too (the UI's `OnDemandPayload` and secret-carrying `Message` variants) rather than unwrapping at the IPC boundary, which only moves the leak inward.
+  - **`Secret`'s `Display` prints `********`.** Converting a field from `String` to `Secret` silently changes any `println!("{x}")` from the value to asterisks — it compiles clean and the compiler says nothing. This shipped once: `cosmic-bwarden-cli generate` printed asterisks. Where a command's purpose *is* to emit the value (CLI stdout, clipboard), call `.expose()` explicitly and say why in a comment.
+  - Legitimate conversion points are the clipboard and the `secure_input` widget — both plaintext by nature. Everything upstream of them stays wrapped.
+  - `Secret` also wraps *ciphertext* in this codebase (`protected_key`, `protected_org_keys`). Those need no zeroization; "it's a `Secret`" does not by itself mean "sensitive in memory".
 - **No silent failures**: Any operation that can fail and affect data availability, integrity, or security must log at `warn` or `error` level. **Anything that can corrupt or lose data logs `error!` — no exceptions.** Specifically:
   - **Server API failures**: Every non-2xx API response goes through `Client::request_failed` (core, `api/client/mod.rs`), which logs `error!` with method, URL, status, and response body. Never construct `Error::RequestFailed` directly.
   - **Failed vault mutations & sync**: A server rejection of add/update/delete/favorite, or a sync failure, must log `error!` at the handler — the optimistic local change is silently undone by the next sync, which is data loss from the user's perspective.
@@ -185,11 +189,18 @@ Seals the 64-byte vault key (`enc_key_expanded ‖ mac_key_expanded`) in a TPM2 
 
 - **Agent**: `cargo check -p cosmic-bwarden-agent --features tpm`
 - **Module**: `crates/cosmic-bwarden-agent/src/tpm/` — seal/unseal/clear using `tss-esapi 8.0.0-alpha.2` (`mod.rs` API, `policy.rs`, `blob.rs`, `ops.rs`)
-- **Handler**: `crates/cosmic-bwarden-agent/src/handler/auth/tpm_pin/` — per-concern handlers (`status`, `setup`, `unlock`, `disable`, `server_credentials`)
+- **Handler**: `crates/cosmic-bwarden-agent/src/handler/auth/tpm_pin/` — per-concern handlers (`status`, `setup`, `unlock`, `disable`)
 - **State**: `tpm_configured` in agent `State`; `tpm_available`/`show_pin_unlock` in UI `CosmicBWardenApp`
-- **Blob storage**: `<data_dir>/tpm_sealed_<sha256hex16(server+email)>.bin` — per-account, persisted across reboots
+- **Blob storage** (all per-account, keyed by `dirs::account_hash` = `sha256hex16(server ‖ \0 ‖ email)`, persisted across reboots):
+  - `<data_dir>/tpm_sealed_<hash>.bin` — the vault symmetric keys, PCR{0,7} ∧ PIN. **Seal the vault keys, never `identity.keys`**: `handle_unlock_with_pin` uses the unsealed bytes directly as `state.keys`, so the KDF keys would decrypt nothing (this shipped once as a mismatch between the two setup paths).
+  - `<data_dir>/session_<hash>.enc` — the refresh token under XChaCha20-Poly1305 (`core/session_envelope.rs`); not a TPM object, since a refresh JWT far exceeds `TPM2_MAX_SYM_DATA` (256 bytes).
+- **Never persist the master-password hash (review-blocking).** It is derived per unlock, handed to `Client::login`, and dropped — no `State` field, no TPM blob, no envelope. A sealed-hash fallback existed briefly and was removed: it stored the strongest credential available to avoid a rare prompt, and could not satisfy 2FA regardless. Reprompt verification proves the password by decrypting `protected_key` (`handler/vault/query.rs`), which needs no stored hash and works after a PIN unlock too. `reauth::tests::no_master_password_hash_is_ever_persisted` pins this.
 - **Graceful degradation**: if TPM hardware is absent at runtime, `is_available()` returns false, UI hides PIN controls
 - **Smoke tests**: `cargo test -p cosmic-bwarden-tests --features tpm-smoke -- tpm --test-threads=1` (requires `swtpm` in PATH; auto-skip when absent)
+- **Never let a TPM test reach real hardware (review-blocking)**. Until 2026-09-05 the whole suite silently did, and `lockout.rs` drove a developer's actual TPM into dictionary-attack lockout. Two independent causes, both now fixed — keep both properties:
+  - `open_context` must **fail closed**: an explicitly configured TCTI that cannot be opened is an error, never a fall-through to `/dev/tpmrm0`. Note `TctiNameConf::from_environment_variable()` reads `TPM2TOOLS_TCTI`/`TCTI`/`TEST_TCTI`, **not** `TSS2_TCTI` — that one is read explicitly.
+  - tpm2-tss's swtpm TCTI derives the control socket as `<data-socket>.ctrl` (the `%s.ctrl` format string in `libtss2-tcti-swtpm`). `start_swtpm` must name them `swtpm.sock` / `swtpm.sock.ctrl`; any other pairing makes `Context::new` fail.
+  - The agent logs `TPM: using TCTI from TSS2_TCTI (…)` at debug — grep for it to confirm a test run is on the emulator.
 
 ## Password Generator
 

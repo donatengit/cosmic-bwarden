@@ -189,15 +189,11 @@ pub fn filled_secret_keys(entry: &Entry) -> Vec<String> {
     keys
 }
 
-/// Verify the master password for a reprompt-gated entry against the stored hash.
+/// Verify the master password for a reprompt-gated entry.
 /// Returns `Some(error)` if verification is required and failed/absent; `None` on
 /// success. Runs synchronously (KDF) while the caller holds the state lock, matching
 /// the existing reprompt path.
-pub(super) fn verify_reprompt(
-    provided: Option<String>,
-    db: &Db,
-    state: &State,
-) -> Option<Response> {
+pub(super) fn verify_reprompt(provided: Option<String>, db: &Db) -> Option<Response> {
     let password = match provided {
         Some(p) => p,
         None => {
@@ -247,19 +243,22 @@ pub(super) fn verify_reprompt(
         }
     };
 
-    match &state.master_password_hash {
-        Some(stored_hash) => {
-            if !cosmic_bwarden_core::ct_eq(identity.master_password_hash.hash(), stored_hash.hash())
-            {
-                Some(Response::Error {
-                    message: "incorrect password".to_string(),
-                })
-            } else {
-                None
-            }
-        }
-        None => Some(Response::Error {
-            message: "agent state inconsistent".to_string(),
+    // Prove the password by re-deriving the vault key and decrypting
+    // `protected_key` — the same proof `unlock` uses, and the reason the agent
+    // need not keep the master-password hash in memory at all. It also works
+    // after a PIN unlock, where no hash is ever derived; comparing against a
+    // stored hash would fail outright there.
+    let empty_org_keys: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    match cosmic_bwarden_core::vault::unlock_from_keys(
+        &identity.keys,
+        db.protected_key.as_ref().map(|s| s.expose()).unwrap_or(""),
+        None,
+        &empty_org_keys,
+    ) {
+        Ok(_) => None,
+        Err(_) => Some(Response::Error {
+            message: "incorrect password".to_string(),
         }),
     }
 }
@@ -446,7 +445,7 @@ pub async fn handle_get_entry(
         let org_keys = state.org_keys.as_ref().unwrap_or(&empty_org_keys);
         if let Some(entry) = db.entries.iter().find(|e| e.id == id) {
             if entry.master_password_reprompt() {
-                if let Some(err) = verify_reprompt(password, db, &state) {
+                if let Some(err) = verify_reprompt(password, db) {
                     return err;
                 }
             }
@@ -467,16 +466,27 @@ pub async fn handle_get_entry(
 }
 
 #[cfg(test)]
-mod ct_eq_site {
+mod reprompt_proof_site {
+    /// The reprompt proves the password by decrypting `protected_key` (MAC
+    /// verified before decrypt), so the agent never needs the master-password
+    /// hash in memory. Guard both halves — a future "optimisation" that caches
+    /// the hash to skip the KDF would silently reintroduce it.
     #[test]
-    fn verify_reprompt_uses_ct_eq() {
+    fn reprompt_proves_by_decryption_and_stores_no_hash() {
         let src = include_str!("query.rs");
         assert!(
-            src.contains("cosmic_bwarden_core::ct_eq"),
-            "reprompt hash compare must use ct_eq"
+            src.contains("unlock_from_keys"),
+            "reprompt must prove the password by decrypting protected_key"
         );
-        let non_ct = ["hash()", " != ", "stored_hash.hash()"].concat();
-        assert!(!src.contains(&non_ct), "non-CT != compare must not remain");
+        let field = ["master", "_password_", "hash"].concat();
+        assert!(
+            !src.contains(&field),
+            "reprompt must not consult a stored master-password hash"
+        );
+        assert!(
+            !include_str!("../../state.rs").contains(&field),
+            "State must not retain the master-password hash"
+        );
     }
 }
 

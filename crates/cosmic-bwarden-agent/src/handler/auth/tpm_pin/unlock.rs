@@ -48,8 +48,22 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
         }
 
         let blob_path = cosmic_bwarden_core::dirs::tpm_blob_file(&config.server_name(), &email);
-        let hash_blob_path =
-            cosmic_bwarden_core::dirs::tpm_hash_blob_file(&config.server_name(), &email);
+
+        // The blob path is derived from the server URL, so changing that URL (or a
+        // TPM reset) silently points this at a file that no longer exists. Say so
+        // plainly: an unseal attempt would fail as ERR_TPM_UNSEAL_FAILED, which
+        // reads as "wrong PIN" and makes the user retry — burning TPM
+        // dictionary-attack attempts against a blob that isn't there.
+        if !blob_path.exists() {
+            log::error!(
+                "pin unlock: TPM is enabled for {} but no sealed blob at {}",
+                email,
+                blob_path.display()
+            );
+            return Response::Error {
+                message: cosmic_bwarden_core::protocol::ERR_TPM_BLOB_MISSING.to_string(),
+            };
+        }
 
         // Unseal the vault symmetric keys from the TPM (these are the same keys stored
         // in state.keys after a normal password unlock — NOT the identity/KDF keys).
@@ -80,27 +94,6 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
             }
         };
 
-        // Try to unseal the server credentials (master_password_hash) if available.
-        // This blob is TPM-bound only (no PIN) and enables silent re-auth after PIN unlock.
-        let maybe_hash = if hash_blob_path.exists() {
-            match crate::tpm::unseal_bytes(&hash_blob_path, "").await {
-                Ok(bytes) => {
-                    let mut locked_vec = cosmic_bwarden_core::locked::Vec::new();
-                    locked_vec.extend(bytes.iter().copied());
-                    Some(cosmic_bwarden_core::locked::PasswordHash::new(locked_vec))
-                }
-                Err(e) => {
-                    log::warn!(
-                        "pin unlock: could not unseal server credentials from TPM: {}",
-                        e
-                    );
-                    None
-                }
-            }
-        } else {
-            None
-        };
-
         // Derive org keys from the vault symmetric keys directly (no protected-key
         // decryption needed — we already have the vault keys).
         let org_keys_raw: std::collections::HashMap<_, _> = db
@@ -122,26 +115,30 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
             }
         };
 
+        // Kept out of the state commit below so the re-auth chain can use it
+        // after `keys` has moved into `State`.
+        let keys_for_reauth = vault_keys.clone();
         let keys = vault_keys;
 
         // Restore session tokens — Db::load() never has them (serde skip).
         // Try keyring first, then fall back to whatever was in memory before
         // locking (covers a lock→pin-unlock cycle without agent restart).
-        // PIN unlock cannot do a silent re-auth (no master_password_hash),
-        // so if tokens are unavailable server sync will fail until the user
-        // logs out and back in.
         if db.access_token.is_none() && config.persist_session {
             match keyring::get_tokens(&config.server_name(), &email).await {
                 Ok(Some((at, rt))) => {
                     db.access_token = Some(at.into());
                     db.refresh_token = Some(rt.into());
                 }
-                Ok(None) => {}
+                Ok(None) => log::warn!(
+                    "pin unlock: persist_session is on but the keyring holds no session for {} \
+                     (is this build compiled with --features keyring?)",
+                    email
+                ),
                 Err(e) => log::warn!("pin unlock: could not load tokens from keyring: {}", e),
             }
         }
 
-        let needs_reauth = {
+        let has_token = {
             let mut g = state.lock().await;
 
             // In-memory copy covers lock→pin-unlock without agent restart when
@@ -154,27 +151,9 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
             }
 
             let has_token = db.access_token.is_some();
-            let has_hash = maybe_hash.is_some();
-
-            if !has_token && !has_hash {
-                // The unlock itself succeeds, but every server operation will
-                // fail until the user logs in again — announce it instead of
-                // handing back a bare Ack that claims full success.
-                log::error!(
-                    "pin unlock: no session token available for {} — \
-                     server sync will fail until you log out and log in again",
-                    email
-                );
-                g.sync_failed = true;
-                g.last_sync_error = Some(
-                    "no session token after PIN unlock — sync unavailable until you log in again"
-                        .to_string(),
-                );
-            }
 
             g.keys = Some(keys);
             g.org_keys = Some(org_keys);
-            g.master_password_hash = maybe_hash;
             g.pinned_ids.clear();
             for entry in &db.entries {
                 if entry.favorite {
@@ -185,102 +164,51 @@ pub async fn handle_unlock_with_pin(pin: String, state: &Arc<Mutex<State>>) -> R
             g.bump_epoch();
             g.rebuild_sidebar_cache();
             g.broadcast(cosmic_bwarden_core::protocol::Event::Unlocked);
-            !has_token && has_hash
+            has_token
         };
 
-        // If we have a sealed hash but no session token, do a silent re-auth now
-        // (same path as master-password unlock when tokens are missing).
-        let mut can_sync = !needs_reauth;
-        if needs_reauth {
-            log::info!("pin unlock: no session token, attempting silent re-auth via sealed hash");
-            let hash = {
-                let g = state.lock().await;
-                g.master_password_hash.clone()
-            };
-            if let Some(master_password_hash) = hash {
-                let client = cosmic_bwarden_core::api::Client::new(
-                    &config.base_url(),
-                    &config.identity_url(),
-                );
-                match config.device_id().await {
-                    Ok(device_id) => {
-                        match client
-                            .login(
-                                &email,
-                                &device_id,
-                                &master_password_hash,
-                                None,
-                                None,
-                                None,
-                                None,
-                            )
-                            .await
-                        {
-                            Ok((access_token, refresh_token, _protected_key)) => {
-                                log::info!("pin unlock: silent re-auth succeeded");
-                                can_sync = true;
-                                {
-                                    let mut g = state.lock().await;
-                                    if let Some(db) = &mut g.db {
-                                        db.access_token = Some(access_token.clone().into());
-                                        db.refresh_token =
-                                            refresh_token.as_ref().map(|rt| rt.clone().into());
-                                    }
-                                }
-                                if config.persist_session {
-                                    if let Some(rt) = &refresh_token {
-                                        if let Err(e) = keyring::store_tokens(
-                                            &config.server_name(),
-                                            &email,
-                                            &access_token,
-                                            rt,
-                                        )
-                                        .await
-                                        {
-                                            log::error!("pin unlock: failed to store refreshed tokens in keyring: {}", e);
-                                        }
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                can_sync = false;
-                                log::error!("pin unlock: silent re-auth failed (sync will be unavailable): {}", e);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        can_sync = false;
-                        log::error!(
-                            "pin unlock: could not obtain device_id for silent re-auth: {}",
-                            e
-                        );
-                    }
-                }
-            }
-        }
-
-        if can_sync {
-            // Catch the vault up with the server now that we are unlocked and
-            // have a session (clears a stale out-of-sync flag truthfully).
-            let sync_state = Arc::clone(state);
-            tokio::spawn(async move {
-                // Skip if the user re-locked before this ran: a sync without
-                // tokens would falsely mark the state out-of-sync.
-                let has_token = {
-                    let g = sync_state.lock().await;
-                    g.db.as_ref().is_some_and(|db| db.access_token.is_some())
-                };
-                if has_token {
-                    let _ = crate::handler::vault::sync::handle_sync(&sync_state).await;
-                }
-            });
+        // No live token: re-mint one from the stored refresh-token envelope.
+        // A PIN unlock never has the master password, so if that fails the user
+        // is asked for it — the vault stays unlocked and usable offline either
+        // way, only sync depends on this.
+        let restored = if has_token {
+            Ok(())
         } else {
-            let mut g = state.lock().await;
-            g.sync_failed = true;
-            g.last_sync_error = Some(
-                "no session token after PIN unlock — sync unavailable until you log in again"
-                    .to_string(),
-            );
+            super::super::reauth::restore_session(state, &config, &email, &keys_for_reauth, None)
+                .await
+        };
+
+        match restored {
+            Ok(()) => {
+                // Catch the vault up with the server now that we are unlocked and
+                // have a session (clears a stale out-of-sync flag truthfully).
+                let sync_state = Arc::clone(state);
+                tokio::spawn(async move {
+                    // Skip if the user re-locked before this ran: a sync without
+                    // tokens would falsely mark the state out-of-sync.
+                    let has_token = {
+                        let g = sync_state.lock().await;
+                        g.db.as_ref().is_some_and(|db| db.access_token.is_some())
+                    };
+                    if has_token {
+                        let _ = crate::handler::vault::sync::handle_sync(&sync_state).await;
+                    }
+                });
+            }
+            Err(reason) => {
+                // The unlock itself succeeded, but every server operation will
+                // fail until a master-password unlock re-authenticates —
+                // announce it instead of handing back a bare Ack that claims
+                // full success. The reason travels to the UI, so a 2FA
+                // challenge doesn't read as a generic network failure.
+                log::error!("pin unlock: no session could be restored for {email}: {reason}");
+                let mut g = state.lock().await;
+                g.sync_failed = true;
+                g.last_sync_error = Some(format!(
+                    "{}: {reason}",
+                    cosmic_bwarden_core::protocol::ERR_NO_SESSION
+                ));
+            }
         }
 
         log::info!("vault unlocked via TPM PIN for {}", email);

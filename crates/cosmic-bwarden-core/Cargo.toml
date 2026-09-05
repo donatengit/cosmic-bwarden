@@ -42,6 +42,7 @@ url = "2.5"
 uuid = { version = "1.0", features = ["v4"] }
 zeroize = { workspace = true }
 subtle = "2.6"
+chacha20poly1305 = { version = "0.11.0", features = ["zeroize"] }
 
 [features]
 default = []

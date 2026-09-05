@@ -173,7 +173,7 @@ pub fn get_pruned_newest_first() -> Result<Vec<GeneratorHistoryEntry>> {
                 .context("decrypting history entry")?;
             let password = String::from_utf8(bytes).context("history entry was not valid UTF-8")?;
             Ok(GeneratorHistoryEntry {
-                password,
+                password: password.into(),
                 created_at: e.created_at,
             })
         })

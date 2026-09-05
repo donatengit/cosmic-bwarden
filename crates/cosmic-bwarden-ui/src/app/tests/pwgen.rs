@@ -14,7 +14,7 @@ use cosmic_bwarden_core::protocol::{GeneratorHistoryEntry, GeneratorSettings};
 
 fn history_entry(password: &str, created_at: u64) -> GeneratorHistoryEntry {
     GeneratorHistoryEntry {
-        password: password.to_string(),
+        password: password.into(),
         created_at,
     }
 }
@@ -87,7 +87,7 @@ fn generator_generated_ok_sets_result_and_clears_error() {
         ..Default::default()
     };
 
-    let _ = app.update(Message::GeneratorGenerated(Ok("fresh-pw".to_string())));
+    let _ = app.update(Message::GeneratorGenerated(Ok("fresh-pw".into())));
 
     assert_eq!(app.generator_result.as_deref(), Some("fresh-pw"));
     assert!(!app.generator_result_revealed);
@@ -97,7 +97,7 @@ fn generator_generated_ok_sets_result_and_clears_error() {
 #[test]
 fn generator_generated_err_sets_error_and_leaves_result_untouched() {
     let mut app = CosmicBWardenApp {
-        generator_result: Some("previous-pw".to_string()),
+        generator_result: Some("previous-pw".into()),
         ..Default::default()
     };
 

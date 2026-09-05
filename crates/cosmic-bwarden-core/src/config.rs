@@ -22,11 +22,6 @@ pub struct CosmicBWardenConfig {
     /// Cleared on disable; set by the agent after successful sealing.
     #[serde(default)]
     pub tpm_enabled: bool,
-    /// When true, the master_password_hash is also sealed in the TPM so that
-    /// PIN unlock can silently re-authenticate with the server (enabling Sync).
-    /// Trade-off: physical TPM access (without PIN) allows server authentication.
-    #[serde(default)]
-    pub tpm_store_server_credentials: bool,
 }
 
 impl Default for CosmicBWardenConfig {
@@ -42,7 +37,6 @@ impl Default for CosmicBWardenConfig {
             lock_timeout: default_lock_timeout(),
             persist_session: false,
             tpm_enabled: false,
-            tpm_store_server_credentials: false,
         }
     }
 }

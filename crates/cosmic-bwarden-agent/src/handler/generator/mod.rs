@@ -59,7 +59,9 @@ async fn handle_generate(settings: Option<GeneratorSettings>) -> Response {
         log::error!("failed to append generated password to history: {e:#}");
     }
 
-    Response::GeneratedPassword { password }
+    Response::GeneratedPassword {
+        password: password.into(),
+    }
 }
 
 async fn handle_get_settings() -> Response {

@@ -239,17 +239,6 @@ impl CosmicBWardenApp {
             );
         }
 
-        // Server credentials toggle — only shown when PIN unlock is configured.
-        if self.tpm_configured {
-            let creds_toggle = cosmic::widget::toggler(self.tpm_server_credentials)
-                .on_toggle(Message::TpmServerCredentialsToggled);
-            col = col.add(cosmic_settings::item(
-                fl!("store-hashed-password-tpm"),
-                creds_toggle,
-            ));
-            col = col.add(text::caption(fl!("store-hashed-password-tpm-note")).class(muted_text()));
-        }
-
         col.into()
     }
 }

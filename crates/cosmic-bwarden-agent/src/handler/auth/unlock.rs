@@ -42,7 +42,10 @@ pub async fn handle_unlock(password: String, state: &Arc<Mutex<State>>) -> Respo
                 db.access_token = Some(at.into());
                 db.refresh_token = Some(rt.into());
             }
-            Ok(None) => {}
+            Ok(None) => log::warn!(
+                "unlock: persist_session is on but the keyring holds no session for {}",
+                email
+            ),
             Err(e) => log::warn!("unlock: could not load tokens from keyring: {}", e),
         }
     }
@@ -88,13 +91,15 @@ pub async fn handle_unlock(password: String, state: &Arc<Mutex<State>>) -> Respo
             // Determine whether we need a silent re-auth before committing state,
             // so we can release the lock during the network call.
             let master_password_hash = identity.master_password_hash.clone();
+            // Kept for the re-auth chain, which runs after `keys` has moved
+            // into `State`.
+            let keys_for_reauth = keys.clone();
 
             let needs_reauth = {
                 let mut state_guard = state.lock().await;
 
                 state_guard.keys = Some(keys);
                 state_guard.org_keys = Some(org_keys);
-                state_guard.master_password_hash = Some(identity.master_password_hash);
                 state_guard.bump_epoch();
 
                 state_guard.pinned_ids.clear();
@@ -126,106 +131,56 @@ pub async fn handle_unlock(password: String, state: &Arc<Mutex<State>>) -> Respo
                 needs_reauth
             };
 
-            // If tokens are still missing (agent restart, or persist_session=false),
-            // silently re-authenticate using the master-password hash we just derived.
-            // The lock is intentionally released here so the network call doesn't block
-            // other requests.
-            let mut can_sync = !needs_reauth;
-            if needs_reauth {
+            // Tokens still missing (agent restart, or persist_session=false):
+            // re-mint one. Shared with the PIN path — the stored refresh token
+            // first, then a password grant with the hash we just derived. The
+            // state lock is intentionally released here so the network call
+            // doesn't block other requests.
+            let restored = if needs_reauth {
                 log::info!("unlock: no session token available, attempting silent re-auth");
-                let client = cosmic_bwarden_core::api::Client::new(
-                    &config.base_url(),
-                    &config.identity_url(),
-                );
-                match config.device_id().await {
-                    Ok(device_id) => {
-                        match client
-                            .login(
-                                email,
-                                &device_id,
-                                &master_password_hash,
-                                None,
-                                None,
-                                None,
-                                None,
-                            )
-                            .await
-                        {
-                            Ok((access_token, refresh_token, _protected_key)) => {
-                                log::info!("unlock: silent re-auth succeeded");
-                                can_sync = true;
-                                {
-                                    let mut g = state.lock().await;
-                                    if let Some(db) = &mut g.db {
-                                        db.access_token = Some(access_token.clone().into());
-                                        db.refresh_token =
-                                            refresh_token.as_ref().map(|rt| rt.clone().into());
-                                    }
-                                }
-                                if config.persist_session {
-                                    if let Some(rt) = &refresh_token {
-                                        if let Err(e) = keyring::store_tokens(
-                                            &config.server_name(),
-                                            email,
-                                            &access_token,
-                                            rt,
-                                        )
-                                        .await
-                                        {
-                                            log::error!(
-                                                "failed to store refreshed tokens in keyring: {}",
-                                                e
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                // Server may be unreachable or require 2FA — the vault
-                                // is still usable locally, but sync is unavailable until
-                                // the next unlock. Surface it: set the out-of-sync flag
-                                // so the UI shows "Not synced" instead of lying.
-                                can_sync = false;
-                                log::error!(
-                                    "unlock: silent re-auth failed (sync will be unavailable): {}",
-                                    e
-                                );
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        can_sync = false;
-                        log::error!(
-                            "unlock: could not obtain device_id for silent re-auth (sync will be unavailable): {}",
-                            e
-                        );
-                    }
-                }
-            }
-
-            if can_sync {
-                // Catch the vault up with the server now that we are unlocked
-                // and have a session. This also clears a stale out-of-sync flag
-                // truthfully instead of letting a lock cycle whitewash it.
-                let sync_state = Arc::clone(state);
-                tokio::spawn(async move {
-                    // If the user re-locked before this runs, a sync would fail
-                    // for lack of tokens and mark the state out-of-sync falsely.
-                    let has_token = {
-                        let g = sync_state.lock().await;
-                        g.db.as_ref().is_some_and(|db| db.access_token.is_some())
-                    };
-                    if has_token {
-                        let _ = crate::handler::vault::sync::handle_sync(&sync_state).await;
-                    }
-                });
+                super::reauth::restore_session(
+                    state,
+                    &config,
+                    email,
+                    &keys_for_reauth,
+                    Some(&master_password_hash),
+                )
+                .await
             } else {
-                let mut g = state.lock().await;
-                g.sync_failed = true;
-                g.last_sync_error = Some(
-                    "no session token after unlock — sync unavailable until you log in again"
-                        .to_string(),
-                );
+                // Nothing was re-minted, so roll the stored envelope forward
+                // from the token we already had (keyring or in-memory) — a
+                // later PIN unlock needs a current refresh token to restore.
+                crate::session_store::persist_current(state, &config.server_name(), email).await;
+                Ok(())
+            };
+
+            match restored {
+                Ok(()) => {
+                    // Catch the vault up with the server now that we are unlocked
+                    // and have a session. This also clears a stale out-of-sync flag
+                    // truthfully instead of letting a lock cycle whitewash it.
+                    let sync_state = Arc::clone(state);
+                    tokio::spawn(async move {
+                        // If the user re-locked before this runs, a sync would fail
+                        // for lack of tokens and mark the state out-of-sync falsely.
+                        let has_token = {
+                            let g = sync_state.lock().await;
+                            g.db.as_ref().is_some_and(|db| db.access_token.is_some())
+                        };
+                        if has_token {
+                            let _ = crate::handler::vault::sync::handle_sync(&sync_state).await;
+                        }
+                    });
+                }
+                Err(reason) => {
+                    log::error!("unlock: no session could be restored for {email}: {reason}");
+                    let mut g = state.lock().await;
+                    g.sync_failed = true;
+                    g.last_sync_error = Some(format!(
+                        "{}: {reason}",
+                        cosmic_bwarden_core::protocol::ERR_NO_SESSION
+                    ));
+                }
             }
 
             Response::Ack

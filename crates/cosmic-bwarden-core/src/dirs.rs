@@ -65,30 +65,30 @@ pub fn device_id_file() -> std::path::PathBuf {
     data_dir().join("device_id")
 }
 
-/// Path for the per-account TPM sealed-blob file.
-/// Uses an 8-hex-char prefix of SHA-256(server ‖ '\0' ‖ email) to avoid
-/// special characters in the filename while keeping it unique per account.
-pub fn tpm_blob_file(server: &str, email: &str) -> std::path::PathBuf {
+/// Stable per-account filename component: a 16-hex-char prefix of
+/// SHA-256(server ‖ '\0' ‖ email). Keeps special characters out of filenames
+/// while staying unique per account. Shared by every per-account file in the
+/// data dir so they move together if the account key ever changes.
+pub fn account_hash(server: &str, email: &str) -> String {
     use sha2::{Digest as _, Sha256};
     let mut h = Sha256::new();
     h.update(server.as_bytes());
     h.update(b"\0");
     h.update(email.as_bytes());
-    let hex = format!("{:x}", h.finalize());
-    data_dir().join(format!("tpm_sealed_{}.bin", &hex[..16]))
+    format!("{:x}", h.finalize())[..16].to_string()
 }
 
-/// Path for the per-account TPM sealed master-password-hash blob file.
-/// Distinct from `tpm_blob_file` (vault keys) — same account-hash prefix but
-/// different filename so both blobs can coexist independently.
-pub fn tpm_hash_blob_file(server: &str, email: &str) -> std::path::PathBuf {
-    use sha2::{Digest as _, Sha256};
-    let mut h = Sha256::new();
-    h.update(server.as_bytes());
-    h.update(b"\0");
-    h.update(email.as_bytes());
-    let hex = format!("{:x}", h.finalize());
-    data_dir().join(format!("tpm_sealed_hash_{}.bin", &hex[..16]))
+/// Path for the per-account TPM sealed-blob file (vault keys).
+pub fn tpm_blob_file(server: &str, email: &str) -> std::path::PathBuf {
+    data_dir().join(format!("tpm_sealed_{}.bin", account_hash(server, email)))
+}
+
+/// Path for the per-account encrypted session envelope (the server refresh
+/// token). Not a TPM object — a refresh JWT is far past `TPM2_MAX_SYM_DATA` —
+/// but encrypted under keys the TPM releases, so it is bound to the same PCR
+/// state and PIN. See `session_envelope`.
+pub fn session_file(server: &str, email: &str) -> std::path::PathBuf {
+    data_dir().join(format!("session_{}.enc", account_hash(server, email)))
 }
 
 /// Path for the device-global (not per-account) password-generator "last used
@@ -133,7 +133,7 @@ pub fn cache_dir() -> std::path::PathBuf {
     project_dirs.cache_dir().to_path_buf()
 }
 
-fn data_dir() -> std::path::PathBuf {
+pub fn data_dir() -> std::path::PathBuf {
     let project_dirs = directories::ProjectDirs::from("", "", &profile()).unwrap();
     project_dirs.data_dir().to_path_buf()
 }

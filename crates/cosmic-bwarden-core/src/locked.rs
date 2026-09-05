@@ -2,6 +2,10 @@ use zeroize::Zeroize as _;
 
 const LEN: usize = 4096;
 
+/// Capacity of a `locked::Vec`. Public so callers can reject oversized input
+/// before `extend`, which panics past capacity (`ArrayVec`).
+pub const CAPACITY: usize = LEN;
+
 static REGION_LOCK_WORKS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
 
 /// RAII guard that `mlock`s a memory region for its lifetime, `munlock`ing

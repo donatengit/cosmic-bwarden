@@ -170,14 +170,14 @@ fn test_view_vault_password_generator_panel_renders_with_result_and_history() {
 
     let mut app = CosmicBWardenApp {
         view: View::PasswordGenerator,
-        generator_result: Some("generated-pw-1".to_string()),
+        generator_result: Some("generated-pw-1".into()),
         generator_history: vec![
             GeneratorHistoryEntry {
-                password: "generated-pw-1".to_string(),
+                password: "generated-pw-1".into(),
                 created_at: 1_700_000_000,
             },
             GeneratorHistoryEntry {
-                password: "generated-pw-2".to_string(),
+                password: "generated-pw-2".into(),
                 created_at: 1_699_999_000,
             },
         ],
@@ -194,11 +194,54 @@ fn test_generator_history_delete_confirmation_dialog_renders() {
     let app = CosmicBWardenApp {
         view: View::PasswordGenerator,
         generator_history: vec![GeneratorHistoryEntry {
-            password: "generated-pw-1".to_string(),
+            password: "generated-pw-1".into(),
             created_at: 1_700_000_000,
         }],
         generator_history_delete_pending: Some(0),
         ..Default::default()
     };
     let _ = app.view();
+}
+
+/// While the first window width is still unknown, the vault must render a
+/// *fixed* layout whose sidebar sits at `SIDEBAR_MIN_WIDTH`, not the resizable
+/// pane grid seeded with the guessed `SIDEBAR_DEFAULT_RATIO`. Building the grid
+/// here used to draw the sidebar at 35% of the window and then snap it to the
+/// pixel minimum on the first resize report, which read as a flicker/redraw.
+#[test]
+fn test_view_vault_renders_fixed_sidebar_before_window_width() {
+    let app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
+
+    // Invariant: no width has been reported yet, so the placeholder branch runs.
+    assert!(app.vault_window_width.is_none());
+    assert_eq!(
+        crate::app::state::SIDEBAR_DEFAULT_RATIO,
+        0.35,
+        "placeholder must not be seeded from SIDEBAR_DEFAULT_RATIO"
+    );
+
+    let _ = app.view();
+}
+
+/// Once the first window width is reported, the resizable split is used and the
+/// sidebar is clamped to `SIDEBAR_MIN_WIDTH`. Rendering both branches must not
+/// panic and the width gate must flip.
+#[test]
+fn test_view_vault_renders_split_after_window_width() {
+    let mut app = CosmicBWardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
+
+    let _ = app.view(); // placeholder branch
+    app.vault_window_resized(1200.0);
+    assert!(app.vault_window_width.is_some());
+
+    let _ = app.view(); // split branch after width known
+
+    let min_ratio = crate::app::state::sidebar_min_ratio(1200.0);
+    assert!((app.sidebar_ratio - min_ratio).abs() < f32::EPSILON);
 }

@@ -95,11 +95,9 @@ impl std::fmt::Debug for Response {
             Self::TpmStatus {
                 available,
                 configured,
-                server_credentials,
             } => write!(
                 f,
-                "TpmStatus {{ available: {available}, configured: {configured}, \
-                 server_credentials: {server_credentials} }}"
+                "TpmStatus {{ available: {available}, configured: {configured} }}"
             ),
             Self::TpmDiagnostics { checks } => {
                 write!(f, "TpmDiagnostics {{ checks: {} }}", checks.len())

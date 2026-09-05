@@ -59,7 +59,6 @@ fn save_after_load_writes_only_owned_fields() {
     // whose copy went stale when the agent later enabled TPM on disk.
     let mut stale = on_disk.clone();
     stale.tpm_enabled = false;
-    stale.tpm_store_server_credentials = false;
     let _ = app.update_app(Message::ConfigReceived(Ok((
         stale, false, true, false, false, 0, 0,
     ))));
@@ -78,8 +77,8 @@ fn save_after_load_writes_only_owned_fields() {
         "device_id must survive"
     );
     assert!(
-        written.tpm_enabled && written.tpm_store_server_credentials,
-        "TPM flags are the agent's; a stale UI copy must not clear them"
+        written.tpm_enabled,
+        "the TPM flag is the agent's; a stale UI copy must not clear it"
     );
     assert!(written.persist_session, "persist_session must survive");
     assert!(app.error.is_none(), "a successful save reports no error");

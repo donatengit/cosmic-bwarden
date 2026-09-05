@@ -10,14 +10,13 @@ pub async fn handle_check_tpm(state: &Arc<Mutex<State>>) -> Response {
     #[cfg(feature = "tpm")]
     {
         let available = crate::tpm::is_available().await;
-        let (configured, server_credentials) = {
+        let configured = {
             let config = match cosmic_bwarden_core::config::CosmicBWardenConfig::load_legacy() {
                 Ok(c) => c,
                 Err(_) => {
                     return Response::TpmStatus {
                         available,
                         configured: false,
-                        server_credentials: false,
                     }
                 }
             };
@@ -27,14 +26,10 @@ pub async fn handle_check_tpm(state: &Arc<Mutex<State>>) -> Response {
                     return Response::TpmStatus {
                         available,
                         configured: false,
-                        server_credentials: false,
                     }
                 }
             };
-            let blob_path = cosmic_bwarden_core::dirs::tpm_blob_file(&config.server_name(), email);
-            let hash_blob_path =
-                cosmic_bwarden_core::dirs::tpm_hash_blob_file(&config.server_name(), email);
-            (blob_path.exists(), hash_blob_path.exists())
+            cosmic_bwarden_core::dirs::tpm_blob_file(&config.server_name(), email).exists()
         };
         // Refresh the agent-side flag from blob existence, not just at startup:
         // if the blob was deleted/replaced (TPM reset, clear), `request_unlock`
@@ -46,7 +41,6 @@ pub async fn handle_check_tpm(state: &Arc<Mutex<State>>) -> Response {
         Response::TpmStatus {
             available,
             configured,
-            server_credentials,
         }
     }
     #[cfg(not(feature = "tpm"))]
@@ -55,7 +49,6 @@ pub async fn handle_check_tpm(state: &Arc<Mutex<State>>) -> Response {
         Response::TpmStatus {
             available: false,
             configured: false,
-            server_credentials: false,
         }
     }
 }

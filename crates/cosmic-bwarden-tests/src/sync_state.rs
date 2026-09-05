@@ -49,7 +49,7 @@ async fn config_sync_failed(client: &AgentClient) -> Result<(bool, bool)> {
 ///
 /// `remember_me: false` keeps tokens out of the keyring so that locking the
 /// vault leaves no way to restore a session token — the same condition the
-/// TPM degraded-unlock test produces (`test_pin_unlock_without_server_credentials_sync_fails`).
+/// TPM degraded-unlock test produces (`test_pin_unlock_without_any_credential_sync_fails`).
 #[tokio::test]
 async fn test_login_clears_stale_out_of_sync_flag() -> Result<()> {
     let env = setup_env().await?;

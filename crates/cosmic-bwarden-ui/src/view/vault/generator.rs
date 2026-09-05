@@ -115,7 +115,7 @@ impl CosmicBWardenApp {
                 .push(
                     secure_input(
                         "",
-                        pw,
+                        pw.expose(),
                         Some(Message::GeneratorRevealToggled),
                         !self.generator_result_revealed,
                     )
@@ -123,7 +123,7 @@ impl CosmicBWardenApp {
                 )
                 .push(
                     button::icon(icon::from_name("edit-copy-symbolic"))
-                        .on_press(Message::CopyToClipboard(pw.clone())),
+                        .on_press(Message::CopyToClipboard(pw.expose().to_string())),
                 )
                 .into()
         } else {
@@ -170,15 +170,16 @@ impl CosmicBWardenApp {
                     .push(
                         secure_input(
                             "",
-                            &entry.password,
+                            entry.password.expose(),
                             Some(Message::GeneratorHistoryRevealToggled(idx)),
                             !revealed,
                         )
                         .width(Length::Fill),
                     )
                     .push(
-                        button::icon(icon::from_name("edit-copy-symbolic"))
-                            .on_press(Message::CopyToClipboard(entry.password.clone())),
+                        button::icon(icon::from_name("edit-copy-symbolic")).on_press(
+                            Message::CopyToClipboard(entry.password.expose().to_string()),
+                        ),
                     )
                     .push(
                         button::icon(icon::from_name("user-trash-symbolic"))

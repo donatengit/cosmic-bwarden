@@ -105,6 +105,14 @@ impl CosmicBWardenApp {
                             self.pin_incorrect = false;
                             self.unlock_mode = UnlockMode::Password;
                             Some(Task::none())
+                        } else if e == cosmic_bwarden_core::protocol::ERR_TPM_BLOB_MISSING {
+                            // The sealed data is gone (server URL changed, TPM
+                            // reset). Retrying only burns DA attempts against a
+                            // blob that no longer exists.
+                            self.error = Some(fl!("tpm-blob-missing"));
+                            self.pin_incorrect = false;
+                            self.unlock_mode = UnlockMode::Password;
+                            Some(Task::none())
                         } else {
                             // Environmental failure (agent/config/account) —
                             // show it, don't mislabel it as a wrong PIN.
@@ -156,6 +164,40 @@ impl CosmicBWardenApp {
                 self.unlock_pin_revealed = !self.unlock_pin_revealed;
                 Some(Task::none())
             }
+            Message::SessionRestoreToggle => {
+                self.show_session_restore = !self.show_session_restore;
+                self.session_restore_password.zeroize();
+                self.session_restore_password.clear();
+                Some(Task::none())
+            }
+            Message::SessionRestorePasswordChanged(password) => {
+                self.session_restore_password = password;
+                Some(Task::none())
+            }
+            Message::SessionRestoreRevealToggled => {
+                self.session_restore_revealed = !self.session_restore_revealed;
+                Some(Task::none())
+            }
+            Message::SessionRestoreSubmitted => {
+                // Plain `Unlock`: the agent re-derives the hash and re-auths
+                // (handler::auth::reauth), which is all a dead session needs —
+                // no logout, no re-download of the vault. Deliberately does not
+                // route through UnlockSubmitted, whose PIN field would be empty
+                // here and would clear the sealed blob.
+                let password = self.session_restore_password.clone();
+                self.auth_loading = true;
+                Some(Task::perform(
+                    async move {
+                        let agent = AgentClient::new();
+                        match agent.send(auth_actions::unlock(password)).await {
+                            Ok(Response::Ack) => Ok(()),
+                            Ok(Response::Error { message }) => Err(message),
+                            _ => Err("unexpected response".to_string()),
+                        }
+                    },
+                    |res| Action::App(Message::AuthResult(res)),
+                ))
+            }
             Message::UnlockSubmitted => {
                 // If the user is (re-)enabling PIN, validate its length before we
                 // even unlock — matches the login/settings PIN rules.
@@ -188,6 +230,11 @@ impl CosmicBWardenApp {
                         self.view = View::Vault;
                         self.error = None;
                         self.pin_incorrect = false;
+                        // A successful unlock re-authenticates, so a session-restore
+                        // prompt has served its purpose.
+                        self.show_session_restore = false;
+                        self.session_restore_password.zeroize();
+                        self.session_restore_password.clear();
 
                         let mut tasks =
                             vec![fetch_sidebar_entries(self.search_id, None, None, false)];

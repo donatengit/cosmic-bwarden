@@ -81,8 +81,12 @@ pub fn start_swtpm() -> Option<SwtpmGuard> {
         return None;
     }
 
-    let ctrl_socket = state_path.join("swtpm-ctrl.sock");
-    let server_socket = state_path.join("swtpm-server.sock");
+    // tpm2-tss's swtpm TCTI derives the control socket from the data socket by
+    // appending ".ctrl" (see `%s.ctrl` in libtss2-tcti-swtpm). Naming them
+    // anything else makes `Context::new` fail — which used to fall through to
+    // the host's REAL TPM and drive it into dictionary-attack lockout.
+    let server_socket = state_path.join("swtpm.sock");
+    let ctrl_socket = state_path.join("swtpm.sock.ctrl");
 
     let process = Command::new("swtpm")
         .args([
@@ -253,18 +257,20 @@ impl TpmTestEnv {
         let mut ctx = tss_esapi::Context::new(tcti)
             .map_err(|e| anyhow::anyhow!("failed to open TPM context: {}", e))?;
 
+        // SHA-256 only. The sealing policy binds SHA-256 PCR{0,7}
+        // (`tpm::policy::pcr_selection_list`), so extending that bank is what
+        // invalidates it, and swtpm as provisioned by `swtpm_setup --tpm2` has
+        // no active SHA-1 bank. This never worked; the test simply failed
+        // earlier (at setup) for unrelated reasons, so it was never reached.
         let mut vals = DigestValues::new();
         vals.set(
             HashingAlgorithm::Sha256,
             Digest::try_from(vec![0xB1; 32])
                 .map_err(|e| anyhow::anyhow!("bad sha256 digest: {}", e))?,
         );
-        vals.set(
-            HashingAlgorithm::Sha1,
-            Digest::try_from(vec![0xB1; 20])
-                .map_err(|e| anyhow::anyhow!("bad sha1 digest: {}", e))?,
-        );
-        ctx.pcr_extend(PcrHandle::Pcr7, vals)
+        // PCR_Extend needs an authorization session for the PCR handle; without
+        // one ESAPI rejects the call with BAD_VALUE (0x0007000B).
+        ctx.execute_with_nullauth_session(|c| c.pcr_extend(PcrHandle::Pcr7, vals))
             .map_err(|e| anyhow::anyhow!("PCR 7 extend failed: {}", e))?;
         Ok(())
     }

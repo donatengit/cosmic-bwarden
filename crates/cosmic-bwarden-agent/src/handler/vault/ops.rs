@@ -20,7 +20,7 @@ pub async fn handle_get_totp(
     // GetPassword before releasing a code.
     if let (Some(entry), Some(db)) = (&entry, &state_guard.db) {
         if entry.master_password_reprompt() {
-            if let Some(err) = super::query::verify_reprompt(password, db, &state_guard) {
+            if let Some(err) = super::query::verify_reprompt(password, db) {
                 return err;
             }
         }
@@ -37,7 +37,7 @@ pub async fn handle_get_totp(
         } = &entry.data
         {
             match super::totp::generate_code(totp_secret.expose()) {
-                Ok(code) => Response::Totp { code },
+                Ok(code) => Response::Totp { code: code.into() },
                 Err(message) => Response::Error { message },
             }
         } else {

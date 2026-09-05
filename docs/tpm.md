@@ -51,31 +51,29 @@ suffices instead.
 device can decrypt your vault contents without knowing your master password.
 Protect your PIN like a password.
 
-### Stored hashed password (optional)
+### Restoring the server session
 
-PIN unlock only restores the local vault decryption keys. It does **not**
-restore a session with the Bitwarden server. This means that after a pure PIN
-unlock, sync and other server operations will fail until you authenticate with
-your master password once. The "Store hashed password" option below removes
-this limitation.
+PIN unlock restores the local vault decryption keys, and with them the server
+session: the vault keys decrypt the **session envelope**
+(`~/.local/share/cosmic-bwarden/session_<hex16>.enc`), which holds the server
+refresh token under XChaCha20-Poly1305. The agent exchanges that token for a
+fresh access token and syncs, with no master-password prompt.
 
-When "Store hashed password in this device's TPM chip" is enabled in Settings
-(disabled by default), a second sealed blob is created:
+The refresh token is a deliberately weak credential — revocable from the
+server's device list, self-expiring (30 days on Vaultwarden for a desktop
+device), and unable to change the account. It is rewritten on every successful
+refresh, so ordinary use keeps rolling the window forward.
 
-```
-~/.local/share/cosmic-bwarden/tpm_sealed_hash_<hex16>.bin
-```
+When it cannot be used — the device was offline past the expiry window, the
+session was revoked, the account requires two-factor sign-in, or the TPM state
+changed — the vault still unlocks and works offline, and you are asked for your
+master password once to restore syncing.
 
-This blob contains the master password hash used for Bitwarden server
-authentication. Unlike the vault-key blob it is **not** PIN-protected — the
-TPM hardware binding alone restricts access. After a PIN unlock the agent
-silently unseals this hash, authenticates to the server, and refreshes the
-sync without ever prompting for the master password.
-
-**Trade-off**: Fewer master password prompts, but if your PIN is compromised,
-anyone with physical access to this device and its TPM chip can authenticate to
-your Bitwarden server and modify your account without knowing your actual master
-password.
+> **No master-password hash is stored on this device.** An earlier version
+> sealed one in a second TPM blob to avoid that prompt. It was removed: it kept
+> the strongest credential in the system to save a prompt that fires at most
+> once per refresh-token lifetime, and it could not satisfy two-factor sign-in
+> anyway. Agents delete any leftover `tpm_sealed_hash_*.bin` at startup.
 
 ### TPM context probe order
 
@@ -131,33 +129,7 @@ cosmic-bwarden-cli tpm setup
 The CLI prompts for your master password (to verify and load vault keys) then
 for a PIN. The same 6-character minimum applies.
 
-## 2. Enabling the stored hashed password
-
-This setting appears only after PIN unlock is configured.
-
-### Via the UI
-
-Settings → TPM section → toggle **Store hashed password in this device's TPM
-chip** to on.
-
-### Via the CLI
-
-```sh
-cosmic-bwarden-cli tpm enable-server-credentials
-```
-
-Or disable it:
-
-```sh
-cosmic-bwarden-cli tpm disable-server-credentials
-```
-
-Note: enabling this requires the vault to be unlocked with the **master
-password** (not just the PIN), because the hash is only available after a
-full password-based login. If you've only done a PIN unlock, lock the vault,
-unlock it with the master password, and retry.
-
-## 3. Removing TPM unlock
+## 2. Removing TPM unlock
 
 To stop using PIN unlock and return to master-password-only unlocking:
 
@@ -171,7 +143,7 @@ Settings → TPM section → **Remove PIN unlock**.
 cosmic-bwarden-cli tpm remove
 ```
 
-This deletes both blob files for the current account. The TPM primary key is
+This deletes the sealed blob for the current account. The TPM primary key is
 also destroyed (it is re-derived from the hardware seed on demand, so there is
 nothing else to clean up).
 
@@ -223,6 +195,10 @@ to see the same four-item report in the terminal.
 - **Backup**: the blob file can be backed up but is useless without the original
   TPM hardware. Losing the blob (or the machine) requires re-running `tpm setup`
   on the same hardware after unlocking with the master password.
+- **No stored master password**: the master-password hash is derived per unlock,
+  sent to the server, and dropped — it is never written to a TPM blob, the
+  session envelope, or agent state. The session envelope holds only the refresh
+  token, and an expired one costs a master-password prompt by design.
 - **DA lockout**: the default TPM DA lockout policy applies. On most TPM 2.0
   firmware this is 32 failures before a recovery lockout of ~24 hours. The raw
   lockout interval depends on the platform — check `tpm2_getcap properties-variable`
@@ -235,7 +211,8 @@ exercise the full flow against a live Vaultwarden container. They require a
 software TPM emulator (`swtpm`) in the test environment. Run with:
 
 ```sh
-cargo test -p cosmic-bwarden-tests vault::tpm -- --test-threads=1
+cargo test -p cosmic-bwarden-tests --features tpm-smoke -- tpm_lifecycle --test-threads=1
 ```
 
-(requires Docker or Podman, and `swtpm` installed).
+(requires Docker or Podman, `swtpm` + `swtpm_setup` in PATH, and a
+`target/debug/cosmic-bwarden-agent-tpm` built with `--features tpm`.)

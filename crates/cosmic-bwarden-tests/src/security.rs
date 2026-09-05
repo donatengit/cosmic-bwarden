@@ -150,7 +150,7 @@ async fn test_reprompt() -> Result<()> {
         })
         .await?;
     if let Response::Password { password: p } = res {
-        assert_eq!(p, "secret");
+        assert_eq!(p.expose(), "secret");
     } else {
         anyhow::bail!("Expected password");
     }
@@ -316,6 +316,29 @@ async fn test_token_leakage() -> Result<()> {
     let json: serde_json::Value = serde_json::from_str(&content)?;
     assert!(json.get("access_token").is_none());
     assert!(json.get("refresh_token").is_none());
+
+    // The data dir holds the session envelope and the TPM blobs. Nothing there
+    // may contain a token in the clear either — the cache check above would
+    // happily pass while a bearer credential sat in plaintext next door.
+    // "eyJ" is the base64 prefix every JWT starts with (`{"`); matching it by
+    // chance in ciphertext is ~1e-5 per run, which is worth the coverage.
+    for entry in walkdir::WalkDir::new(&env.data_home).into_iter().flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let bytes = std::fs::read(path)?;
+        assert!(
+            !bytes.windows(3).any(|w| w == b"eyJ".as_slice()),
+            "possible plaintext token in {}",
+            path.display()
+        );
+        assert!(
+            !bytes.windows(13).any(|w| w == b"refresh_token".as_slice()),
+            "literal 'refresh_token' in {}",
+            path.display()
+        );
+    }
 
     Ok(())
 }

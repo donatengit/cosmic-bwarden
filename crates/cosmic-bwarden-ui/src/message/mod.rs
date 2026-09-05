@@ -2,7 +2,7 @@ use cosmic::iced::window;
 use cosmic::widget;
 use cosmic::widget::ToastId;
 use cosmic_bwarden_core::config::CosmicBWardenConfig;
-use cosmic_bwarden_core::db::Entry;
+use cosmic_bwarden_core::db::{Entry, Secret};
 use cosmic_bwarden_core::protocol::{
     EntryType, GeneratorHistoryEntry, GeneratorSettings, SidebarEntry,
 };
@@ -60,8 +60,8 @@ pub enum RepromptIntent {
 /// warnings) — boxing is free here because the payload is transient.
 #[derive(Clone)]
 pub enum OnDemandPayload {
-    Password(String),
-    Totp(String),
+    Password(Secret),
+    Totp(Secret),
     Entry(Box<Entry>),
 }
 
@@ -169,7 +169,7 @@ pub enum Message {
     // Applet popup: copy actions
     AppletCopyPrimary(String),
     AppletCopySecret(String),
-    AppletSecretReceived(Result<String, (String, String)>),
+    AppletSecretReceived(Result<Secret, (String, String)>),
     AppletOpenInVault(String),
     AppletOpenLink(String),
     AppletQuitMenuToggle,
@@ -230,7 +230,7 @@ pub enum Message {
     MainWindowPinSubmitted,
     /// Result of a main-window PIN unlock attempt (mirror of `AppletPinResult`).
     MainWindowPinResult(Result<(), String>),
-    TpmStatusReceived(Result<(bool, bool, bool), String>),
+    TpmStatusReceived(Result<(bool, bool), String>),
     TpmDaStatusReceived(Option<cosmic_bwarden_core::protocol::TpmDaStatus>),
     TpmDiagnosticsReceived(Vec<(String, bool, String)>),
     TpmSetupFormToggle,
@@ -241,8 +241,10 @@ pub enum Message {
     TpmSetupResult(Result<(), String>),
     TpmDisableSubmitted,
     TpmDisableResult(Result<(), String>),
-    TpmServerCredentialsToggled(bool),
-    TpmServerCredentialsResult(Result<(), String>),
+    SessionRestoreToggle,
+    SessionRestorePasswordChanged(String),
+    SessionRestoreRevealToggled,
+    SessionRestoreSubmitted,
 
     // Password generator pane
     GeneratorViewClicked,
@@ -259,7 +261,7 @@ pub enum Message {
     /// persisted "last used" settings — that only happens on the next Generate.
     GeneratorResetClicked,
     GeneratorGenerateClicked,
-    GeneratorGenerated(Result<String, String>),
+    GeneratorGenerated(Result<Secret, String>),
     GeneratorRevealToggled,
     GeneratorSettingsReceived(Result<GeneratorSettings, String>),
     GeneratorHistoryReceived(Result<Vec<GeneratorHistoryEntry>, String>),
@@ -273,7 +275,7 @@ pub enum Message {
 
     // Applet popup: quick-generate (last-saved settings, copies to clipboard)
     AppletGeneratePasswordRequested,
-    AppletGeneratePasswordReceived(Result<String, String>),
+    AppletGeneratePasswordReceived(Result<Secret, String>),
 }
 
 #[cfg(test)]

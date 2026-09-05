@@ -1,7 +1,6 @@
 use crate::app::applet_search;
 use crate::app::state::CosmicBWardenApp;
 use crate::app::tasks::{fetch_applet_search, fetch_sidebar_entries};
-use crate::app::update::auth_actions;
 use crate::message::{Message, UnlockMode, View};
 use cosmic::app::Task;
 use cosmic::Action;
@@ -16,8 +15,7 @@ pub(super) fn check_tpm_task() -> Task<Message> {
                 Ok(Response::TpmStatus {
                     available,
                     configured,
-                    server_credentials,
-                }) => Ok((available, configured, server_credentials)),
+                }) => Ok((available, configured)),
                 Ok(Response::Error { message }) => Err(message),
                 _ => Err("unexpected response to CheckTpm".to_string()),
             }
@@ -252,11 +250,10 @@ impl CosmicBWardenApp {
             }
             Message::TpmStatusReceived(res) => {
                 match res {
-                    Ok((available, configured, server_credentials)) => {
+                    Ok((available, configured)) => {
                         self.tpm_status_known = true;
                         self.tpm_available = available;
                         self.tpm_configured = configured;
-                        self.tpm_server_credentials = server_credentials;
                         // Promote the unlock form to PIN when a PIN is
                         // configured — but only while the unlock view is
                         // actually showing (never while unlocked, where it
@@ -304,34 +301,6 @@ impl CosmicBWardenApp {
             }
             Message::TpmDiagnosticsReceived(checks) => {
                 self.tpm_diagnostics = checks;
-                Some(Task::none())
-            }
-            Message::TpmServerCredentialsToggled(on) => {
-                self.tpm_error = None;
-                let action = auth_actions::tpm_server_credentials(on);
-                Some(Task::perform(
-                    async move {
-                        let agent = AgentClient::new();
-                        match agent.send(action).await {
-                            Ok(Response::Ack) => Ok(()),
-                            Ok(Response::Error { message }) => Err(message),
-                            _ => Err("unexpected response".to_string()),
-                        }
-                    },
-                    |res| Action::App(Message::TpmServerCredentialsResult(res)),
-                ))
-            }
-            Message::TpmServerCredentialsResult(res) => {
-                match res {
-                    Ok(()) => {
-                        self.tpm_error = None;
-                        return Some(check_tpm_task());
-                    }
-                    Err(e) => {
-                        tracing::error!("TPM server credentials toggle failed: {}", e);
-                        self.tpm_error = Some(e);
-                    }
-                }
                 Some(Task::none())
             }
             Message::RefreshStateInternal => {

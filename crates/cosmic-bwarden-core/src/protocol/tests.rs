@@ -53,12 +53,12 @@ fn action_debug_never_prints_secrets() {
 #[test]
 fn response_debug_never_prints_secrets() {
     let r = Response::Password {
-        password: "leaked-pw".to_string(),
+        password: "leaked-pw".into(),
     };
     assert!(!format!("{r:?}").contains("leaked-pw"));
 
     let r = Response::Totp {
-        code: "123456".to_string(),
+        code: "123456".into(),
     };
     assert!(!format!("{r:?}").contains("123456"));
 
@@ -69,13 +69,13 @@ fn response_debug_never_prints_secrets() {
     assert!(format!("{r:?}").contains("boom"));
 
     let r = Response::GeneratedPassword {
-        password: "hunter2-generated".to_string(),
+        password: "hunter2-generated".into(),
     };
     assert!(!format!("{r:?}").contains("hunter2-generated"));
 
     let r = Response::PasswordHistory {
         entries: vec![GeneratorHistoryEntry {
-            password: "old-generated-secret".to_string(),
+            password: "old-generated-secret".into(),
             created_at: 0,
         }],
     };
@@ -101,4 +101,34 @@ fn action_decode_from_arbitrary_bytes_never_panics() {
     for cut in 0..valid.len() {
         let _ = postcard::from_bytes::<Action>(&valid[..cut]);
     }
+}
+
+/// `Secret` is `#[serde(transparent)]`, so moving these fields from `String`
+/// to `Secret` for zeroize-on-drop must not change a single wire byte — no
+/// protocol bump, no skew with an older peer. Pinned against the raw postcard
+/// encoding of the equivalent plain-string payload.
+#[test]
+fn secret_fields_are_wire_identical_to_plain_strings() {
+    #[derive(serde::Serialize)]
+    struct PlainPassword<'a> {
+        password: &'a str,
+    }
+
+    let secret = postcard::to_allocvec(&Response::Password {
+        password: "wire-check".into(),
+    })
+    .expect("encode Secret form");
+
+    // Same variant index, then the transparent string payload.
+    let mut plain = postcard::to_allocvec(&PlainPassword {
+        password: "wire-check",
+    })
+    .expect("encode plain form");
+    let mut expected = secret[..secret.len() - plain.len()].to_vec();
+    expected.append(&mut plain);
+
+    assert_eq!(
+        secret, expected,
+        "Secret must serialize exactly like the bare string it replaced"
+    );
 }

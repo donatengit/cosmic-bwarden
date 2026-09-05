@@ -2,7 +2,7 @@ use cosmic::app::Core;
 use cosmic::iced::window;
 use cosmic::widget;
 use cosmic_bwarden_core::config::CosmicBWardenConfig;
-use cosmic_bwarden_core::db::Entry;
+use cosmic_bwarden_core::db::{Entry, Secret};
 use cosmic_bwarden_core::protocol::{EntryType, SidebarEntry};
 use std::collections::{HashMap, HashSet};
 
@@ -49,8 +49,13 @@ pub enum VaultPane {
 pub const SIDEBAR_MIN_WIDTH: f32 = 340.0;
 /// Upper drag limit for the sidebar split, as a share of the window width.
 pub const SIDEBAR_MAX_RATIO: f32 = 0.60;
-/// Sidebar share used only until the first window-size report arrives, at
-/// which point the split snaps to exactly [`SIDEBAR_MIN_WIDTH`].
+/// Initial split ratio for the vault window's pane grid, used only to seed
+/// `vault_panes`/`sidebar_ratio` before the first real window width is known.
+/// With `view_vault`'s placeholder layout the vault window never renders this
+/// ratio — it renders a fixed sidebar at [`SIDEBAR_MIN_WIDTH`] until
+/// `vault_window_resized` reports, so this value must not be visible as a
+/// starting geometry (it was drawn as-is once, causing the sidebar to jump on
+/// the first resize report).
 pub const SIDEBAR_DEFAULT_RATIO: f32 = 0.35;
 
 /// Lowest allowed sidebar ratio for the given window width: the ratio that
@@ -185,8 +190,6 @@ pub struct CosmicBWardenApp {
     pub tpm_status_known: bool,
     pub tpm_available: bool,
     pub tpm_configured: bool,
-    /// True when the master_password_hash is also sealed in the TPM.
-    pub tpm_server_credentials: bool,
     /// Which form the unlock views show. Event-driven: `PinRequested`/
     /// `UnlockRequested` set it explicitly, `TpmStatusReceived` promotes
     /// Password→Pin when a PIN is configured, but only while the view is
@@ -209,6 +212,12 @@ pub struct CosmicBWardenApp {
     pub show_tpm_setup_form: bool,
     pub tpm_setup_pin: String,
     pub tpm_setup_pin_revealed: bool,
+    /// Inline "restore session" prompt in the sidebar: the vault is open but
+    /// the server session is gone, which a master-password unlock repairs
+    /// without the full logout the old affordance forced.
+    pub show_session_restore: bool,
+    pub session_restore_password: String,
+    pub session_restore_revealed: bool,
     pub show_tpm_disable_form: bool,
     /// Diagnostic check results populated by CheckTpmDiagnostics (shown when !tpm_available).
     pub tpm_diagnostics: Vec<(String, bool, String)>,
@@ -234,7 +243,7 @@ pub struct CosmicBWardenApp {
     /// last-saved settings until Generate is pressed (Reset restores schema
     /// defaults locally, without touching what's persisted).
     pub generator_settings: cosmic_bwarden_core::protocol::GeneratorSettings,
-    pub generator_result: Option<String>,
+    pub generator_result: Option<Secret>,
     pub generator_result_revealed: bool,
     pub generator_history: Vec<cosmic_bwarden_core::protocol::GeneratorHistoryEntry>,
     /// Per-row reveal state, keyed by index into `generator_history`. Safe to
@@ -264,7 +273,7 @@ pub struct CosmicBWardenApp {
     /// Field a secret fetch was started for (MVU tests assert this).
     pub pending_secret_field: Option<String>,
     /// Live TOTP code from `GetTotp`, not the stored seed.
-    pub totp_code: Option<String>,
+    pub totp_code: Option<Secret>,
 }
 
 impl Default for CosmicBWardenApp {
@@ -343,7 +352,6 @@ impl Default for CosmicBWardenApp {
             tpm_status_known: false,
             tpm_available: false,
             tpm_configured: false,
-            tpm_server_credentials: false,
             unlock_mode: UnlockMode::default(),
             password_preferred: false,
             applet_pin: String::new(),
@@ -353,6 +361,9 @@ impl Default for CosmicBWardenApp {
             show_tpm_setup_form: false,
             tpm_setup_pin: String::new(),
             tpm_setup_pin_revealed: false,
+            show_session_restore: false,
+            session_restore_password: String::new(),
+            session_restore_revealed: false,
             show_tpm_disable_form: false,
             tpm_diagnostics: Vec::new(),
             tpm_error: None,

@@ -213,7 +213,7 @@ async fn test_secure_note_full_crud() -> Result<()> {
         })
         .await?;
     if let Response::Password { password: content } = res {
-        assert_eq!(content, "Initial secret content");
+        assert_eq!(content.expose(), "Initial secret content");
     } else {
         anyhow::bail!("Expected Password response for SecureNote");
     }
@@ -249,7 +249,7 @@ async fn test_secure_note_full_crud() -> Result<()> {
         })
         .await?;
     if let Response::Password { password: content } = res {
-        assert_eq!(content, "Updated secret content");
+        assert_eq!(content.expose(), "Updated secret content");
     } else {
         anyhow::bail!("Expected Password response after update");
     }

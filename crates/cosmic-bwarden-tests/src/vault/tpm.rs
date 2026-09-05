@@ -120,7 +120,6 @@ async fn test_tpm_availability_check() -> Result<()> {
         Response::TpmStatus {
             available,
             configured: _,
-            server_credentials: _,
         } => {
             // With swtpm running, TPM should be available if agent has TPM support.
             // If agent lacks --features tpm, available == false is expected.

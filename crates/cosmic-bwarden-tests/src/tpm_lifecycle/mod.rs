@@ -24,7 +24,7 @@ mod errors_and_setup;
 mod full_lifecycle;
 mod lockout;
 mod restart;
-mod server_credentials;
+mod session_restore;
 mod state_changed;
 
 pub(super) const EMAIL: &str = "tpm-lifecycle@example.com";
@@ -138,34 +138,30 @@ pub(super) async fn unlock_with_password(env: &TpmTestEnv, password: &str) -> Re
         .map_err(Into::into)
 }
 
-pub(super) async fn enable_server_credentials(env: &TpmTestEnv) -> Result<Response> {
-    env.client()
-        .send(Action::EnableTpmServerCredentials)
-        .await
-        .map_err(Into::into)
+/// Path of the agent's encrypted session envelope for `email`. Resolved
+/// against the *agent's* XDG_DATA_HOME and profile, not this test process's,
+/// and via core's own `account_hash` so the two can never drift.
+pub(super) fn session_envelope_path(env: &TpmTestEnv, email: &str) -> std::path::PathBuf {
+    let server = env.vault_url();
+    env.inner
+        .data_home
+        .join(format!("cosmic-bwarden-{}", env.inner.profile))
+        .join(format!(
+            "session_{}.enc",
+            cosmic_bwarden_core::dirs::account_hash(server, email)
+        ))
 }
 
-pub(super) async fn disable_server_credentials(env: &TpmTestEnv) -> Result<Response> {
-    env.client()
-        .send(Action::DisableTpmServerCredentials)
-        .await
-        .map_err(Into::into)
-}
-
-/// Assert `CheckTpm.server_credentials` matches the expected value.
-pub(super) async fn assert_server_credentials(env: &TpmTestEnv, expect: bool) -> Result<()> {
-    let res = env.client().send(Action::CheckTpm).await?;
-    match res {
-        Response::TpmStatus {
-            server_credentials, ..
-        } => {
-            assert_eq!(
-                server_credentials, expect,
-                "server_credentials mismatch (expected {})",
-                expect
-            );
+/// Delete the stored refresh-token envelope, forcing the next PIN unlock to
+/// fall through to whatever weaker source remains. Lets a test isolate one
+/// re-auth source instead of silently passing on the first one that works.
+pub(super) fn remove_session_envelope(env: &TpmTestEnv, email: &str) -> Result<()> {
+    let path = session_envelope_path(env, email);
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            anyhow::bail!("expected a session envelope at {}", path.display())
         }
-        other => anyhow::bail!("CheckTpm returned unexpected response: {:?}", other),
+        Err(e) => Err(e.into()),
     }
-    Ok(())
 }

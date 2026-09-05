@@ -1,5 +1,6 @@
 pub mod config;
 pub mod login;
+pub(crate) mod reauth;
 pub mod register;
 pub mod tpm_pin;
 pub mod unlock;
@@ -56,12 +57,6 @@ pub async fn handle_request(action: Action, state: &Arc<Mutex<State>>) -> Respon
         }
         Action::UnlockWithPin { pin } => tpm_pin::handle_unlock_with_pin(pin, state).await,
         Action::DisableTpmPin => tpm_pin::handle_disable_tpm_pin(state).await,
-        Action::EnableTpmServerCredentials => {
-            tpm_pin::handle_enable_tpm_server_credentials(state).await
-        }
-        Action::DisableTpmServerCredentials => {
-            tpm_pin::handle_disable_tpm_server_credentials(state).await
-        }
         _ => Response::Error {
             message: "not implemented in auth handler".to_string(),
         },

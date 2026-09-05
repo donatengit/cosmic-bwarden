@@ -2,9 +2,18 @@ use crate::app::CosmicBWardenApp;
 use crate::fl;
 use crate::message::{Message, View};
 use cosmic::iced::{Alignment, Length};
-use cosmic::widget::{button, container, icon, list_column, segmented_button, text};
+use cosmic::widget::{button, container, icon, list_column, secure_input, segmented_button, text};
 use cosmic::Element;
 use cosmic_bwarden_core::protocol::EntryType;
+
+/// True when the vault is open but the server session is gone — the one sync
+/// failure a master-password unlock repairs in place, without a logout.
+///
+/// Matches the agent's stable marker rather than prose: the human-readable
+/// reason after it (2FA required, server unreachable, …) is free to change.
+pub(crate) fn is_session_expired(sync_failed: bool, error: Option<&str>) -> bool {
+    sync_failed && error.is_some_and(|e| e.contains(cosmic_bwarden_core::protocol::ERR_NO_SESSION))
+}
 
 /// Model for the type-filter segmented control. Item order is matched to
 /// `filter_to_idx` / `idx_to_filter` (All, Logins, Notes, SSH Keys).
@@ -119,12 +128,7 @@ impl CosmicBWardenApp {
                 ),
         );
 
-        let session_expired = self.sync_failed
-            && self
-                .error
-                .as_deref()
-                .map(|e| e.contains("session token"))
-                .unwrap_or(false);
+        let session_expired = is_session_expired(self.sync_failed, self.error.as_deref());
 
         // Sync is icon-only like Lock/Logout; its state shows through the
         // icon + destructive class, the tooltip names the state.
@@ -136,10 +140,13 @@ impl CosmicBWardenApp {
                 .center_y(Length::Fixed(32.0))
                 .into()
         } else if session_expired {
+            // A master-password unlock re-authenticates and syncs in one step;
+            // logging out would additionally discard the account and force a
+            // full re-download for no benefit.
             button::icon(icon::from_name("dialog-password-symbolic"))
                 .class(cosmic::theme::Button::Destructive)
                 .tooltip(fl!("session-expired"))
-                .on_press(Message::LogoutClicked)
+                .on_press(Message::SessionRestoreToggle)
                 .into()
         } else if self.sync_failed {
             button::icon(icon::from_name("network-error-symbolic"))
@@ -182,6 +189,60 @@ impl CosmicBWardenApp {
             }
         }
 
+        if self.show_session_restore {
+            sidebar = sidebar.push(text::caption(fl!("restore-session-note")));
+            sidebar = sidebar.push(
+                secure_input(
+                    fl!("master-password"),
+                    &self.session_restore_password,
+                    Some(Message::SessionRestoreRevealToggled),
+                    !self.session_restore_revealed,
+                )
+                .on_input(Message::SessionRestorePasswordChanged)
+                .on_submit(|_| Message::SessionRestoreSubmitted),
+            );
+            sidebar = sidebar.push(
+                cosmic::widget::row::with_capacity(2)
+                    .spacing(5)
+                    .push(
+                        button::suggested(fl!("restore-session"))
+                            .on_press(Message::SessionRestoreSubmitted),
+                    )
+                    .push(button::standard(fl!("cancel")).on_press(Message::SessionRestoreToggle)),
+            );
+        }
+
         sidebar.into()
+    }
+}
+
+#[cfg(test)]
+mod session_expired_tests {
+    use super::is_session_expired;
+    use cosmic_bwarden_core::protocol::ERR_NO_SESSION;
+
+    /// The agent prefixes the reason with a stable marker so the UI can offer
+    /// "restore session" instead of the blunt logout.
+    #[test]
+    fn marker_selects_the_restore_affordance() {
+        let msg = format!("{ERR_NO_SESSION}: two-factor authentication is required");
+        assert!(is_session_expired(true, Some(&msg)));
+    }
+
+    /// An ordinary sync failure must keep the plain retry affordance — offering
+    /// a master-password prompt for a network outage is just noise.
+    #[test]
+    fn other_sync_failures_are_not_session_expiry() {
+        assert!(!is_session_expired(
+            true,
+            Some("sync failed: connection refused")
+        ));
+    }
+
+    #[test]
+    fn healthy_state_is_never_session_expiry() {
+        let msg = format!("{ERR_NO_SESSION}: whatever");
+        assert!(!is_session_expired(false, Some(&msg)));
+        assert!(!is_session_expired(true, None));
     }
 }

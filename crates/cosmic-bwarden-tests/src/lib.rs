@@ -31,6 +31,8 @@ mod pinned_ops;
 #[cfg(test)]
 mod security;
 #[cfg(test)]
+mod session_envelope;
+#[cfg(test)]
 mod ssh_test_utils;
 #[cfg(test)]
 mod sync_persistence;

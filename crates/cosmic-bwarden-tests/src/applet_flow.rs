@@ -440,7 +440,7 @@ async fn test_get_password_for_secure_note() -> Result<()> {
         .send(Action::GetPassword { id, password: None })
         .await?;
     if let Response::Password { password } = res {
-        assert_eq!(password, "secret note content");
+        assert_eq!(password.expose(), "secret note content");
     } else {
         anyhow::bail!("Expected password response, got {:?}", res);
     }
@@ -522,7 +522,7 @@ async fn test_get_password_reprompt_flow() -> Result<()> {
         })
         .await?;
     if let Response::Password { password: p } = res {
-        assert_eq!(p, "topsecret");
+        assert_eq!(p.expose(), "topsecret");
     } else {
         anyhow::bail!("Expected password response, got {:?}", res);
     }

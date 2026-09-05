@@ -88,34 +88,36 @@ pub async fn handle_setup_tpm_pin(
             .map(|(k, v)| (k.clone(), v.expose().to_string()))
             .collect();
 
-        if let Err(e) = cosmic_bwarden_core::vault::unlock_from_keys(
+        let (vault_keys, _org_keys) = match cosmic_bwarden_core::vault::unlock_from_keys(
             &identity.keys,
             prot_key,
             db.protected_private_key.as_ref().map(|s| s.expose()),
             &org_keys,
         ) {
-            return Response::Error {
-                message: format!("master password incorrect: {}", e),
-            };
-        }
+            Ok(k) => k,
+            Err(e) => {
+                return Response::Error {
+                    message: format!("master password incorrect: {}", e),
+                }
+            }
+        };
 
-        // Seal the identity keys into the TPM.
-        let blob_path = cosmic_bwarden_core::dirs::tpm_blob_file(&config.server_name(), &email);
+        // Seal the VAULT symmetric keys, not `identity.keys`. `handle_unlock_with_pin`
+        // uses the unsealed bytes directly as `state.keys` and feeds them to
+        // `decrypt_org_keys` — the identity/KDF keys would decrypt nothing, and
+        // `handle_setup_tpm_pin_from_unlocked` already seals the vault keys.
+        let server = config.server_name();
+        let blob_path = cosmic_bwarden_core::dirs::tpm_blob_file(&server, &email);
 
-        if let Err(e) = crate::tpm::seal(&identity.keys, &pin, &blob_path).await {
+        if let Err(e) = crate::tpm::seal(&vault_keys, &pin, &blob_path).await {
             let msg = format!("TPM seal failed: {:#}", e);
             log::error!("{}", msg);
             return Response::Error { message: msg };
         }
 
-        // Fresh enable: reset all other TPM stores so re-enabling never inherits
-        // stale state (the vault-key blob was just overwritten by the seal above).
-        super::reset_server_credentials_store(&config.server_name(), &email);
-
         // Update config.
         let mut updated_config = config;
         updated_config.tpm_enabled = true;
-        updated_config.tpm_store_server_credentials = false;
         if let Err(e) = updated_config.save_legacy() {
             log::error!("TPM setup: failed to save config: {}", e);
         }
@@ -183,7 +185,8 @@ pub async fn handle_setup_tpm_pin_from_unlocked(
             }
         };
 
-        let blob_path = cosmic_bwarden_core::dirs::tpm_blob_file(&config.server_name(), &email);
+        let server = config.server_name();
+        let blob_path = cosmic_bwarden_core::dirs::tpm_blob_file(&server, &email);
 
         if let Err(e) = crate::tpm::seal(&keys, &pin, &blob_path).await {
             let msg = format!("TPM seal failed: {:#}", e);
@@ -191,13 +194,8 @@ pub async fn handle_setup_tpm_pin_from_unlocked(
             return Response::Error { message: msg };
         }
 
-        // Fresh enable: reset all other TPM stores so re-enabling never inherits
-        // stale state (the vault-key blob was just overwritten by the seal above).
-        super::reset_server_credentials_store(&config.server_name(), &email);
-
         let mut updated_config = config;
         updated_config.tpm_enabled = true;
-        updated_config.tpm_store_server_credentials = false;
         if let Err(e) = updated_config.save_legacy() {
             log::error!("TPM setup: failed to save config: {}", e);
         }

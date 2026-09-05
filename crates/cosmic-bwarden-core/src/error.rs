@@ -92,6 +92,9 @@ pub enum Error {
     #[error("new device verification required")]
     NewDeviceVerificationRequired,
 
+    #[error("session envelope: {reason}")]
+    SessionEnvelope { reason: String },
+
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 

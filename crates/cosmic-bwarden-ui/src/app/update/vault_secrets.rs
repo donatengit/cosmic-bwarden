@@ -49,7 +49,7 @@ impl CosmicBWardenApp {
     fn copy_secret_field(&mut self, id: String, field: String) -> Task<Message> {
         if field == "TOTP" {
             if let Some(code) = self.totp_code.clone() {
-                return self.copy_to_clipboard_with_autoclear(code);
+                return self.copy_to_clipboard_with_autoclear(code.expose().to_string());
             }
         } else if let Some(entry) = &self.selected_entry {
             if let Some(plain) = vault_actions::field_plaintext(entry, &field) {
@@ -86,7 +86,7 @@ impl CosmicBWardenApp {
                     OnDemandPayload::Password(p) => {
                         if let Some(entry) = &mut self.selected_entry {
                             if let EntryData::Login { password, .. } = &mut entry.data {
-                                *password = Some(Secret::from(p.clone()));
+                                *password = Some(p.clone());
                             }
                         }
                         to_copy = Some(p);
@@ -96,7 +96,7 @@ impl CosmicBWardenApp {
                         to_copy = Some(code);
                     }
                     OnDemandPayload::Entry(entry) => {
-                        to_copy = vault_actions::field_plaintext(&entry, &field);
+                        to_copy = vault_actions::field_plaintext(&entry, &field).map(Secret::from);
                         self.selected_entry = Some(*entry);
                     }
                 }
@@ -108,7 +108,7 @@ impl CosmicBWardenApp {
                 self.reprompt_intent = None;
                 if copy {
                     if let Some(plain) = to_copy {
-                        return self.copy_to_clipboard_with_autoclear(plain);
+                        return self.copy_to_clipboard_with_autoclear(plain.expose().to_string());
                     }
                 }
                 Task::none()

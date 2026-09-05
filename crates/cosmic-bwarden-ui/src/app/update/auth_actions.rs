@@ -67,17 +67,6 @@ pub fn logout() -> AgentAction {
     AgentAction::Logout
 }
 
-/// Persist the "store server credentials in the TPM" toggle. Must match the
-/// switch the user just flipped — sending the inverse silently leaves the
-/// setting opposite to what the UI shows.
-pub fn tpm_server_credentials(enabled: bool) -> AgentAction {
-    if enabled {
-        AgentAction::EnableTpmServerCredentials
-    } else {
-        AgentAction::DisableTpmServerCredentials
-    }
-}
-
 /// What the PIN field on the master-password unlock screen should do once the
 /// vault is open. Each arm routes to a different result message, so this is an
 /// enum rather than an `Option<AgentAction>`.
@@ -171,18 +160,6 @@ mod tests {
             } => assert_eq!(device_verification_code.as_deref(), Some("123456")),
             other => panic!("expected Login, got {}", other.variant_name()),
         }
-    }
-
-    #[test]
-    fn server_credentials_toggle_matches_the_switch() {
-        assert!(matches!(
-            tpm_server_credentials(true),
-            AgentAction::EnableTpmServerCredentials
-        ));
-        assert!(matches!(
-            tpm_server_credentials(false),
-            AgentAction::DisableTpmServerCredentials
-        ));
     }
 
     #[test]

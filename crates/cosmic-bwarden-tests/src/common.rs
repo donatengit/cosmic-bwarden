@@ -504,7 +504,8 @@ pub async fn logout_login_cycle(
         })
         .await?;
     if let Response::Error { message } = res {
-        if !message.contains("no API session token") && !message.contains("locked") {
+        let no_session = message.contains(cosmic_bwarden_core::protocol::ERR_NO_SESSION);
+        if !no_session && !message.contains("locked") {
             anyhow::bail!("Expected session-token or locked error, got: {}", message);
         }
     } else {

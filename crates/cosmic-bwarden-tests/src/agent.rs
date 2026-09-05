@@ -136,8 +136,9 @@ async fn test_unlock_after_restart_is_not_routed_back_to_login() -> Result<()> {
         .await?;
 
     // Kill and restart the agent, simulating a fresh process with no in-memory
-    // access/refresh tokens (the default build has no keyring backend, so tokens
-    // are never persisted across restarts).
+    // access/refresh tokens. The session envelope restores a refresh token on
+    // unlock (see session_envelope.rs); this test only cares that the restart
+    // is not misrouted back to a full login.
     if let Some(mut proc) = env.agent_process.take() {
         proc.kill()?;
     }

@@ -1,4 +1,4 @@
-mod auth;
+pub(crate) mod auth;
 mod generator;
 mod subscription_handler;
 mod vault;
@@ -33,9 +33,7 @@ async fn dispatch(action: Action, state: &Arc<Mutex<State>>) -> Response {
         | Action::SetupTpmPin { .. }
         | Action::SetupTpmPinFromUnlocked { .. }
         | Action::UnlockWithPin { .. }
-        | Action::DisableTpmPin
-        | Action::EnableTpmServerCredentials
-        | Action::DisableTpmServerCredentials => auth::handle_request(action, state).await,
+        | Action::DisableTpmPin => auth::handle_request(action, state).await,
         // Vault operations
         Action::Sync
         | Action::GetEntries { .. }
