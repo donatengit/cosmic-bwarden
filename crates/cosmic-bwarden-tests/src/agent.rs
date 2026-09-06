@@ -7,7 +7,7 @@ use tokio::time::{sleep, Duration};
 #[tokio::test]
 async fn test_agent_login_lifecycle() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "agent-test@example.com";
     let password = "testpassword123";
@@ -67,7 +67,7 @@ async fn test_agent_login_lifecycle() -> Result<()> {
 #[tokio::test]
 async fn test_remember_email() -> Result<()> {
     let mut env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "remember-test@example.com";
     let password = "rempassword123";
@@ -92,6 +92,8 @@ async fn test_remember_email() -> Result<()> {
     // Kill the agent
     if let Some(mut proc) = env.agent_process.take() {
         proc.kill()?;
+        // Reap before restarting: see pinned_ops.rs.
+        let _ = proc.wait();
     }
 
     // Restart the agent
@@ -114,7 +116,7 @@ async fn test_remember_email() -> Result<()> {
 #[tokio::test]
 async fn test_unlock_after_restart_is_not_routed_back_to_login() -> Result<()> {
     let mut env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "restart-unlock@example.com";
     let password = "restartpassword123";
@@ -141,6 +143,8 @@ async fn test_unlock_after_restart_is_not_routed_back_to_login() -> Result<()> {
     // is not misrouted back to a full login.
     if let Some(mut proc) = env.agent_process.take() {
         proc.kill()?;
+        // Reap before restarting: see pinned_ops.rs.
+        let _ = proc.wait();
     }
 
     let agent_process = env.start_agent()?;

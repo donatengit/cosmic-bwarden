@@ -55,7 +55,7 @@ async fn get_entry(client: &AgentClient, id: &str) -> Result<cosmic_bwarden_core
 #[tokio::test]
 async fn test_all_modifications_survive_forced_sync() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "sync-persist@example.com";
     let password = "syncpersist123";

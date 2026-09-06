@@ -24,7 +24,7 @@ async fn login(client: &AgentClient, vault_url: &str, email: &str, password: &st
 #[tokio::test]
 async fn test_card_full_update() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "card-update@example.com";
     let password = "cardpassword456";
@@ -180,7 +180,7 @@ async fn test_card_full_update() -> Result<()> {
 #[tokio::test]
 async fn test_identity_full_update() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "identity-full@example.com";
     let password = "identitypassword456";

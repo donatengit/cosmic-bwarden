@@ -27,7 +27,7 @@ async fn login(client: &AgentClient, vault_url: &str, email: &str, password: &st
 #[tokio::test]
 async fn test_logout_clears_account_state() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "logout-state@example.com";
     let password = "logoutpassword123";
@@ -79,7 +79,7 @@ async fn test_logout_clears_account_state() -> Result<()> {
 #[tokio::test]
 async fn test_lock_preserves_account_unlock_restores_entries() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "lock-restore@example.com";
     let password = "lockrestorepass123";
@@ -188,7 +188,7 @@ async fn test_lock_preserves_account_unlock_restores_entries() -> Result<()> {
 #[tokio::test]
 async fn test_applet_unlock_after_lock() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "applet-unlock@example.com";
     let password = "appletpassword123";
@@ -242,7 +242,7 @@ async fn test_applet_unlock_after_lock() -> Result<()> {
 #[tokio::test]
 async fn test_applet_unlock_wrong_password() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "applet-wrongpw@example.com";
     let password = "appletpassword123";
@@ -267,7 +267,7 @@ async fn test_applet_unlock_wrong_password() -> Result<()> {
 #[tokio::test]
 async fn test_favourites_only_when_query_empty() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "applet-favourites@example.com";
     let password = "appletpassword123";
@@ -352,7 +352,7 @@ async fn test_favourites_only_when_query_empty() -> Result<()> {
 #[tokio::test]
 async fn test_ssh_public_key_in_sidebar_entries() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "applet-ssh@example.com";
     let password = "appletpassword123";
@@ -398,7 +398,7 @@ async fn test_ssh_public_key_in_sidebar_entries() -> Result<()> {
 #[tokio::test]
 async fn test_get_password_for_secure_note() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "applet-note@example.com";
     let password = "appletpassword123";
@@ -451,7 +451,7 @@ async fn test_get_password_for_secure_note() -> Result<()> {
 #[tokio::test]
 async fn test_get_password_reprompt_flow() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "applet-reprompt@example.com";
     let password = "appletpassword123";

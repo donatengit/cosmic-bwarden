@@ -10,7 +10,7 @@ use cosmic_bwarden_core::protocol::{Action, Response};
 #[tokio::test]
 async fn test_browser_save_flow() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "browser-save@example.com";
     let password = "browserpassword123";

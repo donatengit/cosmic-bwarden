@@ -4,6 +4,8 @@
 set -e
 
 PROJECT_ROOT=$(git rev-parse --show-toplevel)
+# shellcheck source=cleanup.sh
+source "$PROJECT_ROOT/tests/browser-extension/cleanup.sh"
 TEST_TMP=$(mktemp -d)
 AGENT_BIN="$PROJECT_ROOT/target/debug/cosmic-bwarden-agent"
 EXT_DIR="$PROJECT_ROOT/browser-extension"
@@ -46,7 +48,20 @@ GECKO_PID=$!
 cleanup() {
     echo "Cleaning up..."
     kill $AGENT_PID $GECKO_PID 2>/dev/null || true
-    # rm -rf "$TEST_TMP"
+    # Wait before removing: a killed agent can still be mid-write.
+    wait $AGENT_PID 2>/dev/null || true
+    # HOME is reassigned to $TEST_TMP above (before the agent starts), so the
+    # config/cache/data profile dirs are all inside it — removing the tree
+    # covers them. The runtime dir is the exception: XDG_RUNTIME_DIR is
+    # inherited from the real session, so it lives outside $TEST_TMP.
+    cleanup_profile "$COSMIC_BWARDEN_PROFILE" || true
+    rm -f -- /tmp/cosmic-bwarden-browser-host.log
+    if [ -n "$TEST_TMP" ] && [ -d "$TEST_TMP" ]; then
+        case "$TEST_TMP" in
+            /tmp/*) rm -rf -- "$TEST_TMP" ;;
+            *) echo "refusing to remove unexpected TEST_TMP: $TEST_TMP" >&2 ;;
+        esac
+    fi
 }
 trap cleanup EXIT
 

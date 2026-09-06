@@ -12,7 +12,7 @@ use cosmic_bwarden_core::protocol::{Action, GeneratorSettings, Response};
 #[tokio::test]
 async fn test_generate_password_various_charsets_and_lengths() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
     let client = AgentClient::new_with_socket(env.socket_path.clone());
 
     let cases = [
@@ -60,7 +60,7 @@ async fn test_generate_password_various_charsets_and_lengths() -> Result<()> {
 #[tokio::test]
 async fn test_generate_password_rejects_invalid_input() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
     let client = AgentClient::new_with_socket(env.socket_path.clone());
 
     // No character group selected.
@@ -100,7 +100,7 @@ async fn test_generate_password_rejects_invalid_input() -> Result<()> {
 #[tokio::test]
 async fn test_generate_password_none_reuses_last_saved_settings() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
     let client = AgentClient::new_with_socket(env.socket_path.clone());
 
     let chosen = GeneratorSettings {
@@ -144,7 +144,7 @@ async fn test_generate_password_none_reuses_last_saved_settings() -> Result<()> 
 #[tokio::test]
 async fn test_password_history_round_trip() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
     let client = AgentClient::new_with_socket(env.socket_path.clone());
 
     let mut generated = Vec::new();
@@ -189,7 +189,7 @@ async fn test_password_history_round_trip() -> Result<()> {
 #[tokio::test]
 async fn test_delete_password_history_entry() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
     let client = AgentClient::new_with_socket(env.socket_path.clone());
 
     let mut generated = Vec::new();

@@ -27,6 +27,12 @@ if [ ! -f "$AGENT_PATH" ]; then
     exit 1
 fi
 
+# WARNING: this OVERWRITES the developer's real Firefox native-messaging
+# wrapper with one hardcoding the test profile. The caller is responsible for
+# backing it up and restoring it — run-e2e.sh does that via backup_file() /
+# restore_file() in tests/browser-extension/cleanup.sh. Running this script
+# standalone leaves the developer's Firefox talking to the test profile; undo
+# with `just register-browser-host`.
 echo "Customizing wrapper at $WRAPPER_PATH..."
 cat <<EOF > "$WRAPPER_PATH"
 #!/bin/bash

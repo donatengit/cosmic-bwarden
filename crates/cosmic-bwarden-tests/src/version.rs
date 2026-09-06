@@ -6,7 +6,7 @@ use cosmic_bwarden_core::protocol::{Action, Response};
 #[tokio::test]
 async fn test_version_response_format() -> anyhow::Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let client = AgentClient::new_with_socket(env.socket_path.clone());
     let res = client.send(Action::Version).await?;
@@ -44,7 +44,7 @@ async fn test_version_response_format() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_cli_version_subcommand_match() -> anyhow::Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let output = env.cli_cmd().arg("version").output()?;
 

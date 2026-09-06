@@ -5,11 +5,29 @@ set -e
 PROJECT_ROOT=$(git rev-parse --show-toplevel)
 cd "$PROJECT_ROOT"
 
+# shellcheck source=cleanup.sh
+source "$PROJECT_ROOT/tests/browser-extension/cleanup.sh"
+
+TEST_PROFILE=test-extension-e2e
+# setup_native_host.sh overwrites this with a wrapper hardcoding the test
+# profile. Without a restore, the developer's real Firefox extension keeps
+# talking to the test profile after the suite exits.
+NATIVE_HOST_WRAPPER="${HOME}/.mozilla/native-messaging-hosts/cosmic-bwarden-browser-host.sh"
+
 # Setup cleanup
 cleanup() {
     echo "Cleaning up..."
-    if [ -n "$AGENT_PID" ]; then kill $AGENT_PID 2>/dev/null || true; fi
+    if [ -n "$AGENT_PID" ]; then
+        kill $AGENT_PID 2>/dev/null || true
+        # Wait before removing dirs: a killed agent can still be mid-write,
+        # and its shutdown would otherwise recreate what we just deleted.
+        wait $AGENT_PID 2>/dev/null || true
+    fi
     if [ -n "$VW_PID" ]; then kill $VW_PID 2>/dev/null || true; fi
+    restore_file "$NATIVE_HOST_WRAPPER" || true
+    cleanup_profile "$TEST_PROFILE" || true
+    rm -f -- /tmp/agent_test.log /tmp/vaultwarden_test.log \
+             /tmp/cosmic-bwarden-browser-host.log
 }
 trap cleanup EXIT
 
@@ -25,7 +43,7 @@ timeout 30 bash -c 'until curl -s http://localhost:8080/health > /dev/null; do s
 
 # 3. Agent
 echo "Starting Agent..."
-export COSMIC_BWARDEN_PROFILE=test-extension-e2e
+export COSMIC_BWARDEN_PROFILE="$TEST_PROFILE"
 ./target/debug/cosmic-bwarden-agent > /tmp/agent_test.log 2>&1 &
 AGENT_PID=$!
 sleep 2
@@ -39,7 +57,11 @@ SERVER="http://localhost:8080"
 ./target/debug/cosmic-bwarden-cli login --server "$SERVER" --password "$PASSWORD" "$EMAIL"
 
 # 5. Native Host
+# Back up the developer's real wrapper first — setup_native_host.sh replaces it
+# with a test-profile one, and cleanup() restores this on exit.
 echo "Setting up native messaging host..."
+mkdir -p "$(dirname "$NATIVE_HOST_WRAPPER")"
+backup_file "$NATIVE_HOST_WRAPPER"
 bash tests/browser-extension/playwright/setup_native_host.sh
 
 # 6. Isolation & Tests

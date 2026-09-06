@@ -6,7 +6,7 @@ use cosmic_bwarden_core::protocol::{Action, Response};
 #[tokio::test]
 async fn test_custom_fields_ui_simulation() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "ui-sim@example.com";
     let password = "uipassword123";

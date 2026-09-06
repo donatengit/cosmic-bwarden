@@ -33,7 +33,7 @@ fn envelope_path(env: &crate::common::TestEnv, email: &str) -> std::path::PathBu
 #[tokio::test]
 async fn test_session_envelope_carries_the_session_across_a_restart() -> Result<()> {
     let mut env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "session-envelope@example.com";
     let password = "envelopepassword123";
@@ -75,6 +75,8 @@ async fn test_session_envelope_carries_the_session_across_a_restart() -> Result<
     // Restart the agent: a fresh process with no in-memory tokens.
     if let Some(mut proc) = env.agent_process.take() {
         proc.kill()?;
+        // Reap before restarting: see pinned_ops.rs.
+        let _ = proc.wait();
     }
     let agent_process = env.start_agent()?;
     sleep(Duration::from_millis(1000)).await;
@@ -122,7 +124,7 @@ async fn test_session_envelope_carries_the_session_across_a_restart() -> Result<
 #[tokio::test]
 async fn test_corrupt_envelope_falls_back_to_the_password_grant() -> Result<()> {
     let mut env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "session-envelope-corrupt@example.com";
     let password = "envelopepassword456";
@@ -152,6 +154,8 @@ async fn test_corrupt_envelope_falls_back_to_the_password_grant() -> Result<()> 
 
     if let Some(mut proc) = env.agent_process.take() {
         proc.kill()?;
+        // Reap before restarting: see pinned_ops.rs.
+        let _ = proc.wait();
     }
     let agent_process = env.start_agent()?;
     sleep(Duration::from_millis(1000)).await;

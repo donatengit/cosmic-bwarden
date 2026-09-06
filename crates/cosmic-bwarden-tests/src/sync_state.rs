@@ -53,7 +53,7 @@ async fn config_sync_failed(client: &AgentClient) -> Result<(bool, bool)> {
 #[tokio::test]
 async fn test_login_clears_stale_out_of_sync_flag() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "sync-relogin@example.com";
     let password = "syncrelogin123";
@@ -115,7 +115,7 @@ async fn test_login_clears_stale_out_of_sync_flag() -> Result<()> {
 #[tokio::test]
 async fn test_logout_clears_out_of_sync_flag() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "sync-relogout@example.com";
     let password = "syncrelogout123";

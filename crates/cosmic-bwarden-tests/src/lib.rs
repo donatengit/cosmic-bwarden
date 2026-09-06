@@ -13,6 +13,8 @@ mod common;
 #[cfg(all(test, feature = "tpm-smoke"))]
 mod common_tpm;
 #[cfg(test)]
+mod container_limits;
+#[cfg(test)]
 mod custom_fields_cli;
 #[cfg(test)]
 mod custom_fields_ui;
@@ -34,6 +36,8 @@ mod security;
 mod session_envelope;
 #[cfg(test)]
 mod ssh_test_utils;
+#[cfg(test)]
+mod state_guard;
 #[cfg(test)]
 mod sync_persistence;
 #[cfg(test)]

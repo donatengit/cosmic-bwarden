@@ -19,7 +19,7 @@ async fn run_signing_test(
     password: &str,
 ) -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     register_user(&env.vault_url, email, password).await?;
 

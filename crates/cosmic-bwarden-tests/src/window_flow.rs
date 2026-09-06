@@ -6,7 +6,7 @@ use cosmic_bwarden_core::protocol::{Action, Response};
 #[tokio::test]
 async fn test_detached_auth_flow_simulation() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "window-flow@example.com";
     let password = "windowpassword123";

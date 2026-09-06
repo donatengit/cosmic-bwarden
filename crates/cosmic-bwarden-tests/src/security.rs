@@ -6,7 +6,7 @@ use cosmic_bwarden_core::protocol::{Action, Response};
 #[tokio::test]
 async fn test_lock_unlock() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "lock-test@example.com";
     let password = "lockpassword123";
@@ -62,7 +62,7 @@ async fn test_lock_unlock() -> Result<()> {
 #[tokio::test]
 async fn test_reprompt() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "reprompt@example.com";
     let password = "reppassword123";
@@ -161,7 +161,7 @@ async fn test_reprompt() -> Result<()> {
 #[tokio::test]
 async fn test_agent_events() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "events@example.com";
     let password = "eventpassword123";
@@ -266,7 +266,7 @@ async fn test_agent_events() -> Result<()> {
 #[tokio::test]
 async fn test_token_leakage() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "leak@example.com";
     let password = "leakpassword123";

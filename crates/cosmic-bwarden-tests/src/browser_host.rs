@@ -20,7 +20,18 @@ async fn test_browser_host_proxy_comprehensive() -> anyhow::Result<()> {
         .arg("--config")
         .arg(&env.config_path)
         .arg("browser-host")
+        // Full explicit environment, like every other agent spawn in the
+        // suite. `browser-host` mode currently returns before
+        // `dirs::make_all()` and so creates no profile dirs, but that is a
+        // property of today's control flow, not a guarantee — leaving the XDG
+        // vars unset here means the day browser-host touches a dir it writes
+        // into the developer's real home. See AGENTS.md, "Tests must clean up
+        // their own state".
         .env("COSMIC_BWARDEN_PROFILE", &env.profile)
+        .env("XDG_CONFIG_HOME", &env.config_home)
+        .env("XDG_CACHE_HOME", &env.cache_home)
+        .env("XDG_DATA_HOME", &env.data_home)
+        .env("XDG_RUNTIME_DIR", &env.runtime_home)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -237,5 +248,6 @@ async fn test_browser_host_proxy_comprehensive() -> anyhow::Result<()> {
     }
 
     let _ = host_process.kill();
+    let _ = host_process.wait();
     Ok(())
 }

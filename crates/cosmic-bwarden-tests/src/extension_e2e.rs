@@ -196,6 +196,7 @@ impl BrowserTest {
     async fn cleanup(mut self) -> anyhow::Result<()> {
         let _ = self.driver.quit().await;
         let _ = self.geckodriver.kill();
+        let _ = self.geckodriver.wait();
         Ok(())
     }
 }

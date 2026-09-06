@@ -25,9 +25,18 @@ echo "Starting Vaultwarden on port $PORT..."
 # lets the init process exist but nothing else — Vaultwarden's tokio runtime
 # then dies with "OS can't spawn worker thread". 2048 is far beyond what a
 # single Rust process needs and is harmless under a regular Docker daemon.
+# Keep the container off the developer's cores for the length of the run. These
+# match the caps the Rust harness applies (container_limits.rs); a container is
+# not covered by the systemd scope `just` puts around the test command, because
+# podman places it in a sibling cgroup. See docs/testing.md.
+CONTAINER_CPUS=2
+CONTAINER_MEM_MB=1024
+LIMIT_ARGS=(--cpus "$CONTAINER_CPUS" --memory "${CONTAINER_MEM_MB}m")
+
 docker run -d \
     --name $CONTAINER_NAME \
     --pids-limit 2048 \
+    "${LIMIT_ARGS[@]}" \
     -e SIGNUPS_ALLOWED=true \
     -e I_REALLY_WANT_VOLATILE_STORAGE=true \
     -p $PORT:80 \

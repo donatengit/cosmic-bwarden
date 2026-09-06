@@ -60,7 +60,7 @@ async fn login(client: &AgentClient, email: &str, password: &str, url: &str) -> 
 #[tokio::test]
 async fn test_ui_new_login_draft_is_created_not_updated() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "ui-save-flow@example.com";
     let password = "uisavepassword123";
@@ -124,7 +124,7 @@ async fn test_ui_new_login_draft_is_created_not_updated() -> Result<()> {
 #[tokio::test]
 async fn test_ui_edit_of_saved_entry_updates_in_place() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "ui-save-edit@example.com";
     let password = "uisaveeditpassword123";

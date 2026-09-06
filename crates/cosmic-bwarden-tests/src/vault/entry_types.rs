@@ -24,7 +24,7 @@ async fn login(client: &AgentClient, vault_url: &str, email: &str, password: &st
 #[tokio::test]
 async fn test_ssh_key_full_crud() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "sshkey-crud@example.com";
     let password = "sshkeypassword123";
@@ -161,7 +161,7 @@ async fn test_ssh_key_full_crud() -> Result<()> {
 #[tokio::test]
 async fn test_secure_note_full_crud() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "securenote-crud@example.com";
     let password = "notepassword456";

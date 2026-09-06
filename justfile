@@ -21,6 +21,19 @@ local_apps := local_share + "/applications"
 local_metainfo := local_share + "/metainfo"
 local_icons := local_share + "/icons/hicolor"
 
+# ── Test resource caps ────────────────────────────────────────────────────
+# Every test recipe runs inside a transient systemd scope with these caps, so a
+# long run leaves the desktop usable. Override per invocation, e.g.
+#   just test_cpus=12 test
+#   just test_cpus=0 test          # no caps at all
+# The scope covers cargo, rustc, the test binaries and the agents they spawn.
+# It does NOT cover rootless podman containers, which podman places in a
+# sibling cgroup; those are capped from inside the harness instead. See
+# docs/testing.md, "Container resource limits".
+test_cpus := "6"
+test_memory := "8G"
+_limited := "./packaging/run-limited.sh " + test_cpus + " " + test_memory
+
 # Auto-detect TPM2 support: enable the agent's `tpm` feature when libtss2-esys is present.
 _tpm_features := `pkg-config --exists tss2-esys 2>/dev/null && echo '--features cosmic-bwarden-agent/tpm' || true`
 
@@ -242,38 +255,86 @@ uninstall:
 clean: uninstall
     cargo clean --quiet
 
-# Run all tests in complexity order
-test: test-unit test-agent test-cli test-ui
+# The filtered recipes below (test-agent / test-cli / test-ui) are focused
+# subsets for iterating on one area; they are NOT a partition of the suite, and
+# an earlier filter list silently left 41 of 90 E2E tests unrun. Keep the full
+# run filter-free so it cannot drift again.
+#
+# Run the whole Rust test suite: unit tests, then the complete E2E crate
+test: test-unit test-e2e
 
-# 1. Unit Tests (Core & UI Logic)
+# The browser E2E recipes are excluded because they need a compositor and real
+# browsers; run those explicitly.
+#
+# Run every suite that works without a desktop session (Rust + offline JS)
+test-all: test test-extension-unit test-ext-release
+
+# 1. Unit tests for every crate that has them
 test-unit:
-    echo "--- 1. Unit Tests (Core & UI Logic) ---"
-    cargo test --quiet -p cosmic-bwarden-core
-    cargo test --quiet -p cosmic-bwarden-ui
+    echo "--- 1. Unit Tests (all crates) ---"
+    {{_limited}} cargo test --quiet -p cosmic-bwarden-core
+    {{_limited}} cargo test --quiet -p cosmic-bwarden-ui
+    {{_limited}} cargo test --quiet -p cosmic-bwarden-agent
+    {{_limited}} cargo test --quiet -p cosmic-bwarden-cli
 
-# Rebuild the binaries the E2E harness launches from target/debug — running
-# the suite against stale binaries fails the version-compatibility test with a
-# confusing mismatch (docs/review/00_ground_truth.md F9).
+# Requires libtss2-esys; skipped automatically when it is absent.
+#
+# Unit tests for the TPM-gated agent code, invisible to a plain `cargo test`
+test-unit-tpm:
+    echo "--- Unit Tests (agent, tpm feature) ---"
+    if pkg-config --exists tss2-esys 2>/dev/null; then \
+        {{_limited}} cargo test --quiet -p cosmic-bwarden-agent --features tpm; \
+    else \
+        echo "libtss2-esys not present; skipping"; \
+    fi
+
+# Running the suite against stale binaries fails the version-compatibility test
+# with a confusing mismatch (docs/review/00_ground_truth.md F9).
+#
+# Rebuild the debug binaries the E2E harness launches
 build-test-binaries:
-    cargo build --quiet -p cosmic-bwarden-agent -p cosmic-bwarden-cli
+    {{_limited}} cargo build --quiet -p cosmic-bwarden-agent -p cosmic-bwarden-cli
 
-# 2. Agent & Protocol E2E Tests
 # Container runtime: podman is the primary path — the test harness
 # auto-detects the podman user socket (no docker group required). Docker is
 # used when DOCKER_HOST or /var/run/docker.sock is present.
+#
+# 2. The complete E2E suite (all modules, no filters)
+test-e2e: build-test-binaries (ensure-container-socket)
+    echo "--- 2. E2E Suite (complete) ---"
+    {{_limited}} cargo test --quiet -p cosmic-bwarden-tests --lib -- --test-threads=1
+
+# --- Focused subsets, for iterating on one area. Not a partition of the suite;
+# --- use `just test-e2e` for full coverage.
+
+# [subset] Agent & protocol E2E tests
 test-agent: build-test-binaries (ensure-container-socket)
-    echo "--- 2. Agent & Protocol E2E Tests ---"
-    cargo test --quiet -p cosmic-bwarden-tests --lib -- agent security vault pinned_ops ipc_hardening --test-threads=1
+    echo "--- [subset] Agent & Protocol E2E Tests ---"
+    {{_limited}} cargo test --quiet -p cosmic-bwarden-tests --lib -- agent security vault pinned_ops ipc_hardening --test-threads=1
 
-# 3. CLI E2E Tests
+# [subset] CLI E2E tests
 test-cli: build-test-binaries (ensure-container-socket)
-    echo "--- 3. CLI E2E Tests ---"
-    cargo test --quiet -p cosmic-bwarden-tests --lib -- cli_lifecycle cli_secret_mask_test custom_fields_cli --test-threads=1
+    echo "--- [subset] CLI E2E Tests ---"
+    {{_limited}} cargo test --quiet -p cosmic-bwarden-tests --lib -- cli_lifecycle cli_secret_mask_test custom_fields_cli --test-threads=1
 
-# 4. UI E2E Tests
+# [subset] UI E2E tests
 test-ui: build-test-binaries (ensure-container-socket)
-    echo "--- 4. UI E2E Tests ---"
-    cargo test --quiet -p cosmic-bwarden-tests --lib -- window_flow custom_fields_ui --test-threads=1
+    echo "--- [subset] UI E2E Tests ---"
+    {{_limited}} cargo test --quiet -p cosmic-bwarden-tests --lib -- window_flow custom_fields_ui --test-threads=1
+
+# A correct run leaves none of these: tests redirect XDG into a tempdir and the
+# extension scripts clean their fixed profiles in a trap. This is for residue
+# from before that was true, and for recovery after a SIGKILLed run. If a clean
+# run leaves anything, fix the test rather than running this.
+# Refuses anything not named cosmic-bwarden-test-*, symlinks, and non-directories.
+#
+# List leftover test profile dirs without removing them
+clean-test-residue:
+    ./packaging/clean-test-residue.sh
+
+# Remove leftover test profile dirs (see clean-test-residue for the guards)
+clean-test-residue-apply:
+    ./packaging/clean-test-residue.sh --apply
 
 # Ensure a container socket for the E2E harness. Order: explicit DOCKER_HOST,
 # then the Docker socket, then the rootful podman socket, then the podman user
@@ -434,40 +495,42 @@ sign-extension: sign-extension-preflight ext-check-webext
         echo "$PWD/dist/updates.json"; \
     fi
 
-# Unit tests for the release pipeline's pure logic (version preflight,
-# updates.json generation, sha256) — offline, no AMO credentials.
+# Offline, no AMO credentials needed.
+#
+# Unit tests for the release pipeline's pure logic (version preflight, sha256)
 test-ext-release:
-    node --test "packaging/*.test.mjs"
+    {{_limited}} node --test "packaging/*.test.mjs"
 
 # Setup extension testing environment (installs npm dependencies)
 test-extension-setup:
-    cd browser-extension && npm install
+    cd browser-extension && ../packaging/run-limited.sh {{test_cpus}} {{test_memory}} npm install
 
 # Run extension unit/logic tests
 test-extension-unit:
-    cd browser-extension && npm run test:unit
+    cd browser-extension && ../packaging/run-limited.sh {{test_cpus}} {{test_memory}} npm run test:unit
 
-# Run extension E2E tests (Playwright, mocked — no agent needed)
 # Goes through the npm script rather than calling playwright directly, so the
 # `e2e:link` step runs: the spec dir needs a node_modules symlink to resolve
 # @playwright/test (see tests/browser-extension/playwright/link-deps.js).
+#
+# Run extension E2E tests (Playwright, mocked — no agent needed)
 test-extension-e2e: test-extension-setup
-    cd browser-extension && npx playwright install firefox
-    cd browser-extension && npm run test:e2e
+    cd browser-extension && ../packaging/run-limited.sh {{test_cpus}} {{test_memory}} npx playwright install firefox
+    cd browser-extension && ../packaging/run-limited.sh {{test_cpus}} {{test_memory}} npm run test:e2e
 
 # Run full extension E2E tests with real agent and vaultwarden
 test-extension-e2e-full: build test-extension-setup
     @echo "--- Extension Full E2E (Real Agent & Vaultwarden) ---"
-    bash tests/browser-extension/run-e2e.sh
+    {{_limited}} bash tests/browser-extension/run-e2e.sh
 
 # Run full extension E2E tests in Chrome (headless-compatible, real agent + Vaultwarden)
 test-extension-e2e-chrome: build test-extension-setup
     @echo "--- Extension Chrome Full E2E ---"
-    bash tests/browser-extension/run-chrome-e2e.sh
+    {{_limited}} bash tests/browser-extension/run-chrome-e2e.sh
 
 # Debug extension E2E tests (Playwright with UI)
 test-extension-e2e-debug: test-extension-setup
-    cd browser-extension && npx playwright install firefox
-    bash tests/browser-extension/playwright/setup_native_host.sh
-    cd browser-extension && npm run e2e:link
-    cd browser-extension && npx playwright test --config=../tests/browser-extension/playwright/playwright.config.js --ui
+    cd browser-extension && ../packaging/run-limited.sh {{test_cpus}} {{test_memory}} npx playwright install firefox
+    {{_limited}} bash tests/browser-extension/playwright/setup_native_host.sh
+    cd browser-extension && ../packaging/run-limited.sh {{test_cpus}} {{test_memory}} npm run e2e:link
+    cd browser-extension && ../packaging/run-limited.sh {{test_cpus}} {{test_memory}} npx playwright test --config=../tests/browser-extension/playwright/playwright.config.js --ui

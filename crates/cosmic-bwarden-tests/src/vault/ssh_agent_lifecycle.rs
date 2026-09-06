@@ -23,7 +23,7 @@ struct LifecycleEnv {
 
 async fn setup_with_ssh_key(email: &str, password: &str) -> Result<LifecycleEnv> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     register_user(&env.vault_url, email, password).await?;
 

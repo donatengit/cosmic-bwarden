@@ -11,7 +11,7 @@ use tokio::time::{sleep, Duration};
 #[tokio::test]
 async fn test_pin_visible_without_sync() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "pin-visibility@example.com";
     let password = "pinvisible123";
@@ -95,7 +95,7 @@ async fn test_pin_visible_without_sync() -> Result<()> {
 #[tokio::test]
 async fn test_pinning_lifecycle() -> Result<()> {
     let mut env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "pinning@example.com";
     let password = "pinpassword123";
@@ -214,6 +214,9 @@ async fn test_pinning_lifecycle() -> Result<()> {
     // 4. Persistence across restart
     if let Some(mut child) = env.agent_process.take() {
         child.kill()?;
+        // Reap before restarting: an unwaited child stays a zombie for the rest
+        // of the run, and the replacement agent binds the same socket.
+        let _ = child.wait();
     }
 
     env.agent_process = Some(env.start_agent()?);
@@ -296,7 +299,7 @@ async fn test_pinning_lifecycle() -> Result<()> {
 #[tokio::test]
 async fn test_pin_after_restart_unlock_silent_reauth() -> Result<()> {
     let mut env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "restart-pin@example.com";
     let password = "restartpinpass123";
@@ -352,6 +355,9 @@ async fn test_pin_after_restart_unlock_silent_reauth() -> Result<()> {
     // Without the keyring feature, unlock cannot recover them.
     if let Some(mut child) = env.agent_process.take() {
         child.kill()?;
+        // Reap before restarting: an unwaited child stays a zombie for the rest
+        // of the run, and the replacement agent binds the same socket.
+        let _ = child.wait();
     }
     env.agent_process = Some(env.start_agent()?);
     sleep(Duration::from_millis(1000)).await;

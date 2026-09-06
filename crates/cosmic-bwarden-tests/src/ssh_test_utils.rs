@@ -59,6 +59,9 @@ pub async fn start_sshd_container(
         .with_label("com.enikeev.cosmic-bwarden.e2e", "true");
 
     let container = image.start().await?;
+    // Capped like the vaultwarden container: the ssh tests run it alongside
+    // that one, so both are live at the same time.
+    crate::container_limits::apply(container.id(), "openssh-server").await;
     let port = container.get_host_port_ipv4(2222).await?;
 
     let mut ready = false;

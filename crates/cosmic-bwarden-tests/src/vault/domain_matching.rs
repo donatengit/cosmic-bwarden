@@ -47,7 +47,7 @@ async fn names_for_domain(client: &AgentClient, domain: &str) -> Result<Vec<Stri
 #[tokio::test]
 async fn test_sidebar_domain_filter() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "domain-match@example.com";
     let password = "domainpassword123";

@@ -31,6 +31,11 @@ pub struct TestEnv {
     pub cache_home: PathBuf,
     pub data_home: PathBuf,
     pub runtime_home: PathBuf,
+    /// Listing of `cosmic-bwarden*` entries in the developer's real home,
+    /// taken before this env spawned anything. Compared in `Drop` so a spawn
+    /// that forgets its XDG redirect is reported rather than silently
+    /// accumulating. See `state_guard` — it never deletes.
+    real_home_before: crate::state_guard::RealHomeSnapshot,
 }
 
 impl TestEnv {
@@ -215,8 +220,18 @@ impl Drop for TestEnv {
     fn drop(&mut self) {
         if let Some(mut child) = self.agent_process.take() {
             let _ = child.kill();
+            // Wait before the leak check: a killed agent can still be
+            // mid-write, and a dir it creates after the snapshot would either
+            // be missed here or blamed on the next test.
             let _ = child.wait();
         }
+        // Report only — never remove. Every path this env legitimately owns
+        // lives under `_temp_dir`, which drops right after this and takes them
+        // with it. Anything showing up in the *real* home came from a spawn
+        // that skipped its redirect, and deleting by a path computed here
+        // could hit the developer's live profile.
+        self.real_home_before
+            .report_additions(&format!("TestEnv (profile {})", self.profile));
     }
 }
 
@@ -265,6 +280,16 @@ pub(crate) async fn cleanup_stale_containers() {
                     id,
                     Some(bollard::container::RemoveContainerOptions {
                         force: true,
+                        // `v: true` removes the container's anonymous volumes.
+                        // Vaultwarden mounts /data as one, and without this the
+                        // volume outlives the sweep forever: the container goes
+                        // but its ~300 kB volume stays dangling in
+                        // ~/.cache/podman/storage/volumes, one per stale
+                        // container ever swept. testcontainers' own teardown
+                        // already passes `v: true`; this path was the only one
+                        // that did not, so leaks appeared only after a run was
+                        // killed and the next run swept its remains.
+                        v: true,
                         ..Default::default()
                     }),
                 )
@@ -275,6 +300,10 @@ pub(crate) async fn cleanup_stale_containers() {
 }
 
 pub async fn setup_env_no_agent() -> Result<TestEnv> {
+    // Before anything is spawned, so `Drop` can attribute new real-home dirs
+    // to this env.
+    let real_home_before = crate::state_guard::RealHomeSnapshot::take();
+
     if env::var_os("DOCKER_HOST").is_none() {
         let mut candidates = vec!["/run/podman/podman.sock".to_string()];
         if let Ok(runtime_dir) = env::var("XDG_RUNTIME_DIR") {
@@ -300,6 +329,9 @@ pub async fn setup_env_no_agent() -> Result<TestEnv> {
         .with_label("com.enikeev.cosmic-bwarden.e2e", "true");
 
     let container = node.start().await?;
+    // Cap CPU/memory before the tests start hitting it — uncapped, this
+    // competes with the developer's desktop for the whole ~23-minute run.
+    crate::container_limits::apply(container.id(), "vaultwarden").await;
     let host_port = container.get_host_port_ipv4(80).await?;
     let vault_url = format!("http://localhost:{}", host_port);
 
@@ -350,9 +382,15 @@ pub async fn setup_env_no_agent() -> Result<TestEnv> {
     agent_path.pop();
     agent_path.push("target/debug/cosmic-bwarden-agent");
 
+    // Under `target/`, not the repo root: this is a build artifact, and a run
+    // should not dirty the working tree. Deliberately not inside `_temp_dir` —
+    // the log's whole purpose is to survive teardown so a failed run can be
+    // diagnosed after the temp dir is gone.
     let mut log_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     log_path.pop();
     log_path.pop();
+    log_path.push("target");
+    std::fs::create_dir_all(&log_path)?;
     log_path.push("agent_test.log");
     let _log_file_handle = std::fs::File::create(&log_path)?;
 
@@ -376,6 +414,7 @@ pub async fn setup_env_no_agent() -> Result<TestEnv> {
         cache_home,
         data_home,
         runtime_home,
+        real_home_before,
     })
 }
 

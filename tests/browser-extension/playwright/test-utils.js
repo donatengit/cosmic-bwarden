@@ -145,6 +145,12 @@ export function runCli(args, env = {}) {
   const projectRoot = path.resolve(__dirname, '../../..');
   const cliPath = path.join(projectRoot, 'target/debug/cosmic-bwarden-cli');
   
+  // Intentionally inherits the XDG environment rather than redirecting it:
+  // this CLI must resolve the *same* profile dirs as the agent that run-e2e.sh
+  // started, and that agent runs against the real XDG roots under the
+  // test-extension-e2e profile. Redirecting here would point the CLI at an
+  // empty config. The dirs are removed by run-e2e.sh's cleanup() trap
+  // (cleanup_profile) — see docs/test_cleanup_plan.md.
   const defaultEnv = {
     ...process.env,
     COSMIC_BWARDEN_PROFILE: 'test-extension-e2e',

@@ -59,6 +59,23 @@ function agentSocketPath() {
   return path.join(runtimeDir, profile, 'socket');
 }
 
+// Files this suite wrote into the developer's real Chrome config dirs, with
+// the content they had beforehand (null = the file did not exist). Consumed by
+// unregisterNativeHost() in afterAll — without it, the developer's Chrome keeps
+// a manifest pointing at the test agent socket after the suite exits.
+const writtenHostFiles = [];
+
+function writeHostFile(filePath, content, opts) {
+  if (!writtenHostFiles.some(f => f.path === filePath)) {
+    writtenHostFiles.push({
+      path: filePath,
+      previous: fs.existsSync(filePath) ? fs.readFileSync(filePath) : null,
+      previousMode: fs.existsSync(filePath) ? fs.statSync(filePath).mode : null,
+    });
+  }
+  fs.writeFileSync(filePath, content, opts);
+}
+
 function registerNativeHost(extensionId, userDataDir) {
   const socketPath = agentSocketPath();
 
@@ -71,14 +88,14 @@ function registerNativeHost(extensionId, userDataDir) {
   for (const nmDir of nmDirs) {
     fs.mkdirSync(nmDir, { recursive: true });
     const wrapperPath = path.join(nmDir, 'cosmic-bwarden-browser-host.sh');
-    fs.writeFileSync(wrapperPath, [
+    writeHostFile(wrapperPath, [
       '#!/bin/bash',
       `echo "$(date) [$$] nmDir=${nmDir} native host started, args: $*" >> /tmp/native-host-debug.log`,
       // Chrome passes the calling extension's URL as a trailing arg; the agent doesn't expect it.
       `exec "${AGENT_BIN}" --socket "${socketPath}" browser-host`,
       '',
     ].join('\n'), { mode: 0o755 });
-    fs.writeFileSync(path.join(nmDir, `${HOST_NAME}.json`), JSON.stringify({
+    writeHostFile(path.join(nmDir, `${HOST_NAME}.json`), JSON.stringify({
       name: HOST_NAME,
       description: 'COSMIC BWarden Chrome Test Host',
       path: wrapperPath,
@@ -87,6 +104,25 @@ function registerNativeHost(extensionId, userDataDir) {
     }, null, 2));
     console.log(`Wrote manifest to ${nmDir}`);
   }
+}
+
+// Put the real Chrome config dirs back exactly as they were. Only paths this
+// suite recorded in writtenHostFiles are touched — never a directory, and
+// never a path derived from anything but our own earlier write.
+function unregisterNativeHost() {
+  for (const { path: filePath, previous, previousMode } of writtenHostFiles) {
+    try {
+      if (previous === null) {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } else {
+        fs.writeFileSync(filePath, previous);
+        if (previousMode !== null) fs.chmodSync(filePath, previousMode & 0o777);
+      }
+    } catch (e) {
+      console.error(`Failed to restore ${filePath}: ${e.message}`);
+    }
+  }
+  writtenHostFiles.length = 0;
 }
 
 // Inject a clipboard mock before page scripts run (navigator.clipboard is undefined in headless).
@@ -146,6 +182,9 @@ test.describe('Chrome Extension Full E2E', () => {
     const ctx = sharedContext;
     sharedContext = null;
     await ctx?.close();
+    // Restore the developer's real Chrome native-messaging config. Runs after
+    // the browser is closed so nothing rewrites the files behind us.
+    unregisterNativeHost();
   });
 
   // ── Popup helpers ──────────────────────────────────────────────────────────

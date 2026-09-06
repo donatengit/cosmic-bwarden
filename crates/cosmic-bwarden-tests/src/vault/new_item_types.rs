@@ -136,7 +136,7 @@ async fn sidebar_id(client: &AgentClient, name: &str) -> Result<String> {
 #[tokio::test]
 async fn test_bank_account_full_crud() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "bank-crud@example.com";
     let password = "bankpassword123";
@@ -314,7 +314,7 @@ async fn test_bank_account_full_crud() -> Result<()> {
 #[tokio::test]
 async fn test_drivers_license_full_crud() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "dl-crud@example.com";
     let password = "dlpassword123";
@@ -447,7 +447,7 @@ async fn test_drivers_license_full_crud() -> Result<()> {
 #[tokio::test]
 async fn test_passport_full_crud() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "passport-crud@example.com";
     let password = "passportpassword123";
@@ -592,7 +592,7 @@ async fn test_passport_full_crud() -> Result<()> {
 #[tokio::test]
 async fn test_all_eight_types_coexist() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "all-types@example.com";
     let password = "alltypespassword123";

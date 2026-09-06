@@ -67,7 +67,7 @@ fn assert_sync_ok(res: &Response) {
 #[tokio::test]
 async fn test_delete_fails_gracefully_when_backend_unavailable() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "delete-err@example.com";
     let password = "deletepassword123";
@@ -155,7 +155,7 @@ async fn test_delete_fails_gracefully_when_backend_unavailable() -> Result<()> {
 #[tokio::test]
 async fn test_add_fails_gracefully_when_backend_unavailable() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "add-err@example.com";
     let password = "addpassword123";
@@ -209,7 +209,7 @@ async fn test_add_fails_gracefully_when_backend_unavailable() -> Result<()> {
 #[tokio::test]
 async fn test_update_fails_gracefully_when_backend_unavailable() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "update-err@example.com";
     let password = "updatepassword123";
@@ -297,7 +297,7 @@ async fn test_update_fails_gracefully_when_backend_unavailable() -> Result<()> {
 #[tokio::test]
 async fn test_sync_fails_sets_flag_recovery_clears_it() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "sync-err@example.com";
     let password = "syncpassword123";
@@ -346,7 +346,7 @@ async fn test_sync_fails_sets_flag_recovery_clears_it() -> Result<()> {
 #[tokio::test]
 async fn test_sync_failed_survives_lock() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "syncfail-lock@example.com";
     let password = "syncfaillock123";

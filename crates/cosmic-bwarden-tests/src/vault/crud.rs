@@ -6,7 +6,7 @@ use cosmic_bwarden_core::protocol::{Action, Response};
 #[tokio::test]
 async fn test_note_crud_lifecycle() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "note-crud@example.com";
     let password = "notepassword123";
@@ -132,7 +132,7 @@ async fn test_note_crud_lifecycle() -> Result<()> {
 #[tokio::test]
 async fn test_login_crud_lifecycle() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "login-crud@example.com";
     let password = "loginpassword123";
@@ -254,7 +254,7 @@ async fn test_login_crud_lifecycle() -> Result<()> {
 #[tokio::test]
 async fn test_card_crud_lifecycle() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "card-crud@example.com";
     let password = "cardpassword123";
@@ -342,7 +342,7 @@ async fn test_card_crud_lifecycle() -> Result<()> {
 #[tokio::test]
 async fn test_identity_crud_lifecycle() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "identity-crud@example.com";
     let password = "identitypassword123";

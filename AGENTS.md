@@ -23,6 +23,29 @@ Start here, then go deeper as needed:
 - **Never circle back to a failed approach.** If a fix didn't work, note why and move forward.
 - **One responsibility per file.** If a file exceeds ~250 lines, it needs splitting.
 - **cargo check before cargo test.** Don't run expensive tests against code that won't compile.
+- **Run every test through `just`, never `cargo test` or a bare script.** The
+  recipes carry the container-socket setup, the debug-binary rebuild the E2E
+  harness depends on, and the resource caps that keep the machine usable during
+  a 20+ minute run. `just test` is the whole Rust suite; `just test-all` adds
+  the offline JS suites; `just --list` shows the rest. Details:
+  [`docs/testing.md`](docs/testing.md).
+  - **If the test suite needs something new, add it to the justfile in the same
+    change.** A new test module, feature flag, service, or fixture that only
+    runs from a hand-typed command line is not wired up. The standard is that a
+    human can run the full suite at any moment with one `just` command and no
+    prior knowledge. A recipe that covers only part of a suite must say so in
+    its comment: `just test` once used name filters that silently left 41 of 90
+    E2E tests unrun.
+- **Write all text in plain technical English.** This covers everything you
+  produce: chat replies, commit messages, code comments, doc prose, log lines,
+  error strings, and identifiers. State what a thing does, why it exists, and
+  what breaks without it. No marketing register, no filler adjectives
+  ("powerful", "seamless", "robust", "comprehensive"), no praise of the code or
+  the reader, no emoji outside data payloads, no rhetorical questions. Prefer
+  short declarative sentences and concrete nouns; name the file, the function,
+  the flag, the exact error. When something is uncertain, say so and say what
+  would settle it — do not hedge with vague qualifiers. Report failures and
+  gaps directly, including your own.
 - **Never commit generated or temporary artifacts.** Build output, `node_modules`, test-runner results (`test-results/`, `playwright-report/`), coverage, and logs belong in `.gitignore`, never in a commit. If `git status` shows a generated path, add it to `.gitignore` rather than staging it (note: a slash-suffixed pattern matches directories only — drop the slash to also catch symlinks).
 
 ## Naming (one spelling per layer)
@@ -115,6 +138,83 @@ Rules:
 - When adding a config field, ask which process *owns* it. The UI owns only
   what its Settings pane edits; it must read-modify-write the file, never
   persist its whole in-memory struct.
+- **Tests must clean up their own state, and never inherit their environment.**
+  Any test or script that spawns the agent or CLI must pass an **explicit**
+  `COSMIC_BWARDEN_PROFILE`, `HOME`, and **all four** `XDG_*` vars — never
+  inherit them. `COSMIC_BWARDEN_PROFILE` is process-global and ~59 tests in the
+  E2E crate set it without restoring it, so an un-set-up spawn silently adopts
+  another test's profile, or (when nothing has set it yet) the **live**
+  `cosmic-bwarden` profile. A partial set is not partial safety: `directories`
+  falls back to the passwd entry when `$HOME` is unset, so a missing
+  `XDG_DATA_HOME` still lands in the real `~/.local/share` even under
+  `env_clear()`. Test profiles must be named `test-*`. Each test/script then
+  removes the `cosmic-bwarden-<profile>` dirs it created — config, cache, data,
+  **and runtime** — and restores any real user file it overwrote (browser
+  native-messaging manifests especially) in its own teardown path (Rust `Drop`,
+  script `cleanup()` trap; `wait` for the agent first, or its shutdown writes
+  recreate what you deleted). Redirecting all four XDG vars into a
+  `tempfile::tempdir()` satisfies the directory half. Leaving residue, or
+  leaving a developer's browser pointed at a test profile, is a review-blocking
+  regression — not fixable by a manual sweep or a `clean-test-data` command.
+  - **Never compute a deletion path from `dirs::`** (`cache_dir()`,
+    `data_dir()`, …). They read process-global env, so an unset profile
+    resolves to the live `cosmic-bwarden` profile and the "cleanup" erases the
+    developer's real vault cache. Derive removal paths only from the test's own
+    recorded temp roots, and assert the target is under them. `TestEnv::Drop`
+    therefore *detects* leaks instead of deleting: `state_guard.rs` snapshots
+    the real roots and reports additions. `paths.rs::agent_spawn_writes_
+    nothing_to_the_real_home` is the deterministic guard.
+  - Shell teardown goes through `cleanup_profile()` in
+    `tests/browser-extension/cleanup.sh`, which refuses an empty name, a
+    non-`test-*` profile, and any name containing a separator or `..`.
+  - **Removing a container must also remove its anonymous volumes** — pass
+    `v: true` in `RemoveContainerOptions`. Vaultwarden mounts `/data` as an
+    anonymous volume; without `v: true` the container goes and the volume stays
+    dangling in `~/.cache/podman/storage/volumes` forever. testcontainers'
+    own teardown already does this; `common::cleanup_stale_containers` did not,
+    so volumes leaked only when a killed run's remains were swept by the next
+    run.
+  - **Every `kill()` needs a matching `wait()`.** An unreaped child stays a
+    zombie for the rest of the test binary's life, and three sites killed an
+    agent and immediately started a replacement on the same socket without
+    reaping the old one.
+  - `just clean-test-residue` lists leftover `cosmic-bwarden-test-*` dirs and
+    `clean-test-residue-apply` removes them. This is a recovery tool for a
+    SIGKILLed run, not part of the loop: a clean run leaves nothing, and if one
+    does not, fix the test.
+  - Full rationale and the verification recipe: `docs/test_cleanup_plan.md`.
+
+### Test runs must be resource-capped
+A full run takes over twenty minutes and would otherwise saturate the machine.
+Two layers, because neither reaches both halves. Full explanation:
+[`docs/testing.md`](docs/testing.md), "Resource limits".
+
+- **Layer 1, everything `just` starts**: each test recipe runs its command
+  through `packaging/run-limited.sh`, which wraps it in a transient systemd
+  scope. Controlled by the `test_cpus` (default 6) and `test_memory` (default
+  8G) justfile variables; `0` disables either. Memory uses `MemoryHigh`
+  (throttle) rather than `MemoryMax`, so a spike slows the run instead of
+  OOM-killing a browser mid-test. Falls back to running unwrapped
+  when systemd is absent. Any new test recipe must go through it too.
+- **Layer 2, containers**: rootless podman puts each container in
+  `user@<uid>.service/user.slice/libpod-<id>.scope`, a *sibling* of the test
+  scope, so it inherits nothing from layer 1. Containers are capped separately
+  at 2 CPUs / 1024 MB by fixed constants in
+  `crates/cosmic-bwarden-tests/src/container_limits.rs`,
+  `tools/run_vaultwarden.sh`, and `tests/browser-extension/run-chrome-e2e.sh` —
+  keep the three in step.
+- **Rust suites**: call `container_limits::apply(container.id(), "<label>")`
+  immediately after `.start()`. testcontainers 0.23 has no create-time resource
+  API, so the cap goes on afterwards via bollard's `update_container`.
+- **Shell scripts**: pass `--cpus` / `--memory` to `docker run` (both runtimes
+  honour these at create time).
+- **Never use `NanoCpus`.** Podman's Docker-compat API accepts it on the update
+  endpoint, answers 200, and ignores it — `cpu.max` stays `max`. Only
+  `CpuQuota` + `CpuPeriod` work. `container_limits::tests::cpu_and_memory_caps_
+  reach_the_cgroup` reads the value back and fails if the cap did not land;
+  keep that test whenever touching this code.
+- Capping is best-effort — a runtime that rejects the update logs and continues,
+  because no test asserts on the limit.
 
 ### Adding features
 1. Update `preprocess_args` and `--help` (`after_help` with `EXAMPLES:` block) for any CLI change.

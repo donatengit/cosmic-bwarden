@@ -24,7 +24,7 @@ async fn login(client: &AgentClient, vault_url: &str, email: &str, password: &st
 #[tokio::test]
 async fn test_login_with_uris() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "uri-test@example.com";
     let password = "uripassword123";
@@ -125,7 +125,7 @@ async fn test_login_with_uris() -> Result<()> {
 #[tokio::test]
 async fn test_custom_fields_all_types() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "fields-all@example.com";
     let password = "fieldspassword123";
@@ -219,7 +219,7 @@ async fn test_custom_fields_all_types() -> Result<()> {
 #[tokio::test]
 async fn test_get_totp_from_login_entry() -> Result<()> {
     let env = setup_env().await?;
-    std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile);
+    let _profile = crate::state_guard::ProfileEnv::set(&env.profile);
 
     let email = "totp-test@example.com";
     let password = "totppassword123";
