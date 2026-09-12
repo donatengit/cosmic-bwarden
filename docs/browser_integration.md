@@ -32,6 +32,39 @@ cargo build -p cosmic-bwarden-agent --no-default-features
 
 The `browser-host` feature requires the `io-std` feature of `tokio` for asynchronous access to standard input and output streams.
 
+### 3. Extension source layout
+
+Source lives in `browser-extension/`. Plain vanilla JS — no bundler, no framework.
+
+| File | Responsibility |
+|---|---|
+| `background.js` | Native messaging queue, badge count, theme-aware + lock-state icon switching (`<theme>_locked*.png` when locked *or* logged out) |
+| `background-save.js` | Save-prompt state machine: per-tab pending credentials, save/update decision via `CheckLoginMatch` |
+| `theme.js` | Design tokens (light+dark palette, radii, shadows) for the shadow-DOM surfaces — must stay in sync with `popup/popup.css`; loaded first in content scripts |
+| `content.js` | Form fill injected into pages |
+| `content-heuristics.js` | Shared pure DOM helpers (username-field detection, submitted-credential capture); loaded first |
+| `content-submit.js` | Login-form submit detection → `LOGIN_SUBMITTED` to background |
+| `content-bar.js` | In-page "Save/Update password?" floating card (open shadow root; never receives the password) |
+| `popup/popup.js` | View management, list rendering, fill, domain helpers |
+| `popup/popup-lock.js` | Locked-vault view: TPM PIN unlock, DA lockout feedback; loaded *before* `popup.js` — see "Script load order gotcha" below |
+| `popup/popup-detail.js` | Detail view, secret reveal/copy (on-demand via `GetPassword`) |
+| `popup/popup-edit.js` | Edit/add form, field rendering |
+| `popup/popup-state.js` | View/search/draft persistence across popup close+reopen, in `storage.session`; scoped to the tab's domain |
+| `popup/icons.js` | Inline SVG icons for dynamically built buttons (monochrome, `currentColor`) — static header icons live in `popup.html` |
+| `popup/popup.css` | Popup design system: tokens, `.btn` component classes, views; dark mode via `prefers-color-scheme` |
+
+**Icons**: `browser-extension/icons` is a symlink to the repo-root `icons/`
+folder (`black*.png` for light theme, `white*.png` for dark). `zip -r`
+dereferences symlinks, so `pack-extension` embeds them correctly.
+
+**Unit-test loading gotcha**: `background-save.test.js` injects `sendToAgent` as
+a `new Function` parameter, but `background.js` *declares its own* `sendToAgent`
+(the native-messaging queue), which shadows any injected parameter — a unit test
+that injects it will hang forever. Load `background.js` with a fake
+`connectNative()` port whose `postMessage()` resolves the agent call and
+delivers the response through the real `onMessage` listener (see
+`background.test.js`).
+
 ## Security Model
 
 - **No Local Storage**: The extension does not use `browser.storage` for vault data. All searches and fetches are performed on-demand via the agent.
@@ -227,16 +260,17 @@ Clicking the icon fills every field in its group (e.g. both "new" and
   only into the fields already identified as the "new password" group,
   through the same `setInputValue` dispatch (`input`+`change` events) used by
   the existing autofill content script.
-- See `AGENTS.md`'s "Password Generator" section for the at-rest protection
-  (and threat model) of the local 7-day history the agent maintains.
+- See [`docs/password_generator_plan.md`](password_generator_plan.md) for the
+  at-rest protection (and threat model) of the local 7-day history the agent
+  maintains.
 
 ## PIN Unlock (TPM 2.0)
 
 The popup offers a quick PIN unlock when the vault is locked, mirroring the
-desktop UI's PIN flow (see `AGENTS.md`'s "TPM PIN Unlock" section). The
-extension only ever collects a PIN here — master password unlock stays a
-desktop/CLI-only action; the popup never collects the master password, so the
-"thin client, no secrets" invariant holds for the locked state too.
+desktop UI's PIN flow (see [`docs/tpm.md`](tpm.md)). The extension only ever
+collects a PIN here — master password unlock stays a desktop/CLI-only action;
+the popup never collects the master password, so the "thin client, no secrets"
+invariant holds for the locked state too.
 
 ### Message flow
 

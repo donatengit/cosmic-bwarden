@@ -314,6 +314,12 @@ after one:
 - `~/.cache/cosmic-bwarden-probe` exists on at least one developer machine and
   matches **no profile anywhere in the tree** — an orphan from a removed test.
   Note it here so the one-time sweep below is not scoped to `test-*` only.
+- **Removing a container must also remove its anonymous volumes** — pass
+  `v: true` in `RemoveContainerOptions`. Vaultwarden mounts `/data` as an
+  anonymous volume; without `v: true` the container goes and the volume stays
+  dangling in `~/.cache/podman/storage/volumes` forever. testcontainers' own
+  teardown already does this; `common::cleanup_stale_containers` did not, so
+  volumes leaked only when a killed run's remains were swept by the next run.
 
 ## Guiding documents must require cleanup after the tests
 

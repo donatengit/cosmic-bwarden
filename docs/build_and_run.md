@@ -130,3 +130,52 @@ To use the built-in SSH agent, export the following environment variable in your
 export SSH_AUTH_SOCK=$(cosmic-bwarden-agent --print-ssh-socket-path) 
 # Or manually find it in the runtime directory managed by the agent.
 ```
+
+## Justfile (task runner)
+
+`just` is the entry point for every build, install, and test step. Run
+`just --list` for the authoritative recipe list; `just` reads the recipes
+themselves, so that output is never stale. The table below covers the recipes
+used day to day.
+
+| Recipe | What it does |
+|---|---|
+| `just build` | Release build of all Rust crates (auto-detects TPM) |
+| `just install` | `build` + install binaries + register Firefox native host (system-wide, needs sudo) |
+| `just user-install` | Same but installs to `~/.local` (no sudo) |
+| `just pack-extension` | Zips preselected production files only (explicit allowlist in `packaging/pack-extension.sh` — nothing unlisted can ship; the old exclude-list approach leaked `.env` once) → `target/cosmic-bwarden-extension.zip`, with shape assertions. Not part of `build`. |
+| `just register-browser-host` | Registers native host pointing at debug build (dev workflow) |
+| `just test` | Full Rust test suite in order: unit → agent → CLI → UI. The E2E steps auto-ensure a container socket via `ensure-container-socket` — podman is the primary runtime (`systemctl --user start podman.socket`; the harness auto-detects the user socket and needs no docker group); Docker is the fallback when `DOCKER_HOST`/`/var/run/docker.sock` exists |
+| `just test-unit` | Unit tests for every crate that has them |
+| `just test-extension-unit` | Extension JS unit tests (vitest) |
+| `just test-extension-e2e` | Extension Playwright E2E (Firefox, mock agent) |
+| `just test-extension-e2e-full` | Extension Playwright E2E (Firefox, real agent + Vaultwarden) |
+| `just test-extension-e2e-chrome` | Same but Chrome |
+| `just sign-extension` | The single signing entry point: stage production files → inject a fresh timestamp version (`YYYY.M.D.mmm`, dev signing — no tag/clean-tree requirements) and gecko `update_url` from `EXT_UPDATE_BASE_URL` → `web-ext lint` → AMO unlisted sign → `dist/cosmic-bwarden-<version>.xpi` (+ `dist/updates.json` when the base URL is set; append preserves entries; `update_hash` = sha256 of the signed XPI). Requires `WEB_EXT_API_KEY`/`WEB_EXT_API_SECRET` and a pinned web-ext (10.6.0, checked at entry); refuses versions already shipped in `dist/`; prints one absolute output path per line for CI capture |
+| `just test-ext-release` | Offline unit tests for the release pipeline's pure logic (`node --test packaging/*.test.mjs`) |
+| `just restart-panel` | Restart COSMIC panel after install |
+| `just enable-agent` | Enable + start agent systemd user service |
+
+### Notes that are easy to get wrong
+
+- **Never inline the extension zip command anywhere else** — CI and the release
+  workflow call `packaging/pack-extension.sh` so every consumer produces the
+  identical artifact.
+- **`sign-extension` reads its AMO credentials from the environment or the
+  gitignored `browser-extension/.env`** (parse-only loader
+  `packaging/load-ext-env.sh`, mode 0600, explicit exports win; web-ext also
+  reads the env natively via its `WEB_EXT` prefix, the config trampoline is
+  belt-and-braces — never argv).
+- **Release mode**: `EXT_SIGN_MODE=release` switches to the strict tag-based
+  preflight (`vYYYY.MM.P[-alphaN]` tag on HEAD, clean tree; the tag version is
+  injected into the staged manifest — alpha maps to the 4th component, e.g.
+  `v2026.8.0-alpha` → `2026.8.0.1`; no `manifest.json` bumps are needed). It is
+  used by the `sign-extension` job in `.github/workflows/release.yml`, which
+  runs on every `v*` tag and attaches the signed XPI to the draft release.
+- **A new test module, feature flag, service, or fixture must be wired into a
+  recipe in the same change.** A suite that only runs from a hand-typed command
+  line is not wired up. A recipe that covers only part of a suite must say so in
+  its comment, and `just test` must run the whole Rust suite with no filters.
+
+Test-run resource limits and what each suite covers:
+[`docs/testing.md`](testing.md).

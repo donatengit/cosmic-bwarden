@@ -1,12 +1,26 @@
 # cosmic-bwarden: Agent Guidelines
 
-## How to read this file
+Instructions and hard rules only. No explanations, no design notes, no
+inventories — those live in the guides below.
 
-Instructions and hard rules only. Documentation is indexed in
-[`README.md`](README.md) — the only link in this file, and it links back here.
-Document paths mentioned below in plain backticks are listed there.
+## Guiding documents
+
+- [`README.md`](README.md) — project overview and the index of every document
+  in `docs/`. It is the only place that links them. This file names a document
+  in plain backticks when a rule needs it; those paths are listed there. README
+  links back here.
+- [`CONTEXT.md`](CONTEXT.md) — architecture: crates, module layout, data flow,
+  protocol compatibility.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to contribute, and the full list of
+  gates a change has to pass.
+- [`SECURITY.md`](SECURITY.md) — how to report a vulnerability.
+
+A rule belongs in this file when breaking it can lose data, leak a secret,
+break someone else's build, or force a re-discovery of a bug that already
+shipped. Everything explanatory belongs in the guides.
 
 ## Golden Rules
+
 - **Never ask for confirmation.** Apply fixes, run validation, iterate until passing. Report only on final outcome or exhausted options.
 - **Never circle back to a failed approach.** If a fix didn't work, note why and move forward.
 - **One responsibility per file.** If a file exceeds ~250 lines, it needs splitting.
@@ -38,8 +52,7 @@ Document paths mentioned below in plain backticks are listed there.
 
 ## Naming (one spelling per layer)
 
-The display name drifted across three spellings before it was unified; keep each
-layer in its own lane:
+Keep each layer in its own lane:
 
 | Layer | Canonical form | Where |
 |---|---|---|
@@ -51,9 +64,9 @@ layer in its own lane:
 `com.system76.CosmicBWarden` appears only in the justfile's legacy-cleanup
 `rm -f` lines; it is a historical app ID, not a name — leave it byte-for-byte.
 
-Project URL: `cosmic_bwarden_core::HOMEPAGE` on the Rust side; the non-Rust
-manifests (metainfo, systemd units, `manifest.json`, `package.json`, PKGBUILD)
-carry their own copy and must be updated together if the repo ever moves.
+The project URL is `cosmic_bwarden_core::HOMEPAGE` on the Rust side. The
+non-Rust manifests (metainfo, systemd units, `manifest.json`, `package.json`,
+PKGBUILD) carry their own copy and must be updated together if the repo moves.
 
 ## Versioning
 
@@ -63,16 +76,8 @@ carry their own copy and must be updated together if the repo ever moves.
 - **Adding a version subcommand**: Always add `Commands::Version` to the CLI's enum, route it to the auth handler, and include the `check_protocol_compatibility()` call. Update `preprocess_args` if the new command name conflicts with type keywords.
 - **Breaking protocol changes**: Bump the `protocol_version` in `Response::Version` by updating `check_protocol_compatibility` expectations if the protocol surface changes incompatibly.
 
-## Workspace Structure
-
-| Crate | Responsibility |
-|---|---|
-| `cosmic-bwarden-core` | Daemon, IPC server, crypto, vault state |
-| `cosmic-bwarden-cli` | Argument parsing, IPC client, output formatting |
-| `cosmic-bwarden-ui` | libcosmic applet, MVU model/view/update |
-| `cosmic-bwarden-tests` | E2E tests against Vaultwarden in Docker |
-
 ## Security Invariants (core)
+
 These must never regress. Treat violations as build-blocking bugs.
 
 - **Core dumps**: `libc::prctl(PR_SET_DUMPABLE, 0)` on daemon startup.
@@ -98,25 +103,21 @@ These must never regress. Treat violations as build-blocking bugs.
 ## Workflow
 
 ### Fixing failing tests
-1. Run `cargo test -p cosmic-bwarden-tests -- --test-threads=1`, capture full output.
+
+1. Run the failing suite through `just` (`just test-e2e` for the E2E crate, `just test` for everything), capture full output.
 2. Identify root cause from panic/error line — do not guess from test name alone.
 3. `cargo check` after each edit before re-running tests.
 4. If a fix attempt fails, document why before trying the next approach.
 5. Every bug fix requires a corresponding test case.
 
 ### Tests must never touch real user state (review-blocking)
-`dirs::config_file()`, `db_file()`, `device_id_file()` and friends fall back to
-the *live* user paths (`~/.config/cosmic-bwarden/`, `~/.cache/…`) whenever the
-`COSMIC_BWARDEN_*` overrides are unset. A unit test that reaches a save path
-therefore overwrites the developer's own account. On 2026-08-10 a plain
-`cargo test -p cosmic-bwarden-ui` did exactly that: `test_settings_flow` drove
-`SettingsSaveClicked` with a `Default` config and replaced a live
-`config.json` with all-`null` fields. The running agent kept serving the vault
-from memory, so nothing looked broken until the next vault write failed with
-`email not set in config` — and only the untouched cache file made recovery
-possible.
 
-Rules:
+`dirs::config_file()`, `db_file()`, `device_id_file()` and friends fall back to
+the live user paths (`~/.config/cosmic-bwarden/`, `~/.cache/…`) whenever the
+`COSMIC_BWARDEN_*` overrides are unset, so a test that reaches a save path
+overwrites the developer's own account. Full rationale and the verification
+recipe: `docs/test_cleanup_plan.md`.
+
 - Any test that can reach `save_legacy()`, `Db::save()`, or a keyring/TPM write
   must redirect the path first. In the UI crate use
   `app/tests/config_env.rs::ConfigFile`; elsewhere set the `COSMIC_BWARDEN_*`
@@ -129,65 +130,49 @@ Rules:
 - **Tests must clean up their own state, and never inherit their environment.**
   Any test or script that spawns the agent or CLI must pass an **explicit**
   `COSMIC_BWARDEN_PROFILE`, `HOME`, and **all four** `XDG_*` vars — never
-  inherit them. `COSMIC_BWARDEN_PROFILE` is process-global and ~59 tests in the
-  E2E crate set it without restoring it, so an un-set-up spawn silently adopts
-  another test's profile, or (when nothing has set it yet) the **live**
-  `cosmic-bwarden` profile. A partial set is not partial safety: `directories`
-  falls back to the passwd entry when `$HOME` is unset, so a missing
-  `XDG_DATA_HOME` still lands in the real `~/.local/share` even under
-  `env_clear()`. Test profiles must be named `test-*`. Each test/script then
-  removes the `cosmic-bwarden-<profile>` dirs it created — config, cache, data,
-  **and runtime** — and restores any real user file it overwrote (browser
+  inherit them. A partial set is not partial safety: `directories` falls back
+  to the passwd entry when `$HOME` is unset, so a missing `XDG_DATA_HOME` still
+  lands in the real `~/.local/share` even under `env_clear()`. Test profiles
+  must be named `test-*`. Each test/script then removes the
+  `cosmic-bwarden-<profile>` dirs it created — config, cache, data, **and
+  runtime** — and restores any real user file it overwrote (browser
   native-messaging manifests especially) in its own teardown path (Rust `Drop`,
   script `cleanup()` trap; `wait` for the agent first, or its shutdown writes
-  recreate what you deleted). Redirecting all four XDG vars into a
-  `tempfile::tempdir()` satisfies the directory half. Leaving residue, or
-  leaving a developer's browser pointed at a test profile, is a review-blocking
-  regression — not fixable by a manual sweep or a `clean-test-data` command.
+  recreate what you deleted). Leaving residue, or leaving a developer's browser
+  pointed at a test profile, is a review-blocking regression — not fixable by a
+  manual sweep or a `clean-test-data` command.
   - **Never compute a deletion path from `dirs::`** (`cache_dir()`,
     `data_dir()`, …). They read process-global env, so an unset profile
     resolves to the live `cosmic-bwarden` profile and the "cleanup" erases the
     developer's real vault cache. Derive removal paths only from the test's own
-    recorded temp roots, and assert the target is under them. `TestEnv::Drop`
-    therefore *detects* leaks instead of deleting: `state_guard.rs` snapshots
-    the real roots and reports additions. `paths.rs::agent_spawn_writes_
-    nothing_to_the_real_home` is the deterministic guard.
+    recorded temp roots, and assert the target is under them.
   - Shell teardown goes through `cleanup_profile()` in
     `tests/browser-extension/cleanup.sh`, which refuses an empty name, a
     non-`test-*` profile, and any name containing a separator or `..`.
   - **Removing a container must also remove its anonymous volumes** — pass
-    `v: true` in `RemoveContainerOptions`. Vaultwarden mounts `/data` as an
-    anonymous volume; without `v: true` the container goes and the volume stays
-    dangling in `~/.cache/podman/storage/volumes` forever. testcontainers'
-    own teardown already does this; `common::cleanup_stale_containers` did not,
-    so volumes leaked only when a killed run's remains were swept by the next
-    run.
+    `v: true` in `RemoveContainerOptions`, or the volume outlives the container
+    in `~/.cache/podman/storage/volumes` forever.
   - **Every `kill()` needs a matching `wait()`.** An unreaped child stays a
-    zombie for the rest of the test binary's life, and three sites killed an
-    agent and immediately started a replacement on the same socket without
-    reaping the old one.
+    zombie for the rest of the test binary's life.
   - `just clean-test-residue` lists leftover `cosmic-bwarden-test-*` dirs and
     `clean-test-residue-apply` removes them. This is a recovery tool for a
     SIGKILLed run, not part of the loop: a clean run leaves nothing, and if one
     does not, fix the test.
-  - Full rationale and the verification recipe: `docs/test_cleanup_plan.md`.
 
 ### Test runs must be resource-capped
+
 A full run takes over twenty minutes and would otherwise saturate the machine.
-Two layers, because neither reaches both halves. Full explanation in
-`docs/testing.md`, "Resource limits".
+Keep both layers; full explanation: `docs/testing.md`.
 
 - **Layer 1, everything `just` starts**: each test recipe runs its command
   through `packaging/run-limited.sh`, which wraps it in a transient systemd
   scope. Controlled by the `test_cpus` (default 6) and `test_memory` (default
   8G) justfile variables; `0` disables either. Memory uses `MemoryHigh`
   (throttle) rather than `MemoryMax`, so a spike slows the run instead of
-  OOM-killing a browser mid-test. Falls back to running unwrapped
-  when systemd is absent. Any new test recipe must go through it too.
-- **Layer 2, containers**: rootless podman puts each container in
-  `user@<uid>.service/user.slice/libpod-<id>.scope`, a *sibling* of the test
-  scope, so it inherits nothing from layer 1. Containers are capped separately
-  at 2 CPUs / 1024 MB by fixed constants in
+  OOM-killing a browser mid-test. Any new test recipe must go through it too.
+- **Layer 2, containers**: rootless podman puts each container in a scope that
+  is a sibling of the test scope, so it inherits nothing from layer 1.
+  Containers are capped separately at 2 CPUs / 1024 MB by fixed constants in
   `crates/cosmic-bwarden-tests/src/container_limits.rs`,
   `tools/run_vaultwarden.sh`, and `tests/browser-extension/run-chrome-e2e.sh` —
   keep the three in step.
@@ -205,17 +190,18 @@ Two layers, because neither reaches both halves. Full explanation in
   because no test asserts on the limit.
 
 ### Adding features
+
 1. Update `preprocess_args` and `--help` (`after_help` with `EXAMPLES:` block) for any CLI change.
 2. Follow MVU strictly for UI changes — no logic in view functions.
 3. Update `CONTEXT.md` for architectural changes.
 
 ### Dispatching agent actions from the UI (review-blocking)
+
 Never decide *which* `Action` to send inside the `async` block handed to
 `Task::perform`. An action built in that closure is unreachable from any test
 that doesn't spin up an executor and a live agent, so a wrong variant stays
-invisible until it hits the server — this shipped once as new entries being
-sent via `UpdateEntry`, producing `PUT /ciphers/new-<unix_secs>` and an HTTP
-400 that discarded the user's unsaved work.
+invisible until it hits the server. `docs/testing.md` records what that cost
+the last time it happened.
 
 - **Build the action in a pure function**, then move it into the closure:
   `protocol::entry_save` (core, shared with the E2E suite) and, in the UI,
@@ -237,14 +223,17 @@ sent via `UpdateEntry`, producing `PUT /ciphers/new-<unix_secs>` and an HTTP
   clear it only on success, so a failed save leaves the user's input on screen.
 
 ## Code Organization
+
 - **Target file size: 150–250 lines.** This is the range where edits are reliable and context fits cleanly.
 - **Hard limit: 500 lines.** If a file exceeds this, split it before adding more code. No exceptions.
 - **One module = one responsibility.** If you find yourself writing "and also" when describing what a file does, it needs splitting.
 
 ### Modular Patterns (Mandatory)
+
 When a crate's main logic grows, decompose using these established patterns:
+
 - **`cosmic-bwarden-agent`**: Split into `handler.rs` (request routing), `server.rs` (API interaction), and `logind.rs` (DBus events).
-- **`cosmic-bwarden-core`**: 
+- **`cosmic-bwarden-core`**:
     - `api/`: Split into `models.rs` (DTOs) and `client.rs` (Network logic).
     - `db/`: Split into `models.rs` (Data structs) and `persistence.rs` (File I/O).
 - **`cosmic-bwarden-ui`**: Split into `app/state.rs` (State), `app/update.rs` (MVU logic), and `app/tasks.rs` (Async tasks).
@@ -273,97 +262,102 @@ When a crate's main logic grows, decompose using these established patterns:
 ## Optional Features
 
 ### TPM PIN Unlock (`--features tpm`)
-Seals the 64-byte vault key (`enc_key_expanded ‖ mac_key_expanded`) in a TPM2 object protected by a user PIN and bound to PCR{0,7} (firmware + Secure Boot state).
 
-- **Agent**: `cargo check -p cosmic-bwarden-agent --features tpm`
-- **Module**: `crates/cosmic-bwarden-agent/src/tpm/` — seal/unseal/clear using `tss-esapi 8.0.0-alpha.2` (`mod.rs` API, `policy.rs`, `blob.rs`, `ops.rs`)
-- **Handler**: `crates/cosmic-bwarden-agent/src/handler/auth/tpm_pin/` — per-concern handlers (`status`, `setup`, `unlock`, `disable`)
-- **State**: `tpm_configured` in agent `State`; `tpm_available`/`show_pin_unlock` in UI `CosmicBWardenApp`
-- **Blob storage** (all per-account, keyed by `dirs::account_hash` = `sha256hex16(server ‖ \0 ‖ email)`, persisted across reboots):
-  - `<data_dir>/tpm_sealed_<hash>.bin` — the vault symmetric keys, PCR{0,7} ∧ PIN. **Seal the vault keys, never `identity.keys`**: `handle_unlock_with_pin` uses the unsealed bytes directly as `state.keys`, so the KDF keys would decrypt nothing (this shipped once as a mismatch between the two setup paths).
-  - `<data_dir>/session_<hash>.enc` — the refresh token under XChaCha20-Poly1305 (`core/session_envelope.rs`); not a TPM object, since a refresh JWT far exceeds `TPM2_MAX_SYM_DATA` (256 bytes).
-- **Never persist the master-password hash (review-blocking).** It is derived per unlock, handed to `Client::login`, and dropped — no `State` field, no TPM blob, no envelope. A sealed-hash fallback existed briefly and was removed: it stored the strongest credential available to avoid a rare prompt, and could not satisfy 2FA regardless. Reprompt verification proves the password by decrypting `protected_key` (`handler/vault/query.rs`), which needs no stored hash and works after a PIN unlock too. `reauth::tests::no_master_password_hash_is_ever_persisted` pins this.
-- **Graceful degradation**: if TPM hardware is absent at runtime, `is_available()` returns false, UI hides PIN controls
-- **Smoke tests**: `cargo test -p cosmic-bwarden-tests --features tpm-smoke -- tpm --test-threads=1` (requires `swtpm` in PATH; auto-skip when absent)
-- **Never let a TPM test reach real hardware (review-blocking)**. Until 2026-09-05 the whole suite silently did, and `lockout.rs` drove a developer's actual TPM into dictionary-attack lockout. Two independent causes, both now fixed — keep both properties:
-  - `open_context` must **fail closed**: an explicitly configured TCTI that cannot be opened is an error, never a fall-through to `/dev/tpmrm0`. Note `TctiNameConf::from_environment_variable()` reads `TPM2TOOLS_TCTI`/`TCTI`/`TEST_TCTI`, **not** `TSS2_TCTI` — that one is read explicitly.
-  - tpm2-tss's swtpm TCTI derives the control socket as `<data-socket>.ctrl` (the `%s.ctrl` format string in `libtss2-tcti-swtpm`). `start_swtpm` must name them `swtpm.sock` / `swtpm.sock.ctrl`; any other pairing makes `Context::new` fail.
-  - The agent logs `TPM: using TCTI from TSS2_TCTI (…)` at debug — grep for it to confirm a test run is on the emulator.
+Seals the vault symmetric keys in a TPM2 object protected by a user PIN and
+bound to PCR{0,7} (firmware + Secure Boot state). Design, blob format, blob
+paths, and the code layout: `docs/tpm.md`.
 
-## Password Generator
+- **Check it with the feature on**: `cargo check -p cosmic-bwarden-agent --features tpm`. TPM code is invisible to a plain `cargo check` and to `cargo test`.
+- **Seal the vault keys, never `identity.keys`.** `handle_unlock_with_pin` uses
+  the unsealed bytes directly as `state.keys`, so sealing the KDF keys would
+  decrypt nothing. This shipped once as a mismatch between the two setup paths.
+- **Never persist the master-password hash (review-blocking).** It is derived
+  per unlock, handed to `Client::login`, and dropped — no `State` field, no TPM
+  blob, no envelope. Reprompt verification proves the password by decrypting
+  `protected_key` (`handler/vault/query.rs`), which needs no stored hash and
+  works after a PIN unlock too. `reauth::tests::no_master_password_hash_is_ever_persisted`
+  pins this.
+- **Graceful degradation**: if TPM hardware is absent at runtime,
+  `is_available()` returns false and the UI hides the PIN controls.
+- **Smoke tests**: `just test-tpm-smoke` (needs `swtpm` in PATH; auto-skips when
+  absent). The recipe is not part of `just test`.
+- **Never let a TPM test reach real hardware (review-blocking)** — the suite
+  silently did once, and drove a developer's actual TPM into dictionary-attack
+  lockout. Keep both properties:
+  - `open_context` must **fail closed**: an explicitly configured TCTI that
+    cannot be opened is an error, never a fall-through to `/dev/tpmrm0`. Note
+    `TctiNameConf::from_environment_variable()` reads
+    `TPM2TOOLS_TCTI`/`TCTI`/`TEST_TCTI`, **not** `TSS2_TCTI` — that one is read
+    explicitly.
+  - tpm2-tss's swtpm TCTI derives the control socket as `<data-socket>.ctrl`
+    (the `%s.ctrl` format string in `libtss2-tcti-swtpm`). `start_swtpm` must
+    name them `swtpm.sock` / `swtpm.sock.ctrl`; any other pairing makes
+    `Context::new` fail.
+  - The agent logs `TPM: using TCTI from TSS2_TCTI (…)` at debug — grep for it
+    to confirm a test run is on the emulator.
 
-Charset-based generation, "last used settings", and a 7-day local history — all agent-side (`crates/cosmic-bwarden-agent/src/handler/generator/`), deliberately its own dispatch group in `handler.rs` (not folded into `handler/vault/`), since generation must work with the vault **locked** and even with **no account configured at all**.
+### Password Generator
 
-- **Protocol**: `Action::GeneratePassword { settings: Option<GeneratorSettings> }` → `Response::GeneratedPassword { password }`. `Some` persists the settings as the new device-wide "last used" and generates with them; `None` reuses whatever is currently persisted. Every call appends to history. `Action::GetGeneratorSettings` / `Action::GetPasswordHistory` are the read-only counterparts.
-- **Algorithm**: `handler/generator/algorithm.rs` — forces one char from each selected charset, fills the rest from the union, shuffles. **Must use `rand::rngs::OsRng`** (via `rand::TryRngCore::unwrap_err()`, since `OsRng` is fallible in rand 0.9) — never `rand::rng()`/`ThreadRng`, and never the seeded `StdRng` used elsewhere in this codebase for deterministic fuzz tests.
-- **Settings storage**: `crates/cosmic-bwarden-core/src/generator_settings.rs` — plain JSON at `dirs::generator_settings_file()` (`<data_dir>/generator_settings.json`), device-global (no server/email in the path), *not* folded into `CosmicBWardenConfig` (which is account-shaped and unavailable pre-login).
-- **History storage**: `handler/generator/storage.rs` — postcard-encoded `Vec<{created_at, ciphertext}>` at `dirs::generator_history_file()` (`<data_dir>/generator_history.bin`), atomic tmp+rename+0600 (same pattern as `db::persistence::Db::save`). Pruned to 7 days on every read and write — no background sweep.
-- **At-rest encryption**: reuses `cipherstring.rs`'s existing `CipherString::encrypt_symmetric`/`decrypt_symmetric` (AES-256-CBC + HMAC-SHA256) with a **locally-generated, device-global key** (`dirs::generator_key_file()`, `<data_dir>/generator_key.bin`, 0600) — not derived from any account's master password, since generation must work standalone. **Threat model**: protects against a different local user, a stray backup, or misconfigured permissions elsewhere reading the file directly. Does **not** protect against another process running as the same local user (the key sits unguarded next to the ciphertext by design) — the same protection level as the vault `Db` JSON cache's 0600-only model, not as strong as anything gated by the master password.
-- **Surfaces sharing this**: desktop UI pane (`view/vault/generator.rs`), COSMIC applet quick-gen entry (`view/applet/menu.rs`, works while locked), `cosmic-bwarden-cli generate` (`commands/generator.rs`), browser extension context menu + inline field icon (`content-generate.js`, `docs/browser_integration.md`).
-- **Full design**: `docs/password_generator_plan.md`.
+Generation must work with the vault **locked** and even with **no account
+configured at all**, so it stays its own dispatch group in `handler.rs`, not
+folded into `handler/vault/`. Full design, storage paths, and the at-rest
+threat model: `docs/password_generator_plan.md`.
 
-## Browser Extension
+- **The algorithm must use `rand::rngs::OsRng`** (via
+  `rand::TryRngCore::unwrap_err()`, since `OsRng` is fallible in rand 0.9) —
+  never `rand::rng()`/`ThreadRng`, and never the seeded `StdRng` used elsewhere
+  in this codebase for deterministic fuzz tests.
+- **Settings are device-global** and must not be folded into
+  `CosmicBWardenConfig`, which is account-shaped and unavailable pre-login.
+- **History is encrypted at rest and pruned to 7 days on every read and write**
+  — no background sweep. Persist it atomically (tmp+rename) with mode `0600`,
+  the same pattern as `db::persistence::Db::save`.
+- Every surface shares one settings set and one history: desktop pane, applet
+  quick-gen (works while locked), `cosmic-bwarden-cli generate`, and the browser
+  extension. Do not fork the storage per surface.
 
-Source lives in `browser-extension/`. Plain vanilla JS — no bundler, no framework.
+### Browser Extension
 
-| File | Responsibility |
-|---|---|
-| `background.js` | Native messaging queue, badge count, theme-aware + lock-state icon switching (`<theme>_locked*.png` when locked *or* logged out) |
-| `background-save.js` | Save-prompt state machine: per-tab pending credentials, save/update decision via `CheckLoginMatch` |
-| `theme.js` | Design tokens (light+dark palette, radii, shadows) for the shadow-DOM surfaces — must stay in sync with `popup/popup.css`; loaded first in content scripts |
-| `content.js` | Form fill injected into pages |
-| `content-heuristics.js` | Shared pure DOM helpers (username-field detection, submitted-credential capture); loaded first |
-| `content-submit.js` | Login-form submit detection → `LOGIN_SUBMITTED` to background |
-| `content-bar.js` | In-page "Save/Update password?" floating card (open shadow root; never receives the password) |
-| `popup/popup.js` | View management, list rendering, fill, domain helpers |
-| `popup/popup-lock.js` | Locked-vault view: TPM PIN unlock, DA lockout feedback; loaded *before* `popup.js` — see `docs/browser_integration.md`'s "Script load order gotcha" |
-| `popup/popup-detail.js` | Detail view, secret reveal/copy (on-demand via `GetPassword`) |
-| `popup/popup-edit.js` | Edit/add form, field rendering |
-| `popup/popup-state.js` | View/search/draft persistence across popup close+reopen, in `storage.session`; scoped to the tab's domain |
-| `popup/icons.js` | Inline SVG icons for dynamically built buttons (monochrome, `currentColor`) — static header icons live in `popup.html` |
-| `popup/popup.css` | Popup design system: tokens, `.btn` component classes, views; dark mode via `prefers-color-scheme` |
+Plain vanilla JS — no bundler, no framework. File layout, message flow,
+protocol translation, and the script-load-order gotcha:
+`docs/browser_integration.md`.
 
-**Icons**: `browser-extension/icons` is a symlink to the repo-root `icons/` folder (black*.png for light theme, white*.png for dark). `zip -r` dereferences symlinks, so `pack-extension` embeds them correctly.
+- **Security invariant**: the detail view uses `GetEntryMeta` (no secrets).
+  Secrets are fetched only on explicit reveal/copy (`GetPassword`/`GetTotp`) or
+  fill (`GetEntry`). Never hold plaintext passwords in JS state from passive
+  browsing.
+- **Save prompt**: credentials captured at user-initiated form submit are the
+  one exception — they live transiently in the background per-tab pending map
+  (cleared on action/90 s TTL/tab close, never persisted or logged). "Does this
+  login exist / did the password change" is decided inside the agent
+  (`CheckLoginMatch`); the extension never fetches a stored secret to compare,
+  and `SHOW_SAVE_BAR` messages to the page never carry the password.
+- **Updates go through `UpdateLoginPassword { id, password }`** — never echo a
+  `GetEntryMeta` result through `UpdateEntry`, which wipes notes (redaction sets
+  them `None` and the merge treats `None` notes as a legitimate clear).
+- **Locked-vault save prompt**: a submission made while the vault is locked is
+  *deferred*, not dropped. Two rules keep that from silently losing the
+  credential it exists to protect: the locked bar's 30 s auto-dismiss must
+  **not** send `dismiss` (that clears the pending — only an explicit click
+  may), and the 90 s TTL is **restarted once** at deferral, since the original
+  window runs from the form submit and unlocking easily outlives what's left of
+  it.
+- **Validate with `just test-extension-unit` and `just test-extension-e2e`**
+  before reporting done; `just pack-extension` for anything that changes the
+  shipped file set.
 
-**Security invariant**: The detail view uses `GetEntryMeta` (no secrets). Secrets are fetched only on explicit reveal/copy (`GetPassword`/`GetTotp`) or fill (`GetEntry`). Never hold plaintext passwords in JS state from passive browsing.
+## Validation
 
-**Locked-vault save prompt**: a submission made while the vault is locked is *deferred*, not dropped — the pending credential stays put with `awaitingUnlock`, a `mode: 'locked'` bar offers "Unlock", and the popup's `VAULT_UNLOCKED` message re-evaluates every deferred tab into a real Save/Update bar. Two rules keep that from silently losing the credential it exists to protect: the locked bar's 30 s auto-dismiss must **not** send `dismiss` (that clears the pending — only an explicit click may), and the 90 s TTL is **restarted once** at deferral, since the original window runs from the form submit and unlocking easily outlives what's left of it.
-
-**Save prompt**: credentials captured at user-initiated form submit are the one exception — they live transiently in the background per-tab pending map (cleared on action/90 s TTL/tab close, never persisted or logged). "Does this login exist / did the password change" is decided inside the agent (`CheckLoginMatch`); the extension never fetches a stored secret to compare, and `SHOW_SAVE_BAR` messages to the page never carry the password. Updates go through `UpdateLoginPassword { id, password }` — never echo a `GetEntryMeta` result through `UpdateEntry`, which wipes notes (redaction sets them `None` and the merge treats `None` notes as a legitimate clear). See `docs/browser_integration.md`.
-
-**Unit-test loading gotcha**: `background-save.test.js` injects `sendToAgent` as a `new Function` parameter, but `background.js` *declares its own* `sendToAgent` (the native-messaging queue), which shadows any injected parameter — a unit test that injects it will hang forever. Load `background.js` with a fake `connectNative()` port whose `postMessage()` resolves the agent call and delivers the response through the real `onMessage` listener (see `background.test.js`).
-
-## Justfile (task runner)
-
-The project uses `just` for all build, install, and test orchestration. Key recipes:
-
-| Recipe | What it does |
-|---|---|
-| `just build` | Release build of all Rust crates (auto-detects TPM) |
-| `just install` | `build` + install binaries + register Firefox native host (system-wide, needs sudo) |
-| `just user-install` | Same but installs to `~/.local` (no sudo) |
-| `just pack-extension` | Zips **preselected production files only** (explicit allowlist in `packaging/pack-extension.sh` — nothing unlisted can ship; the old exclude-list approach leaked `.env` once) → `target/cosmic-bwarden-extension.zip`, with shape assertions. **Not part of `build`.** Never inline the zip command elsewhere — CI and the release workflow call the same script. |
-| `just register-browser-host` | Registers native host pointing at debug build (dev workflow) |
-| `just test` | Full Rust test suite in order: unit → agent → CLI → UI. The E2E steps auto-ensure a container socket via `ensure-container-socket` — **podman is the primary runtime** (`systemctl --user start podman.socket`; the harness auto-detects the user socket and needs no docker group); Docker is the fallback when `DOCKER_HOST`/`/var/run/docker.sock` exists |
-| `just test-extension-unit` | Extension JS unit tests (vitest) |
-| `just test-extension-e2e` | Extension Playwright E2E (Firefox, mock agent) |
-| `just test-extension-e2e-full` | Extension Playwright E2E (Firefox, real agent + Vaultwarden) |
-| `just test-extension-e2e-chrome` | Same but Chrome |
-| `just sign-extension` | The single signing entry point: stage production files → inject a fresh **timestamp version** (`YYYY.M.D.mmm`, dev signing — no tag/clean-tree requirements) and gecko `update_url` from `EXT_UPDATE_BASE_URL` → `web-ext lint` → AMO **unlisted** sign → `dist/cosmic-bwarden-<version>.xpi` (+ `dist/updates.json` when the base URL is set; append preserves entries; `update_hash` = sha256 of the signed XPI). Opt-in: requires `WEB_EXT_API_KEY`/`WEB_EXT_API_SECRET` — from the environment or the gitignored `browser-extension/.env` (parse-only loader `packaging/load-ext-env.sh`, 0600, explicit exports win; web-ext also reads the env natively via its WEB_EXT prefix, the config trampoline is belt-and-braces — never argv) — and pinned web-ext (10.6.0, checked at entry). Refuses versions already shipped in `dist/`. Prints one absolute output path per line for CI capture. Release mode: `EXT_SIGN_MODE=release` switches to the strict tag-based preflight (`vYYYY.MM.P[-alphaN]` tag on HEAD, clean tree; the tag version is injected into the staged manifest — alpha maps to the 4th component, e.g. `v2026.8.0-alpha` → `2026.8.0.1`; no manifest.json bumps needed) — used by the `sign-extension` job in `.github/workflows/release.yml`, which runs on every `v*` tag and attaches the signed XPI to the draft release |
-| `just test-ext-release` | Offline unit tests for the release pipeline's pure logic (`node --test packaging/*.test.mjs`) |
-| `just restart-panel` | Restart COSMIC panel after install |
-| `just enable-agent` | Enable + start agent systemd user service |
-
-When modifying the browser extension, validate with `just test-extension-unit` and `just test-extension-e2e` before reporting done.
-
-## Validation Commands
-```
+```sh
 cargo check -p <crate>
-cargo check -p cosmic-bwarden-agent --features tpm
-cargo test -p cosmic-bwarden-tests -- --test-threads=1
-cargo test -p cosmic-bwarden-tests --features tpm-smoke -- tpm --test-threads=1
+cargo check -p cosmic-bwarden-agent --features tpm    # tpm code is invisible otherwise
+just test                                            # whole Rust suite
+just test-tpm-smoke                                  # TPM suite; auto-skips without swtpm
 just test-extension-unit
 just test-extension-e2e
 just pack-extension
 just test-ext-release
 ```
+
+The full gate list (fmt, clippy, `--all-features` checks) is in
+`CONTRIBUTING.md`.

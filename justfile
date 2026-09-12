@@ -288,6 +288,19 @@ test-unit-tpm:
         echo "libtss2-esys not present; skipping"; \
     fi
 
+# Needs swtpm + swtpm_setup in PATH, libtss2-esys, and a container runtime;
+# skipped automatically when any of them is absent.
+#
+# [subset] TPM PIN unlock smoke tests on the swtpm emulator, not part of `just test`
+test-tpm-smoke: (ensure-container-socket)
+    echo "--- TPM smoke tests (swtpm emulator) ---"
+    if command -v swtpm >/dev/null 2>&1 && command -v swtpm_setup >/dev/null 2>&1 && pkg-config --exists tss2-esys 2>/dev/null; then \
+        {{_limited}} cargo build --quiet -p cosmic-bwarden-agent --features tpm --bin cosmic-bwarden-agent-tpm; \
+        {{_limited}} cargo test -p cosmic-bwarden-tests --lib --features tpm-smoke -- tpm --test-threads=1; \
+    else \
+        echo "swtpm/swtpm_setup or libtss2-esys not present; skipping"; \
+    fi
+
 # Running the suite against stale binaries fails the version-compatibility test
 # with a confusing mismatch (docs/review/00_ground_truth.md F9).
 #

@@ -38,4 +38,5 @@ For more details on specific system integrations and configuration, see:
 - [Implementation Details](./implementation.md)
 
 For architecture and security invariants, see [`CONTEXT.md`](../CONTEXT.md).
-For agent/AI guidelines and the full document index, see [`AGENTS.md`](../AGENTS.md).
+For agent/AI guidelines see [`AGENTS.md`](../AGENTS.md); the index of every
+document in `docs/` is in [`README.md`](../README.md).

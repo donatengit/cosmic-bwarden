@@ -211,8 +211,40 @@ exercise the full flow against a live Vaultwarden container. They require a
 software TPM emulator (`swtpm`) in the test environment. Run with:
 
 ```sh
-cargo test -p cosmic-bwarden-tests --features tpm-smoke -- tpm_lifecycle --test-threads=1
+just test-tpm-smoke
 ```
 
-(requires Docker or Podman, `swtpm` + `swtpm_setup` in PATH, and a
-`target/debug/cosmic-bwarden-agent-tpm` built with `--features tpm`.)
+The recipe builds `target/debug/cosmic-bwarden-agent-tpm` with `--features tpm`
+first, and skips itself when `swtpm`, `swtpm_setup`, or libtss2-esys is absent.
+Requires Docker or Podman for the Vaultwarden container.
+
+### Never let a TPM test reach real hardware
+
+Until 2026-09-05 the whole suite silently did, and `lockout.rs` drove a
+developer's actual TPM into dictionary-attack lockout. Two independent causes,
+both fixed — keep both properties:
+
+- `open_context` must **fail closed**: an explicitly configured TCTI that
+  cannot be opened is an error, never a fall-through to `/dev/tpmrm0`. Note
+  `TctiNameConf::from_environment_variable()` reads
+  `TPM2TOOLS_TCTI`/`TCTI`/`TEST_TCTI`, **not** `TSS2_TCTI` — that one is read
+  explicitly.
+- tpm2-tss's swtpm TCTI derives the control socket as `<data-socket>.ctrl` (the
+  `%s.ctrl` format string in `libtss2-tcti-swtpm`). `start_swtpm` must name them
+  `swtpm.sock` / `swtpm.sock.ctrl`; any other pairing makes `Context::new` fail.
+
+The agent logs `TPM: using TCTI from TSS2_TCTI (…)` at debug — grep for it to
+confirm a test run is on the emulator rather than the host chip.
+
+## Code layout
+
+| Piece | Where |
+|---|---|
+| Seal / unseal / clear, TCTI probe order, policy, blob format | `crates/cosmic-bwarden-agent/src/tpm/` — API in `mod.rs`, policy in `policy.rs`, blob format in `blob.rs`, operations in `ops.rs` |
+| IPC handlers (`status`, `setup`, `unlock`, `disable`) | `crates/cosmic-bwarden-agent/src/handler/auth/tpm_pin/` |
+| Agent state | `tpm_configured` in the agent's `State` |
+| UI state | `tpm_available` / `show_pin_unlock` on `CosmicBWardenApp`, which is what hides or shows the PIN controls |
+
+Enabled by the optional `tpm` feature (agent and UI). Build with
+`cargo check -p cosmic-bwarden-agent --features tpm`. Seal/unseal goes through
+`tss-esapi`.
