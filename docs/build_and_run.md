@@ -158,6 +158,13 @@ used day to day.
 
 ### Notes that are easy to get wrong
 
+- **Builds and tests run inside a systemd scope** with a CPU quota, a memory
+  throttle and a lowered CPU/I/O share, so a long run does not starve the
+  desktop. It needs no setup and degrades to an unwrapped run when systemd is
+  unavailable. Defaults, per-recipe overrides and the opt-in hard ceilings:
+  [`docs/testing.md`](testing.md), "Resource limits". `RUN_LIMITED_PRIORITY=0`
+  drops the scheduling limits but still scopes the run; only zero for *both*
+  caps runs unscoped.
 - **Never inline the extension zip command anywhere else** — CI and the release
   workflow call `packaging/pack-extension.sh` so every consumer produces the
   identical artifact.

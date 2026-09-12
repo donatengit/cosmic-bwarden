@@ -21,18 +21,31 @@ local_apps := local_share + "/applications"
 local_metainfo := local_share + "/metainfo"
 local_icons := local_share + "/icons/hicolor"
 
-# ── Test resource caps ────────────────────────────────────────────────────
-# Every test recipe runs inside a transient systemd scope with these caps, so a
-# long run leaves the desktop usable. Override per invocation, e.g.
+# ── Build and test resource caps ──────────────────────────────────────────
+# Every build and test recipe runs inside a transient systemd scope, so a long
+# run leaves the desktop usable. The scope sets a CPU share, an I/O share and a
+# nice level, so it loses a contention against the foreground session while
+# still taking every idle core. Override per invocation, e.g.
 #   just test_cpus=12 test
-#   just test_cpus=0 test          # no caps at all
+#   just test_cpus=0 test_memory=0 test     # drop the hard caps, keep the shares
+# RUN_LIMITED_PRIORITY=0 just test          # drop the shares, keep the caps
+# Every other knob (the weights, nice, and the opt-in MemoryMax / MemorySwapMax
+# / TasksMax ceilings), plus why the hard ceilings are off by default, is in
+# packaging/run-limited.sh.
 # The scope covers cargo, rustc, the test binaries and the agents they spawn.
 # It does NOT cover rootless podman containers, which podman places in a
 # sibling cgroup; those are capped from inside the harness instead. See
 # docs/testing.md, "Container resource limits".
 test_cpus := "6"
 test_memory := "8G"
+# Builds get the same treatment with their own budget. They default to no hard
+# caps — a release build is foreground work and may take the whole machine —
+# so raise these only when a build is fighting something else:
+#   just build_cpus=8 build
+build_cpus := "0"
+build_memory := "0"
 _limited := "./packaging/run-limited.sh " + test_cpus + " " + test_memory
+_build_limited := "./packaging/run-limited.sh " + build_cpus + " " + build_memory
 
 # Auto-detect TPM2 support: enable the agent's `tpm` feature when libtss2-esys is present.
 _tpm_features := `pkg-config --exists tss2-esys 2>/dev/null && echo '--features cosmic-bwarden-agent/tpm' || true`
@@ -40,13 +53,17 @@ _tpm_features := `pkg-config --exists tss2-esys 2>/dev/null && echo '--features 
 # Default task: build the project
 default: build
 
-# Build all components in release mode
+# Build all components in release mode.
+#
+# Only the direct branch is scoped. A systemd --user scope needs the invoking
+# session's user manager, and `sudo -u` carries no XDG_RUNTIME_DIR, so the sudo
+# branch would fall back to running unconfined regardless. Keep those attended.
 build:
     if [ -n "${SUDO_USER:-}" ]; then \
         echo "Detected sudo, running cargo build as $SUDO_USER..."; \
         sudo -u "$SUDO_USER" env PATH="$PATH" RUSTFLAGS="-C target-cpu=native" cargo build --release --quiet {{_tpm_features}}; \
     else \
-        RUSTFLAGS="-C target-cpu=native" cargo build --release --quiet {{_tpm_features}}; \
+        RUSTFLAGS="-C target-cpu=native" {{_build_limited}} cargo build --release --quiet {{_tpm_features}}; \
     fi
 
 # Install binaries, desktop entry, and COSMIC applet metadata system-wide
@@ -253,7 +270,7 @@ uninstall:
 
 # Clean build artifacts
 clean: uninstall
-    cargo clean --quiet
+    {{_build_limited}} cargo clean --quiet
 
 # The filtered recipes below (test-agent / test-cli / test-ui) are focused
 # subsets for iterating on one area; they are NOT a partition of the suite, and
@@ -306,7 +323,7 @@ test-tpm-smoke: (ensure-container-socket)
 #
 # Rebuild the debug binaries the E2E harness launches
 build-test-binaries:
-    {{_limited}} cargo build --quiet -p cosmic-bwarden-agent -p cosmic-bwarden-cli
+    {{_build_limited}} cargo build --quiet -p cosmic-bwarden-agent -p cosmic-bwarden-cli
 
 # Container runtime: podman is the primary path — the test harness
 # auto-detects the podman user socket (no docker group required). Docker is
@@ -365,7 +382,7 @@ run: build
 
 # [Dev] Register native messaging host pointing to debug build (use without a full install)
 register-browser-host:
-    cargo build -p cosmic-bwarden-agent --quiet
+    {{_build_limited}} cargo build -p cosmic-bwarden-agent --quiet
     python3 tests/browser-extension/register_host.py
 
 # Pack the browser extension for distribution (production files only → target/)

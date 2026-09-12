@@ -35,34 +35,51 @@ suite: an earlier filter list left 41 of 90 E2E tests unrun, which is why
 
 ## Resource limits
 
-A full run takes over twenty minutes. Without limits it saturates the machine
-for that whole time, so the test recipes constrain it. There are two layers,
-because one mechanism cannot reach both halves.
+A full run takes over twenty minutes, and a release build saturates the same
+cores for as long as it lasts. Without limits both monopolise the machine, so
+the build and test recipes constrain them. There are two layers, because one
+mechanism cannot reach both halves.
 
 ### Layer 1 — the systemd scope, for everything `just` starts
 
-Each test recipe runs its command through `packaging/run-limited.sh`, which
-wraps it in a transient systemd scope. This covers cargo, rustc, the test
-binaries, and the agent processes the suite spawns — the bulk of the CPU a test
-run uses.
+Each build and test recipe runs its command through
+`packaging/run-limited.sh`, which wraps it in a transient systemd scope. This
+covers cargo, rustc, the test binaries, and the agent processes the suite
+spawns — the bulk of the CPU a run uses.
 
-Two `just` variables control it:
+Two pairs of `just` variables control the hard caps:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `test_cpus` | `6` | Cores for the whole run. `0` disables the CPU cap. |
-| `test_memory` | `8G` | Memory for the whole run, applied as `MemoryHigh` (throttle, not a hard kill). `0` disables it. |
+| `test_cpus` | `6` | Cores for a test run. `0` disables the CPU cap. |
+| `test_memory` | `8G` | Memory for a test run, applied as `MemoryHigh` (throttle, not a hard kill). `0` disables it. |
+| `build_cpus` | `0` | Cores for a build. `0` disables the CPU cap. |
+| `build_memory` | `0` | Memory for a build, applied as `MemoryHigh`. `0` disables it. |
+
+Builds default to no hard caps on purpose: a release build is foreground work
+the user asked for, and capping it would only make it slower. What keeps the
+desktop usable during a build is the scope's scheduling settings — `CPUWeight`,
+`IOWeight` and a `nice` level — which apply to builds and test runs alike, so
+either yields to whatever the user is doing while still taking every idle core.
 
 ```bash
-just test                      # capped at 6 cores / 8G
+just test                      # capped at 6 cores / 8G, plus the shares
 just test_cpus=12 test         # let it use the whole machine
-just test_cpus=0 test_memory=0 test   # no caps at all
+just test_cpus=0 test_memory=0 test   # drop the hard caps, keep the shares
+just build_cpus=8 build        # cap a build that is fighting something else
+RUN_LIMITED_PRIORITY=0 just test      # drop the shares, keep the caps
 ```
+
+Every other knob — the weights, the nice level, and the opt-in `MemoryMax`,
+`MemorySwapMax` and `TasksMax` ceilings, which stay off because they kill rather
+than throttle — is documented in `packaging/run-limited.sh`. The scheduling
+limits are independent of the caps: `RUN_LIMITED_PRIORITY=0` drops them but
+still scopes the run, so zero for *both* caps is the only way to run unscoped.
 
 The script falls back to running the command unwrapped, with a note on stderr,
 when systemd is unavailable (a container, a CI runner with no user manager, a
-non-systemd host). The caps are a courtesy to the developer's machine, never a
-correctness requirement.
+non-systemd host), and when `systemd-run` rejects the limits. The caps are a
+courtesy to the developer's machine, never a correctness requirement.
 
 ### Layer 2 — per-container caps, because containers escape the scope
 
