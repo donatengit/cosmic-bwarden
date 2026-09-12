@@ -34,6 +34,16 @@ zeroize = { version = "1.8", features = ["derive"] }
 # qualifier on our side double-compiles 5 libcosmic crates. The alternative is
 # pinning a rev here for fully controlled bumps, at the cost of that duplicate
 # compilation; we chose the unified graph instead.
+#
+# The lock deliberately holds 53314201b (2026-09-11), the COSMIC 1.8-era commit
+# that is the master tip's parent, not the tip itself: the tip's "chore: update
+# iced" commit moves the bundled iced submodule's cosmic-client-toolkit pin to
+# rev c0cff4d while libcosmic's own Cargo.toml still pins rev 32283d7, so that
+# one commit resolves two cosmic-protocols sources into the graph. A [patch]
+# cannot repair it — Cargo rejects a same-URL patch ("patches must point to
+# different sources") and silently ignores a rev-qualified key — so the pin is
+# the only way to keep one instance per dependency. 53314201b carries the same
+# iced and cosmic-protocols revisions the workspace had on 2026-08-24.
 libcosmic = { git = "https://github.com/pop-os/libcosmic" }
 cosmic-config = { git = "https://github.com/pop-os/libcosmic", default-features = false, features = ["macro"] }
 i18n-embed = { version = "0.16.0", features = ["fluent-system", "desktop-requester"] }

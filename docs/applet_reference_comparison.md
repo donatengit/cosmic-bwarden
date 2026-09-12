@@ -90,10 +90,10 @@ cosmic-settings' panel-applets page.
 - **Popup:** `applet_view` (`view/applet/mod.rs:28-45`) uses
   `icon_button_from_handle(...).on_press_with_rectangle(|offset, bounds|
   Message::AppletIconClicked(offset, bounds))`. The `Message` carries the raw
-  coordinates; `app/update/applet.rs:35-50` toggles/destroys the existing
-  popup, else `open_applet_popup_task` (`applet.rs:523-588`) opens
-  `app_popup` with the same `anchor_rect = bounds - offset` math
-  (`applet.rs:574-580`), plus a protocol-version check, `GetConfig` refresh,
+  coordinates; `app/update/applet.rs`'s `AppletIconClicked` arm toggles or
+  destroys the existing popup, else `open_applet_popup_task`
+  (`app/update/applet/popup.rs`) opens `app_popup` with the same anchor
+  math (`anchor_rect = bounds - offset`), a protocol-version check, `GetConfig` refresh,
   and input focus. Popup content is routed via `WindowState::Popup`
   (`view/mod.rs:103-124`).
 - **Popup content** (`view/applet/mod.rs:47-89`): header row (menu.rs), then
@@ -157,7 +157,7 @@ Non-issues confirmed while comparing:
 Severity is a review-priority guess, not a confirmed vulnerability. All paths
 repo-relative.
 
-1. **`xdg-open` with a vault-derived URI** — `crates/cosmic-bwarden-ui/src/app/update/applet.rs:255-258`
+1. **`xdg-open` with a vault-derived URI** — `crates/cosmic-bwarden-ui/src/app/update/applet.rs`'s `AppletOpenLink` arm
    spawns `xdg-open <uri>` where `uri` comes from a login entry's name field
    (vault data → external program). The gate `is_uri_like`
    (`app/applet_search.rs:52-59`) is conservative: it strips only

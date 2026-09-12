@@ -1,69 +1,29 @@
 use crate::app::applet_search;
 use crate::app::state::CosmicBWardenApp;
-use crate::app::tasks::{check_protocol_version, fetch_applet_search, fetch_applet_secret};
+use crate::app::tasks::{fetch_applet_search, fetch_applet_secret};
 use crate::app::update::{auth_actions, generator_actions};
 use crate::fl;
 use crate::message::{Message, UnlockMode, View};
-use crate::view::applet::{search, unlock};
+use crate::view::applet::search;
 use crate::MIN_PIN_LEN;
 use cosmic::app::Task;
-use cosmic::iced::window;
 use cosmic::widget::text_input;
-use cosmic::widget::Toast;
 use cosmic::Action;
 use cosmic_bwarden_core::agent_client::AgentClient;
 use cosmic_bwarden_core::protocol::{Action as AgentAction, Response};
 use zeroize::Zeroize;
 
-/// Debounce window for the applet popup reopen race, in milliseconds. After an
-/// icon click closes the popup, a second click within this window is treated as
-/// part of the same physical press (Wayland can deliver a close and then a
-/// follow-up event that sees the popup gone and would re-open it) and is
-/// suppressed. Mirrors `cosmic-ext-applet-external-monitor-brightness`'s
-/// 200 ms `last_quit` gate.
-pub(crate) const APPLET_POPUP_REOPEN_DEBOUNCE_MS: u128 = 200;
+mod helpers;
+mod popup;
 
-/// True when a popup reopen should be suppressed because the popup was just
-/// closed within [`APPLET_POPUP_REOPEN_DEBOUNCE_MS`]. Pure so the toggle
-/// race logic is unit-testable without a live executor.
-pub(crate) fn should_suppress_popup_reopen(
-    last_closed_at: Option<std::time::Instant>,
-    now: std::time::Instant,
-) -> bool {
-    last_closed_at
-        .map(|t| now.duration_since(t).as_millis() < APPLET_POPUP_REOPEN_DEBOUNCE_MS)
-        .unwrap_or(false)
-}
-
-/// Compute the popup's `anchor_rect` from the icon-click `(offset, bounds)` and
-/// clamp every side to at least 1px (as `cosmic-applet-time` does). A 0-width or
-/// negative anchor from degenerate icon bounds would produce a zero-sized
-/// positioning rect and a misplaced/never-mapped popup. `positioner.anchor_rect`
-/// is `Rectangle<i32>`; `bounds`/`offset` are in logical floats. Pure so the
-/// clamp is unit-testable without a live executor/popup surface.
-pub(crate) fn clamped_anchor_rect(
-    offset: cosmic::iced::Vector,
-    bounds: cosmic::iced::Rectangle,
-) -> cosmic::iced::Rectangle<i32> {
-    cosmic::iced::Rectangle {
-        x: (bounds.x - offset.x).max(1.0) as i32,
-        y: (bounds.y - offset.y).max(1.0) as i32,
-        width: bounds.width.max(1.0) as i32,
-        height: bounds.height.max(1.0) as i32,
-    }
-}
-
-/// Which unlock field the applet popup should autofocus: the PIN field when
-/// TPM PIN unlock is active, the master password field otherwise. Pulled out
-/// as a pure function so the decision is unit-testable independent of the
-/// opaque `Task` returned by `text_input::focus`.
-pub(crate) fn unlock_focus_id(mode: crate::message::UnlockMode) -> cosmic::widget::Id {
-    if mode == crate::message::UnlockMode::Pin {
-        unlock::pin_input_id()
-    } else {
-        unlock::password_input_id()
-    }
-}
+// The message arms below call this one directly. The remaining helpers are
+// reached only by `app/tests/applet.rs`, through the path they had before the
+// split (`crate::app::update::applet::{…}`), so they are re-exported under
+// `cfg(test)`: a plain `pub(crate) use` of items no non-test code calls trips
+// `unused_imports`, which the workspace denies.
+pub(crate) use helpers::should_suppress_popup_reopen;
+#[cfg(test)]
+pub(crate) use helpers::{clamped_anchor_rect, unlock_focus_id, APPLET_POPUP_REOPEN_DEBOUNCE_MS};
 
 impl CosmicBWardenApp {
     pub fn update_applet(&mut self, message: Message) -> Option<Task<Message>> {
@@ -79,8 +39,8 @@ impl CosmicBWardenApp {
                     // Record the close so a follow-up event in the same
                     // physical press cannot immediately re-open the popup.
                     self.applet_last_popup_closed_at = Some(std::time::Instant::now());
-                    return Some(Task::done(cosmic::Action::Cosmic(
-                        cosmic::app::Action::Surface(cosmic::surface::action::destroy_popup(id)),
+                    return Some(Task::done(cosmic::Action::Surface(
+                        cosmic::surface::action::destroy_popup(id),
                     )));
                 }
 
@@ -102,18 +62,19 @@ impl CosmicBWardenApp {
                 self.applet_last_popup_closed_at = None;
                 Some(self.open_applet_popup_task((offset, bounds)))
             }
-            Message::Surface(action) => Some(Task::done(cosmic::Action::Cosmic(
-                cosmic::app::Action::Surface(action),
-            ))),
+            // Surface actions come back as our own messages after the applet
+            // popup is created (`app_popup` in `open_applet_popup_task`).
+            // Forward them untouched: libcosmic intercepts `Action::Surface`
+            // in its own update loop (see the surface module docs), and the
+            // variant is typed on our message, so it cannot be handled here.
+            Message::Surface(action) => Some(Task::done(cosmic::Action::Surface(action))),
             Message::Exit => {
                 let mut tasks = Vec::new();
 
                 if let Some(popup_id) = self.applet_popup.take() {
                     self.windows.remove(&popup_id);
-                    tasks.push(Task::done(cosmic::Action::Cosmic(
-                        cosmic::app::Action::Surface(cosmic::surface::action::destroy_popup(
-                            popup_id,
-                        )),
+                    tasks.push(Task::done(cosmic::Action::Surface(
+                        cosmic::surface::action::destroy_popup(popup_id),
                     )));
                 }
 
@@ -142,10 +103,8 @@ impl CosmicBWardenApp {
 
                 if let Some(popup_id) = self.applet_popup.take() {
                     self.windows.remove(&popup_id);
-                    tasks.push(Task::done(cosmic::Action::Cosmic(
-                        cosmic::app::Action::Surface(cosmic::surface::action::destroy_popup(
-                            popup_id,
-                        )),
+                    tasks.push(Task::done(cosmic::Action::Surface(
+                        cosmic::surface::action::destroy_popup(popup_id),
                     )));
                 }
 
@@ -576,102 +535,5 @@ impl CosmicBWardenApp {
 
             _ => None,
         }
-    }
-
-    /// Resets transient popup state and builds the task that opens the
-    /// applet popup, focused on whichever unlock field is actually shown
-    /// (PIN when TPM PIN unlock is active, master password otherwise).
-    ///
-    /// `(offset, bounds)` come from the icon click and position the popup
-    /// next to the clicked applet icon. Only ever called from a click:
-    /// cosmic-panel drops popups created while no panel surface is
-    /// hovered/focused (see the note in `update_lifecycle`'s `PinRequested`),
-    /// so opening from anywhere else can never map a popup.
-    pub(crate) fn open_applet_popup_task(
-        &mut self,
-        anchor: (cosmic::iced::Vector, cosmic::iced::Rectangle),
-    ) -> Task<Message> {
-        // Reset only truly transient state; preserve search query and
-        // favourites-filter so the popup re-opens with the last search intact.
-        self.applet_unlock_password.zeroize();
-        self.applet_unlock_password_revealed = false;
-        self.applet_reprompt_id = None;
-        self.applet_reprompt_password.zeroize();
-        self.applet_reprompt_password_revealed = false;
-        self.applet_error = None;
-
-        let mut tasks = Vec::new();
-        tasks.push(check_protocol_version());
-        tasks.push(text_input::focus(unlock_focus_id(self.unlock_mode)));
-        tasks.push(Task::perform(
-            async {
-                let agent = AgentClient::new();
-                match agent.send(AgentAction::GetConfig).await {
-                    Ok(Response::Config {
-                        config,
-                        needs_login,
-                        has_account,
-                        is_locked,
-                        sync_failed,
-                        session_id,
-                        lock_epoch,
-                    }) => Ok((
-                        config,
-                        needs_login,
-                        has_account,
-                        is_locked,
-                        sync_failed,
-                        session_id,
-                        lock_epoch,
-                    )),
-                    Ok(Response::Error { message }) => Err(message),
-                    _ => Err("unexpected response".to_string()),
-                }
-            },
-            |res| cosmic::Action::App(Message::ConfigReceived(res)),
-        ));
-
-        let popup_task = Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Surface(
-            cosmic::surface::action::app_popup::<CosmicBWardenApp>(
-                |_| Default::default(),
-                move |state: &mut CosmicBWardenApp| {
-                    let new_id = window::Id::unique();
-                    tracing::info!(?new_id, "creating applet popup surface");
-                    state.applet_popup = Some(new_id);
-                    state
-                        .windows
-                        .insert(new_id, crate::message::WindowState::Popup);
-                    let mut popup_settings = state.core.applet.get_popup_settings(
-                        state.core.main_window_id().unwrap_or(window::Id::RESERVED),
-                        new_id,
-                        None,
-                        None,
-                        None,
-                    );
-                    let (offset, bounds) = anchor;
-                    // Clamp the anchor rectangle to at least 1px on every side
-                    // (as cosmic-applet-time does): a 0-width/0-height or negative
-                    // anchor from a degenerate icon bounds would produce a
-                    // zero-sized positioning rect and a misplaced/never-mapped
-                    // popup. `bounds` is in logical floats; cast after clamping.
-                    popup_settings.positioner.anchor_rect = clamped_anchor_rect(offset, bounds);
-                    popup_settings.positioner.size_limits =
-                        crate::view::applet::applet_popup_limits();
-                    popup_settings
-                },
-                None,
-            ),
-        )));
-        tasks.push(popup_task);
-        Task::batch(tasks)
-    }
-
-    fn applet_copy_to_clipboard(&mut self, value: String) -> Task<Message> {
-        let clipboard_task = self.copy_to_clipboard_with_autoclear(value);
-        let toast_task = self
-            .applet_toasts
-            .push(Toast::new(fl!("copied-to-clipboard")))
-            .map(cosmic::Action::App);
-        Task::batch(vec![clipboard_task, toast_task])
     }
 }

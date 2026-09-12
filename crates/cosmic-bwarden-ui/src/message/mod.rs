@@ -152,7 +152,7 @@ pub enum Message {
     ToggleAdvanced,
 
     // Applet actions
-    Surface(cosmic::surface::Action),
+    Surface(cosmic::surface::Action<Message>),
     OpenVaultRequested,
     Token(cosmic::applet::token::subscription::TokenUpdate),
 
