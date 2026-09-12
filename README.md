@@ -81,7 +81,8 @@ for the `tpm` feature). Details in [docs/build_and_run.md](docs/build_and_run.md
 ```sh
 git clone https://github.com/donatengit/cosmic-bwarden
 cd cosmic-bwarden
-just user-install    # to ~/.local (no sudo); or: sudo just install
+just build           # release binaries in target/
+just install         # copy them to ~/.local (does not compile)
 just enable-agent    # systemd --user enable + start the agent
 just restart-panel   # let the COSMIC panel discover the applet
 ```

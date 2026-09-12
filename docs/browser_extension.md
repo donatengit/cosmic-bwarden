@@ -66,7 +66,7 @@ Chrome/Chromium registration is handled automatically during Playwright E2E test
 
 | Target | What it does |
 |---|---|
-| `just install` | Full system install — binaries, service, and native messaging host |
+| `just install` | User-local install — `~/.local/bin`, systemd `--user` unit, and native messaging host |
 | `just pack-extension` | Zip production files → `target/cosmic-bwarden-extension.zip` |
 | `just test-extension-setup` | `npm install` in `browser-extension/` |
 | `just test-extension-unit` | Run Vitest unit tests (popup logic, no browser) |

@@ -141,8 +141,8 @@ used day to day.
 | Recipe | What it does |
 |---|---|
 | `just build` | Release build of all Rust crates (auto-detects TPM) |
-| `just install` | `build` + install binaries + register Firefox native host (system-wide, needs sudo) |
-| `just user-install` | Same but installs to `~/.local` (no sudo) |
+| `just install` | Copy already-built `target/release` binaries to `~/.local/bin`, systemd `--user` unit, applet metadata, Firefox native host. Does not compile — run `just build` first. `just user-install` is an alias. |
+| `just clean-install` | `uninstall` then `install` |
 | `just pack-extension` | Zips preselected production files only (explicit allowlist in `packaging/pack-extension.sh` — nothing unlisted can ship; the old exclude-list approach leaked `.env` once) → `target/cosmic-bwarden-extension.zip`, with shape assertions. Not part of `build`. |
 | `just register-browser-host` | Registers native host pointing at debug build (dev workflow) |
 | `just test` | Full Rust test suite in order: unit → agent → CLI → UI. The E2E steps auto-ensure a container socket via `ensure-container-socket` — podman is the primary runtime (`systemctl --user start podman.socket`; the harness auto-detects the user socket and needs no docker group); Docker is the fallback when `DOCKER_HOST`/`/var/run/docker.sock` exists |

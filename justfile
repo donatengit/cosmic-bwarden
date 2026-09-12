@@ -12,14 +12,14 @@ metainfo_dir := share_dir + "/metainfo"
 icons_dir := share_dir + "/icons/hicolor"
 systemd_user_dir := "/usr/lib/systemd/user"
 
-# Resolve the invoking user's home dir even when run via `sudo just ...`,
-# so user-local install/uninstall paths don't end up under /root.
-real_home := `if [ -n "${SUDO_USER:-}" ]; then getent passwd "$SUDO_USER" | cut -d: -f6; else echo "$HOME"; fi`
-local_share := real_home + "/.local/share"
+home := env_var("HOME")
+local_share := home + "/.local/share"
 local_applets := local_share + "/cosmic/applets"
 local_apps := local_share + "/applications"
 local_metainfo := local_share + "/metainfo"
 local_icons := local_share + "/icons/hicolor"
+local_bin := home + "/.local/bin"
+local_systemd := home + "/.config/systemd/user"
 
 # ── Build and test resource caps ──────────────────────────────────────────
 # Every build and test recipe runs inside a transient systemd scope, so a long
@@ -50,135 +50,37 @@ _tpm_features := `pkg-config --exists tss2-esys 2>/dev/null && echo '--features 
 # Default task: build the project
 default: build
 
-# Build all components in release mode.
-#
-# Only the direct branch is scoped. A systemd --user scope needs the invoking
-# session's user manager, and `sudo -u` carries no XDG_RUNTIME_DIR, so the sudo
-# branch would fall back to running unconfined regardless. Keep those attended.
+# Release build. This is the only recipe that compiles.
 build:
-    if [ -n "${SUDO_USER:-}" ]; then \
-        echo "Detected sudo, running cargo build as $SUDO_USER..."; \
-        sudo -u "$SUDO_USER" env PATH="$PATH" RUSTFLAGS="-C target-cpu=native" cargo build --release --quiet {{_tpm_features}}; \
-    else \
-        RUSTFLAGS="-C target-cpu=native" {{_build_limited}} cargo build --release --quiet {{_tpm_features}}; \
-    fi
+    RUSTFLAGS="-C target-cpu=native" {{_build_limited}} cargo build --release --quiet {{_tpm_features}}
 
-# Install binaries, desktop entry, and COSMIC applet metadata system-wide
-install: build
-    echo "Installing binaries..."
-    install -Dm755 target/release/cosmic-bwarden-agent {{bin_dir}}/cosmic-bwarden-agent
-    install -Dm755 target/release/cosmic-applet-bwarden {{bin_dir}}/cosmic-applet-bwarden
-    install -Dm755 target/release/cosmic-bwarden-cli {{bin_dir}}/cosmic-bwarden-cli
-    
-    echo "Installing desktop entry..."
-    install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop {{apps_dir}}/com.enikeev.cosmic_bwarden.desktop
-
-    echo "Installing AppStream metainfo..."
-    install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.metainfo.xml {{metainfo_dir}}/com.enikeev.cosmic_bwarden.metainfo.xml
-
-    echo "Installing application icon..."
-    install -Dm644 icons/black.svg {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
-    install -Dm644 icons/black16.png {{icons_dir}}/16x16/apps/com.enikeev.cosmic_bwarden.png
-    install -Dm644 icons/black32.png {{icons_dir}}/32x32/apps/com.enikeev.cosmic_bwarden.png
-    install -Dm644 icons/black64.png {{icons_dir}}/64x64/apps/com.enikeev.cosmic_bwarden.png
-    install -Dm644 icons/black128.png {{icons_dir}}/128x128/apps/com.enikeev.cosmic_bwarden.png
-    install -Dm644 crates/cosmic-bwarden-ui/resources/icons/cosmic-bwarden-symbolic.svg {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg
-
-    echo "Installing COSMIC applet metadata..."
-    mkdir -p {{applets_dir}}
-    echo '( name: "COSMIC BWarden", description: "Secure Bitwarden client for COSMIC", identifier: "com.enikeev.cosmic_bwarden", icon: "com.enikeev.cosmic_bwarden-symbolic", )' > {{applets_dir}}/com.enikeev.cosmic_bwarden.ron
-
-    echo "Installing systemd user service..."
-    mkdir -p {{systemd_user_dir}}
-    sed "s|@BINDIR@|{{bin_dir}}|g" crates/cosmic-bwarden-agent/res/cosmic-bwarden-agent.service > /tmp/cosmic-bwarden-agent.service
-    install -Dm644 /tmp/cosmic-bwarden-agent.service {{systemd_user_dir}}/cosmic-bwarden-agent.service
-    rm /tmp/cosmic-bwarden-agent.service
-    echo "Reloading systemd user daemon..."
-    if [ -n "$SUDO_USER" ]; then \
-        sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$(id -u $SUDO_USER)" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u $SUDO_USER)/bus" systemctl --user daemon-reload; \
-    else \
-        systemctl --user daemon-reload; \
-    fi
-    if [ -n "{{_tpm_features}}" ]; then \
-        TARGET_USER="${SUDO_USER:-$USER}"; \
-        if ! id -nG "$TARGET_USER" 2>/dev/null | grep -qw tss; then \
-            echo "TPM2 support compiled in — adding $TARGET_USER to the 'tss' group..."; \
-            usermod -aG tss "$TARGET_USER" && \
-            echo "NOTE: log out and back in (or run 'newgrp tss') for TPM access to take effect."; \
-        else \
-            echo "TPM2 support compiled in — $TARGET_USER is already in the 'tss' group."; \
-        fi; \
-    fi
-    echo "Registering Firefox native messaging host..."
-    sudo -u "${SUDO_USER:-$USER}" python3 tests/browser-extension/register_host.py \
-        --agent-path {{bin_dir}}/cosmic-bwarden-agent \
-        --home {{real_home}}
-    echo "Done. Please run 'just restart-panel' and 'just enable-agent'."
-
-# Perform a completely fresh installation (removes old files first)
-clean-install: uninstall build
-    echo "Installing binaries..."
-    sudo install -Dm755 target/release/cosmic-bwarden-agent {{bin_dir}}/cosmic-bwarden-agent
-    sudo install -Dm755 target/release/cosmic-applet-bwarden {{bin_dir}}/cosmic-applet-bwarden
-    sudo install -Dm755 target/release/cosmic-bwarden-cli {{bin_dir}}/cosmic-bwarden-cli
+# Copy already-built release binaries and metadata into ~/.local.
+# Does not compile — run `just build` first. Deb/AUR remain the system-wide path.
+install:
+    test -x target/release/cosmic-bwarden-agent \
+        -a -x target/release/cosmic-applet-bwarden \
+        -a -x target/release/cosmic-bwarden-cli \
+        || { echo "missing target/release binaries; run: just build" >&2; exit 1; }
+    echo "Installing binaries to {{local_bin}}..."
+    mkdir -p {{local_bin}}
+    install -Dm755 target/release/cosmic-bwarden-agent {{local_bin}}/cosmic-bwarden-agent
+    install -Dm755 target/release/cosmic-applet-bwarden {{local_bin}}/cosmic-applet-bwarden
+    install -Dm755 target/release/cosmic-bwarden-cli {{local_bin}}/cosmic-bwarden-cli
 
     echo "Installing desktop entry..."
-    sudo install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop {{apps_dir}}/com.enikeev.cosmic_bwarden.desktop
-
-    echo "Installing AppStream metainfo..."
-    sudo install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.metainfo.xml {{metainfo_dir}}/com.enikeev.cosmic_bwarden.metainfo.xml
-
-    echo "Installing application icon..."
-    sudo install -Dm644 icons/black.svg {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
-    sudo install -Dm644 icons/black16.png {{icons_dir}}/16x16/apps/com.enikeev.cosmic_bwarden.png
-    sudo install -Dm644 icons/black32.png {{icons_dir}}/32x32/apps/com.enikeev.cosmic_bwarden.png
-    sudo install -Dm644 icons/black64.png {{icons_dir}}/64x64/apps/com.enikeev.cosmic_bwarden.png
-    sudo install -Dm644 icons/black128.png {{icons_dir}}/128x128/apps/com.enikeev.cosmic_bwarden.png
-    sudo install -Dm644 crates/cosmic-bwarden-ui/resources/icons/cosmic-bwarden-symbolic.svg {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg
-
-    echo "Installing COSMIC applet metadata..."
-    sudo mkdir -p {{applets_dir}}
-    sudo sh -c "echo '( name: \"COSMIC BWarden\", description: \"Secure Bitwarden client for COSMIC\", identifier: \"com.enikeev.cosmic_bwarden\", icon: \"com.enikeev.cosmic_bwarden-symbolic\" )' > {{applets_dir}}/com.enikeev.cosmic_bwarden.ron"
-
-    echo "Installing systemd user service..."
-    sudo mkdir -p {{systemd_user_dir}}
-    sed "s|@BINDIR@|{{bin_dir}}|g" crates/cosmic-bwarden-agent/res/cosmic-bwarden-agent.service > /tmp/cosmic-bwarden-agent.service
-    sudo install -Dm644 /tmp/cosmic-bwarden-agent.service {{systemd_user_dir}}/cosmic-bwarden-agent.service
-    rm /tmp/cosmic-bwarden-agent.service
-    echo "Reloading systemd user daemon..."
-    if [ -n "$SUDO_USER" ]; then \
-        sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$(id -u $SUDO_USER)" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u $SUDO_USER)/bus" systemctl --user daemon-reload; \
-    else \
-        systemctl --user daemon-reload; \
-    fi
-    if [ -n "{{_tpm_features}}" ]; then \
-        TARGET_USER="${SUDO_USER:-$USER}"; \
-        if ! id -nG "$TARGET_USER" 2>/dev/null | grep -qw tss; then \
-            echo "TPM2 support compiled in — adding $TARGET_USER to the 'tss' group..."; \
-            usermod -aG tss "$TARGET_USER" && \
-            echo "NOTE: log out and back in (or run 'newgrp tss') for TPM access to take effect."; \
-        else \
-            echo "TPM2 support compiled in — $TARGET_USER is already in the 'tss' group."; \
-        fi; \
-    fi
-    echo "Registering Firefox native messaging host..."
-    sudo -u "${SUDO_USER:-$USER}" python3 tests/browser-extension/register_host.py \
-        --agent-path {{bin_dir}}/cosmic-bwarden-agent \
-        --home {{real_home}}
-    echo "Done. Please run 'just restart-panel' and 'just enable-agent'."
-
-# Install metadata and desktop files for the current user (only if not installing system-wide)
-user-install: build
-    echo "Warning: user-install may conflict with system-wide install. Running uninstall first..."
-    just uninstall
-    echo "Installing desktop entry to local apps..."
-    mkdir -p {{local_apps}}
+    # cosmic-panel spawns Exec via its own PATH, which is the systemd user
+    # default (/usr/local/bin:/usr/bin) and does not include ~/.local/bin.
+    # Settings still finds the applet from XDG data dirs, so the icon shows
+    # in the picker and then nothing starts. Distro packages keep the
+    # unqualified name (binary is on PATH); user-local install writes the
+    # absolute path.
     install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop {{local_apps}}/com.enikeev.cosmic_bwarden.desktop
+    sed -i "s|^Exec=cosmic-applet-bwarden|Exec={{local_bin}}/cosmic-applet-bwarden|" {{local_apps}}/com.enikeev.cosmic_bwarden.desktop
 
-    echo "Installing AppStream metainfo to local metainfo..."
+    echo "Installing AppStream metainfo..."
     install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.metainfo.xml {{local_metainfo}}/com.enikeev.cosmic_bwarden.metainfo.xml
 
-    echo "Installing application icon to local icons..."
+    echo "Installing application icon..."
     install -Dm644 icons/black.svg {{local_icons}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
     install -Dm644 icons/black16.png {{local_icons}}/16x16/apps/com.enikeev.cosmic_bwarden.png
     install -Dm644 icons/black32.png {{local_icons}}/32x32/apps/com.enikeev.cosmic_bwarden.png
@@ -186,20 +88,26 @@ user-install: build
     install -Dm644 icons/black128.png {{local_icons}}/128x128/apps/com.enikeev.cosmic_bwarden.png
     install -Dm644 crates/cosmic-bwarden-ui/resources/icons/cosmic-bwarden-symbolic.svg {{local_icons}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg
 
-    echo "Installing binaries to user bin..."
-    mkdir -p {{local_share}}/../bin
-    install -Dm755 target/release/cosmic-bwarden-agent {{local_share}}/../bin/cosmic-bwarden-agent
-    install -Dm755 target/release/cosmic-applet-bwarden {{local_share}}/../bin/cosmic-applet-bwarden
-    install -Dm755 target/release/cosmic-bwarden-cli {{local_share}}/../bin/cosmic-bwarden-cli
-
-    echo "Installing COSMIC applet metadata to local applets..."
+    echo "Installing COSMIC applet metadata..."
     mkdir -p {{local_applets}}
     echo '( name: "COSMIC BWarden", description: "Secure Bitwarden client for COSMIC", identifier: "com.enikeev.cosmic_bwarden", icon: "com.enikeev.cosmic_bwarden-symbolic", )' > {{local_applets}}/com.enikeev.cosmic_bwarden.ron
+
+    echo "Installing systemd user service..."
+    mkdir -p {{local_systemd}}
+    sed "s|@BINDIR@|{{local_bin}}|g" crates/cosmic-bwarden-agent/res/cosmic-bwarden-agent.service > {{local_systemd}}/cosmic-bwarden-agent.service
+    echo "Reloading systemd user daemon..."
+    systemctl --user daemon-reload
     echo "Registering Firefox native messaging host..."
     python3 tests/browser-extension/register_host.py \
-        --agent-path {{local_share}}/../bin/cosmic-bwarden-agent \
-        --home {{real_home}}
-    echo "Done. Please run 'just restart-panel'."
+        --agent-path {{local_bin}}/cosmic-bwarden-agent \
+        --home {{home}}
+    echo "Done. Binaries are in {{local_bin}} (keep that directory on PATH). Run 'just restart-panel' and 'just enable-agent'."
+
+# Alias: `just install` is user-local.
+user-install: install
+
+# Remove previous files, then install.
+clean-install: uninstall install
 
 
 
@@ -215,9 +123,9 @@ enable-agent:
 disable-agent:
     systemctl --user disable --now cosmic-bwarden-agent
 
-# Uninstall all components from both system and local paths
-uninstall:
-    echo "Uninstalling from system paths..."
+# Remove root-owned files from older `sudo just install` runs. Needs sudo.
+# Does not touch the current user-local install (~/.local, ~/.config/systemd/user).
+uninstall-system:
     sudo rm -f {{bin_dir}}/cosmic-bwarden-agent
     sudo rm -f {{bin_dir}}/cosmic-applet-bwarden
     sudo rm -f {{bin_dir}}/cosmic-bwarden-cli
@@ -225,14 +133,10 @@ uninstall:
     sudo rm -f {{metainfo_dir}}/com.enikeev.cosmic_bwarden.metainfo.xml
     sudo rm -f {{applets_dir}}/com.enikeev.cosmic_bwarden.ron
     sudo rm -f {{systemd_user_dir}}/cosmic-bwarden-agent.service
-    # Legacy app-ID / binary names (transitional cleanup across renames)
     sudo rm -f {{apps_dir}}/com.system76.CosmicBWarden.desktop
     sudo rm -f {{applets_dir}}/com.system76.CosmicBWarden.ron
     sudo rm -f {{bin_dir}}/com.system76.CosmicBWarden
     sudo rm -f {{bin_dir}}/cosmic-bwarden-ui
-    # cosmic-bwarden.enikeev.com had a hyphenated last segment for one commit;
-    # invalid as a D-Bus object path (only [A-Za-z0-9_] allowed), so it broke
-    # "Open Vault Window" (dbus_activation::subscription exits(1) on failure).
     sudo rm -f {{apps_dir}}/com.enikeev.cosmic-bwarden.desktop
     sudo rm -f {{applets_dir}}/com.enikeev.cosmic-bwarden.ron
     sudo rm -f {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
@@ -241,6 +145,14 @@ uninstall:
     sudo rm -f {{icons_dir}}/32x32/apps/com.enikeev.cosmic_bwarden.png
     sudo rm -f {{icons_dir}}/64x64/apps/com.enikeev.cosmic_bwarden.png
     sudo rm -f {{icons_dir}}/128x128/apps/com.enikeev.cosmic_bwarden.png
+    sudo gtk-update-icon-cache -f {{icons_dir}} 2>/dev/null || true
+    sudo update-desktop-database {{apps_dir}} 2>/dev/null || true
+    systemctl --user daemon-reload
+    echo "System leftovers removed. User-local install is unchanged. Run 'just restart-panel' so the panel drops any /usr/local applet path."
+
+# Uninstall user-local files. Leftover system-wide files from older sudo
+# installs are removed only if this user can write them (no sudo).
+uninstall:
     echo "Uninstalling from local paths..."
     rm -f {{local_apps}}/com.enikeev.cosmic_bwarden.desktop
     rm -f {{local_metainfo}}/com.enikeev.cosmic_bwarden.metainfo.xml
@@ -251,19 +163,22 @@ uninstall:
     rm -f {{local_icons}}/32x32/apps/com.enikeev.cosmic_bwarden.png
     rm -f {{local_icons}}/64x64/apps/com.enikeev.cosmic_bwarden.png
     rm -f {{local_icons}}/128x128/apps/com.enikeev.cosmic_bwarden.png
-    rm -f {{local_share}}/../bin/cosmic-bwarden-agent
-    rm -f {{local_share}}/../bin/cosmic-applet-bwarden
-    rm -f {{local_share}}/../bin/cosmic-bwarden-cli
+    rm -f {{local_bin}}/cosmic-bwarden-agent
+    rm -f {{local_bin}}/cosmic-applet-bwarden
+    rm -f {{local_bin}}/cosmic-bwarden-cli
+    rm -f {{local_systemd}}/cosmic-bwarden-agent.service
     # Legacy app-ID / binary names (transitional cleanup across renames)
     rm -f {{local_apps}}/com.system76.CosmicBWarden.desktop
     rm -f {{local_applets}}/com.system76.CosmicBWarden.ron
-    rm -f {{local_share}}/../bin/com.system76.CosmicBWarden
-    rm -f {{local_share}}/../bin/cosmic-bwarden-ui
+    rm -f {{local_bin}}/com.system76.CosmicBWarden
+    rm -f {{local_bin}}/cosmic-bwarden-ui
     rm -f {{local_apps}}/com.enikeev.cosmic-bwarden.desktop
     rm -f {{local_applets}}/com.enikeev.cosmic-bwarden.ron
     echo "Removing Firefox native messaging host..."
-    rm -f {{real_home}}/.mozilla/native-messaging-hosts/com.enikeev.cosmic_bwarden.json
-    rm -f {{real_home}}/.mozilla/native-messaging-hosts/cosmic-bwarden-browser-host.sh
+    rm -f {{home}}/.mozilla/native-messaging-hosts/com.enikeev.cosmic_bwarden.json
+    rm -f {{home}}/.mozilla/native-messaging-hosts/cosmic-bwarden-browser-host.sh
+    echo "Removing leftover system-wide files if writable..."
+    rm -f {{bin_dir}}/cosmic-bwarden-agent {{bin_dir}}/cosmic-applet-bwarden {{bin_dir}}/cosmic-bwarden-cli {{apps_dir}}/com.enikeev.cosmic_bwarden.desktop {{metainfo_dir}}/com.enikeev.cosmic_bwarden.metainfo.xml {{applets_dir}}/com.enikeev.cosmic_bwarden.ron {{systemd_user_dir}}/cosmic-bwarden-agent.service {{apps_dir}}/com.system76.CosmicBWarden.desktop {{applets_dir}}/com.system76.CosmicBWarden.ron {{bin_dir}}/com.system76.CosmicBWarden {{bin_dir}}/cosmic-bwarden-ui {{apps_dir}}/com.enikeev.cosmic-bwarden.desktop {{applets_dir}}/com.enikeev.cosmic-bwarden.ron {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden.svg {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg {{icons_dir}}/16x16/apps/com.enikeev.cosmic_bwarden.png {{icons_dir}}/32x32/apps/com.enikeev.cosmic_bwarden.png {{icons_dir}}/64x64/apps/com.enikeev.cosmic_bwarden.png {{icons_dir}}/128x128/apps/com.enikeev.cosmic_bwarden.png 2>/dev/null || true
 
 # Clean build artifacts
 clean: uninstall

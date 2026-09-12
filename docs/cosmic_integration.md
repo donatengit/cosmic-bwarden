@@ -1,8 +1,9 @@
 # Integration with COSMIC DE
 
 How cosmic-bwarden registers with the COSMIC desktop. This documents what
-`just install` / `just user-install` actually do (the justfile is the source of
-truth).
+`just install` actually does (the justfile is the source of truth). Install
+is user-local: `~/.local/bin`, `~/.local/share`, `~/.config/systemd/user`.
+Deb/AUR packages remain the system-wide path.
 
 ## Application ID
 
@@ -17,17 +18,26 @@ applet metadata, `StartupWMClass`, `CONFIG_ID` in `core/src/config.rs`).
 
 ## What gets installed
 
-| Artifact | Source | Installed to |
+| Artifact | Source | Installed to (`just install`) |
 |---|---|---|
-| Applet/app binary `cosmic-applet-bwarden` | built from the `cosmic-bwarden-ui` crate | `{bin_dir}` |
-| Desktop entry | `crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop` | `{apps_dir}` |
-| Applet metadata (`.ron`) | generated inline by the justfile | `{applets_dir}/com.enikeev.cosmic_bwarden.ron` |
-| Agent systemd user unit | `crates/cosmic-bwarden-agent/res/cosmic-bwarden-agent.service` (hardened; `@BINDIR@` substituted) | `{systemd_user_dir}` |
+| Applet/app binary `cosmic-applet-bwarden` | built from the `cosmic-bwarden-ui` crate | `~/.local/bin` |
+| Desktop entry | `crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop` | `~/.local/share/applications` |
+| Applet metadata (`.ron`) | generated inline by the justfile | `~/.local/share/cosmic/applets/com.enikeev.cosmic_bwarden.ron` |
+| Agent systemd user unit | `crates/cosmic-bwarden-agent/res/cosmic-bwarden-agent.service` (hardened; `@BINDIR@` substituted) | `~/.config/systemd/user` |
 | Firefox native-messaging host | `tests/browser-extension/register_host.py` | `~/.mozilla/native-messaging-hosts/` |
 
 The desktop entry carries the applet markers COSMIC's panel looks for:
 `X-CosmicApplet=true`, `X-CosmicHoverPopup=Auto`, `OnlyShowIn=COSMIC;`, plus
 `NoDisplay` is *not* set so the app is also launchable as a normal window.
+
+COSMIC Settings lists applets by scanning XDG desktop files
+(`~/.local/share/applications` is on that list), which is why a user-local
+install still appears in the picker. The panel then spawns `Exec=` with
+`Process::with_executable` using **cosmic-panel's** PATH (systemd user
+default: `/usr/local/bin:/usr/bin` — not `~/.local/bin`). `just install`
+therefore rewrites `Exec=` to the absolute `~/.local/bin/cosmic-applet-bwarden`
+path. Distro packages leave the unqualified name, because `/usr/bin` is on
+that PATH.
 
 ## One binary, two modes
 
