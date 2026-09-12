@@ -23,29 +23,26 @@ local_icons := local_share + "/icons/hicolor"
 
 # ── Build and test resource caps ──────────────────────────────────────────
 # Every build and test recipe runs inside a transient systemd scope, so a long
-# run leaves the desktop usable. The scope sets a CPU share, an I/O share and a
-# nice level, so it loses a contention against the foreground session while
-# still taking every idle core. Override per invocation, e.g.
+# run leaves the desktop usable while agents, tasks and containers run at the
+# same time. The scope caps the CPU and memory a run may take and lowers its
+# CPU and I/O share and its nice level, so it only uses what nothing else wants
+# and the foreground session never waits behind it.
+#
+# One budget covers builds and test runs alike. Change the values here:
 #   just test_cpus=12 test
-#   just test_cpus=0 test_memory=0 test     # drop the hard caps, keep the shares
-# RUN_LIMITED_PRIORITY=0 just test          # drop the shares, keep the caps
-# Every other knob (the weights, nice, and the opt-in MemoryMax / MemorySwapMax
-# / TasksMax ceilings), plus why the hard ceilings are off by default, is in
-# packaging/run-limited.sh.
+#   just test_cpus=0 test_memory=0 test     # no caps, no scope
+# The scheduling shares are fixed constants in packaging/run-limited.sh, which
+# also explains why the hard ceilings (MemoryMax and friends) are left off.
 # The scope covers cargo, rustc, the test binaries and the agents they spawn.
 # It does NOT cover rootless podman containers, which podman places in a
 # sibling cgroup; those are capped from inside the harness instead. See
 # docs/testing.md, "Container resource limits".
 test_cpus := "6"
 test_memory := "8G"
-# Builds get the same treatment with their own budget. They default to no hard
-# caps — a release build is foreground work and may take the whole machine —
-# so raise these only when a build is fighting something else:
-#   just build_cpus=8 build
-build_cpus := "0"
-build_memory := "0"
 _limited := "./packaging/run-limited.sh " + test_cpus + " " + test_memory
-_build_limited := "./packaging/run-limited.sh " + build_cpus + " " + build_memory
+# Builds share the budget above. The alias exists so the build recipes read as
+# what they are; there is deliberately no separate knob to keep in step.
+_build_limited := _limited
 
 # Auto-detect TPM2 support: enable the agent's `tpm` feature when libtss2-esys is present.
 _tpm_features := `pkg-config --exists tss2-esys 2>/dev/null && echo '--features cosmic-bwarden-agent/tpm' || true`

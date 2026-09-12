@@ -47,34 +47,30 @@ Each build and test recipe runs its command through
 covers cargo, rustc, the test binaries, and the agent processes the suite
 spawns — the bulk of the CPU a run uses.
 
-Two pairs of `just` variables control the hard caps:
+One `just` variable pair controls it, and builds and test runs share it:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `test_cpus` | `6` | Cores for a test run. `0` disables the CPU cap. |
-| `test_memory` | `8G` | Memory for a test run, applied as `MemoryHigh` (throttle, not a hard kill). `0` disables it. |
-| `build_cpus` | `0` | Cores for a build. `0` disables the CPU cap. |
-| `build_memory` | `0` | Memory for a build, applied as `MemoryHigh`. `0` disables it. |
+| `test_cpus` | `6` | Cores a run may use. `0` disables the CPU cap. |
+| `test_memory` | `8G` | Memory for a run, applied as `MemoryHigh` (throttle, not a hard kill). `0` disables it. |
 
-Builds default to no hard caps on purpose: a release build is foreground work
-the user asked for, and capping it would only make it slower. What keeps the
-desktop usable during a build is the scope's scheduling settings — `CPUWeight`,
-`IOWeight` and a `nice` level — which apply to builds and test runs alike, so
-either yields to whatever the user is doing while still taking every idle core.
+The reason is concurrency: several agents, background tasks and containers can
+be working at once, and unbounded they all run flat out until the desktop stops
+responding. The scope both caps what one run may take and lowers its CPU and
+I/O share and its `nice` level, so the foreground session always wins a
+contention and only a genuinely idle machine is used at full speed.
 
 ```bash
-just test                      # capped at 6 cores / 8G, plus the shares
+just test                      # capped at 6 cores / 8G
 just test_cpus=12 test         # let it use the whole machine
-just test_cpus=0 test_memory=0 test   # drop the hard caps, keep the shares
-just build_cpus=8 build        # cap a build that is fighting something else
-RUN_LIMITED_PRIORITY=0 just test      # drop the shares, keep the caps
+just test_cpus=0 test_memory=0 test   # no caps, no scope at all
 ```
 
-Every other knob — the weights, the nice level, and the opt-in `MemoryMax`,
-`MemorySwapMax` and `TasksMax` ceilings, which stay off because they kill rather
-than throttle — is documented in `packaging/run-limited.sh`. The scheduling
-limits are independent of the caps: `RUN_LIMITED_PRIORITY=0` drops them but
-still scopes the run, so zero for *both* caps is the only way to run unscoped.
+The scheduling shares and the hard ceilings that stay off (`MemoryMax`,
+`MemorySwapMax`, `TasksMax` — they kill rather than throttle) are fixed
+constants at the top of `packaging/run-limited.sh`, deliberately not
+environment variables: a knob per invocation is how the limits stop being
+applied. Edit a value there if a run needs a different share.
 
 The script falls back to running the command unwrapped, with a note on stderr,
 when systemd is unavailable (a container, a CI runner with no user manager, a

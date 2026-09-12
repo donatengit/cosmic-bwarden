@@ -166,14 +166,13 @@ Keep both layers; full explanation: `docs/testing.md`.
 
 - **Layer 1, everything `just` starts**: each build and test recipe runs its
   command through `packaging/run-limited.sh`, which wraps it in a transient
-  systemd scope. Tests are controlled by the `test_cpus` (default 6) and
-  `test_memory` (default 8G) justfile variables, builds by `build_cpus` and
-  `build_memory` (both default 0); `0` disables either. Memory uses
-  `MemoryHigh` (throttle) rather than `MemoryMax`, so a spike slows the run
-  instead of OOM-killing a browser mid-test. The scope also lowers the CPU and
-  I/O share and the nice level, so a run yields to the foreground session
-  instead of only being rate-limited. Any new build or test recipe must go
-  through it too.
+  systemd scope. One budget covers both: the `test_cpus` (default 6) and
+  `test_memory` (default 8G) justfile variables, and `0` for both disables
+  everything, scope included. Memory uses `MemoryHigh` (throttle) rather than
+  `MemoryMax`, so a spike slows the run instead of OOM-killing a browser
+  mid-test. The scope also lowers the CPU and I/O share and the nice level, so
+  a run yields to the foreground session instead of only being rate-limited.
+  Any new build or test recipe must go through it too.
 - **Layer 2, containers**: rootless podman puts each container in a scope that
   is a sibling of the test scope, so it inherits nothing from layer 1.
   Containers are capped separately at 2 CPUs / 1024 MB by fixed constants in
