@@ -1,10 +1,13 @@
+use crate::app::applet_menu::row_actions_visible;
 use crate::app::applet_search::{build_applet_rows, AppletRow, AppletRowKind};
 use crate::app::CosmicBWardenApp;
 use crate::fl;
 use crate::message::Message;
+use cosmic::applet::menu_button;
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{
-    button, column, container, icon, row, scrollable, search_input, secure_input, text, tooltip, Id,
+    button, column, container, icon, mouse_area, row, scrollable, search_input, secure_input,
+    space, text, tooltip, Id,
 };
 use cosmic::Element;
 
@@ -34,8 +37,13 @@ pub fn view(app: &CosmicBWardenApp) -> Element<'_, Message> {
                 .on_press(Message::AppletToggleFavouritesFilter),
         );
 
+    let space_xs = cosmic::theme::active().cosmic().spacing.space_xs;
+
     let mut col = column::with_capacity(2).spacing(5);
-    col = col.push(search_row);
+    // Same horizontal inset as `menu_button` (`menu_control_padding`), so the
+    // search field lines up with Quit without stacking a second padded_control
+    // around the result rows.
+    col = col.push(container(search_row).padding(cosmic::applet::menu_control_padding()));
 
     let rows = build_applet_rows(&app.applet_search_results);
     let mut results_col = column::with_capacity(rows.len().max(1)).spacing(RESULTS_SPACING);
@@ -51,13 +59,20 @@ pub fn view(app: &CosmicBWardenApp) -> Element<'_, Message> {
             if app.applet_reprompt_id.as_deref() == Some(result_row.id.as_str()) {
                 results_col = results_col.push(reprompt_row(app));
             } else {
-                results_col = results_col.push(result_row_view(result_row));
+                let show_actions = row_actions_visible(
+                    app.applet_hovered_row_id.as_deref(),
+                    result_row.id.as_str(),
+                );
+                results_col = results_col.push(result_row_view(result_row, show_actions));
             }
         }
     }
 
+    // Right gutter so hover-action icons (and labels) sit left of the
+    // scrollbar instead of under it. `space_xs` is 12 px on the default
+    // theme — one native spacing step, not an ad-hoc extra inset.
     col = col.push(
-        scrollable(container(results_col).padding([0, 12, 0, 0]))
+        scrollable(container(results_col).padding([0, space_xs, 0, 0]))
             .height(Length::Fixed(RESULTS_MAX_HEIGHT)),
     );
     col.into()
@@ -74,15 +89,33 @@ fn row_action_btn(
         .into()
 }
 
-fn result_row_view(row_data: AppletRow) -> Element<'static, Message> {
-    match row_data.kind {
+/// App-list overlay: icons sit on top of the label instead of inserting into
+/// the row, so hover does not shrink the label or leave a trailing gap.
+fn action_overlay(icons: Element<'static, Message>) -> Element<'static, Message> {
+    let space_xs = cosmic::theme::active().cosmic().spacing.space_xs;
+    row::with_capacity(3)
+        .push(space::horizontal())
+        .push(icons)
+        .push(space::horizontal().width(Length::Fixed(f32::from(space_xs))))
+        .width(Length::Fill)
+        .align_y(Alignment::Center)
+        .into()
+}
+
+fn result_row_view(row_data: AppletRow, show_actions: bool) -> Element<'static, Message> {
+    let id = row_data.id.clone();
+    let inner = match row_data.kind {
         AppletRowKind::Login { username, link } => {
-            login_row_view(row_data.id, row_data.label, username, link)
+            login_row_view(row_data.id, row_data.label, username, link, show_actions)
         }
         AppletRowKind::SecureNote | AppletRowKind::SshKey => {
-            secret_row_view(row_data.id, row_data.label)
+            secret_row_view(row_data.id, row_data.label, show_actions)
         }
-    }
+    };
+    mouse_area(inner)
+        .on_enter(Message::AppletSearchRowHoverChanged(id.clone(), true))
+        .on_exit(Message::AppletSearchRowHoverChanged(id, false))
+        .into()
 }
 
 fn login_row_view(
@@ -90,81 +123,72 @@ fn login_row_view(
     label: String,
     username: Option<String>,
     link: Option<String>,
+    show_actions: bool,
 ) -> Element<'static, Message> {
     let copy_id = id.clone();
-    let label_btn = button::custom(text::body(label))
-        .on_press_maybe(
-            username
-                .is_some()
-                .then(|| Message::AppletCopyPrimary(copy_id)),
-        )
-        .width(Length::Fill)
-        .class(cosmic::theme::Button::Text);
+    let label_btn = menu_button(text::body(label)).on_press_maybe(
+        username
+            .is_some()
+            .then(|| Message::AppletCopyPrimary(copy_id)),
+    );
 
-    // Move username into the tooltip so it lives as Cow::Owned('static)
     let label_el: Element<'static, Message> = if let Some(u) = username {
         tooltip(label_btn, text::caption(u), tooltip::Position::Bottom).into()
     } else {
         label_btn.into()
     };
 
-    let vault_btn = row_action_btn(
-        crate::view::symbolic::applet_open_in_vault_icon(),
-        fl!("open-in-vault"),
-        Some(Message::AppletOpenInVault(id.clone())),
-    );
-    let link_btn = row_action_btn(
-        crate::view::symbolic::applet_open_link_icon(),
-        fl!("open-uri"),
-        link.map(Message::AppletOpenLink),
-    );
-    let secret_btn = row_action_btn(
-        crate::view::symbolic::applet_copy_secret_icon(),
-        fl!("copy-secret"),
-        Some(Message::AppletCopySecret(id)),
-    );
+    if !show_actions {
+        return label_el;
+    }
 
-    row::with_capacity(2)
-        .spacing(4)
-        .align_y(Alignment::Center)
-        .push(label_el)
-        .push(
-            row::with_capacity(3)
-                .spacing(2)
-                .push(vault_btn)
-                .push(link_btn)
-                .push(secret_btn),
-        )
+    let icons = row::with_capacity(3)
+        .spacing(2)
+        .push(row_action_btn(
+            crate::view::symbolic::applet_open_in_vault_icon(),
+            fl!("open-in-vault"),
+            Some(Message::AppletOpenInVault(id.clone())),
+        ))
+        .push(row_action_btn(
+            crate::view::symbolic::applet_open_link_icon(),
+            fl!("open-uri"),
+            link.map(Message::AppletOpenLink),
+        ))
+        .push(row_action_btn(
+            crate::view::symbolic::applet_copy_secret_icon(),
+            fl!("copy-secret"),
+            Some(Message::AppletCopySecret(id)),
+        ));
+
+    cosmic::iced::widget::stack![label_el, action_overlay(icons.into())]
+        .width(Length::Fill)
         .into()
 }
 
-fn secret_row_view(id: String, label: String) -> Element<'static, Message> {
-    let vault_btn = row_action_btn(
-        crate::view::symbolic::applet_open_in_vault_icon(),
-        fl!("open-in-vault"),
-        Some(Message::AppletOpenInVault(id.clone())),
-    );
-    let secret_btn = row_action_btn(
-        crate::view::symbolic::applet_copy_secret_icon(),
-        fl!("copy-secret"),
-        Some(Message::AppletCopySecret(id.clone())),
-    );
+fn secret_row_view(id: String, label: String, show_actions: bool) -> Element<'static, Message> {
+    let label_el: Element<'static, Message> = menu_button(text::body(label))
+        .on_press(Message::AppletCopySecret(id.clone()))
+        .into();
 
-    let label_btn = button::custom(text::body(label))
-        .on_press(Message::AppletCopySecret(id))
+    if !show_actions {
+        return label_el;
+    }
+
+    let icons = row::with_capacity(2)
+        .spacing(2)
+        .push(row_action_btn(
+            crate::view::symbolic::applet_open_in_vault_icon(),
+            fl!("open-in-vault"),
+            Some(Message::AppletOpenInVault(id.clone())),
+        ))
+        .push(row_action_btn(
+            crate::view::symbolic::applet_copy_secret_icon(),
+            fl!("copy-secret"),
+            Some(Message::AppletCopySecret(id)),
+        ));
+
+    cosmic::iced::widget::stack![label_el, action_overlay(icons.into())]
         .width(Length::Fill)
-        .class(cosmic::theme::Button::Text);
-
-    row::with_capacity(2)
-        .spacing(4)
-        .align_y(Alignment::Center)
-        .push(label_btn)
-        .push(
-            row::with_capacity(2)
-                .spacing(2)
-                .push(vault_btn)
-                .push(secret_btn),
-        )
         .into()
 }
 

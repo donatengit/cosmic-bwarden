@@ -240,8 +240,8 @@ to how Cosmic Settings / applets already use them.
 
 ### Related text triangles
 
-| Glyph | Use | What landed |
-|---|---|---|
-| ▾ / ▸ | Quit menu expand/collapse in `quit_footer` | `pan-down-symbolic` / `pan-end-symbolic` via `quit_disclosure_icon`. |
+The quit footer no longer uses a ▾ / ▸ disclosure. It is a single
+**Quit** `menu_button` (`applet_menu::QuitAction::Exit`). Header Lock/Logout
+cover stay-running session actions. `quit_disclosure_icon` is gone.
 
 Generator's `insert-drawing-symbolic` placeholder is a separate TODO in `view/applet/menu.rs`, not in this emoji inventory.

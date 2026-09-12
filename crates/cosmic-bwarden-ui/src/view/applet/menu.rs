@@ -1,24 +1,27 @@
+use crate::app::applet_menu::{quit_actions, QuitAction};
 use crate::app::CosmicBWardenApp;
 use crate::fl;
 use crate::message::Message;
-use cosmic::applet::menu_button;
+use cosmic::applet::{menu_button, menu_control_padding};
 use cosmic::iced::{Alignment, Length};
-use cosmic::widget::{button, icon, row, text, tooltip};
+use cosmic::widget::{button, icon, row, space, text, tooltip};
 use cosmic::Element;
 
 /// Top header row: "Open Vault" (sync-failed uses a destructive style) + icon buttons.
 pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
     let is_unlocked = app.view.is_unlocked();
 
+    // Same `menu_control_padding` as the Quit `menu_button` and search rows
+    // so the Open Vault label lines up with the rows below.
     let open_btn: Element<'static, Message> = if app.sync_failed && is_unlocked {
         button::destructive(fl!("open-vault-window"))
             .on_press(Message::OpenVaultRequested)
+            .padding(menu_control_padding())
             .width(Length::Fill)
             .into()
     } else {
-        button::text(fl!("open-vault-window"))
+        menu_button(text::body(fl!("open-vault-window")))
             .on_press(Message::OpenVaultRequested)
-            .width(Length::Fill)
             .into()
     };
 
@@ -81,56 +84,27 @@ pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
     );
     action_row = action_row.push(logout_btn);
 
-    row::with_capacity(2)
+    // Same total right gutter as search-row action icons (`space_xs` on the
+    // overlay plus `space_xs` on the scrollable) so the last header icon
+    // matches those rows instead of sitting on the popup edge.
+    let space_xs = cosmic::theme::active().cosmic().spacing.space_xs;
+    row::with_capacity(3)
         .spacing(5)
         .align_y(Alignment::Center)
         .push(open_btn)
         .push(action_row)
+        .push(space::horizontal().width(Length::Fixed(f32::from(space_xs.saturating_mul(2)))))
         .into()
 }
 
-/// Quit footer: a single "Quit" button that expands to show sub-actions.
-/// Every row is a `menu_button` so they carry the COSMIC `AppletMenu` style and
-/// theme-derived padding uniformly — matching how the reference applets render
-/// menu rows (no per-row indent wrapper / hardcoded padding).
-pub fn quit_footer(app: &CosmicBWardenApp) -> Vec<Element<'static, Message>> {
-    let is_unlocked = app.view.is_unlocked();
+/// Single native `menu_button` Quit/Exit row. AppletMenu chrome (not
+/// Destructive) — filled red buttons are not how COSMIC applet menus look.
+pub fn quit_footer() -> Vec<Element<'static, Message>> {
+    quit_actions().iter().copied().map(quit_row).collect()
+}
 
-    let quit_label = row::with_capacity(2)
-        .spacing(8)
-        .align_y(Alignment::Center)
-        .push(
-            icon::from_name(crate::view::symbolic::quit_disclosure_icon(
-                app.applet_quit_expanded,
-            ))
-            .size(16)
-            .icon(),
-        )
-        .push(text::body(fl!("quit")));
-
-    let mut items: Vec<Element<'static, Message>> = vec![menu_button(quit_label)
-        .on_press(Message::AppletQuitMenuToggle)
-        .into()];
-
-    if app.applet_quit_expanded {
-        if is_unlocked {
-            items.push(
-                menu_button(text::body(fl!("lock-and-quit")))
-                    .on_press(Message::LockAndQuit)
-                    .into(),
-            );
-            items.push(
-                menu_button(text::body(fl!("logout-and-quit")))
-                    .on_press(Message::LogoutAndQuit)
-                    .into(),
-            );
-        }
-        items.push(
-            menu_button(text::body(fl!("just-quit")))
-                .on_press(Message::Exit)
-                .into(),
-        );
-    }
-
-    items
+fn quit_row(action: QuitAction) -> Element<'static, Message> {
+    menu_button(text::body(action.label()))
+        .on_press(action.message())
+        .into()
 }

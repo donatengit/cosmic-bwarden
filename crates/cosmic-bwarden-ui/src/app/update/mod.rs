@@ -107,8 +107,6 @@ impl CosmicBWardenApp {
             | Message::AppletIconClicked(_, _)
             | Message::Surface(_)
             | Message::Exit
-            | Message::LockAndQuit
-            | Message::LogoutAndQuit
             | Message::OpenVaultRequested
             | Message::Token(_)
             | Message::AppletUnlockPasswordChanged(_)
@@ -127,7 +125,7 @@ impl CosmicBWardenApp {
             | Message::AppletToggleRepromptPasswordReveal
             | Message::AppletOpenInVault(_)
             | Message::AppletOpenLink(_)
-            | Message::AppletQuitMenuToggle
+            | Message::AppletSearchRowHoverChanged(_, _)
             | Message::CloseToast(_)
             | Message::ProtocolVersionCheck(_)
             | Message::AppletPinChanged(_)

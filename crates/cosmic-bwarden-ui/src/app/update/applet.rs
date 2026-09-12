@@ -84,20 +84,6 @@ impl CosmicBWardenApp {
 
                 Some(Task::batch(tasks))
             }
-            Message::LockAndQuit => Some(Task::perform(
-                async {
-                    let agent = AgentClient::new();
-                    let _ = agent.send(auth_actions::lock()).await;
-                },
-                |_| Action::App(Message::Exit),
-            )),
-            Message::LogoutAndQuit => Some(Task::perform(
-                async {
-                    let agent = AgentClient::new();
-                    let _ = agent.send(auth_actions::logout()).await;
-                },
-                |_| Action::App(Message::Exit),
-            )),
             Message::OpenVaultRequested => {
                 let mut tasks = Vec::new();
 
@@ -278,8 +264,12 @@ impl CosmicBWardenApp {
                 // session once it exited.
                 Some(crate::app::update::activation::open_link(uri))
             }
-            Message::AppletQuitMenuToggle => {
-                self.applet_quit_expanded = !self.applet_quit_expanded;
+            Message::AppletSearchRowHoverChanged(id, hovered) => {
+                if hovered {
+                    self.applet_hovered_row_id = Some(id);
+                } else if self.applet_hovered_row_id.as_deref() == Some(id.as_str()) {
+                    self.applet_hovered_row_id = None;
+                }
                 Some(Task::none())
             }
             Message::AppletSecretReceived(res) => match res {

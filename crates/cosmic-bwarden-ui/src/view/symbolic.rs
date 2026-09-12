@@ -27,15 +27,6 @@ pub fn tpm_diagnostic_icon(passed: bool) -> &'static str {
     }
 }
 
-/// Applet quit-menu disclosure: expanded ▾ / collapsed ▸.
-pub fn quit_disclosure_icon(expanded: bool) -> &'static str {
-    if expanded {
-        "pan-down-symbolic"
-    } else {
-        "pan-end-symbolic"
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -54,11 +45,5 @@ mod tests {
     fn tpm_diagnostic_icon_is_select_when_passed_and_stop_when_failed() {
         assert_eq!(tpm_diagnostic_icon(true), "object-select-symbolic");
         assert_eq!(tpm_diagnostic_icon(false), "process-stop-symbolic");
-    }
-
-    #[test]
-    fn quit_disclosure_icon_tracks_expanded() {
-        assert_eq!(quit_disclosure_icon(false), "pan-end-symbolic");
-        assert_eq!(quit_disclosure_icon(true), "pan-down-symbolic");
     }
 }

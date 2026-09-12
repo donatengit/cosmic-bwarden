@@ -5,8 +5,9 @@ pub mod unlock;
 use crate::app::CosmicBWardenApp;
 use crate::fl;
 use crate::message::{Message, View};
-use cosmic::iced::Length;
-use cosmic::widget::{button, container, icon, list_column, text, toaster};
+use cosmic::applet::padded_control;
+use cosmic::iced::Alignment;
+use cosmic::widget::{column, divider, icon, text, toaster};
 use cosmic::Element;
 
 /// Dedicated branded panel icon: the repo's brand mark simplified for small
@@ -48,6 +49,14 @@ pub fn applet_popup_limits() -> cosmic::iced::Limits {
         .max_height(1080.0)
 }
 
+/// Native applet section break: `padded_control(divider)` with
+/// `[space_xxs, space_s]` as in cosmic-applet-power / bluetooth / battery.
+fn popup_divider<'a>(space_xxs: u16, space_s: u16) -> Element<'a, Message> {
+    padded_control(divider::horizontal::default())
+        .padding([space_xxs, space_s])
+        .into()
+}
+
 impl CosmicBWardenApp {
     pub fn applet_view(&self) -> Element<'_, Message> {
         // `is_unlocked()` is false for Loading/Setup/Unlock alike, so the
@@ -78,48 +87,53 @@ impl CosmicBWardenApp {
     }
 
     pub fn applet_popup_content(&self) -> Element<'_, Message> {
-        // If protocol versions don't match, show only the error message and Quit.
+        let spacing = cosmic::theme::active().cosmic().spacing;
+        let space_xxs = spacing.space_xxs;
+        let space_s = spacing.space_s;
+
+        // Native applets (power/bluetooth/battery): column `[8, 0]` outer
+        // padding, `padded_control` only on non-button content and dividers,
+        // `menu_button` rows carrying their own `menu_control_padding`.
+        // Wrapping search/header in `padded_control` *and* using `menu_button`
+        // padding stacked a second `space_m` inset after the last icon.
+        let mut content = column::with_capacity(6)
+            .align_x(Alignment::Start)
+            .padding([space_xxs, 0]);
+
         if self.protocol_mismatch {
-            let mut content = list_column();
-            content =
-                content.add(container(text::body(fl!("protocol-version-mismatch"))).padding(10));
-            content = content.add(
-                button::text(fl!("quit"))
-                    .on_press(Message::Exit)
-                    .width(Length::Fill),
-            );
+            content = content.push(padded_control(text::body(fl!("protocol-version-mismatch"))));
+            content = content.push(popup_divider(space_xxs, space_s));
+            for item in menu::quit_footer() {
+                content = content.push(item);
+            }
             return toaster(
                 &self.applet_toasts,
-                self.core
-                    .applet
-                    .popup_container(container(content).padding(5)),
+                self.core.applet.popup_container(content),
             );
         }
 
-        let mut content = list_column();
-        content = content.add(menu::header_row(self));
+        content = content.push(menu::header_row(self));
 
         content = if self.view.is_unlocked() {
-            content.add(search::view(self))
+            content.push(search::view(self))
         } else if self.view == View::Setup {
-            content.add(container(text::body(fl!("not-configured"))).padding(10))
+            content.push(padded_control(text::body(fl!("not-configured"))))
         } else {
-            content.add(unlock::view(self))
+            content.push(padded_control(unlock::view(self)))
         };
 
         if let Some(error) = &self.applet_error {
-            content = content.add(container(text::body(error)).padding(5));
+            content = content.push(padded_control(text::body(error)));
         }
 
-        for item in menu::quit_footer(self) {
-            content = content.add(item);
+        content = content.push(popup_divider(space_xxs, space_s));
+        for item in menu::quit_footer() {
+            content = content.push(item);
         }
 
         toaster(
             &self.applet_toasts,
-            self.core
-                .applet
-                .popup_container(container(content).padding(5)),
+            self.core.applet.popup_container(content),
         )
     }
 }

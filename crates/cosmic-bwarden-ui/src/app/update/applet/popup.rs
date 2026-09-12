@@ -39,6 +39,7 @@ impl CosmicBWardenApp {
         self.applet_reprompt_password.zeroize();
         self.applet_reprompt_password_revealed = false;
         self.applet_error = None;
+        self.applet_hovered_row_id = None;
 
         let mut tasks = Vec::new();
         tasks.push(check_protocol_version());

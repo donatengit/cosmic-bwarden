@@ -144,7 +144,9 @@ pub struct CosmicBWardenApp {
     pub applet_unlock_password_revealed: bool,
     pub applet_reprompt_password_revealed: bool,
     pub applet_toasts: widget::Toasts<crate::message::Message>,
-    pub applet_quit_expanded: bool,
+    /// Search-result row currently under the pointer, if any. Action icons
+    /// (open-in-vault / open-URI / copy-secret) render only for this id.
+    pub applet_hovered_row_id: Option<String>,
     /// Monotonic timestamp of the last time the applet popup was closed by an
     /// icon click. Used to suppress the Wayland same-press reopen race: a
     /// single physical press can deliver a close event and then a second event
@@ -329,7 +331,7 @@ impl Default for CosmicBWardenApp {
             applet_unlock_password_revealed: false,
             applet_reprompt_password_revealed: false,
             applet_toasts: widget::Toasts::new(crate::message::Message::CloseToast),
-            applet_quit_expanded: false,
+            applet_hovered_row_id: None,
             applet_last_popup_closed_at: None,
             editing_config: None,
             login_pin_enabled: false,

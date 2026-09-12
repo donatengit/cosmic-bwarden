@@ -299,40 +299,62 @@ async fn test_applet_refresh_state_triggers_fetch_when_popup_open() {
     assert!(app.applet_search_id > prev_search_id);
 }
 
-// ── Quit submenu ──────────────────────────────────────────────────────────────
+// ── Quit footer (single Exit / Quit row) ─────────────────────────────────────
 
 #[tokio::test]
-async fn test_applet_quit_menu_toggle_expands_and_collapses() {
-    let mut app = CosmicBWardenApp::default();
-    assert!(!app.applet_quit_expanded);
-
-    let _ = app.update(Message::AppletQuitMenuToggle);
-    assert!(app.applet_quit_expanded);
-
-    let _ = app.update(Message::AppletQuitMenuToggle);
-    assert!(!app.applet_quit_expanded);
-}
-
-#[tokio::test]
-async fn test_applet_quit_menu_collapsed_renders() {
+async fn test_applet_quit_menu_unlocked_renders() {
     let (app, id) = popup_app(View::Vault);
-    // Collapsed by default
     let _ = app.view_window(id);
 }
 
 #[tokio::test]
-async fn test_applet_quit_menu_expanded_unlocked_renders_all_sub_items() {
-    let (mut app, id) = popup_app(View::Vault);
-    app.applet_quit_expanded = true;
-    // Must render Lock-and-Quit, Logout-and-Quit, Just-Quit without panic
+async fn test_applet_quit_menu_locked_renders() {
+    let (app, id) = popup_app(View::Unlock);
     let _ = app.view_window(id);
 }
 
 #[tokio::test]
-async fn test_applet_quit_menu_expanded_locked_shows_just_quit_only() {
+async fn test_applet_protocol_mismatch_renders_quit() {
     let (mut app, id) = popup_app(View::Unlock);
-    app.applet_quit_expanded = true;
-    // In locked state no Lock-and-Quit or Logout-and-Quit in the submenu
+    app.protocol_mismatch = true;
+    let _ = app.view_window(id);
+}
+
+// ── Search-row hover (action icons only while hovered) ───────────────────────
+
+#[tokio::test]
+async fn test_applet_search_row_hover_sets_and_clears_id() {
+    let mut app = CosmicBWardenApp::default();
+    assert_eq!(app.applet_hovered_row_id, None);
+
+    let _ = app.update(Message::AppletSearchRowHoverChanged("e1".into(), true));
+    assert_eq!(app.applet_hovered_row_id.as_deref(), Some("e1"));
+
+    let _ = app.update(Message::AppletSearchRowHoverChanged("e1".into(), false));
+    assert_eq!(app.applet_hovered_row_id, None);
+}
+
+#[tokio::test]
+async fn test_applet_search_row_hover_exit_of_other_id_does_not_clear() {
+    let mut app = CosmicBWardenApp::default();
+    let _ = app.update(Message::AppletSearchRowHoverChanged("e1".into(), true));
+    let _ = app.update(Message::AppletSearchRowHoverChanged("e2".into(), true));
+    let _ = app.update(Message::AppletSearchRowHoverChanged("e1".into(), false));
+    assert_eq!(app.applet_hovered_row_id.as_deref(), Some("e2"));
+}
+
+#[tokio::test]
+async fn test_applet_hovered_search_row_renders() {
+    let (mut app, id) = popup_app(View::Vault);
+    app.applet_search_results = vec![SidebarEntry {
+        id: "1".to_string(),
+        name: "account.facebook.com".to_string(),
+        username: Some("alice@example.com".to_string()),
+        public_key: None,
+        entry_type: EntryType::Login,
+        is_pinned: false,
+    }];
+    app.applet_hovered_row_id = Some("1".to_string());
     let _ = app.view_window(id);
 }
 
