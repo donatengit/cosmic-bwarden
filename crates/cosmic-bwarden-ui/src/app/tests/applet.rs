@@ -364,7 +364,7 @@ async fn test_applet_header_row_renders_setup() {
 #[tokio::test]
 async fn test_applet_login_row_with_link_renders() {
     let (mut app, id) = popup_app(View::Vault);
-    // Name looks like a hostname → is_uri_like → 🔗 button is active
+    // Name looks like a hostname → is_uri_like → open-URI button is active
     app.applet_search_results = vec![SidebarEntry {
         id: "1".to_string(),
         name: "account.facebook.com".to_string(),
@@ -379,7 +379,7 @@ async fn test_applet_login_row_with_link_renders() {
 #[tokio::test]
 async fn test_applet_login_row_without_link_renders() {
     let (mut app, id) = popup_app(View::Vault);
-    // Name has spaces → not URI-like → 🔗 button is inactive (on_press_maybe(None))
+    // Name has spaces → not URI-like → open-URI button is inactive (on_press_maybe(None))
     app.applet_search_results = vec![SidebarEntry {
         id: "1".to_string(),
         name: "My Facebook Account".to_string(),

@@ -446,6 +446,26 @@ fn test_tpm_status_received_hardware_unavailable() {
 }
 
 #[test]
+fn test_tpm_diagnostics_rows_render_pass_and_fail() {
+    // Drives the shipped settings diagnostic row (symbolic pass/fail icons,
+    // not emoji) with both outcomes so a missing helper or a view panic
+    // cannot hide behind the empty-diagnostics branch.
+    let mut app = CosmicBWardenApp::default();
+    let _ = app.update(Message::TpmStatusReceived(Ok((false, false))));
+    let _ = app.update(Message::TpmDiagnosticsReceived(vec![
+        ("TPM device present".into(), true, String::new()),
+        (
+            "User in tss group".into(),
+            false,
+            "Add your user to the tss group".into(),
+        ),
+    ]));
+    assert!(!app.tpm_available);
+    assert_eq!(app.tpm_diagnostics.len(), 2);
+    let _ = app.view_settings();
+}
+
+#[test]
 fn test_tpm_status_received_available_not_configured() {
     let mut app = CosmicBWardenApp::default();
     let _ = app.update(Message::TpmStatusReceived(Ok((true, false))));

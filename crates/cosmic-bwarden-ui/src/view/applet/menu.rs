@@ -6,7 +6,7 @@ use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{button, icon, row, text, tooltip};
 use cosmic::Element;
 
-/// Top header row: "Open Vault" (or "⚠ Not synced" in red) + Lock|Logout icon buttons.
+/// Top header row: "Open Vault" (sync-failed uses a destructive style) + icon buttons.
 pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
     let is_unlocked = app.view.is_unlocked();
 
@@ -96,13 +96,19 @@ pub fn header_row(app: &CosmicBWardenApp) -> Element<'static, Message> {
 pub fn quit_footer(app: &CosmicBWardenApp) -> Vec<Element<'static, Message>> {
     let is_unlocked = app.view.is_unlocked();
 
-    let label = if app.applet_quit_expanded {
-        fl!("quit-menu-expanded", label = fl!("quit"))
-    } else {
-        fl!("quit-menu-collapsed", label = fl!("quit"))
-    };
+    let quit_label = row::with_capacity(2)
+        .spacing(8)
+        .align_y(Alignment::Center)
+        .push(
+            icon::from_name(crate::view::symbolic::quit_disclosure_icon(
+                app.applet_quit_expanded,
+            ))
+            .size(16)
+            .icon(),
+        )
+        .push(text::body(fl!("quit")));
 
-    let mut items: Vec<Element<'static, Message>> = vec![menu_button(text::body(label))
+    let mut items: Vec<Element<'static, Message>> = vec![menu_button(quit_label)
         .on_press(Message::AppletQuitMenuToggle)
         .into()];
 

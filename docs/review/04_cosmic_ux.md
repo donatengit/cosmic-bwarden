@@ -55,9 +55,9 @@ System76 project. Blocks store/Flatpak publishing (ID must be a namespace we con
 e.g. `io.github.<owner>.CosmicBWarden`) and needs a config-migration step for
 `CONFIG_ID`. → roadmap, pre-publish.
 
-**U4-4 (S3) — emoji as button icons** (`view/applet/search.rs`: 📂 🔗 🔑). Render
-inconsistently across icon themes, don't recolor, and carry no accessible name. Replace
-with symbolic icons + tooltips.
+**U4-4 (S3) — emoji as button icons** — *done*. Applet search rows use Cosmic
+symbolics + tooltips (`view/symbolic.rs`, `docs/icon_guidelines.md` §8). TPM
+pass/fail prefixes and the quit-menu triangles were replaced in the same pass.
 
 **U4-5 (S3) — no keyboard handling.** No `Escape` (dismiss popup/dialogs), no arrow-key
 navigation in result lists; only `Enter` via `on_submit` works. Keyboard-first operation

@@ -48,7 +48,7 @@ pub fn extract_domain_label(name: &str) -> String {
 
 /// Returns `true` if `name` looks like a URL or bare hostname that a browser
 /// can open (has a dot, no spaces, no `@`).  Used to decide whether to enable
-/// the 🔗 button for a login row.
+/// the open-URI button for a login row.
 pub fn is_uri_like(name: &str) -> bool {
     let stripped = name
         .strip_prefix("https://")

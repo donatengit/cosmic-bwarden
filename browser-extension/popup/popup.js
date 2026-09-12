@@ -102,9 +102,9 @@ async function updateResults() {
     hideStatus();
     // A typed search is a substring query; otherwise the current tab's host
     // goes in `domain` and the agent domain-matches it against entry URIs.
-    // The ★ toggle restricts everything to favourites; with no search and no
-    // domain match, favourites are shown anyway for quick access (same idea
-    // as the applet's empty-query behaviour).
+    // The favourites toggle restricts everything to favourites; with no search
+    // and no domain match, favourites are shown anyway for quick access (same
+    // idea as the applet's empty-query behaviour).
     const query = searchInput.value || null;
     try {
         const configResp = await getConfig();
@@ -127,7 +127,7 @@ async function updateResults() {
         listIsDomainMatch = false;
         if (favouritesOnly) {
             entries = await getEntries({ query, only_pinned: true });
-            caption = '★ Favourites';
+            caption = 'Favourites';
         } else if (query) {
             entries = await getEntries({ query });
         } else if (currentTabDomain) {
@@ -138,11 +138,11 @@ async function updateResults() {
                 listIsDomainMatch = true;
             } else {
                 entries = await getEntries({ only_pinned: true });
-                caption = '★ Favourites';
+                caption = 'Favourites';
             }
         } else {
             entries = await getEntries({ only_pinned: true });
-            caption = '★ Favourites';
+            caption = 'Favourites';
         }
         renderEntries(entries, caption);
     } catch (e) { showStatus(e.message || "Failed to communicate with agent.", 'error'); }

@@ -39,6 +39,11 @@ removed. Both talk to the same `cosmic-bwarden-agent` over the Unix socket.
 
 ## Panel icon
 
+Applet action icons (search-row open/link/copy, TPM pass/fail, quit
+disclosure) are Cosmic `-symbolic` names listed in
+[`docs/icon_guidelines.md`](icon_guidelines.md). This section covers only
+the panel/app identity mark.
+
 The applet uses the repo's brand mark as a symbolic icon
 (`resources/icons/cosmic-bwarden-symbolic.svg`, the drawable content of the
 repo-root `icons/black.svg` with design-tool export metadata stripped),

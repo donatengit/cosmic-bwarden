@@ -222,9 +222,13 @@ record what changed.
 - `view/applet/menu.rs:102-105` composed `format!("▾ {}"/"▸ {}", fl!("quit"))`
   — glyph + whole-key composition; glyphs are exempt from localization, so it
   was acceptable, but it still built a display string with `format!`.
-  **Fixed:** now `fl!("quit-menu-expanded"|"quit-menu-collapsed",
-  label = fl!("quit"))`, with the glyph as a Fluent placeable so translators
-  can position it.
+  **Fixed:** the glyph became a Fluent placeable
+  (`fl!("quit-menu-expanded", label = fl!("quit"))`), and then a Cosmic
+  symbolic disclosure icon next to a plain label
+  (`symbolic::quit_disclosure_icon` — `pan-down-symbolic` /
+  `pan-end-symbolic`), so no display string is composed at all. The
+  `quit-menu-expanded` / `quit-menu-collapsed` keys are gone; the glyph map is
+  `docs/icon_guidelines.md` §8.
 - `Menu`'s `is_unlocked` predicate (`menu.rs:10-13`, `96-99`) included
   `View::PasswordGenerator`, which the applet process can never reach (set
   only in `update/pwgen.rs`); the popup `match` in `view/applet/mod.rs:69-73`

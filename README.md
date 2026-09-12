@@ -161,6 +161,7 @@ file can stay instructions-only.
 
 **COSMIC and UI**
 - [`docs/cosmic_integration.md`](docs/cosmic_integration.md) — panel applet registration and metadata
+- [`docs/icon_guidelines.md`](docs/icon_guidelines.md) — the emoji-to-symbolic inventory, CosmicDE symbolic construction/look, and which theme names are wired in
 - [`docs/applet_reference_comparison.md`](docs/applet_reference_comparison.md) — libcosmic reference applet vs ours, code level
 - [`docs/cosmic_applets_review_1.8.md`](docs/cosmic_applets_review_1.8.md) — upstream applets at COSMIC 1.8: reference revisions, what changed, which patches matter, what to adopt
 
