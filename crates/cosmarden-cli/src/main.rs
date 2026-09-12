@@ -13,6 +13,7 @@ use utils::preprocess_args;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    cosmarden_core::dirs::adopt_legacy_env();
     let args = preprocess_args(std::env::args().collect());
     let cli = Cli::parse_from(args);
 

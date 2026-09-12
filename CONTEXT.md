@@ -29,7 +29,7 @@ The project follows a modular Rust-based architecture split into specialized cra
 - **Application version**: Generated at build time in `cosmarden-core/build.rs` with format `YYYY.MM-N-<short git id>` where N is the number of seconds elapsed in the current month.
 - **Unified builds**: A 30-second cache window via `target/build_version.txt` ensures all crates in a single build share the same version.
 - **IPC protocol**: `Response::Version { version, protocol_version }` carries both the agent's build version and the protocol version. Currently both fields contain the same build version since all binaries are built together.
-- **CLI check**: `cosmarden-cli version` subcommand queries the agent, prints local/agent/protocol versions, and runs `check_protocol_compatibility()` — a pure function that compares the local build version against the agent's `protocol_version`.
+- **CLI check**: `cosmarden version` queries the agent, prints local/agent/protocol versions, and runs `check_protocol_compatibility()` — a pure function that compares the local build version against the agent's `protocol_version`.
 - **UI display**: Version is shown muted in the applet context menu (next to "Open Vault") and in the Settings panel.
 
 ## Account State & Snapshot Ordering

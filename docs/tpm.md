@@ -14,7 +14,7 @@ these keys are re-derived from your master password every time you unlock. TPM
 PIN unlock seals a copy of those keys inside the hardware chip so a short PIN
 suffices instead.
 
-1. During setup (`cosmarden-cli tpm setup`) the agent derives your vault's
+1. During setup (`cosmarden tpm setup`) the agent derives your vault's
    encryption keys from your master password, then asks for a 6-character-minimum
    PIN.
 2. A symmetric primary key is created deterministically from the TPM's owner
@@ -123,7 +123,7 @@ instead of a master password prompt.
 ### Via the CLI
 
 ```sh
-cosmarden-cli tpm setup
+cosmarden tpm setup
 ```
 
 The CLI prompts for your master password (to verify and load vault keys) then
@@ -140,7 +140,7 @@ Settings → TPM section → **Remove PIN unlock**.
 ### Via the CLI
 
 ```sh
-cosmarden-cli tpm remove
+cosmarden tpm remove
 ```
 
 This deletes the sealed blob for the current account. The TPM primary key is
@@ -172,7 +172,7 @@ to override the probe order.
 You can also run:
 
 ```sh
-cosmarden-cli tpm diagnostics
+cosmarden tpm diagnostics
 ```
 
 to see the same four-item report in the terminal.

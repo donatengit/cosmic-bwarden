@@ -4,7 +4,7 @@ Cosmarden allows you to customize the paths for its IPC socket, SSH agent socket
 
 ## Command Line Arguments
 
-All binaries (`cosmarden-agent`, `cosmarden-cli`, and `cosmarden-ui`) support the following flags:
+All binaries (`cosmarden-agent`, `cosmarden`, and `cosmarden-applet`) support the following flags:
 
 - `--config <PATH>`: Use a specific configuration file.
 - `--socket <PATH>`: Use a specific Unix socket for IPC.
@@ -16,8 +16,8 @@ The agent also supports:
 
 You can also set these paths via environment variables:
 
-- `COSMARDEN_CONFIG`: Path to the configuration file.
-- `COSMARDEN_SOCKET`: Path to the main IPC socket.
+- `COSMARDEN_CONFIG`: Path to the configuration file (`COSMIC_BWARDEN_CONFIG` is still read if this is unset).
+- `COSMARDEN_SOCKET`: Path to the main IPC socket (`COSMIC_BWARDEN_SOCKET` likewise).
 - `COSMARDEN_SSH_SOCKET`: Path to the SSH agent socket.
 
 ## Configuration File Settings

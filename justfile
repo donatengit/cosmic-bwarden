@@ -101,6 +101,7 @@ install:
     python3 tests/browser-extension/register_host.py \
         --agent-path {{local_bin}}/cosmarden-agent \
         --home {{home}}
+    just remove-previous-identity
     echo "Done. Binaries are in {{local_bin}} (keep that directory on PATH). Run 'just restart-panel' and 'just enable-agent'."
 
 # Alias: `just install` is user-local.
@@ -111,12 +112,28 @@ clean-install: uninstall install
 
 
 
+# Drop the pre-rename identity so two agents/applets cannot run together.
+# `com.system76.CosmicBWarden` is a historical app ID — leave that string byte-for-byte.
+remove-previous-identity:
+    systemctl --user disable --now cosmic-bwarden-agent 2>/dev/null || true
+    rm -f {{local_bin}}/cosmic-bwarden-agent {{local_bin}}/cosmic-applet-bwarden {{local_bin}}/cosmic-bwarden-cli {{local_bin}}/cosmic-bwarden-ui
+    rm -f {{local_apps}}/com.enikeev.cosmic_bwarden.desktop {{local_metainfo}}/com.enikeev.cosmic_bwarden.metainfo.xml {{local_applets}}/com.enikeev.cosmic_bwarden.ron
+    rm -f {{local_apps}}/com.enikeev.cosmic-bwarden.desktop {{local_applets}}/com.enikeev.cosmic-bwarden.ron
+    rm -f {{local_apps}}/com.system76.CosmicBWarden.desktop {{local_applets}}/com.system76.CosmicBWarden.ron {{local_bin}}/com.system76.CosmicBWarden
+    rm -f {{local_systemd}}/cosmic-bwarden-agent.service
+    rm -f {{local_icons}}/scalable/apps/com.enikeev.cosmic_bwarden.svg {{local_icons}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg
+    rm -f {{local_icons}}/16x16/apps/com.enikeev.cosmic_bwarden.png {{local_icons}}/32x32/apps/com.enikeev.cosmic_bwarden.png {{local_icons}}/64x64/apps/com.enikeev.cosmic_bwarden.png {{local_icons}}/128x128/apps/com.enikeev.cosmic_bwarden.png
+    rm -f {{home}}/.mozilla/native-messaging-hosts/com.enikeev.cosmic_bwarden.json
+    rm -f {{home}}/.mozilla/native-messaging-hosts/cosmic-bwarden-browser-host.sh
+    systemctl --user daemon-reload 2>/dev/null || true
+
 # Restart the COSMIC panel to discover new applets
 restart-panel:
     systemctl --user restart cosmic-panel
 
 # Enable and start the agent service for the current user
 enable-agent:
+    systemctl --user disable --now cosmic-bwarden-agent 2>/dev/null || true
     systemctl --user enable --now cosmarden-agent
 
 # Disable and stop the agent service for the current user
@@ -139,6 +156,13 @@ uninstall-system:
     sudo rm -f {{icons_dir}}/32x32/apps/com.enikeev.cosmarden.png
     sudo rm -f {{icons_dir}}/64x64/apps/com.enikeev.cosmarden.png
     sudo rm -f {{icons_dir}}/128x128/apps/com.enikeev.cosmarden.png
+    sudo rm -f {{bin_dir}}/cosmic-bwarden-agent {{bin_dir}}/cosmic-applet-bwarden {{bin_dir}}/cosmic-bwarden-cli {{bin_dir}}/cosmic-bwarden-ui {{bin_dir}}/com.system76.CosmicBWarden
+    sudo rm -f {{apps_dir}}/com.enikeev.cosmic_bwarden.desktop {{apps_dir}}/com.enikeev.cosmic-bwarden.desktop {{apps_dir}}/com.system76.CosmicBWarden.desktop
+    sudo rm -f {{metainfo_dir}}/com.enikeev.cosmic_bwarden.metainfo.xml
+    sudo rm -f {{applets_dir}}/com.enikeev.cosmic_bwarden.ron {{applets_dir}}/com.enikeev.cosmic-bwarden.ron {{applets_dir}}/com.system76.CosmicBWarden.ron
+    sudo rm -f {{systemd_user_dir}}/cosmic-bwarden-agent.service
+    sudo rm -f {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden.svg {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg
+    sudo rm -f {{icons_dir}}/16x16/apps/com.enikeev.cosmic_bwarden.png {{icons_dir}}/32x32/apps/com.enikeev.cosmic_bwarden.png {{icons_dir}}/64x64/apps/com.enikeev.cosmic_bwarden.png {{icons_dir}}/128x128/apps/com.enikeev.cosmic_bwarden.png
     sudo gtk-update-icon-cache -f {{icons_dir}} 2>/dev/null || true
     sudo update-desktop-database {{apps_dir}} 2>/dev/null || true
     systemctl --user daemon-reload
@@ -163,8 +187,9 @@ uninstall:
     rm -f {{local_systemd}}/cosmarden-agent.service
     rm -f {{home}}/.mozilla/native-messaging-hosts/com.enikeev.cosmarden.json
     rm -f {{home}}/.mozilla/native-messaging-hosts/cosmarden-browser-host.sh
+    just remove-previous-identity
     echo "Removing leftover system-wide files if writable..."
-    rm -f {{bin_dir}}/cosmarden-agent {{bin_dir}}/cosmarden-applet {{bin_dir}}/cosmarden {{apps_dir}}/com.enikeev.cosmarden.desktop {{metainfo_dir}}/com.enikeev.cosmarden.metainfo.xml {{applets_dir}}/com.enikeev.cosmarden.ron {{systemd_user_dir}}/cosmarden-agent.service {{icons_dir}}/scalable/apps/com.enikeev.cosmarden.svg {{icons_dir}}/scalable/apps/com.enikeev.cosmarden-symbolic.svg {{icons_dir}}/16x16/apps/com.enikeev.cosmarden.png {{icons_dir}}/32x32/apps/com.enikeev.cosmarden.png {{icons_dir}}/64x64/apps/com.enikeev.cosmarden.png {{icons_dir}}/128x128/apps/com.enikeev.cosmarden.png 2>/dev/null || true
+    rm -f {{bin_dir}}/cosmarden-agent {{bin_dir}}/cosmarden-applet {{bin_dir}}/cosmarden {{bin_dir}}/cosmic-bwarden-agent {{bin_dir}}/cosmic-applet-bwarden {{bin_dir}}/cosmic-bwarden-cli {{bin_dir}}/cosmic-bwarden-ui {{bin_dir}}/com.system76.CosmicBWarden {{apps_dir}}/com.enikeev.cosmarden.desktop {{apps_dir}}/com.enikeev.cosmic_bwarden.desktop {{apps_dir}}/com.enikeev.cosmic-bwarden.desktop {{apps_dir}}/com.system76.CosmicBWarden.desktop {{metainfo_dir}}/com.enikeev.cosmarden.metainfo.xml {{metainfo_dir}}/com.enikeev.cosmic_bwarden.metainfo.xml {{applets_dir}}/com.enikeev.cosmarden.ron {{applets_dir}}/com.enikeev.cosmic_bwarden.ron {{applets_dir}}/com.enikeev.cosmic-bwarden.ron {{applets_dir}}/com.system76.CosmicBWarden.ron {{systemd_user_dir}}/cosmarden-agent.service {{systemd_user_dir}}/cosmic-bwarden-agent.service 2>/dev/null || true
 
 # Clean build artifacts
 clean: uninstall

@@ -126,9 +126,9 @@ pub enum Commands {
     },
     /// Get details for an entry
     #[command(after_help = "EXAMPLES:
-  cosmarden-cli get \"My Account\" --show-secrets
-  cosmarden-cli get \"AWS Creds\" --fields notes --show-secrets
-  cosmarden-cli get \"AWS Creds\" --fields notes --show-secrets > credentials.yaml
+  cosmarden get \"My Account\" --show-secrets
+  cosmarden get \"AWS Creds\" --fields notes --show-secrets
+  cosmarden get \"AWS Creds\" --fields notes --show-secrets > credentials.yaml
 
 `--fields notes` alone (no other field names) prints just the note body,
 byte-for-byte, with no label \u{2014} pipe it straight to a file to restore
@@ -151,15 +151,15 @@ whatever was stored with `add --stdin` / `edit --stdin` (see `add --help`).")]
     #[command(
         long_about = "Add a new entry to the vault using key=value pairs.",
         after_help = "EXAMPLES:
-  cosmarden-cli login add \"My Account\" username=user1
-  cosmarden-cli add note \"My Note\" notes=\"Some text\"
-  cosmarden-cli sshkey add \"Work Key\" private_key=X
-  cat credentials.yaml | cosmarden-cli add note \"AWS Creds\" --stdin
-  cosmarden-cli add note \"AWS Creds\" --stdin < credentials.yaml
-  cosmarden-cli add note \"AWS Creds\" --replace --stdin < credentials.yaml
+  cosmarden login add \"My Account\" username=user1
+  cosmarden add note \"My Note\" notes=\"Some text\"
+  cosmarden sshkey add \"Work Key\" private_key=X
+  cat credentials.yaml | cosmarden add note \"AWS Creds\" --stdin
+  cosmarden add note \"AWS Creds\" --stdin < credentials.yaml
+  cosmarden add note \"AWS Creds\" --replace --stdin < credentials.yaml
 
   # ...later, restore the whole file from the note:
-  cosmarden-cli get \"AWS Creds\" --fields notes --show-secrets > credentials.yaml
+  cosmarden get \"AWS Creds\" --fields notes --show-secrets > credentials.yaml
 
 ENTRY TYPE DETAILS:
   For login:  username=X, password=Y, notes=N
@@ -198,13 +198,13 @@ existing entry (or entries) are deleted first."
     },
     /// Edit an existing entry
     #[command(after_help = "EXAMPLES:
-  cosmarden-cli edit \"My Account\" password=newpass
-  cat env_vars.sh | cosmarden-cli edit \"My Note\" --stdin
-  cosmarden-cli edit \"My Note\" --stdin < env_vars.sh
-  cosmarden-cli edit b837ec2d-1590-42cf-8a14-b48a0152fc9c --delete
+  cosmarden edit \"My Account\" password=newpass
+  cat env_vars.sh | cosmarden edit \"My Note\" --stdin
+  cosmarden edit \"My Note\" --stdin < env_vars.sh
+  cosmarden edit b837ec2d-1590-42cf-8a14-b48a0152fc9c --delete
 
   # ...later, restore the whole file from the note:
-  cosmarden-cli get \"My Note\" --fields notes --show-secrets > env_vars.sh
+  cosmarden get \"My Note\" --fields notes --show-secrets > env_vars.sh
 
 --stdin reads the entry's notes from standard input (via `cat file | ...`
 or `... < file`) instead of a notes=/note= pair. `get --fields notes
@@ -272,9 +272,9 @@ Passing no character-group/length flags reuses whatever was last saved \
 independently on/off, not additive), and that becomes the new \"last used\" \
 setting for every other surface.",
         after_help = "EXAMPLES:
-  cosmarden-cli generate
-  cosmarden-cli generate --length 20 --special --numbers
-  cosmarden-cli generate --history"
+  cosmarden generate
+  cosmarden generate --length 20 --special --numbers
+  cosmarden generate --history"
     )]
     Generate {
         /// Include uppercase letters (A-Z)

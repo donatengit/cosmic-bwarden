@@ -329,6 +329,7 @@ impl Application for CosmardenApp {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    cosmarden_core::dirs::adopt_legacy_env();
     setup_logs();
 
     let args = Cli::try_parse().unwrap_or(Cli {

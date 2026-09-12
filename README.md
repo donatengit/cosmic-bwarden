@@ -102,7 +102,10 @@ an AUR `PKGBUILD` lives in [`packaging/`](packaging/).
 
 Browser extension: `just pack-extension`, load `target/cosmarden-extension.zip`,
 and register the native host with `just register-browser-host` (dev) or `just install`
-(system). See [docs/browser_extension.md](docs/browser_extension.md).
+(system). Firefox id is `cosmarden@enikeev.com` and the native host is
+`com.enikeev.cosmarden` — a new listing, not an update of the old
+`cosmic-bwarden@enikeev.com` add-on; remove that add-on if it is still loaded.
+See [docs/browser_extension.md](docs/browser_extension.md).
 
 ## Security model, honestly
 

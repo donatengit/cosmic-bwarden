@@ -3,6 +3,10 @@ use oo7::dbus::Service;
 
 #[cfg(feature = "keyring")]
 const APP_ID: &str = "com.enikeev.cosmarden";
+/// Pre-rename Secret Service attribute. Search-and-rewrite so a persisted
+/// session survives the App ID change.
+#[cfg(feature = "keyring")]
+const LEGACY_APP_ID: &str = "com.enikeev.cosmic_bwarden";
 
 pub async fn store_tokens(
     server: &str,
@@ -53,11 +57,21 @@ pub async fn get_tokens(server: &str, email: &str) -> anyhow::Result<Option<(Str
         attributes.insert("email", email);
 
         let items = collection.search_items(&attributes).await?;
-        if let Some(item) = items.first() {
-            let secret_bytes = item.secret().await?;
-            let secret_str = String::from_utf8(secret_bytes.to_vec())?;
-            if let Some((at, rt)) = secret_str.split_once(':') {
-                return Ok(Some((at.to_string(), rt.to_string())));
+        if let Some(pair) = parse_token_item(items.first()).await? {
+            return Ok(Some(pair));
+        }
+
+        attributes.insert("app_id", LEGACY_APP_ID);
+        let legacy = collection.search_items(&attributes).await?;
+        if let Some(item) = legacy.first() {
+            if let Some((at, rt)) = parse_token_item(Some(item)).await? {
+                log::info!("migrating Secret Service session item to {APP_ID}");
+                item.delete().await.map_err(|e| {
+                    log::error!("failed to delete legacy keyring item: {e}");
+                    e
+                })?;
+                store_tokens(server, email, &at, &rt).await?;
+                return Ok(Some((at, rt)));
             }
         }
         Ok(None)
@@ -69,6 +83,20 @@ pub async fn get_tokens(server: &str, email: &str) -> anyhow::Result<Option<(Str
     }
 }
 
+#[cfg(feature = "keyring")]
+async fn parse_token_item(
+    item: Option<&oo7::dbus::Item<'_>>,
+) -> anyhow::Result<Option<(String, String)>> {
+    let Some(item) = item else {
+        return Ok(None);
+    };
+    let secret_bytes = item.secret().await?;
+    let secret_str = String::from_utf8(secret_bytes.to_vec())?;
+    Ok(secret_str
+        .split_once(':')
+        .map(|(at, rt)| (at.to_string(), rt.to_string())))
+}
+
 pub async fn delete_tokens(server: &str, email: &str) -> anyhow::Result<()> {
     #[cfg(feature = "keyring")]
     {
@@ -76,13 +104,14 @@ pub async fn delete_tokens(server: &str, email: &str) -> anyhow::Result<()> {
         let collection = service.default_collection().await?;
 
         let mut attributes = std::collections::HashMap::new();
-        attributes.insert("app_id", APP_ID);
         attributes.insert("server", server);
         attributes.insert("email", email);
 
-        let items = collection.search_items(&attributes).await?;
-        for item in items {
-            item.delete().await?;
+        for app_id in [APP_ID, LEGACY_APP_ID] {
+            attributes.insert("app_id", app_id);
+            for item in collection.search_items(&attributes).await? {
+                item.delete().await?;
+            }
         }
         Ok(())
     }
@@ -109,13 +138,10 @@ mod tests {
         );
         let current = ["com.enikeev.", "cosmarden"].concat();
         let legacy = ["com.enikeev.", "cosmic_bwarden"].concat();
+        assert!(src.contains(&current), "store uses {current}");
         assert!(
-            src.contains(&current),
-            "store/get/delete must use {current}"
-        );
-        assert!(
-            !src.contains(&legacy),
-            "legacy Secret Service app_id must not remain"
+            src.contains(&legacy),
+            "get/delete must still search the pre-rename app_id"
         );
     }
 }

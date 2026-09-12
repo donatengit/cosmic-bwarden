@@ -204,7 +204,7 @@ pub async fn handle_command(
             } else {
                 for dup in &duplicates {
                     eprintln!(
-                        "Warning: a {} entry named \"{}\" already exists (id {}). Adding a new entry anyway.\n  Use --replace to replace it instead, or run: cosmarden-cli edit {} --delete",
+                        "Warning: a {} entry named \"{}\" already exists (id {}). Adding a new entry anyway.\n  Use --replace to replace it instead, or run: cosmarden edit {} --delete",
                         entry_type_label(t),
                         dup.name,
                         dup.id,

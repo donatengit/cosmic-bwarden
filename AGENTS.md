@@ -61,6 +61,9 @@ Keep each layer in its own lane:
 | App ID | `com.enikeev.cosmarden` | `APP_ID`, `.desktop`/`.ron`/metainfo filenames, D-Bus path, `StartupWMClass`, native-messaging host name |
 | Code identifiers | `Cosmarden*` | `CosmardenApp`, `CosmardenConfig` — Rust types, never rename to match the display name. `AppFlags` implements libcosmic `CosmicFlags`. |
 
+`com.system76.CosmicBWarden` appears only in the justfile's leftover-cleanup
+`rm -f` lines; it is a historical app ID, not a name — leave it byte-for-byte.
+
 The project URL is `cosmarden_core::HOMEPAGE` on the Rust side. The
 non-Rust manifests (metainfo, systemd units, `manifest.json`, `package.json`,
 PKGBUILD) carry their own copy and must be updated together if the repo moves.
@@ -83,7 +86,7 @@ These must never regress. Treat violations as build-blocking bugs.
 - **Persistent IPC connections**: The agent keeps client connections alive across multiple requests (one `tokio::spawn` per connected socket, inner `loop` for subsequent requests). Subscribe connections are long-lived; all others reuse the same socket until the client disconnects.
 - **Sensitive memory**: Use memory-locked storage for all key material and plaintext secrets.
 - **Plaintext secrets cross IPC as `db::Secret`, never `String`** (review-blocking). `Secret` is `ZeroizeOnDrop`, so the plaintext is scrubbed when the response is dropped instead of lingering in freed heap. It is `#[serde(transparent)]`, so this costs nothing on the wire — `protocol::tests::secret_fields_are_wire_identical_to_plain_strings` pins that, and no version bump is needed to adopt it. Applies to `Response::{Password, Totp, GeneratedPassword}` and `GeneratorHistoryEntry::password`; propagate it through client state too (the UI's `OnDemandPayload` and secret-carrying `Message` variants) rather than unwrapping at the IPC boundary, which only moves the leak inward.
-  - **`Secret`'s `Display` prints `********`.** Converting a field from `String` to `Secret` silently changes any `println!("{x}")` from the value to asterisks — it compiles clean and the compiler says nothing. This shipped once: `cosmarden-cli generate` printed asterisks. Where a command's purpose *is* to emit the value (CLI stdout, clipboard), call `.expose()` explicitly and say why in a comment.
+  - **`Secret`'s `Display` prints `********`.** Converting a field from `String` to `Secret` silently changes any `println!("{x}")` from the value to asterisks — it compiles clean and the compiler says nothing. This shipped once: `cosmarden generate` printed asterisks. Where a command's purpose *is* to emit the value (CLI stdout, clipboard), call `.expose()` explicitly and say why in a comment.
   - Legitimate conversion points are the clipboard and the `secure_input` widget — both plaintext by nature. Everything upstream of them stays wrapped.
   - `Secret` also wraps *ciphertext* in this codebase (`protected_key`, `protected_org_keys`). Those need no zeroization; "it's a `Secret`" does not by itself mean "sensitive in memory".
 - **No silent failures**: Any operation that can fail and affect data availability, integrity, or security must log at `warn` or `error` level. **Anything that can corrupt or lose data logs `error!` — no exceptions.** Specifically:
@@ -314,7 +317,7 @@ threat model: `docs/password_generator_plan.md`.
   — no background sweep. Persist it atomically (tmp+rename) with mode `0600`,
   the same pattern as `db::persistence::Db::save`.
 - Every surface shares one settings set and one history: desktop pane, applet
-  quick-gen (works while locked), `cosmarden-cli generate`, and the browser
+  quick-gen (works while locked), `cosmarden generate`, and the browser
   extension. Do not fork the storage per surface.
 
 ### Browser Extension

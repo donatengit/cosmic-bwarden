@@ -111,6 +111,7 @@ pub async fn run() -> anyhow::Result<()> {
         cosmarden_core::PROTOCOL_VERSION,
     );
 
+    cosmarden_core::dirs::adopt_legacy_env();
     let args = Cli::parse();
 
     // Apply CLI overrides to dirs early

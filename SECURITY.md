@@ -11,7 +11,7 @@ be taken seriously.
 - Alternative: email **donat@enikeev.net** with `cosmarden security` in the subject.
 
 Please include what you'd want to receive: affected component (agent / applet / UI / CLI
-/ SSH agent / browser extension / TPM path), version (`cosmarden-cli --version`),
+/ SSH agent / browser extension / TPM path), version (`cosmarden --version`),
 reproduction steps, and impact as you see it.
 
 Expect an acknowledgement within 7 days and an assessment within 14. There is no bug

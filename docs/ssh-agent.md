@@ -61,7 +61,7 @@ Add a key via the CLI (the private key is read from stdin/prompt if
 `private_key=` is omitted):
 
 ```sh
-cosmarden-cli sshkey add "My Work Key" \
+cosmarden sshkey add "My Work Key" \
   private_key="$(cat ~/.ssh/id_ed25519)" \
   public_key="$(cat ~/.ssh/id_ed25519.pub)"
 ```
@@ -129,9 +129,9 @@ ssh -o IdentitiesOnly=no user@host
 
 - **`ssh-add -l` says "no identities" but the vault has an SSH key entry**:
   this agent process has not unlocked since start (or you logged out).
-  Unlock (`cosmarden-cli unlocked` / the applet), then list again. If
+  Unlock (`cosmarden unlocked` / the applet), then list again. If
   it's unlocked and the key still doesn't show up, check
-  `cosmarden-cli get "My Work Key"` returns a populated `public_key` —
+  `cosmarden get "My Work Key"` returns a populated `public_key` —
   if it doesn't, the entry itself is missing key data (re-add it).
 - **`ssh-add -l` shows `[cosmarden:locked]`**: the vault is locked in
   this process; unlock the applet or app and retry the SSH/git command

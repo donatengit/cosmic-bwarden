@@ -32,7 +32,7 @@ RUSTFLAGS="-C target-cpu=native" cargo build --release
 This will produce binaries in `target/release/`:
 - `cosmarden-agent`: The background daemon.
 - `cosmarden-applet`: The main GUI application and panel tray applet (built from the `cosmarden-ui` crate).
-- `cosmarden-cli`: The command-line interface.
+- `cosmarden`: The command-line interface (crate `cosmarden-cli`).
 
 ## Running the Components
 
@@ -52,7 +52,7 @@ The same binary handles both the main window and the applet tray.
 ```
 
 ### 3. CLI Usage
-The `cosmarden-cli` provides a powerful interface for scripting and advanced management.
+The `cosmarden` CLI provides a powerful interface for scripting and advanced management.
 
 ```bash
 # Register a new account (prompts for the master password interactively)

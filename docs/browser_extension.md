@@ -50,6 +50,8 @@ For a permanent install, package the extension with `just pack-extension` and su
 
 The agent binary acts as the native messaging host (`com.enikeev.cosmarden`). Registration writes a wrapper script and a manifest into `~/.mozilla/native-messaging-hosts/`.
 
+The Firefox add-on id is `cosmarden@enikeev.com`. That is a new AMO listing, not an update of `cosmic-bwarden@enikeev.com`. Remove the old add-on before loading this one; `just install` also removes the old native-host manifest.
+
 **Post-install (normal users):** registration is done automatically by `just install`.
 
 **Development (without a full install):** use the dev recipe, which builds only the agent in debug mode and points the manifest at `target/debug/`:
@@ -95,7 +97,7 @@ just test-extension-e2e-chrome
 
 The script (`tests/browser-extension/run-chrome-e2e.sh`) handles everything:
 
-1. Builds `cosmarden-agent` and `cosmarden-cli`
+1. Builds `cosmarden-agent` and `cosmarden`
 2. Starts a Vaultwarden container on port 8081 (Docker or Podman auto-detected)
 3. Starts the agent under `COSMARDEN_PROFILE=test-chrome-e2e`
 4. Runs `npx playwright test --project=chrome-full`
@@ -150,7 +152,7 @@ The `chrome-full` suite (`tests/browser-extension/playwright/chrome-full.spec.js
 | SecureNote | Yes | Yes | Yes |
 | SshKey | **No** | Yes (public key + fingerprint only) | No |
 
-SSH keys must be created via the CLI (`cosmarden-cli add-ssh-key`) or the native COSMIC UI. The popup form intentionally has no SSH key type option — entering private key material via a browser popup is a security anti-pattern.
+SSH keys must be created via the CLI (`cosmarden sshkey add`) or the native COSMIC UI. The popup form intentionally has no SSH key type option — entering private key material via a browser popup is a security anti-pattern.
 
 ---
 

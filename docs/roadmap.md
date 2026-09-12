@@ -175,7 +175,7 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
 - [x] ~~Password generator (applet quick-gen + edit form)~~ — *done 2026-07*:
       full-page generator pane (checkboxes, length slider, reveal/copy,
       7-day local history) at `crates/cosmarden-ui/src/view/vault/generator.rs`;
-      applet quick-gen entry; `cosmarden-cli generate`; browser extension
+      applet quick-gen entry; `cosmarden generate`; browser extension
       context menu + inline field icon. Settings/history/algorithm live in the
       agent (`handler/generator/`) so every surface shares them. See
       `docs/password_generator_plan.md`.

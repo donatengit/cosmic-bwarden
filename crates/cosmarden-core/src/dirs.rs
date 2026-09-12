@@ -3,7 +3,7 @@ use std::os::unix::fs::{DirBuilderExt as _, PermissionsExt as _};
 use std::path::PathBuf;
 
 mod profile;
-pub use profile::profile;
+pub use profile::{adopt_legacy_env, profile};
 
 pub fn set_config_override(path: PathBuf) {
     std::env::set_var("COSMARDEN_CONFIG", path);
@@ -18,6 +18,7 @@ pub fn set_ssh_socket_override(path: PathBuf) {
 }
 
 pub fn make_all() -> Result<()> {
+    profile::migrate_legacy_dirs();
     create_dir_all_with_permissions(&cache_dir(), 0o700)?;
     create_dir_all_with_permissions(&runtime_dir(), 0o700)?;
     create_dir_all_with_permissions(&data_dir(), 0o700)?;
@@ -47,9 +48,14 @@ fn create_dir_all_with_permissions(path: &std::path::Path, mode: u32) -> Result<
     Ok(())
 }
 
-pub fn config_file() -> std::path::PathBuf {
-    std::env::var_os("COSMARDEN_CONFIG")
+fn env_path(new: &str, old: &str) -> Option<PathBuf> {
+    std::env::var_os(new)
+        .or_else(|| std::env::var_os(old))
         .map(PathBuf::from)
+}
+
+pub fn config_file() -> std::path::PathBuf {
+    env_path("COSMARDEN_CONFIG", "COSMIC_BWARDEN_CONFIG")
         .unwrap_or_else(|| config_dir().join("config.json"))
 }
 
@@ -115,14 +121,12 @@ pub fn generator_history_file() -> std::path::PathBuf {
 }
 
 pub fn socket_file() -> std::path::PathBuf {
-    std::env::var_os("COSMARDEN_SOCKET")
-        .map(PathBuf::from)
+    env_path("COSMARDEN_SOCKET", "COSMIC_BWARDEN_SOCKET")
         .unwrap_or_else(|| runtime_dir().join("socket"))
 }
 
 pub fn ssh_agent_socket_file() -> std::path::PathBuf {
-    std::env::var_os("COSMARDEN_SSH_SOCKET")
-        .map(PathBuf::from)
+    env_path("COSMARDEN_SSH_SOCKET", "COSMIC_BWARDEN_SSH_SOCKET")
         .unwrap_or_else(|| runtime_dir().join("ssh-agent-socket"))
 }
 
