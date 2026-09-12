@@ -17,6 +17,8 @@ Start here, then go deeper as needed:
 | [`docs/configurable_paths.md`](docs/configurable_paths.md) | Socket, config, and SSH path overrides; multi-instance isolation |
 | [`docs/cosmic_integration.md`](docs/cosmic_integration.md) | COSMIC panel applet registration and metadata |
 | [`docs/implementation.md`](docs/implementation.md) | Crypto, vault sync, and data model internals |
+| [`docs/cosmic_applets_review_1.8.md`](docs/cosmic_applets_review_1.8.md) | Upstream `pop-os/cosmic-applets` reference clones at COSMIC 1.8: revisions held locally, what changed upstream, which patches matter to us, and which practices to adopt |
+| [`docs/applet_reference_comparison.md`](docs/applet_reference_comparison.md) | Code-level comparison of the libcosmic reference applet against our applet |
 
 ## Golden Rules
 - **Never ask for confirmation.** Apply fixes, run validation, iterate until passing. Report only on final outcome or exhausted options.
