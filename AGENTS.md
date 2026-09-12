@@ -1,24 +1,10 @@
 # cosmic-bwarden: Agent Guidelines
 
-## Key Documents
+## How to read this file
 
-Start here, then go deeper as needed:
-
-| Document | Purpose |
-|---|---|
-| [`CONTEXT.md`](CONTEXT.md) | Architecture, security invariants, key workflows, "game-changing" features — the canonical project map |
-| [`docs/summary.md`](docs/summary.md) | User-facing project overview and feature list |
-| [`docs/build_and_run.md`](docs/build_and_run.md) | Prerequisites, build commands, run modes |
-| [`docs/testing.md`](docs/testing.md) | Complexity-ordered testing strategy and what each test suite covers |
-| [`docs/ssh-agent.md`](docs/ssh-agent.md) | SSH agent protocol implementation and socket paths |
-| [`docs/ssh_agent_locked_message.md`](docs/ssh_agent_locked_message.md) | Locked-vault SSH identity listing and wait-on-sign (decision record) |
-| [`docs/browser_integration.md`](docs/browser_integration.md) | Native browser extension architecture and IPC protocol |
-| [`docs/public_suffix_list.md`](docs/public_suffix_list.md) | Domain-matching rules (exact / boundary-subdomain / PSL eTLD+1) and the `public_suffix_list` feature |
-| [`docs/configurable_paths.md`](docs/configurable_paths.md) | Socket, config, and SSH path overrides; multi-instance isolation |
-| [`docs/cosmic_integration.md`](docs/cosmic_integration.md) | COSMIC panel applet registration and metadata |
-| [`docs/implementation.md`](docs/implementation.md) | Crypto, vault sync, and data model internals |
-| [`docs/cosmic_applets_review_1.8.md`](docs/cosmic_applets_review_1.8.md) | Upstream `pop-os/cosmic-applets` reference clones at COSMIC 1.8: revisions held locally, what changed upstream, which patches matter to us, and which practices to adopt |
-| [`docs/applet_reference_comparison.md`](docs/applet_reference_comparison.md) | Code-level comparison of the libcosmic reference applet against our applet |
+Instructions and hard rules only. Documentation is indexed in
+[`README.md`](README.md) — the only link in this file, and it links back here.
+Document paths mentioned below in plain backticks are listed there.
 
 ## Golden Rules
 - **Never ask for confirmation.** Apply fixes, run validation, iterate until passing. Report only on final outcome or exhausted options.
@@ -29,8 +15,8 @@ Start here, then go deeper as needed:
   recipes carry the container-socket setup, the debug-binary rebuild the E2E
   harness depends on, and the resource caps that keep the machine usable during
   a 20+ minute run. `just test` is the whole Rust suite; `just test-all` adds
-  the offline JS suites; `just --list` shows the rest. Details:
-  [`docs/testing.md`](docs/testing.md).
+  the offline JS suites; `just --list` shows the rest. Testing strategy and
+  resource limits: `docs/testing.md`.
   - **If the test suite needs something new, add it to the justfile in the same
     change.** A new test module, feature flag, service, or fixture that only
     runs from a hand-typed command line is not wired up. The standard is that a
@@ -188,8 +174,8 @@ Rules:
 
 ### Test runs must be resource-capped
 A full run takes over twenty minutes and would otherwise saturate the machine.
-Two layers, because neither reaches both halves. Full explanation:
-[`docs/testing.md`](docs/testing.md), "Resource limits".
+Two layers, because neither reaches both halves. Full explanation in
+`docs/testing.md`, "Resource limits".
 
 - **Layer 1, everything `just` starts**: each test recipe runs its command
   through `packaging/run-limited.sh`, which wraps it in a transient systemd

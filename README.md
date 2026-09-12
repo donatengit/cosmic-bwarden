@@ -130,6 +130,58 @@ and register the native host with `just register-browser-host` (dev) or `just in
 - Start with [`docs/review/01_security.md`](docs/review/01_security.md); report issues
   per [SECURITY.md](SECURITY.md).
 
+## Documentation
+
+Rules and hard invariants live in [`AGENTS.md`](AGENTS.md) — start there before
+changing code. Everything else is indexed below; the links live here so that
+file can stay instructions-only.
+
+**Project**
+- [`CONTEXT.md`](CONTEXT.md) — architecture, security invariants, key workflows, "game-changing" features (the canonical project map)
+- [`docs/summary.md`](docs/summary.md) — user-facing overview and feature list
+- [`docs/build_and_run.md`](docs/build_and_run.md) — prerequisites, build commands, run modes
+- [`docs/roadmap.md`](docs/roadmap.md) — current backlog
+
+**Testing**
+- [`docs/testing.md`](docs/testing.md) — strategy, what each suite covers, resource limits
+- [`docs/ui_testing_strategy.md`](docs/ui_testing_strategy.md) — UI test approach
+- [`docs/ui_test_coverage.md`](docs/ui_test_coverage.md) — UI coverage inventory
+- [`docs/test_cleanup_plan.md`](docs/test_cleanup_plan.md) — test-state isolation: rationale and verification recipe
+
+**Security and internals**
+- [`SECURITY.md`](SECURITY.md) — how to report issues
+- [`docs/review/`](docs/review/) — nine-phase self-review (`00_ground_truth` … `08_docs_first_run`), findings written up rather than quietly fixed
+- [`docs/review/01_security.md`](docs/review/01_security.md) — start here for the security findings
+- [`docs/implementation.md`](docs/implementation.md) — crypto, vault sync, data model internals
+- [`docs/configurable_paths.md`](docs/configurable_paths.md) — socket, config, and SSH path overrides; multi-instance isolation
+- [`docs/public_suffix_list.md`](docs/public_suffix_list.md) — domain-matching rules (exact / boundary-subdomain / PSL eTLD+1)
+- [`docs/tpm.md`](docs/tpm.md) — TPM PIN unlock, design and operational notes
+- [`docs/ssh-agent.md`](docs/ssh-agent.md) — SSH agent protocol implementation and socket paths
+- [`docs/ssh_agent_locked_message.md`](docs/ssh_agent_locked_message.md) — locked-vault identity listing and wait-on-sign (decision record)
+
+**COSMIC and UI**
+- [`docs/cosmic_integration.md`](docs/cosmic_integration.md) — panel applet registration and metadata
+- [`docs/applet_reference_comparison.md`](docs/applet_reference_comparison.md) — libcosmic reference applet vs ours, code level
+- [`docs/cosmic_applets_review_1.8.md`](docs/cosmic_applets_review_1.8.md) — upstream applets at COSMIC 1.8: reference revisions, what changed, which patches matter, what to adopt
+
+**Browser extension**
+- [`docs/browser_extension.md`](docs/browser_extension.md) — user-facing extension guide
+- [`docs/browser_integration.md`](docs/browser_integration.md) — architecture and native-messaging IPC protocol
+
+**Password generator**
+- [`docs/password_generator_plan.md`](docs/password_generator_plan.md) — full design, storage, threat model
+
+**Plans and review records** (historical; kept because they explain decisions)
+- [`docs/fable_5_project_review_plan.md`](docs/fable_5_project_review_plan.md)
+- [`docs/grok_xhigh_security_review.md`](docs/grok_xhigh_security_review.md)
+- [`docs/grok_xhigh_security_review_plan.md`](docs/grok_xhigh_security_review_plan.md)
+- [`docs/security_model_review_plan.md`](docs/security_model_review_plan.md)
+- [`docs/archive/`](docs/archive/) — superseded documents
+
+**Contributing**
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contribution notes
+- [`GEMINI.md`](GEMINI.md) — Gemini entry point; points at `AGENTS.md` and `CONTEXT.md` and deliberately holds nothing of its own
+
 ## Development
 
 Start with [`AGENTS.md`](AGENTS.md) (rules, invariants, validation commands) and
