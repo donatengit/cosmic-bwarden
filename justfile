@@ -28,9 +28,9 @@ local_icons := local_share + "/icons/hicolor"
 # CPU and I/O share and its nice level, so it only uses what nothing else wants
 # and the foreground session never waits behind it.
 #
-# One budget covers builds and test runs alike. Change the values here:
+# One budget covers builds and test runs alike, and it always applies: neither
+# value may be zero, because an uncapped run is the thing this prevents.
 #   just test_cpus=12 test
-#   just test_cpus=0 test_memory=0 test     # no caps, no scope
 # The scheduling shares are fixed constants in packaging/run-limited.sh, which
 # also explains why the hard ceilings (MemoryMax and friends) are left off.
 # The scope covers cargo, rustc, the test binaries and the agents they spawn.

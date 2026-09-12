@@ -62,15 +62,16 @@ contention and only a genuinely idle machine is used at full speed.
 
 ```bash
 just test                      # capped at 6 cores / 8G
-just test_cpus=12 test         # let it use the whole machine
-just test_cpus=0 test_memory=0 test   # no caps, no scope at all
+just test_cpus=12 test         # give one run more headroom
 ```
 
-The scheduling shares and the hard ceilings that stay off (`MemoryMax`,
-`MemorySwapMax`, `TasksMax` — they kill rather than throttle) are fixed
-constants at the top of `packaging/run-limited.sh`, deliberately not
-environment variables: a knob per invocation is how the limits stop being
-applied. Edit a value there if a run needs a different share.
+Every run through the wrapper is capped: `test_cpus` and `test_memory` must be
+positive, and passing `0` is an error rather than an opt-out. The scheduling
+shares and the hard ceilings that stay off (`MemoryMax`, `MemorySwapMax`,
+`TasksMax` — they kill rather than throttle) are fixed constants at the top of
+`packaging/run-limited.sh`, deliberately not environment variables: a knob per
+invocation is how the limits stop being applied. Edit a value there if a run
+needs a different share.
 
 The script falls back to running the command unwrapped, with a note on stderr,
 when systemd is unavailable (a container, a CI runner with no user manager, a

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Run a command inside a transient systemd scope with CPU, memory and scheduling
-# limits, so a long build or test run leaves the desktop usable.
+# Run a command inside a transient systemd scope that caps its CPU and memory
+# and lowers its priority, so a long build or test run leaves the desktop usable.
 #
 # Why this exists: several agents, background tasks and containers can be
 # running at once, each willing to take every core and as much memory as it can
@@ -9,11 +9,14 @@
 # wins every contention and the machine stays responsive.
 #
 # Usage: run-limited.sh <cpus> <memory> <command> [args...]
-#   cpus   - whole or fractional cores, e.g. "6" or "1.5". "0" disables the cap.
-#   memory - systemd MemoryHigh value, e.g. "8G". "0" disables the cap.
+#   cpus   - whole or fractional cores, e.g. "6" or "1.5". Must be positive.
+#   memory - systemd MemoryHigh value, e.g. "8G" or "512M". Must be positive.
 #
-# "0" for both runs the command directly, with no scope at all. That is the only
-# unscoped path — there is no environment override.
+# Both are required and neither may be zero: every run through this wrapper is
+# capped. There is no environment override and no opt-out — to change what a run
+# is allowed, edit the settings below, which is also where the scheduling shares
+# live. A "0" here would mean "no cap", which is the thing this script exists to
+# prevent, so it is rejected rather than honoured.
 #
 # Scope, and what this does NOT cover: the scope constrains the command and
 # every process it spawns (cargo, rustc, the test binary, the agents the suite
@@ -26,16 +29,16 @@
 # the test harness — see crates/cosmic-bwarden-tests/src/container_limits.rs
 # and docs/testing.md.
 #
-# Falls back to running the command directly when systemd is unavailable (a
-# container, a CI runner without a user manager, a non-systemd distro) or when
-# systemd-run rejects the limits. The caps are a courtesy to the developer's
-# machine, never a correctness requirement, so an unavailable systemd must not
-# stop the build or the tests.
+# The one unwrapped path is an environment that cannot make a scope: no
+# systemd-run, no systemd user manager, or a rejected scope. That is a missing
+# facility, not an opt-out, and it is reported on stderr. The caps are a
+# courtesy to the developer's machine rather than a correctness requirement, so
+# a machine without systemd still builds and tests.
 
 set -uo pipefail
 
 # ── Settings ──────────────────────────────────────────────────────────────
-# Fixed constants, deliberately not environment variables: these are a courtesy
+# Fixed constants, deliberately not environment variables: this is a courtesy
 # to the local machine, and a knob per invocation is how limits stop being
 # applied at all. Edit a value here if a run needs a different share.
 #
@@ -47,10 +50,12 @@ cpu_weight=20
 io_weight=20
 nice_level=10
 
-# Hard ceilings, off by default. MemoryMax OOM-kills whatever exceeds it, so a
-# browser E2E run that spikes would die with a confusing failure instead of a
-# slow one, and rustc would die mid-link. Set one only if a runaway costs more
-# than a kill: memory_max, memory_swap_max (zram/swap), tasks_max (pids).
+# Hard ceilings, off by default. CPUQuota and MemoryHigh above already bound what
+# a run may take; these bound it in the way that *kills*. MemoryMax OOM-kills
+# whatever exceeds it, so a browser E2E run that spikes would die with a
+# confusing failure instead of a slow one, and rustc would die mid-link. Set one
+# only if a runaway costs more than a kill: memory_max, memory_swap_max
+# (zram/swap), tasks_max (pids).
 memory_max=0
 memory_swap_max=0
 tasks_max=0
@@ -64,70 +69,67 @@ fi
 cpus="$1"; shift
 memory="$1"; shift
 
-# Validate before use. An empty `just` variable (`just test_cpus= test`) would
-# otherwise shift the arguments by one and silently reinterpret the memory
-# value as the CPU count and the first word of the command as the memory
-# value, producing "Failed to find executable" instead of naming the mistake.
 if ! [[ "$cpus" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-    echo "[run-limited] invalid cpus '$cpus': expected a number such as 6 or 1.5, or 0 to disable." >&2
+    echo "[run-limited] invalid cpus '$cpus': expected a number such as 6 or 1.5." >&2
     echo "              Check the test_cpus justfile variable." >&2
     exit 2
 fi
 if ! [[ "$memory" =~ ^[0-9]+(\.[0-9]+)?[KMGT]?$ ]]; then
-    echo "[run-limited] invalid memory '$memory': expected a size such as 8G or 512M, or 0 to disable." >&2
+    echo "[run-limited] invalid memory '$memory': expected a size such as 8G or 512M." >&2
     echo "              Check the test_memory justfile variable." >&2
+    exit 2
+fi
+
+# Reject "0" rather than treating it as "no cap". An empty `just` variable
+# (`just test_cpus= test`) would also shift the arguments by one and silently
+# reinterpret the memory value as the CPU count and the first word of the
+# command as the memory value, producing "Failed to find executable" instead of
+# naming the mistake, so both are caught here.
+if ! awk -v c="$cpus" 'BEGIN { exit !(c + 0 > 0) }'; then
+    echo "[run-limited] cpus '$cpus' does not cap anything: every run is capped." >&2
+    echo "              Pass a positive core count, or edit cpu_weight/settings in $0." >&2
+    exit 2
+fi
+memory_number="${memory%[KMGT]}"
+if ! awk -v m="$memory_number" 'BEGIN { exit !(m + 0 > 0) }'; then
+    echo "[run-limited] memory '$memory' does not cap anything: every run is capped." >&2
+    echo "              Pass a positive size such as 8G, or edit the settings in $0." >&2
     exit 2
 fi
 
 args=()
 
-if [ "$cpus" != "0" ] && [ -n "$cpus" ]; then
-    # systemd expresses CPUQuota in percent of ONE core: 100% = 1 core.
-    quota=$(awk -v c="$cpus" 'BEGIN { printf "%d", c * 100 }')
-    if [ "$quota" -gt 0 ] 2>/dev/null; then
-        args+=(-p "CPUQuota=${quota}%")
+# systemd expresses CPUQuota in percent of ONE core: 100% = 1 core.
+quota=$(awk -v c="$cpus" 'BEGIN { printf "%d", c * 100 }')
+args+=(-p "CPUQuota=${quota}%")
+
+# MemoryHigh, not MemoryMax. MemoryMax is a hard limit: the kernel OOM-kills
+# processes that exceed it, so a browser E2E run (nested compositor + Firefox +
+# agent) that spikes past the value would die with a confusing failure rather
+# than a slow one. MemoryHigh throttles the cgroup and pushes it into reclaim
+# instead, which is what "keep the desktop usable" actually calls for — the goal
+# is to stop a run monopolising the machine, not to enforce a ceiling it must
+# respect.
+args+=(-p "MemoryHigh=${memory}")
+
+# The scheduling shares ride along with the caps: capping CPU and memory alone
+# still lets a run take everything it is allowed the moment the machine is idle,
+# whereas the shares mean it only ever uses what nothing else wants. "0" turns
+# an individual knob off; an empty value would reach systemd as
+# `-p CPUWeight=` and be rejected as an invalid assignment.
+for spec in \
+    "CPUWeight:${cpu_weight}" \
+    "IOWeight:${io_weight}" \
+    "MemoryMax:${memory_max}" \
+    "MemorySwapMax:${memory_swap_max}" \
+    "TasksMax:${tasks_max}"
+do
+    key="${spec%%:*}"
+    value="${spec#*:}"
+    if [ -n "$value" ] && [ "$value" != "0" ]; then
+        args+=(-p "${key}=${value}")
     fi
-fi
-
-if [ "$memory" != "0" ] && [ -n "$memory" ]; then
-    # MemoryHigh, not MemoryMax. MemoryMax is a hard limit: the kernel
-    # OOM-kills processes that exceed it, so a browser E2E run (nested
-    # compositor + Firefox + agent) that spikes past the value would die with a
-    # confusing failure rather than a slow one. MemoryHigh throttles the cgroup
-    # and pushes it into reclaim instead, which is what "keep the desktop
-    # usable" actually calls for — the goal is to stop a run monopolising the
-    # machine, not to enforce a ceiling it must respect.
-    args+=(-p "MemoryHigh=${memory}")
-fi
-
-# The scheduling limits ride along with the caps. They are what keeps the
-# desktop responsive when several runs are going at once, so they apply to every
-# scoped run — including a build, which has no hard cap of its own. When the
-# caller passes "0" for both caps they asked for no scope at all, and this block
-# is skipped so the run really is unconfined. "0" disables an individual knob;
-# an empty value would reach systemd as `-p CPUWeight=` and be rejected as an
-# invalid assignment.
-if [ "${#args[@]}" -gt 0 ]; then
-    for spec in \
-        "CPUWeight:${cpu_weight}" \
-        "IOWeight:${io_weight}" \
-        "MemoryMax:${memory_max}" \
-        "MemorySwapMax:${memory_swap_max}" \
-        "TasksMax:${tasks_max}"
-    do
-        key="${spec%%:*}"
-        value="${spec#*:}"
-        if [ -n "$value" ] && [ "$value" != "0" ]; then
-            args+=(-p "${key}=${value}")
-        fi
-    done
-fi
-
-# Nothing to enforce: run directly rather than paying for a scope. This is the
-# "0 0" path.
-if [ "${#args[@]}" -eq 0 ]; then
-    exec "$@"
-fi
+done
 
 if ! command -v systemd-run >/dev/null 2>&1; then
     echo "[run-limited] systemd-run not found; running without resource caps" >&2
