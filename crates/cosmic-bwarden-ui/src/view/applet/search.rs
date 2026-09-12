@@ -63,6 +63,17 @@ pub fn view(app: &CosmicBWardenApp) -> Element<'_, Message> {
     col.into()
 }
 
+fn row_action_btn(
+    icon_name: &'static str,
+    tooltip: String,
+    on_press: Option<Message>,
+) -> Element<'static, Message> {
+    button::icon(icon::from_name(icon_name))
+        .on_press_maybe(on_press)
+        .tooltip(tooltip)
+        .into()
+}
+
 fn result_row_view(row_data: AppletRow) -> Element<'static, Message> {
     match row_data.kind {
         AppletRowKind::Login { username, link } => {
@@ -97,20 +108,21 @@ fn login_row_view(
         label_btn.into()
     };
 
-    let vault_btn = button::custom(text::caption("📂"))
-        .on_press(Message::AppletOpenInVault(id.clone()))
-        .padding([4, 6])
-        .class(cosmic::theme::Button::Standard);
-
-    let link_btn = button::custom(text::caption("🔗"))
-        .on_press_maybe(link.map(Message::AppletOpenLink))
-        .padding([4, 6])
-        .class(cosmic::theme::Button::Standard);
-
-    let secret_btn = button::custom(text::caption("🔑"))
-        .on_press(Message::AppletCopySecret(id))
-        .padding([4, 6])
-        .class(cosmic::theme::Button::Standard);
+    let vault_btn = row_action_btn(
+        crate::view::symbolic::applet_open_in_vault_icon(),
+        fl!("open-in-vault"),
+        Some(Message::AppletOpenInVault(id.clone())),
+    );
+    let link_btn = row_action_btn(
+        crate::view::symbolic::applet_open_link_icon(),
+        fl!("open-uri"),
+        link.map(Message::AppletOpenLink),
+    );
+    let secret_btn = row_action_btn(
+        crate::view::symbolic::applet_copy_secret_icon(),
+        fl!("copy-secret"),
+        Some(Message::AppletCopySecret(id)),
+    );
 
     row::with_capacity(2)
         .spacing(4)
@@ -127,15 +139,16 @@ fn login_row_view(
 }
 
 fn secret_row_view(id: String, label: String) -> Element<'static, Message> {
-    let vault_btn = button::custom(text::caption("📂"))
-        .on_press(Message::AppletOpenInVault(id.clone()))
-        .padding([4, 6])
-        .class(cosmic::theme::Button::Standard);
-
-    let secret_btn = button::custom(text::caption("🔑"))
-        .on_press(Message::AppletCopySecret(id.clone()))
-        .padding([4, 6])
-        .class(cosmic::theme::Button::Standard);
+    let vault_btn = row_action_btn(
+        crate::view::symbolic::applet_open_in_vault_icon(),
+        fl!("open-in-vault"),
+        Some(Message::AppletOpenInVault(id.clone())),
+    );
+    let secret_btn = row_action_btn(
+        crate::view::symbolic::applet_copy_secret_icon(),
+        fl!("copy-secret"),
+        Some(Message::AppletCopySecret(id.clone())),
+    );
 
     let label_btn = button::custom(text::body(label))
         .on_press(Message::AppletCopySecret(id))

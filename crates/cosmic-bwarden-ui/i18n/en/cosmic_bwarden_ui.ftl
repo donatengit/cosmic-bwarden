@@ -120,7 +120,7 @@ no-results = No results
 session-expired = Session expired — restore it
 restore-session = Restore session
 restore-session-note = Your vault is still open; only the server session expired. Enter your master password to restore syncing — no need to log out.
-not-synced = ⚠ Not synced
+not-synced = Not synced
 select-entry = Select an entry
 
 # Entry detail
@@ -190,9 +190,10 @@ generate-password = Generate password
 # icon button next to the tooltip performs the described action.
 sync-session-expired-tooltip = Session expired — click to log in again
 sync-not-synced-tooltip = Not synced — click to retry
-# { $label } is the translated "Quit" label (`quit`).
-quit-menu-expanded = ▾ { $label }
-quit-menu-collapsed = ▸ { $label }
+# Applet search-row icon-button tooltips.
+open-in-vault = Open in vault
+open-uri = Open URI
+copy-secret = Copy secret
 
 # Password generator
 password-generator = Password Generator

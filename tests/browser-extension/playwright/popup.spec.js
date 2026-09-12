@@ -597,7 +597,7 @@ test.describe('Extension Popup — favourites', () => {
     await setup(page, 'https://nomatch.example.org/');
     await expect(page.locator('.entry-name', { hasText: 'pinned.com' })).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.entry-name', { hasText: 'example.com' })).not.toBeVisible();
-    await expect(page.locator('.list-caption')).toHaveText('★ Favourites');
+    await expect(page.locator('.list-caption')).toHaveText('Favourites');
   });
 
   test('domain match wins over the favourites fallback', async ({ page }) => {

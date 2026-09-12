@@ -16,6 +16,7 @@ Start here, then go deeper as needed:
 | [`docs/public_suffix_list.md`](docs/public_suffix_list.md) | Domain-matching rules (exact / boundary-subdomain / PSL eTLD+1) and the `public_suffix_list` feature |
 | [`docs/configurable_paths.md`](docs/configurable_paths.md) | Socket, config, and SSH path overrides; multi-instance isolation |
 | [`docs/cosmic_integration.md`](docs/cosmic_integration.md) | COSMIC panel applet registration and metadata |
+| [`docs/icon_guidelines.md`](docs/icon_guidelines.md) | CosmicDE symbolic construction/look and the U4-4 emoji-to-symbolic map |
 | [`docs/implementation.md`](docs/implementation.md) | Crypto, vault sync, and data model internals |
 
 ## Golden Rules
@@ -271,7 +272,7 @@ When a crate's main logic grows, decompose using these established patterns:
 - **Where strings live**: `crates/cosmic-bwarden-ui/i18n/en/cosmic_bwarden_ui.ftl` (the fallback locale). Add a kebab-case key there, then reference it with `fl!("my-key")`.
 - **Interpolation**: use Fluent placeables, e.g. `pin-min-chars = PIN (min { $count } characters)` called as `fl!("pin-min-chars", count = value)`. Do **not** build display strings with `format!`. Bind ambiguous numeric expressions (e.g. `a / b`) to a typed local first — `FluentValue` conversion can't infer the type inline. Add a `# comment` above the key documenting each `$arg`.
 - **Logic keys vs. display labels**: strings used as match/lookup keys (e.g. `EditFieldChanged`/`revealed_fields` field names in `view/vault/detail.rs`) must stay stable literals. Localize only their *display* via a mapping helper (`field_label`) — never the key itself.
-- **Not localized**: symbols/glyphs (`—`, `✅`, `…`), the version string, and runtime text already produced by the agent (diagnostics, agent error messages). Compact unit suffixes (`2h`, `90m`) are left numeric by design; only the words around them are keyed.
+- **Not localized**: symbols/glyphs (`—`, `…`), the version string, and runtime text already produced by the agent (diagnostics, agent error messages). Compact unit suffixes (`2h`, `90m`) are left numeric by design; only the words around them are keyed.
 - **Bidi isolation** is disabled in the loader (`set_use_isolating(false)`), so interpolated values render/compare without U+2068/U+2069 marks.
 - **PIN length**: the single source is `cosmic_bwarden_core::MIN_PIN_LEN`; the UI (`crate::MIN_PIN_LEN`) and agent (`tpm_pin::MIN_PIN_LEN`) aliases and the CLI prompt all derive from it. Captions/validation use the constant, never a hardcoded number — a hardcoded "min 4" caption survived one bump already.
 - `i18n_embed_fl::fl!` verifies message IDs against the fallback `.ftl` **at compile time** — a typo'd key fails the build, so `cargo check -p cosmic-bwarden-ui` is the guard.

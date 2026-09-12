@@ -181,7 +181,11 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
       `docs/password_generator_plan.md`.
 - [ ] Extension: re-check active tab's domain at fill time `[P1-8]`.
 - [ ] Folder/collection navigation in the vault window.
-- [ ] Replace emoji button icons (📂🔗🔑) with symbolic icons + tooltips `[U4-4]`.
+- [x] ~~Replace emoji button icons (📂🔗🔑) with symbolic icons + tooltips `[U4-4]`~~
+      — *done*: applet search rows use `preferences-workspaces-symbolic` /
+      `window-pop-out-symbolic` / `network-vpn-symbolic` with tooltips;
+      TPM diagnostics use `object-select-symbolic` / `process-stop-symbolic`.
+      Names and remaining non-icon glyphs: `docs/icon_guidelines.md` §8.
 - [ ] Keyboard: Escape to dismiss, arrow-key list navigation, global shortcut `[U4-5]`.
 - [ ] Second locale to prove the Fluent pipeline `[U4-6]`.
 - [x] ~~Branded symbolic panel icon~~ `[U4-7]` — *done 2026-07 for the applet

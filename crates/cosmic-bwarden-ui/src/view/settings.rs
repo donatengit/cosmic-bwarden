@@ -5,7 +5,8 @@ use crate::view::style::{brand_icon, muted_text};
 use crate::MIN_PIN_LEN;
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{
-    button, container, list_column, row, secure_input, settings as cosmic_settings, slider, text,
+    button, container, icon, list_column, row, secure_input, settings as cosmic_settings, slider,
+    text,
 };
 use cosmic::Element;
 
@@ -148,14 +149,23 @@ impl CosmicBWardenApp {
                 col = col.add(text::body(fl!("tpm-not-accessible")).class(muted_text()));
             } else {
                 for (label, passed, hint) in &self.tpm_diagnostics {
-                    let icon = if *passed { "✅" } else { "❌" };
-                    let row_content = cosmic::widget::column::with_capacity(2)
-                        .push(text::body(format!("{} {}", icon, label)))
-                        .push(if !passed {
-                            Element::from(text::caption(hint.as_str()).class(muted_text()))
-                        } else {
-                            Element::from(text::caption(""))
-                        });
+                    let mut row_content = cosmic::widget::column::with_capacity(2).push(
+                        row::with_capacity(2)
+                            .spacing(8)
+                            .align_y(Alignment::Center)
+                            .push(
+                                icon::from_name(crate::view::symbolic::tpm_diagnostic_icon(
+                                    *passed,
+                                ))
+                                .size(16)
+                                .icon(),
+                            )
+                            .push(text::body(label.as_str())),
+                    );
+                    if !passed {
+                        row_content =
+                            row_content.push(text::caption(hint.as_str()).class(muted_text()));
+                    }
                     col = col.add(row_content);
                 }
             }

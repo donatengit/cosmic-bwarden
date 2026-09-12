@@ -2,6 +2,7 @@ pub mod applet;
 pub mod auth;
 pub mod settings;
 pub mod style;
+pub mod symbolic;
 pub mod vault;
 
 use crate::app::CosmicBWardenApp;
