@@ -52,7 +52,7 @@ export default defineConfig({
             'browser.disable_welcome_page': true,
             'browser.shell.checkDefaultBrowser': false,
             // Set fixed UUID for the extension to avoid about:debugging
-            'extensions.webextensions.uuids': '{"cosmic-bwarden@enikeev.com":"e2e-test-uuid-1234"}',
+            'extensions.webextensions.uuids': '{"cosmarden@enikeev.com":"e2e-test-uuid-1234"}',
           },
         },
       },

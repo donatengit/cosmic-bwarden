@@ -26,7 +26,7 @@
 # the container inherits none of these limits. Verified on podman 6.1.1: a
 # container started from inside a `CPUQuota=200%` scope still reports
 # `cpu.max: max`. Container caps are therefore applied separately, from inside
-# the test harness — see crates/cosmic-bwarden-tests/src/container_limits.rs
+# the test harness — see crates/cosmarden-tests/src/container_limits.rs
 # and docs/testing.md.
 #
 # The one unwrapped path is an environment that cannot make a scope: no

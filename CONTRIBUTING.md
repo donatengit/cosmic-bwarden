@@ -25,8 +25,8 @@ cargo fmt --check
 cargo clippy --workspace --all-targets --all-features
 cargo check --workspace --all-features       # --all-features matters: tpm code is
                                              # invisible to a plain check
-cargo test -p cosmic-bwarden-core -p cosmic-bwarden-agent \
-           -p cosmic-bwarden-cli -p cosmic-bwarden-ui    # unit tests, seconds
+cargo test -p cosmarden-core -p cosmarden-agent \
+           -p cosmarden-cli -p cosmarden-ui    # unit tests, seconds
 just test                                    # full E2E; needs a podman/docker socket
 just test-extension-unit                     # browser-extension unit tests
 ```

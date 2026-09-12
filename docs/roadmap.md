@@ -10,15 +10,15 @@ forge.
       COSMIC ecosystem)*: canonical `LICENSE` at repo root, `license = "GPL-3.0-only"`
       in all five crates, PKGBUILD updated. (Phase 7/8.)
 - [ ] **Finalize .deb depends on a Debian host** — `dpkg-shlibdeps` over the manual
-      list in `crates/cosmic-bwarden-ui/Cargo.toml [package.metadata.deb]`.
+      list in `crates/cosmarden-ui/Cargo.toml [package.metadata.deb]`.
 - [ ] **PKGBUILD**: `url`/`source`/`license` filled 2026-08 (repo is at
       `github.com/donatengit/cosmic-bwarden`). Still open: pin the real sha256 once a
       `vYYYY.MM.P` tag exists, then a clean-chroot build (`packaging/PKGBUILD`).
 - [ ] **Extension store prep**: Firefox-flavoured manifest (`background.scripts`
       event page) alongside Chrome's `service_worker`; privacy policy; AMO
-      source-review notes. Submit early to reserve `cosmic-bwarden@enikeev.com`.
+      source-review notes. Submit early to reserve `cosmarden@enikeev.com`.
 - [x] **Rename the app ID out of System76's namespace** `[U4-1]` — *done 2026-07*:
-      ID is now `com.enikeev.cosmic_bwarden` (desktop entry, applet .ron,
+      ID is now `com.enikeev.cosmarden` (desktop entry, applet .ron,
       `StartupWMClass`, `CONFIG_ID`/`APP_ID` in core/ui/agent). `config.json`
       needed no migration (keyed by `profile()`, not `CONFIG_ID` — see
       `docs/cosmic_integration.md`); pre-existing local keyring entries under the
@@ -88,7 +88,7 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
       (attacker is already same-UID) but cheap. (Was the prior pass's deferred item.)
 - [x] **`mlock` session tokens** `[P1-4]` — *done 2026-07*: `Db.access_token`/
       `refresh_token` moved from `String`-backed `Secret` to the new
-      `cosmic_bwarden_core::locked::Token` (mlocked buffer, zeroize-on-drop, `Debug`
+      `cosmarden_core::locked::Token` (mlocked buffer, zeroize-on-drop, `Debug`
       redacted, unit-tested), so they can no longer page to swap while the vault is
       unlocked. Oversized tokens (> 4 KiB, `locked::Vec`'s fixed capacity — where
       `ArrayVec::extend` would panic) degrade to a zeroize-on-drop heap `String`
@@ -174,8 +174,8 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
 - [ ] TOTP code display/copy in UI+applet (agent's GetTotp already works).
 - [x] ~~Password generator (applet quick-gen + edit form)~~ — *done 2026-07*:
       full-page generator pane (checkboxes, length slider, reveal/copy,
-      7-day local history) at `crates/cosmic-bwarden-ui/src/view/vault/generator.rs`;
-      applet quick-gen entry; `cosmic-bwarden-cli generate`; browser extension
+      7-day local history) at `crates/cosmarden-ui/src/view/vault/generator.rs`;
+      applet quick-gen entry; `cosmarden-cli generate`; browser extension
       context menu + inline field icon. Settings/history/algorithm live in the
       agent (`handler/generator/`) so every surface shares them. See
       `docs/password_generator_plan.md`.
@@ -189,16 +189,16 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
 - [ ] Keyboard: Escape to dismiss, arrow-key list navigation, global shortcut `[U4-5]`.
 - [ ] Second locale to prove the Fluent pipeline `[U4-6]`.
 - [x] ~~Branded symbolic panel icon~~ `[U4-7]` — *done 2026-07 for the applet
-      button*: `resources/icons/cosmic-bwarden-symbolic.svg` embedded via
+      button*: `resources/icons/cosmarden-symbolic.svg` embedded via
       `icon::from_svg_bytes(...).symbolic(true)` + `icon_button_from_handle`
       (see `docs/cosmic_integration.md`), no icon-theme install needed. The
       `.desktop` `Icon=` field (window/dock context) now points at
-      `com.enikeev.cosmic_bwarden-symbolic` (the simplified monochrome mark,
+      `com.enikeev.cosmarden-symbolic` (the simplified monochrome mark,
       installed into hicolor `scalable/apps/`; the full-color
       `icons/black.svg` + raster set is installed alongside as
-      `com.enikeev.cosmic_bwarden` by `just install`/`clean-install`/
+      `com.enikeev.cosmarden` by `just install`/`clean-install`/
       `user-install`). The `.ron` `icon:` field (panel-applet listing in COSMIC
-      Settings) also uses the branded `com.enikeev.cosmic_bwarden-symbolic`
+      Settings) also uses the branded `com.enikeev.cosmarden-symbolic`
       (installed alongside the full-color set) — rendered small/recolored
       like the panel button.
 - [x] ~~Read PrepareForSleep's bool arg; don't re-lock on resume~~ `[U4-8]` — *done
@@ -227,7 +227,7 @@ Items below tagged `[P1-n]` come from the Phase 1 security review
       2026-07-24); ours sets neither, so on a crowded panel we get whatever
       default behavior applies to unmarked applets instead of a deliberate
       choice. Add both fields to
-      `crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop`
+      `crates/cosmarden-ui/resources/com.enikeev.cosmarden.desktop`
       and the justfile's inline `.ron` generation (mirrors the `.desktop` file
       per `docs/cosmic_integration.md`).
 - [ ] Test stricter systemd sandboxing (ProtectHome + ReadWritePaths, ProtectSystem=strict,

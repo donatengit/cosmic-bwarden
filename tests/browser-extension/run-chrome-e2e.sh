@@ -26,7 +26,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo "Building agent and CLI..."
-cargo build -p cosmic-bwarden-agent -p cosmic-bwarden-cli --quiet
+cargo build -p cosmarden-agent -p cosmarden-cli --quiet
 
 echo "Starting Vaultwarden..."
 # Use Podman socket if Docker is not available
@@ -56,8 +56,8 @@ timeout 30 bash -c 'until curl -s http://localhost:8081/api/alive > /dev/null 2>
     || { echo "Vaultwarden failed to start"; exit 1; }
 
 echo "Starting agent (profile: $TEST_PROFILE)..."
-export COSMIC_BWARDEN_PROFILE="$TEST_PROFILE"
-./target/debug/cosmic-bwarden-agent > /tmp/agent_chrome_test.log 2>&1 &
+export COSMARDEN_PROFILE="$TEST_PROFILE"
+./target/debug/cosmarden-agent > /tmp/agent_chrome_test.log 2>&1 &
 AGENT_PID=$!
 sleep 2
 

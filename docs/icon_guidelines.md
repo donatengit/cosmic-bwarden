@@ -3,7 +3,7 @@
 Roadmap item `[U4-4]` is done. This document records which emoji used to
 stand in for icons, how official CosmicDE symbolics are made and look,
 and the theme names now wired in
-`crates/cosmic-bwarden-ui/src/view/symbolic.rs`.
+`crates/cosmarden-ui/src/view/symbolic.rs`.
 
 Panel/brand artwork and install paths stay in
 [`docs/cosmic_integration.md`](cosmic_integration.md).
@@ -35,7 +35,7 @@ as button icons (`popup/popup.html`, `popup/icons.js`).
 
 ## 3. Classified out (not icons)
 
-Hits from a Unicode pass over `crates/cosmic-bwarden-ui` and
+Hits from a Unicode pass over `crates/cosmarden-ui` and
 `browser-extension/` (tests excluded from the "icon" list, not from this
 classification).
 
@@ -58,11 +58,11 @@ Rust/JS comments. Not UI.
 
 - `tests/browser-extension/playwright/chrome-full.spec.js` (`🔐`, `💳`,
   `🌍`, `📝`, `🔑`, `🖊️` in created entry names)
-- `crates/cosmic-bwarden-tests/src/notes_stdin_cli.rs` (`🔑`, `🚀` in a
+- `crates/cosmarden-tests/src/notes_stdin_cli.rs` (`🔑`, `🚀` in a
   stdin note body)
-- `crates/cosmic-bwarden-core/src/tests.rs` (`🦀`, `🚀`, `🔐` as test
+- `crates/cosmarden-core/src/tests.rs` (`🦀`, `🚀`, `🔐` as test
   strings)
-- `crates/cosmic-bwarden-tests/src/cli_secret_mask_test.rs` (numbered
+- `crates/cosmarden-tests/src/cli_secret_mask_test.rs` (numbered
   emoji in comments only)
 
 ## 4. CosmicDE symbolics: how they are made
@@ -180,13 +180,13 @@ Viewed at 256px so construction is visible; they are designed to read at
 
 ## 6. Contrast with this repo's brand symbolics
 
-`crates/cosmic-bwarden-ui/resources/icons/`:
+`crates/cosmarden-ui/resources/icons/`:
 
 | File | Canvas | Paint | Role |
 |---|---|---|---|
-| `cosmic-bwarden-symbolic.svg` | 128×128 `viewBox="0 0 128 128"` | default black fill, no `#232323`, no 0.35 layer, no hit rect | Panel / `.desktop` mark (C-shape + three dots) |
-| `cosmic-bwarden-locked-symbolic.svg` | same 128×128 outline, dots removed | same | Locked / logged-out panel mark |
-| `cosmic-bwarden-full-symbolic.svg` | 500×500, design-tool export | detailed brand, not a 16px action | Full mark for contexts that do not recolor |
+| `cosmarden-symbolic.svg` | 128×128 `viewBox="0 0 128 128"` | default black fill, no `#232323`, no 0.35 layer, no hit rect | Panel / `.desktop` mark (C-shape + three dots) |
+| `cosmarden-locked-symbolic.svg` | same 128×128 outline, dots removed | same | Locked / logged-out panel mark |
+| `cosmarden-full-symbolic.svg` | 500×500, design-tool export | detailed brand, not a 16px action | Full mark for contexts that do not recolor |
 
 These are **identity** marks, not action icons. They sit on a 128px grid,
 carry no Cosmic `#232323` / 0.35 secondary language, and are recolored
@@ -212,7 +212,7 @@ and is out of scope for U4-4.
 
 ## 8. Equivalent Cosmic symbolics for each glyph
 
-These names are wired in `crates/cosmic-bwarden-ui/src/view/symbolic.rs`
+These names are wired in `crates/cosmarden-ui/src/view/symbolic.rs`
 (the view must call those helpers). They were viewed as SVGs and matched
 to how Cosmic Settings / applets already use them.
 

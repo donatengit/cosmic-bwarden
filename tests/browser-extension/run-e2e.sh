@@ -12,7 +12,7 @@ TEST_PROFILE=test-extension-e2e
 # setup_native_host.sh overwrites this with a wrapper hardcoding the test
 # profile. Without a restore, the developer's real Firefox extension keeps
 # talking to the test profile after the suite exits.
-NATIVE_HOST_WRAPPER="${HOME}/.mozilla/native-messaging-hosts/cosmic-bwarden-browser-host.sh"
+NATIVE_HOST_WRAPPER="${HOME}/.mozilla/native-messaging-hosts/cosmarden-browser-host.sh"
 
 # Setup cleanup
 cleanup() {
@@ -27,13 +27,13 @@ cleanup() {
     restore_file "$NATIVE_HOST_WRAPPER" || true
     cleanup_profile "$TEST_PROFILE" || true
     rm -f -- /tmp/agent_test.log /tmp/vaultwarden_test.log \
-             /tmp/cosmic-bwarden-browser-host.log
+             /tmp/cosmarden-browser-host.log
 }
 trap cleanup EXIT
 
 # 1. Build
 echo "Building agent and CLI..."
-cargo build -p cosmic-bwarden-agent -p cosmic-bwarden-cli --quiet
+cargo build -p cosmarden-agent -p cosmarden-cli --quiet
 
 # 2. Vaultwarden
 echo "Starting Vaultwarden..."
@@ -43,8 +43,8 @@ timeout 30 bash -c 'until curl -s http://localhost:8080/health > /dev/null; do s
 
 # 3. Agent
 echo "Starting Agent..."
-export COSMIC_BWARDEN_PROFILE="$TEST_PROFILE"
-./target/debug/cosmic-bwarden-agent > /tmp/agent_test.log 2>&1 &
+export COSMARDEN_PROFILE="$TEST_PROFILE"
+./target/debug/cosmarden-agent > /tmp/agent_test.log 2>&1 &
 AGENT_PID=$!
 sleep 2
 
@@ -53,8 +53,8 @@ echo "Initializing test account..."
 EMAIL="test-extension@example.com"
 PASSWORD="password123"
 SERVER="http://localhost:8080"
-./target/debug/cosmic-bwarden-cli register --server "$SERVER" --password "$PASSWORD" "$EMAIL" || true
-./target/debug/cosmic-bwarden-cli login --server "$SERVER" --password "$PASSWORD" "$EMAIL"
+./target/debug/cosmarden register --server "$SERVER" --password "$PASSWORD" "$EMAIL" || true
+./target/debug/cosmarden login --server "$SERVER" --password "$PASSWORD" "$EMAIL"
 
 # 5. Native Host
 # Back up the developer's real wrapper first — setup_native_host.sh replaces it

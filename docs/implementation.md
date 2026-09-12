@@ -1,8 +1,8 @@
 # Implementation Details
 
-The **COSMIC BWarden Client** project follows a modular architecture designed for security, performance, and maintainability.
+The **Cosmarden Client** project follows a modular architecture designed for security, performance, and maintainability.
 
-## 1. core (`cosmic-bwarden-core`)
+## 1. core (`cosmarden-core`)
 
 The core library handles the heavy lifting of Bitwarden logic and security primitives.
 
@@ -20,7 +20,7 @@ The core library handles the heavy lifting of Bitwarden logic and security primi
 - Implements the full Bitwarden login flow, including prelogin (KDF parameter retrieval) and vault synchronization.
 - **Account Registration**: Supports creating new accounts directly, including KDF parameter negotiation.
 
-## 2. Agent (`cosmic-bwarden-agent`)
+## 2. Agent (`cosmarden-agent`)
 
 The agent acts as the "source of truth" and secret manager for the local system.
 
@@ -33,7 +33,7 @@ The agent acts as the "source of truth" and secret manager for the local system.
 - **Real-Time Synchronization**: All entry modifications (Add, Update, Delete) are immediately pushed to the configured Bitwarden/Vaultwarden server and locally cached upon success, ensuring data integrity across devices.
 - **Automatic Locking**: Configurable idle timeout for automatic vault locking.
 
-## 3. UI and Applet (`cosmic-bwarden-ui` & `cosmic-bwarden-ui`)
+## 3. UI and Applet (`cosmarden-ui` & `cosmarden-ui`)
 
 The front-end components are built on the latest **libcosmic 1.0.0** framework.
 

@@ -7,31 +7,31 @@ PROJECT_ROOT=$(git rev-parse --show-toplevel)
 # shellcheck source=cleanup.sh
 source "$PROJECT_ROOT/tests/browser-extension/cleanup.sh"
 TEST_TMP=$(mktemp -d)
-AGENT_BIN="$PROJECT_ROOT/target/debug/cosmic-bwarden-agent"
+AGENT_BIN="$PROJECT_ROOT/target/debug/cosmarden-agent"
 EXT_DIR="$PROJECT_ROOT/browser-extension"
 
 # EXPORT HOME globally so everything (Agent Server + Firefox children) sees the same isolated environment
 export HOME="$TEST_TMP"
-export COSMIC_BWARDEN_PROFILE=test-verify
+export COSMARDEN_PROFILE=test-verify
 export RUST_LOG=debug
 
 echo "Using isolated HOME: $HOME"
 
 # Clear old logs
-rm -f /tmp/cosmic-bwarden-browser-host.log
+rm -f /tmp/cosmarden-browser-host.log
 
 # 1. Setup Native Messaging Host Manifest
-HOST_NAME="com.enikeev.cosmic_bwarden"
+HOST_NAME="com.enikeev.cosmarden"
 MANIFEST_DIR="$HOME/.mozilla/native-messaging-hosts"
 mkdir -p "$MANIFEST_DIR"
 
 cat <<EOF > "$MANIFEST_DIR/$HOST_NAME.json"
 {
   "name": "$HOST_NAME",
-  "description": "COSMIC BWarden Test Host",
+  "description": "Cosmarden Test Host",
   "path": "$AGENT_BIN",
   "type": "stdio",
-  "allowed_extensions": ["cosmic-bwarden@enikeev.com"]
+  "allowed_extensions": ["cosmarden@enikeev.com"]
 }
 EOF
 
@@ -54,8 +54,8 @@ cleanup() {
     # config/cache/data profile dirs are all inside it — removing the tree
     # covers them. The runtime dir is the exception: XDG_RUNTIME_DIR is
     # inherited from the real session, so it lives outside $TEST_TMP.
-    cleanup_profile "$COSMIC_BWARDEN_PROFILE" || true
-    rm -f -- /tmp/cosmic-bwarden-browser-host.log
+    cleanup_profile "$COSMARDEN_PROFILE" || true
+    rm -f -- /tmp/cosmarden-browser-host.log
     if [ -n "$TEST_TMP" ] && [ -d "$TEST_TMP" ]; then
         case "$TEST_TMP" in
             /tmp/*) rm -rf -- "$TEST_TMP" ;;
@@ -109,10 +109,10 @@ sleep 5
 
 # 7. Check logs
 echo "--- Native Host Log Snapshot ---"
-if [ -f /tmp/cosmic-bwarden-browser-host.log ]; then
-    cat /tmp/cosmic-bwarden-browser-host.log
+if [ -f /tmp/cosmarden-browser-host.log ]; then
+    cat /tmp/cosmarden-browser-host.log
 else
-    echo "Log file /tmp/cosmic-bwarden-browser-host.log not found!"
+    echo "Log file /tmp/cosmarden-browser-host.log not found!"
 fi
 
 echo "--- Agent Server Log Snapshot ---"

@@ -1,6 +1,6 @@
-# cosmic-bwarden
+# Cosmarden
 
-A native **Bitwarden / Vaultwarden client for the COSMIC™ desktop** — panel applet,
+**Bitwarden-compatible password manager for COSMIC DE** — panel applet,
 background agent, vault window, CLI, SSH agent, and browser extension, written in Rust
 on [libcosmic](https://github.com/pop-os/libcosmic).
 
@@ -87,20 +87,20 @@ just enable-agent    # systemd --user enable + start the agent
 just restart-panel   # let the COSMIC panel discover the applet
 ```
 
-A `.deb` is produced by `cargo deb -p cosmic-bwarden-ui --no-build` after `just build`;
+A `.deb` is produced by `cargo deb -p cosmarden-ui --no-build` after `just build`;
 an AUR `PKGBUILD` lives in [`packaging/`](packaging/).
 
 ## First run
 
 1. Add the applet: COSMIC Settings → Desktop → Panel → Configure panel applets →
-   **COSMIC BWarden**.
+   **Cosmarden**.
 2. Click the panel icon → **Open Vault Window** → log in (email, master password, and
    optionally your self-hosted server URL under *Advanced*).
 3. That's it — search from the applet, copy with one click. The agent keeps the vault
    available (locked) across reboots; you re-enter only the master password, never the
    full login.
 
-Browser extension: `just pack-extension`, load `target/cosmic-bwarden-extension.zip`,
+Browser extension: `just pack-extension`, load `target/cosmarden-extension.zip`,
 and register the native host with `just register-browser-host` (dev) or `just install`
 (system). See [docs/browser_extension.md](docs/browser_extension.md).
 

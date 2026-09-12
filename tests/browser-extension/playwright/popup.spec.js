@@ -96,7 +96,7 @@ function buildMock({ isLocked = false, tabUrl = null, entriesForQuery = null, tp
         // close/reopen tests perform.
         query: async () => [{
           id: 123,
-          url: window.sessionStorage.getItem('cosmic-bwarden-test:tabUrlOverride')
+          url: window.sessionStorage.getItem('cosmarden-test:tabUrlOverride')
             ?? ${tabUrl ? `'${tabUrl}'` : 'undefined'}
         }],
         sendMessage: async (tabId, msg) => {
@@ -113,16 +113,16 @@ function buildMock({ isLocked = false, tabUrl = null, entriesForQuery = null, tp
         // navigation, so any mock-level JS object would be recreated.
         session: {
           async get(key) {
-            const raw = window.sessionStorage.getItem('cosmic-bwarden-test:' + key);
+            const raw = window.sessionStorage.getItem('cosmarden-test:' + key);
             return raw !== null ? { [key]: JSON.parse(raw) } : {};
           },
           async set(obj) {
             for (const [k, v] of Object.entries(obj)) {
-              window.sessionStorage.setItem('cosmic-bwarden-test:' + k, JSON.stringify(v));
+              window.sessionStorage.setItem('cosmarden-test:' + k, JSON.stringify(v));
             }
           },
           async remove(key) {
-            window.sessionStorage.removeItem('cosmic-bwarden-test:' + key);
+            window.sessionStorage.removeItem('cosmarden-test:' + key);
           },
         },
       }
@@ -681,12 +681,12 @@ test.describe('Extension Popup — state survives close/reopen (window switching
     // Restored state is scoped to the domain it was captured on. Otherwise one
     // detail view left open would reopen on every unrelated site for the rest
     // of the browser session, hiding the current tab's matches.
-    await page.evaluate(() => sessionStorage.setItem('cosmic-bwarden-test:tabUrlOverride', 'https://example.com/login'));
+    await page.evaluate(() => sessionStorage.setItem('cosmarden-test:tabUrlOverride', 'https://example.com/login'));
     await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
     await page.locator('.entry-actions button[title="View details"]').click();
     await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
 
-    await page.evaluate(() => sessionStorage.setItem('cosmic-bwarden-test:tabUrlOverride', 'https://unrelated.test/'));
+    await page.evaluate(() => sessionStorage.setItem('cosmarden-test:tabUrlOverride', 'https://unrelated.test/'));
     await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
 
     await expect(page.locator('#view-list')).toBeVisible({ timeout: 5000 });

@@ -159,7 +159,7 @@ async function onBarAction(tabId, action) {
         // rather than leaving the bar stuck on "Saving…"/"Updating…" until
         // its own 30s auto-dismiss silently removes it with nothing saved.
         if (action !== 'dismiss') {
-            console.warn(`cosmic-bwarden: no pending save for tab ${tabId} on action "${action}"`);
+            console.warn(`cosmarden: no pending save for tab ${tabId} on action "${action}"`);
             browser.tabs.sendMessage(tabId, { type: 'SAVE_BAR_ERROR' }).catch(() => {});
         }
         return { Ack: true };
@@ -198,7 +198,7 @@ async function onBarAction(tabId, action) {
             // user acted) — the click did not save/update anything, so say so
             // rather than quietly clearing state with no feedback at all.
             console.warn(
-                `cosmic-bwarden: action "${action}" did not match pending mode ` +
+                `cosmarden: action "${action}" did not match pending mode ` +
                 `"${pending.mode}" for tab ${tabId}; dropping without saving`
             );
             browser.tabs.sendMessage(tabId, { type: 'SAVE_BAR_ERROR' }).catch(() => {});
@@ -214,11 +214,11 @@ async function onBarAction(tabId, action) {
             updateBadge(tabId, pending.url);
             return { Ack: true };
         }
-        console.warn(`cosmic-bwarden: ${action} rejected by agent:`, response);
+        console.warn(`cosmarden: ${action} rejected by agent:`, response);
         browser.tabs.sendMessage(tabId, { type: 'SAVE_BAR_ERROR' }).catch(() => {});
         return response;
     } catch (e) {
-        console.warn(`cosmic-bwarden: ${action} failed:`, e);
+        console.warn(`cosmarden: ${action} failed:`, e);
         browser.tabs.sendMessage(tabId, { type: 'SAVE_BAR_ERROR' }).catch(() => {});
         return { Error: { message: String(e) } };
     }

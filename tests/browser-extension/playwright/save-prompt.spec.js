@@ -119,8 +119,8 @@ test.describe('Save bar (content-bar.js)', () => {
   test('renders the save bar and reports the save action', async ({ page }) => {
     await showBar(page, { type: 'SHOW_SAVE_BAR', mode: 'save', domain: 'example.com', username: 'alice' });
 
-    const bar = page.locator('#cosmic-bwarden-save-bar');
-    await expect(bar.locator('.text')).toHaveText('Save password for example.com in COSMIC BWarden?');
+    const bar = page.locator('#cosmarden-save-bar');
+    await expect(bar.locator('.text')).toHaveText('Save password for example.com in Cosmarden?');
     await expect(bar.locator('button.primary')).toHaveText('Save');
 
     await bar.locator('button.primary').click();
@@ -141,8 +141,8 @@ test.describe('Save bar (content-bar.js)', () => {
       username: 'alice', entryName: 'My example.com login',
     });
 
-    const bar = page.locator('#cosmic-bwarden-save-bar');
-    await expect(bar.locator('.text')).toHaveText('Update password for "My example.com login" in COSMIC BWarden?');
+    const bar = page.locator('#cosmarden-save-bar');
+    await expect(bar.locator('.text')).toHaveText('Update password for "My example.com login" in Cosmarden?');
     await expect(bar.locator('button.primary')).toHaveText('Update');
 
     await bar.locator('button.primary').click();
@@ -153,8 +153,8 @@ test.describe('Save bar (content-bar.js)', () => {
   test('renders the locked bar and reports the unlock action', async ({ page }) => {
     await showBar(page, { type: 'SHOW_SAVE_BAR', mode: 'locked', domain: 'example.com', username: 'alice' });
 
-    const bar = page.locator('#cosmic-bwarden-save-bar');
-    await expect(bar.locator('.text')).toHaveText('Unlock COSMIC BWarden to save this password for example.com');
+    const bar = page.locator('#cosmarden-save-bar');
+    await expect(bar.locator('.text')).toHaveText('Unlock Cosmarden to save this password for example.com');
     await expect(bar.locator('button.primary')).toHaveText('Unlock');
 
     await bar.locator('button.primary').click();
@@ -171,8 +171,8 @@ test.describe('Save bar (content-bar.js)', () => {
   test('dismiss removes the bar and notifies background', async ({ page }) => {
     await showBar(page, { type: 'SHOW_SAVE_BAR', mode: 'save', domain: 'example.com', username: 'alice' });
 
-    await page.locator('#cosmic-bwarden-save-bar button.secondary').click();
-    await expect(page.locator('#cosmic-bwarden-save-bar')).toHaveCount(0);
+    await page.locator('#cosmarden-save-bar button.secondary').click();
+    await expect(page.locator('#cosmarden-save-bar')).toHaveCount(0);
 
     const messages = await page.evaluate(() => window._sentMessages);
     expect(messages).toEqual([{ type: 'SAVE_BAR_ACTION', action: 'dismiss' }]);
@@ -182,7 +182,7 @@ test.describe('Save bar (content-bar.js)', () => {
     await showBar(page, { type: 'SHOW_SAVE_BAR', mode: 'save', domain: 'first.com', username: 'a' });
     await showBar(page, { type: 'SHOW_SAVE_BAR', mode: 'save', domain: 'second.com', username: 'b' });
 
-    const bar = page.locator('#cosmic-bwarden-save-bar');
+    const bar = page.locator('#cosmarden-save-bar');
     await expect(bar).toHaveCount(1);
     await expect(bar.locator('.text')).toContainText('second.com');
   });
@@ -191,7 +191,7 @@ test.describe('Save bar (content-bar.js)', () => {
     await showBar(page, { type: 'SHOW_SAVE_BAR', mode: 'save', domain: 'example.com', username: 'alice' });
     await showBar(page, { type: 'SAVE_BAR_ERROR' });
 
-    await expect(page.locator('#cosmic-bwarden-save-bar .text'))
+    await expect(page.locator('#cosmarden-save-bar .text'))
       .toContainText('Saving failed');
   });
 
@@ -203,7 +203,7 @@ test.describe('Save bar (content-bar.js)', () => {
       username: 'alice', password: 'must-never-render',
     });
     const html = await page.evaluate(
-      () => document.getElementById('cosmic-bwarden-save-bar').shadowRoot.innerHTML
+      () => document.getElementById('cosmarden-save-bar').shadowRoot.innerHTML
     );
     expect(html).not.toContain('must-never-render');
   });

@@ -8,7 +8,7 @@ Character groups are 4 checkboxes, Bitwarden-style — **Uppercase, Lowercase, N
 
 This plan was produced after exploring the protocol/agent/core layer, the UI (state/view/update/applet-menu), and the browser-extension/CLI layer in depth, then validating crypto/storage claims directly against the source (`cipherstring.rs`, `locked.rs`, `dirs.rs`).
 
-## Protocol design (`cosmic-bwarden-core`)
+## Protocol design (`cosmarden-core`)
 
 **Pre-requisite**: `protocol.rs` is already 552 lines, over AGENTS.md's 500-line hard cap. Split it *first*, as its own commit, before adding anything:
 - `protocol.rs` — `Action`/`Response`/`Event` enums + inline DTOs + `variant_name()` (~300 lines after the move).
@@ -46,7 +46,7 @@ Reject, don't clamp, at the trust boundary (CLI/browser JSON can send anything):
 
 Required alongside the new variants (easy to miss, both are enforced by existing tests): add arms to `variant_name()`; add `GeneratePassword`'s settings to the manual `Debug for Action`; add **no** arms for the 3 new `Response` variants (they must fall through to the redacting fallback so `password`/`entries` never print); add new cases to `debug_redaction_tests` asserting `Response::GeneratedPassword`/`PasswordHistory` never print their payload in `{:?}`.
 
-## Generation algorithm (`cosmic-bwarden-agent`, new `handler/generator/algorithm.rs`)
+## Generation algorithm (`cosmarden-agent`, new `handler/generator/algorithm.rs`)
 
 - Charsets: `UPPER`/`LOWER`/`DIGITS` standard; `SPECIAL = "!@#$%^&*"` (Bitwarden's basic set — deliberately excludes quotes/backslash/whitespace since generated passwords land in CLI args, JSON, and shells).
 - Force one character from each *selected* pool, fill the remainder from the union, then cryptographically shuffle.
@@ -56,7 +56,7 @@ Required alongside the new variants (easy to miss, both are enforced by existing
 
 ## Where the handler lives
 
-New top-level `crates/cosmic-bwarden-agent/src/handler/generator/` (`mod.rs`, `algorithm.rs`, `storage.rs`), registered as its **own dispatch group** in `handler.rs`, parallel to `auth`/`vault`/`subscription_handler` — not folded into `handler/vault/`. Every existing `vault::*` handler assumes an unlocked vault (`state.db`); password generation must work locked, and even pre-login (fresh install, no account yet). Keeping it a sibling module makes "works without unlock" structurally obvious from the dispatch table, and avoids growing `vault/mod.rs` (already 178 lines).
+New top-level `crates/cosmarden-agent/src/handler/generator/` (`mod.rs`, `algorithm.rs`, `storage.rs`), registered as its **own dispatch group** in `handler.rs`, parallel to `auth`/`vault`/`subscription_handler` — not folded into `handler/vault/`. Every existing `vault::*` handler assumes an unlocked vault (`state.db`); password generation must work locked, and even pre-login (fresh install, no account yet). Keeping it a sibling module makes "works without unlock" structurally obvious from the dispatch table, and avoids growing `vault/mod.rs` (already 178 lines).
 
 ## At-rest protection for the 7-day history
 
@@ -70,13 +70,13 @@ New top-level `crates/cosmic-bwarden-agent/src/handler/generator/` (`mod.rs`, `a
 
 ## Non-secret settings persistence
 
-New sibling type `GeneratorSettings::load()/save()` in a new `crates/cosmic-bwarden-core/src/generator_settings.rs`, plain JSON at `dirs::generator_settings_file()` (`data_dir().join("generator_settings.json")`) — **not** folded into `CosmicBWardenConfig`, which is account-shaped (email/server/TPM/lock-timeout) and would be the wrong owner for a value that must be readable/writable with zero accounts configured (bare CLI `generate` before any login). No `cosmic_config` ceremony needed for "4 bools + a u8" — mirrors `CosmicBWardenConfig`'s own `load_legacy`/`save_legacy` plain-JSON path.
+New sibling type `GeneratorSettings::load()/save()` in a new `crates/cosmarden-core/src/generator_settings.rs`, plain JSON at `dirs::generator_settings_file()` (`data_dir().join("generator_settings.json")`) — **not** folded into `CosmardenConfig`, which is account-shaped (email/server/TPM/lock-timeout) and would be the wrong owner for a value that must be readable/writable with zero accounts configured (bare CLI `generate` before any login). No `cosmic_config` ceremony needed for "4 bools + a u8" — mirrors `CosmardenConfig`'s own `load_legacy`/`save_legacy` plain-JSON path.
 
-## CLI (`cosmic-bwarden-cli`)
+## CLI (`cosmarden-cli`)
 
-New `Commands::Generate { uppercase: bool, lowercase: bool, numbers: bool, special: bool, length: Option<u8>, history: bool }` (short flags `-U -l -n -s`, `length` clap-range-validated `8..=32`, `history` `conflicts_with_all` the others). If none of `-U/-l/-n/-s/--length` given → `Action::GeneratePassword{settings: None}` (reuse last-saved). If any given → treat as "fully specifying this run's checkboxes" (clap bools can't express explicit-false), fetch current length via `GetGeneratorSettings` first if `--length` omitted, then send `Some(GeneratorSettings{...})`. `--history` sends `GetPasswordHistory` and prints `created_at | password` lines. Print **only** the bare password to stdout on success (scriptable: `cosmic-bwarden-cli generate | xclip`). New `crates/cosmic-bwarden-cli/src/commands/generator.rs`; verify `preprocess_args` doesn't collide with `generate`/`history` keywords; add an `after_help` example.
+New `Commands::Generate { uppercase: bool, lowercase: bool, numbers: bool, special: bool, length: Option<u8>, history: bool }` (short flags `-U -l -n -s`, `length` clap-range-validated `8..=32`, `history` `conflicts_with_all` the others). If none of `-U/-l/-n/-s/--length` given → `Action::GeneratePassword{settings: None}` (reuse last-saved). If any given → treat as "fully specifying this run's checkboxes" (clap bools can't express explicit-false), fetch current length via `GetGeneratorSettings` first if `--length` omitted, then send `Some(GeneratorSettings{...})`. `--history` sends `GetPasswordHistory` and prints `created_at | password` lines. Print **only** the bare password to stdout on success (scriptable: `cosmarden-cli generate | xclip`). New `crates/cosmarden-cli/src/commands/generator.rs`; verify `preprocess_args` doesn't collide with `generate`/`history` keywords; add an `after_help` example.
 
-## Desktop UI pane (`cosmic-bwarden-ui`)
+## Desktop UI pane (`cosmarden-ui`)
 
 - `message.rs`: `View::PasswordGenerator`; ~12 new `Message` variants (`GeneratorViewClicked`, one Toggled per checkbox, `GeneratorLengthChanged`, `GeneratorResetClicked` — **local-only, does not call the agent**, `GeneratorGenerateClicked`, `GeneratorGenerated(Result<String,String>)`, `GeneratorRevealToggled`, `GeneratorSettingsReceived`, `GeneratorHistoryReceived`, `GeneratorHistoryRevealToggled(usize)`).
 - `app/state.rs`: `generator_settings: GeneratorSettings` (current draft pane state), `generator_result: Option<String>`, `generator_result_revealed: bool`, `generator_history: Vec<GeneratorHistoryEntry>`, `generator_history_revealed: HashSet<usize>` (index-keyed — the pane always refetches+replaces the whole Vec together, so index keys don't go stale mid-session), `generator_error: Option<String>`.
@@ -85,7 +85,7 @@ New `Commands::Generate { uppercase: bool, lowercase: bool, numbers: bool, speci
 - `view/vault/sidebar.rs`: add a nav button next to Settings/Lock/Logout (`bottom_row` currently pushes 3 `Length::Fill` buttons — a 4th likely needs wrapping into two rows of two; decide by eye at implementation time).
 - New `app/update/pwgen.rs` (~150-200 lines), registered in the `update_app` chain (`app/update/mod.rs`) alongside `update_lifecycle`/`update_auth`/`update_vault`/`update_applet`. `GeneratorResetClicked` just resets the pane's draft `generator_settings` to `GeneratorSettings::default()` locally (no IPC — matches "no live-updating" spec). `GeneratorGenerateClicked` sends `Action::GeneratePassword{settings: Some(current)}`, and on success also re-fetches history so the new entry shows up.
 - `app/tasks.rs`: `fetch_generator_settings()` / `fetch_generator_history()`, following the existing `fetch_applet_secret`-style `Task::perform` template.
-- i18n: add ~10 kebab-case keys to `crates/cosmic-bwarden-ui/i18n/en/cosmic_bwarden_ui.ftl` (`password-generator`, `uppercase`, `lowercase`, `numbers`, `special-characters`, `password-length = Length: { $length }`, `generate`, `reset`, `no-password-generated-yet`, `recent-passwords`) — compile-time `fl!` validation catches typos for free.
+- i18n: add ~10 kebab-case keys to `crates/cosmarden-ui/i18n/en/cosmarden_ui.ftl` (`password-generator`, `uppercase`, `lowercase`, `numbers`, `special-characters`, `password-length = Length: { $length }`, `generate`, `reset`, `no-password-generated-yet`, `recent-passwords`) — compile-time `fl!` validation catches typos for free.
 
 ## Applet menu entry
 
@@ -107,17 +107,17 @@ Every browser-extension-originated password (context menu or inline icon) round-
 | Core | `protocol.rs` (new DTOs/variants), `generator_settings.rs` (new), `dirs.rs` (+3 fns), `lib.rs` (mod registration) |
 | Agent | `handler.rs` (+dispatch arm), `handler/generator/{mod,algorithm,storage}.rs` (new) |
 | CLI | `args.rs` (+`Commands::Generate`), `commands/mod.rs` (+routing), `commands/generator.rs` (new), `utils.rs` (verify `preprocess_args`) |
-| UI | `message.rs`, `app/state.rs`, `view/vault/mod.rs`, `view/vault/generator.rs` (new), `view/vault/sidebar.rs`, `app/update/mod.rs`, `app/update/pwgen.rs` (new), `app/update/applet.rs`, `app/tasks.rs`, `i18n/en/cosmic_bwarden_ui.ftl` |
+| UI | `message.rs`, `app/state.rs`, `view/vault/mod.rs`, `view/vault/generator.rs` (new), `view/vault/sidebar.rs`, `app/update/mod.rs`, `app/update/pwgen.rs` (new), `app/update/applet.rs`, `app/tasks.rs`, `i18n/en/cosmarden_ui.ftl` |
 | Browser extension | `manifest.json`, `background.js`, `content-generate.js` (new) |
 | Docs | `docs/browser_integration.md` (new "Generate Password" section), `docs/roadmap.md` (check off the backlog item), `CONTEXT.md`, `AGENTS.md` (new subsection: key/history file paths + threat model) |
-| Tests | `handler/generator/algorithm.rs` (inline unit tests), `crates/cosmic-bwarden-tests/src/generator.rs` (new E2E), `tests/browser-extension/fixtures/change_password.html` (new), `tests/browser-extension/playwright/generate-password.spec.js` (new) |
+| Tests | `handler/generator/algorithm.rs` (inline unit tests), `crates/cosmarden-tests/src/generator.rs` (new E2E), `tests/browser-extension/fixtures/change_password.html` (new), `tests/browser-extension/playwright/generate-password.spec.js` (new) |
 
 ## Phasing
 
-1. **Protocol + agent + storage + algorithm** — the security-sensitive foundation (RNG choice, cipherstring reuse, pruning). Validate: `cargo check -p cosmic-bwarden-core`, `cargo check -p cosmic-bwarden-agent`, new unit tests, `cargo test -p cosmic-bwarden-tests -- --test-threads=1` (new `generator.rs` E2E: generate combos, reject-empty/reject-bad-length, `None`-reuse, history round-trip + pruning).
-2. **CLI** — cheap second client that stress-tests the protocol shape before the big UI investment. Validate: `cargo check -p cosmic-bwarden-cli`, CLI-driven E2E case.
-3. **Desktop UI pane** — the largest chunk. Validate: `cargo check -p cosmic-bwarden-ui` (catches `fl!` typos), manual smoke test in a running instance.
-4. **Applet menu entry** — small, isolated; explicitly test "generate while locked." Validate: `cargo check -p cosmic-bwarden-ui`, extended `applet_flow.rs`-style E2E case.
+1. **Protocol + agent + storage + algorithm** — the security-sensitive foundation (RNG choice, cipherstring reuse, pruning). Validate: `cargo check -p cosmarden-core`, `cargo check -p cosmarden-agent`, new unit tests, `cargo test -p cosmarden-tests -- --test-threads=1` (new `generator.rs` E2E: generate combos, reject-empty/reject-bad-length, `None`-reuse, history round-trip + pruning).
+2. **CLI** — cheap second client that stress-tests the protocol shape before the big UI investment. Validate: `cargo check -p cosmarden-cli`, CLI-driven E2E case.
+3. **Desktop UI pane** — the largest chunk. Validate: `cargo check -p cosmarden-ui` (catches `fl!` typos), manual smoke test in a running instance.
+4. **Applet menu entry** — small, isolated; explicitly test "generate while locked." Validate: `cargo check -p cosmarden-ui`, extended `applet_flow.rs`-style E2E case.
 5. **Browser extension context menu** — simpler of the two extension pieces (no positioning logic). Validate: `just test-extension-unit`, new Playwright spec invoking the `contextMenus.onClicked` handler directly (real right-clicks aren't Playwright-drivable).
 6. **Browser extension inline field icon** — sequenced last: the one piece with no precedent (anchoring/positioning/mutation-observing) and the highest real-world-site-breakage risk. Validate: `just test-extension-unit`, `just test-extension-e2e` (Firefox) **and** `just test-extension-e2e-chrome` — this phase is the only place the plan relies on Chrome-specific behavior (service-worker clipboard relay), so skipping the Chrome E2E run here specifically would risk silently shipping a broken feature on half the supported browsers.
 

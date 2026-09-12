@@ -1,6 +1,6 @@
 # UI Test Coverage Tracker
 
-This file tracks the testing progress for all screens, components, and interactions within the `cosmic-bwarden` UI.
+This file tracks the testing progress for all screens, components, and interactions within the `cosmarden` UI.
 
 ## Views & Transitions
 

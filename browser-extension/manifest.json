@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "COSMIC BWarden",
+  "name": "Cosmarden",
   "version": "0.1.0",
-  "description": "Autofill from your local COSMIC BWarden vault. Requires the native cosmic-bwarden agent: github.com/donatengit/cosmic-bwarden",
+  "description": "Bitwarden-compatible password manager for COSMIC DE",
   "homepage_url": "https://github.com/donatengit/cosmic-bwarden",
   "browser_specific_settings": {
     "gecko": {
-      "id": "cosmic-bwarden@enikeev.com",
+      "id": "cosmarden@enikeev.com",
       "strict_min_version": "115.0",
       "data_collection_permissions": {
         "required": ["authenticationInfo", "browsingActivity"]

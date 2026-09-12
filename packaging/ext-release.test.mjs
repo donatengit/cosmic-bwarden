@@ -23,7 +23,7 @@ import {
   sha256File,
 } from "./ext-release.mjs";
 
-const ADDON_ID = "cosmic-bwarden@enikeev.com";
+const ADDON_ID = "cosmarden@enikeev.com";
 
 test("isValidVersion accepts one to four dot-separated integers (AMO format)", () => {
   for (const good of ["0.1.0", "2026.8.0", "9.99.999", "2026.8.19.1233", "1", "0"]) {
@@ -119,14 +119,14 @@ test("normalizeBaseUrl requires https and forbids credentials/query/fragment", (
 
 test("computeUpdateUrl appends /updates.json", () => {
   assert.equal(
-    computeUpdateUrl("https://updates.example.com/cosmic-bwarden"),
-    "https://updates.example.com/cosmic-bwarden/updates.json"
+    computeUpdateUrl("https://updates.example.com/cosmarden"),
+    "https://updates.example.com/cosmarden/updates.json"
   );
 });
 
 const baseManifest = {
   manifest_version: 3,
-  name: "COSMIC BWarden",
+  name: "Cosmarden",
   version: "2026.8.0",
   browser_specific_settings: { gecko: { id: ADDON_ID, strict_min_version: "115.0" } },
 };
@@ -262,13 +262,13 @@ test("entryFor defaults link_base to the update base and supports a linkBase ove
   const entry = entryFor({ version: "2026.8.0", baseUrl: base, sha256Hex: "abc123" });
   assert.deepEqual(entry, {
     version: "2026.8.0",
-    update_link: `${base}/cosmic-bwarden-2026.8.0.xpi`,
+    update_link: `${base}/cosmarden-2026.8.0.xpi`,
     update_hash: "sha256:abc123",
   });
   const scoped = entryFor({ version: "2026.8.0", baseUrl: base, sha256Hex: "abc123", linkBase });
   assert.deepEqual(scoped, {
     version: "2026.8.0",
-    update_link: `${linkBase}/cosmic-bwarden-2026.8.0.xpi`,
+    update_link: `${linkBase}/cosmarden-2026.8.0.xpi`,
     update_hash: "sha256:abc123",
   });
 });
@@ -281,7 +281,7 @@ test("entryFor builds the exact Firefox update entry", () => {
   });
   assert.deepEqual(entry, {
     version: "2026.8.0",
-    update_link: "https://updates.example.com/base/cosmic-bwarden-2026.8.0.xpi",
+    update_link: "https://updates.example.com/base/cosmarden-2026.8.0.xpi",
     update_hash: "sha256:abc123",
   });
 });

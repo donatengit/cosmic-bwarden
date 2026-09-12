@@ -100,7 +100,7 @@ function showSaveBar({ mode, domain, entryName }) {
     const isUpdate = mode === 'update';
 
     _barHost = document.createElement('div');
-    _barHost.id = 'cosmic-bwarden-save-bar';
+    _barHost.id = 'cosmarden-save-bar';
     // themeCss() (theme.js) supplies the palette as custom properties on the
     // host; the shadow <style> consumes them via var(--...) — the same token
     // names popup.css uses. display:block so a page rule like
@@ -120,10 +120,10 @@ function showSaveBar({ mode, domain, entryName }) {
     text.className = 'text';
     // Page-derived strings: always textContent, never HTML.
     text.textContent = isLocked
-        ? `Unlock COSMIC BWarden to save this password for ${domain}`
+        ? `Unlock Cosmarden to save this password for ${domain}`
         : (isUpdate
-            ? `Update password for "${entryName}" in COSMIC BWarden?`
-            : `Save password for ${domain} in COSMIC BWarden?`);
+            ? `Update password for "${entryName}" in Cosmarden?`
+            : `Save password for ${domain} in Cosmarden?`);
 
     const primary = document.createElement('button');
     primary.className = 'primary';
@@ -174,7 +174,7 @@ function showSaveBar({ mode, domain, entryName }) {
 function showSaveBarError() {
     if (!_barHost) return;
     const text = _barHost.shadowRoot.querySelector('.text');
-    if (text) text.textContent = 'Saving failed — see the COSMIC BWarden agent logs.';
+    if (text) text.textContent = 'Saving failed — see the Cosmarden agent logs.';
     if (_barTimer) clearTimeout(_barTimer);
     _barTimer = setTimeout(removeSaveBar, BAR_ERROR_LINGER_MS);
 }

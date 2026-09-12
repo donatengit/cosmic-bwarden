@@ -9,7 +9,7 @@ cd "$PROJECT_ROOT"
 echo "DEBUG: setup_native_host.sh PROJECT_ROOT=$PROJECT_ROOT"
 
 echo "Building agent..."
-cargo build -p cosmic-bwarden-agent --quiet
+cargo build -p cosmarden-agent --quiet
 
 # Register native messaging host
 python3 tests/browser-extension/register_host.py
@@ -19,8 +19,8 @@ python3 tests/browser-extension/register_host.py
 # fall back to the passwd entry so normal invocations behave exactly as before.
 HOME_DIR="${HOME:-$(eval echo ~$USER)}"
 MANIFEST_DIR="$HOME_DIR/.mozilla/native-messaging-hosts"
-WRAPPER_PATH="$MANIFEST_DIR/cosmic-bwarden-browser-host.sh"
-AGENT_PATH="$PROJECT_ROOT/target/debug/cosmic-bwarden-agent"
+WRAPPER_PATH="$MANIFEST_DIR/cosmarden-browser-host.sh"
+AGENT_PATH="$PROJECT_ROOT/target/debug/cosmarden-agent"
 
 if [ ! -f "$AGENT_PATH" ]; then
     echo "Error: Agent binary not found at $AGENT_PATH"
@@ -36,9 +36,9 @@ fi
 echo "Customizing wrapper at $WRAPPER_PATH..."
 cat <<EOF > "$WRAPPER_PATH"
 #!/bin/bash
-export COSMIC_BWARDEN_PROFILE=test-extension-e2e
+export COSMARDEN_PROFILE=test-extension-e2e
 export RUST_LOG=debug
-exec "$AGENT_PATH" browser-host "\$@" >> /tmp/cosmic-bwarden-browser-host.log 2>&1
+exec "$AGENT_PATH" browser-host "\$@" >> /tmp/cosmarden-browser-host.log 2>&1
 EOF
 chmod +x "$WRAPPER_PATH"
 

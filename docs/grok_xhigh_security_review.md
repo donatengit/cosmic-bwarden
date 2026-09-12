@@ -1,4 +1,4 @@
-# COSMIC BWarden — source-based security review (2026-08-22)
+# Cosmarden — source-based security review (2026-08-22)
 
 Reviewed: tip of this tree (2026-08-22). Method: read current shipped source
 for every in-scope surface in `SECURITY.md`, re-verify the 2026-07-02 /
@@ -92,7 +92,7 @@ word.
 | ID | Claim | Today | Test / note |
 |----|-------|-------|-------------|
 | H1 | TPM PCR{0,7}, `userWithAuth=false`, DA on, encrypted unseal | **Holds** — `tpm/policy.rs` `pcr_selection_list`, `sealed_template`; `tpm/ops.rs` `unseal_with_policy` | tpm-smoke / `tpm_lifecycle/lockout.rs` |
-| H2 | Bulk/meta redact secrets; per-secret reads gate reprompt | **Holds for `Secret`-typed fields + notes + hidden custom fields** — `query::redact_entry_secrets`, `handle_get_entries`, `handle_get_entry`, `ops::handle_get_totp` | `crates/cosmic-bwarden-tests/src/security.rs` `test_reprompt` |
+| H2 | Bulk/meta redact secrets; per-secret reads gate reprompt | **Holds for `Secret`-typed fields + notes + hidden custom fields** — `query::redact_entry_secrets`, `handle_get_entries`, `handle_get_entry`, `ops::handle_get_totp` | `crates/cosmarden-tests/src/security.rs` `test_reprompt` |
 | H3 | Manual `Debug` on `Action`/`Response` — no secret payloads | **Holds** — `protocol/debug_impls.rs`; `Secret` Debug/Display is `********` | `protocol/tests.rs` `action_debug_never_prints_secrets` |
 | M4 | MAC-less type-2 rejected at parse | **Holds** — `CipherString::new` requires 3 parts | `cipherstring.rs` `type2_requires_mac` |
 | M5 | SSH `SO_PEERCRED` + parent `0700` + socket `0600` | **Holds** — `SshAgentFactory::new_session`, `SshAgent::run` | `ipc_hardening.rs` `test_socket_file_modes` |
@@ -119,12 +119,12 @@ clipboard auto-clear on the *extension* (UI/applet are now 30 s).
 
 ### Main IPC socket — holds
 
-`cosmic_bwarden_agent::run` (`crates/cosmic-bwarden-agent/src/lib.rs`):
+`cosmarden_agent::run` (`crates/cosmarden-agent/src/lib.rs`):
 
 - `libc::prctl(PR_SET_DUMPABLE, 0)` on Linux **before** config-driven
   secrets are loaded into `State`.
 - `dirs::make_all()` creates cache / runtime / data at `0700`.
-- Socket parent is created `0700` even when `COSMIC_BWARDEN_SOCKET` points
+- Socket parent is created `0700` even when `COSMARDEN_SOCKET` points
   at a fresh directory (P1-2).
 - Bound socket is `chmod 0600`.
 - Every `accept` path calls `UnixStream::peer_cred()` and compares
@@ -137,7 +137,7 @@ no `danger_accept` / `INSECURE` / `verify_none` / `no_verify`).
 
 ### SSH-agent socket — holds
 
-`SshAgentFactory::new_session` (`crates/cosmic-bwarden-agent/src/ssh_agent.rs`)
+`SshAgentFactory::new_session` (`crates/cosmarden-agent/src/ssh_agent.rs`)
 repeats the same-UID `peer_cred` check. Unauthorized sessions answer
 `request_identities` as empty and `sign` as `"unauthorized peer"` — they
 do not see key comments. `SshAgent::run` creates the parent `0700` and
@@ -145,7 +145,7 @@ the socket `0600`.
 
 ### D-Bus / logind — holds (client only)
 
-`listen_to_logind` (`crates/cosmic-bwarden-agent/src/logind.rs`) connects
+`listen_to_logind` (`crates/cosmarden-agent/src/logind.rs`) connects
 to the **system** bus as a client, `AddMatch`es `Session.Lock` /
 `PrepareForSleep` / `PrepareForShutdown`, and calls `Inhibit` for a
 delay fd so `State::lock()` can zeroize before a hibernate image.
@@ -157,8 +157,8 @@ invoke. A foreign session’s `Lock` broadcast would only lock this vault
 
 Production install (`tests/browser-extension/register_host.py`
 `register_firefox`, invoked from the justfile) writes
-`~/.mozilla/native-messaging-hosts/com.enikeev.cosmic_bwarden.json` with
-`allowed_extensions: ["cosmic-bwarden@enikeev.com"]` (the gecko id in
+`~/.mozilla/native-messaging-hosts/com.enikeev.cosmarden.json` with
+`allowed_extensions: ["cosmarden@enikeev.com"]` (the gecko id in
 `browser-extension/manifest.json`). Pages cannot `connectNative`. There
 is no `externally_connectable` and no `onMessageExternal`. Chrome
 `allowed_origins` is pinned in the E2E helper
@@ -181,7 +181,7 @@ connects to the main IPC socket, so A1 is the allowlist + the
 | TPM blob | 0600 | `tpm/blob.rs` `write_blob` |
 | Generator key / history | 0600 | `handler/generator/storage.rs` |
 
-`CosmicBWardenConfig::save_legacy` (`crates/cosmic-bwarden-core/src/config.rs`)
+`CosmardenConfig::save_legacy` (`crates/cosmarden-core/src/config.rs`)
 uses `create_dir_all` + `File::create` (umask, typically 0644) and
 `make_all` does not cover the config dir. Config holds email / URLs / TPM
 flags, not tokens. **S3-1**, new, hardening.
@@ -258,7 +258,7 @@ journal leak today.
   purpose.
 
 **S2-2 (new, availability):** `keyring::store_tokens` falls back to
-creating a `"cosmic-bwarden"` collection when `default_collection` fails;
+creating a `"cosmarden"` collection when `default_collection` fails;
 `get_tokens` only searches the default. A store/get mismatch loses
 session restore after PIN unlock (sync, not vault decrypt). Callers log
 store failures; the mismatch itself is silent success.
@@ -266,7 +266,7 @@ store failures; the mismatch itself is silent success.
 ### Clipboard lifetime — UI holds; extension still open
 
 UI/applet: `copy_to_clipboard_with_autoclear`
-(`crates/cosmic-bwarden-ui/src/app/update/mod.rs`),
+(`crates/cosmarden-ui/src/app/update/mod.rs`),
 `CLIPBOARD_CLEAR_SECS = 30`, generation counter, readback wipe only if
 the clipboard still holds our value, `zeroize` of the pending copy.
 Applet goes through `applet_copy_to_clipboard` → the same helper.
@@ -283,7 +283,7 @@ fixed after 2026-07).
 
 ### Cipherstring parse / MAC / encrypt-then-MAC — holds, with one decrypt-side hole
 
-`CipherString::new` (`crates/cosmic-bwarden-core/src/cipherstring.rs`):
+`CipherString::new` (`crates/cosmarden-core/src/cipherstring.rs`):
 
 - Type byte must be a single ASCII digit (L1).
 - Type 2 requires exactly `iv|ct|mac` (M4). MAC-less is `InvalidCipherString`.
@@ -309,7 +309,7 @@ in `SECURITY.md` / `.cargo/audit.toml` — not scored as new S0/S1.
 
 ### KDF clamp — holds for Argon2id memory/parallelism; iterations unbounded
 
-`Identity::new` (`crates/cosmic-bwarden-core/src/identity.rs`):
+`Identity::new` (`crates/cosmarden-core/src/identity.rs`):
 
 - Iterations must be `NonZeroU32`.
 - Argon2id requires memory and parallelism; memory clamped to 16..=1024
@@ -330,14 +330,14 @@ accepted to match real authenticators. RFC 6238 vector tests included.
 
 ### Zeroize / `mlock` — mixed (keys/tokens hold; `Secret` does not)
 
-`locked::Vec` (`crates/cosmic-bwarden-core/src/locked.rs`): `mlock` of a
+`locked::Vec` (`crates/cosmarden-core/src/locked.rs`): `mlock` of a
 fixed 4 KiB region, `zero()` + `zeroize` on `Drop`, degrades to unlocked
 heap with `warn!` if `RLIMIT_MEMLOCK` is exhausted. `Keys`, `Password`,
 `PasswordHash`, `PrivateKey` wrap it. `Token` uses the locked buffer up
 to 4 KiB, else a zeroize-on-drop heap `String` with a warning;
 `From<String>` zeroizes the source.
 
-`State::lock` (`crates/cosmic-bwarden-agent/src/state.rs`) drops
+`State::lock` (`crates/cosmarden-agent/src/state.rs`) drops
 `keys` / `org_keys` / `master_password_hash` (locked types wipe) and
 clears `access_token` / `refresh_token`. Encrypted `db.entries` stay for
 offline unlock. Logind delay inhibitor aims to finish this before
@@ -369,7 +369,7 @@ Holds for the named invariants:
 | Blob 0600 | `write_blob` |
 | `MIN_PIN_LEN = 6`, agent-enforced on setup | `core::MIN_PIN_LEN`; `tpm_pin::validate_pin` |
 | Wrong PIN vs PCR change vs lockout | `tpm::classify_unseal_failure` → `ERR_TPM_UNSEAL_FAILED` / `ERR_TPM_STATE_CHANGED`; UI uses `GetTpmDaStatus` |
-| Server-credentials blob empty PIN, still PCR-bound | `handle_enable_tpm_server_credentials` → `seal_bytes(..., "")`; documented trade-off on `CosmicBWardenConfig.tpm_store_server_credentials` |
+| Server-credentials blob empty PIN, still PCR-bound | `handle_enable_tpm_server_credentials` → `seal_bytes(..., "")`; documented trade-off on `CosmardenConfig.tpm_store_server_credentials` |
 
 `handle_unlock_with_pin` unseals vault keys under the PIN, optionally
 unseals the hash blob with `""`, restores tokens from keyring / in-memory
@@ -416,10 +416,10 @@ Autofill writes the password into the page DOM — that is the feature
 The extension does **not** compute eTLD+1. `background.js` /
 `popup.js` `extractDomain` strip only a leading `www.` and send the full
 host. Matching is `domain::hosts_match`
-(`crates/cosmic-bwarden-core/src/domain.rs`): exact, label-boundary
+(`crates/cosmarden-core/src/domain.rs`): exact, label-boundary
 subdomain both ways, then PSL eTLD+1 when the `public_suffix_list`
 feature is on (agent **default** features include it —
-`cosmic-bwarden-agent/Cargo.toml`). `evil.co.uk` vs `mybank.co.uk` does
+`cosmarden-agent/Cargo.toml`). `evil.co.uk` vs `mybank.co.uk` does
 not match; IPs/dotless hosts match exactly. Save-prompt uses the same
 helper (`browser_save::entry_matches_domain`).
 
@@ -506,7 +506,7 @@ Holds for requests:
   `Subscribe` stays long-lived. Failed writes `error!`.
 
 **S2-9 (new vs L2):** response length is `u32` with **no** cap.
-`AgentClient::do_send` (`crates/cosmic-bwarden-core/src/agent_client.rs`)
+`AgentClient::do_send` (`crates/cosmarden-core/src/agent_client.rs`)
 does `vec![0u8; len]` on the claimed size. Same-UID can already speak
 the protocol (A2); a hostile or buggy agent can force a ~4 GiB alloc in
 UI/CLI. Browser-host inbound is the 1 MiB cap only.
@@ -573,8 +573,8 @@ P1-3 on a value the client already holds.
 
 | ID | Title | Citation |
 |----|-------|----------|
-| **S3-1** | `config.json` / config dir not forced `0600`/`0700` | `CosmicBWardenConfig::save_legacy` |
-| **S3-2** | UI `Message` derived `Debug` can carry secrets | `crates/cosmic-bwarden-ui/src/message.rs` |
+| **S3-1** | `config.json` / config dir not forced `0600`/`0700` | `CosmardenConfig::save_legacy` |
+| **S3-2** | UI `Message` derived `Debug` can carry secrets | `crates/cosmarden-ui/src/message.rs` |
 | **S3-3** | Edit `savePopupState` copies a stored password into `storage.session` | `popup-state.js` `snapshotPopupState` |
 | **S3-4** | `prctl(PR_SET_DUMPABLE, 0)` return ignored | `run` |
 | **S3-5** | Autolock poll is 5 minutes, so a 5-minute timeout can fire at 5–10 minutes | `timeout.rs` `CHECK_INTERVAL` |
@@ -604,8 +604,8 @@ invoking user’s privilege:
 
 | Var | Effect |
 |-----|--------|
-| `COSMIC_BWARDEN_CONFIG` / `_SOCKET` / `_SSH_SOCKET` | path overrides; sockets still `0600` + peer-cred |
-| `COSMIC_BWARDEN_PROFILE` | namespaces dirs created `0700` via `make_all` |
+| `COSMARDEN_CONFIG` / `_SOCKET` / `_SSH_SOCKET` | path overrides; sockets still `0600` + peer-cred |
+| `COSMARDEN_PROFILE` | namespaces dirs created `0700` via `make_all` |
 | `COSMIC_PANEL_NAME` | applet vs window |
 | `RUST_LOG` | log level; HTTP crates still capped at `info` |
 | `TSS2_TCTI` | TPM device (tests / operator); same-UID |

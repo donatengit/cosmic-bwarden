@@ -1,6 +1,6 @@
-# COSMIC BWarden Client: Minimalistic Native COSMIC Bitwarden Client
+# Cosmarden Client: Minimalistic Native COSMIC Bitwarden Client
 
-**COSMIC BWarden Client** is a high-performance, native Bitwarden client designed specifically for the COSMIC desktop environment. Built with Rust and the `libcosmic` toolkit, it provides a seamless and secure experience for managing your vault entries with a focus on speed, low memory footprint, and deep system integration.
+**Cosmarden Client** is a high-performance, native Bitwarden client designed specifically for the COSMIC desktop environment. Built with Rust and the `libcosmic` toolkit, it provides a seamless and secure experience for managing your vault entries with a focus on speed, low memory footprint, and deep system integration.
 
 ## Key Features
 
@@ -10,7 +10,7 @@
 - **Advanced Configuration**: Clean credential cards with expandable "Advanced" options for "Remember email" and custom server settings, using native COSMIC settings widgets.
 - **Real-Time Server Synchronization**: Full CRUD (Create, Read, Update, Delete) support with immediate server-side synchronization for all entry modifications.
 - **Manual Sync Button**: Direct control over vault refreshing via a dedicated Sync button in the vault sidebar.
-- **Secure Background Agent**: A dedicated daemon (`cosmic-bwarden-agent`) manages your vault state in memory-locked regions, ensuring secrets are never swapped to disk and remain protected even when the UI is closed.
+- **Secure Background Agent**: A dedicated daemon (`cosmarden-agent`) manages your vault state in memory-locked regions, ensuring secrets are never swapped to disk and remain protected even when the UI is closed.
 - **Diverse Vault Items**: Full support for standard logins, Secure Notes, and SSH Keys, with automatic synchronization and local caching.
 - **Master Password Reprompt**: Implements granular security for sensitive items, requiring master password verification for specifically marked entries.
 - **SSH Agent Integration**: Automatically serves SSH keys stored in your Bitwarden vault to the system's SSH agent.
@@ -20,11 +20,11 @@
 ## Architecture Overview
 
 The project is structured as a Rust workspace with several specialized components, each following a strict modular decomposition (targeting <250 lines per file) to ensure high maintainability and security auditing:
-- `cosmic-bwarden-core`: The internal library for cryptography, Bitwarden API communication, and data modeling.
-- `cosmic-bwarden-agent`: The background service managing the unlocked vault, SSH agent, and browser integration.
-- `cosmic-bwarden-ui`: The main application for searching and managing vault entries, following the MVU pattern.
-- `cosmic-bwarden-cli`: A full-featured command-line interface for vault management and automation.
-- `cosmic-bwarden-tests`: A comprehensive E2E suite using Docker to verify the full stack.
+- `cosmarden-core`: The internal library for cryptography, Bitwarden API communication, and data modeling.
+- `cosmarden-agent`: The background service managing the unlocked vault, SSH agent, and browser integration.
+- `cosmarden-ui`: The main application for searching and managing vault entries, following the MVU pattern.
+- `cosmarden-cli`: A full-featured command-line interface for vault management and automation.
+- `cosmarden-tests`: A comprehensive E2E suite using Docker to verify the full stack.
 
 ### Specialized Integrations
 

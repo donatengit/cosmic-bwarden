@@ -80,8 +80,8 @@ test.describe('Generate password: clipboard relay (content-generate.js)', () => 
 
 function iconNamesOn(page) {
   return page.evaluate(() =>
-    Array.from(document.documentElement.querySelectorAll('[data-cosmic-bwarden-generate-icon]'))
-      .map((el) => el.getAttribute('data-cosmic-bwarden-generate-icon'))
+    Array.from(document.documentElement.querySelectorAll('[data-cosmarden-generate-icon]'))
+      .map((el) => el.getAttribute('data-cosmarden-generate-icon'))
       .sort()
   );
 }
@@ -113,7 +113,7 @@ test.describe('Generate password: inline icon fill-on-click', () => {
 
     await page.evaluate(() => {
       document.documentElement
-        .querySelector('[data-cosmic-bwarden-generate-icon="new-password"]')
+        .querySelector('[data-cosmarden-generate-icon="new-password"]')
         .shadowRoot.querySelector('.icon-btn')
         .click();
     });

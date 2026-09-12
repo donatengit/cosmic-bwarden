@@ -1,6 +1,6 @@
 # Security Policy
 
-`cosmic-bwarden` handles password-vault material. Security reports are welcome and will
+`cosmarden` handles password-vault material. Security reports are welcome and will
 be taken seriously.
 
 ## Reporting a vulnerability
@@ -8,10 +8,10 @@ be taken seriously.
 **Do not open a public issue for a security bug.**
 
 - Preferred: GitHub → **Security** → *Report a vulnerability* (private advisory).
-- Alternative: email **donat@enikeev.net** with `cosmic-bwarden security` in the subject.
+- Alternative: email **donat@enikeev.net** with `cosmarden security` in the subject.
 
 Please include what you'd want to receive: affected component (agent / applet / UI / CLI
-/ SSH agent / browser extension / TPM path), version (`cosmic-bwarden-cli --version`),
+/ SSH agent / browser extension / TPM path), version (`cosmarden-cli --version`),
 reproduction steps, and impact as you see it.
 
 Expect an acknowledgement within 7 days and an assessment within 14. There is no bug

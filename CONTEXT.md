@@ -1,4 +1,4 @@
-# COSMIC BWarden Client: Context & Architecture
+# Cosmarden Client: Context & Architecture
 
 A secure, native COSMIC Bitwarden client featuring a background agent, tray applet, and flexible CLI.
 
@@ -6,30 +6,30 @@ A secure, native COSMIC Bitwarden client featuring a background agent, tray appl
 
 The project follows a modular Rust-based architecture split into specialized crates, each further decomposed for maintainability:
 
-- **`cosmic-bwarden-core`**: The foundational library.
+- **`cosmarden-core`**: The foundational library.
     - `api/`: API clients (`client.rs`) and data transfer models (`models.rs`).
     - `db/`: Persistence logic (`persistence.rs`) and vault models (`models.rs`).
     - `crypto/`: Cryptographic primitives and cipherstrings.
     - `protocol/entry_save.rs`: Pure `Entry -> Action` mapping shared by clients — decides *create vs. update* from whether the entry still carries a client-side `new-<unix_secs>` placeholder id. Lives in core so the E2E suite can drive the exact mapping the UI uses against a real server.
-- **`cosmic-bwarden-agent`**: A secure background service.
+- **`cosmarden-agent`**: A secure background service.
     - `handler.rs`: Central IPC request dispatcher.
     - `server.rs`: High-level server-side synchronization logic.
     - `logind.rs`: Integration with systemd-logind for auto-locking.
     - `ssh_agent.rs`: SSH agent protocol implementation.
-- **`cosmic-bwarden-cli`**: A feature-rich command-line interface.
-- **`cosmic-bwarden-ui`**: The main graphical interface.
+- **`cosmarden-cli`**: A feature-rich command-line interface.
+- **`cosmarden-ui`**: The main graphical interface.
     - `app/`: MVU decomposition into `state.rs`, `update/` (chained `lifecycle`/`auth`/`vault`/`vault_edit`/`applet`/`pwgen` handlers), and `tasks.rs`. `update/vault_edit.rs` owns the detail pane's edit buffer; `update/{vault,auth,generator}_actions.rs` hold the pure `state -> Action` builders so tests can assert what the UI dispatches. `auth_actions` is shared by the main window and the applet, which previously built the same session actions twice. `update/activation.rs` is the pure classifier for applet activation-token exec strings (`open-vault` spawn vs. `activate:<name>` in-process quick actions).
     - `view/`: Modular view components (Auth, Vault, Settings, `applet/`). The generator pane's Settings/History split is a `tab_bar` (`state::generator_tabs`).
     - **New cipher types (Bitwarden v2026.7.0)**: cipher types 6 (BankAccount), 7 (DriversLicense), 8 (Passport) are fully synced, decrypted, displayed (detail pane + CLI `get`), and CRUD-able via the wire protocol (`AddBankAccount`/`AddDriversLicense`/`AddPassport`). The UI is read-only for them (like Card/Identity): no creation form, not in the applet search, "All" filter only. Vaultwarden only *emits* these types today — its write path rejects them until PR #7478 (`pm-32009-new-item-types`); the E2E suite probes server support and skips with a notice until then (see `tests/vault/new_item_types.rs`).
-- **`cosmic-bwarden-tests`**: End-to-end integration tests using Docker.
+- **`cosmarden-tests`**: End-to-end integration tests using Docker.
     - `vault/ssh_agent.rs` / `vault/ssh_agent_lifecycle.rs`: Real-protocol SSH agent coverage — a real `ssh`/`ssh-add` client signs/authenticates against a containerized `sshd` via the agent's `ssh-agent-socket` (Ed25519 + RSA), including lock/unlock and logout/login state-transition checks. Helpers in `ssh_test_utils.rs`.
 
 ## Versioning & Protocol Compatibility
 
-- **Application version**: Generated at build time in `cosmic-bwarden-core/build.rs` with format `YYYY.MM-N-<short git id>` where N is the number of seconds elapsed in the current month.
+- **Application version**: Generated at build time in `cosmarden-core/build.rs` with format `YYYY.MM-N-<short git id>` where N is the number of seconds elapsed in the current month.
 - **Unified builds**: A 30-second cache window via `target/build_version.txt` ensures all crates in a single build share the same version.
 - **IPC protocol**: `Response::Version { version, protocol_version }` carries both the agent's build version and the protocol version. Currently both fields contain the same build version since all binaries are built together.
-- **CLI check**: `cosmic-bwarden-cli version` subcommand queries the agent, prints local/agent/protocol versions, and runs `check_protocol_compatibility()` — a pure function that compares the local build version against the agent's `protocol_version`.
+- **CLI check**: `cosmarden-cli version` subcommand queries the agent, prints local/agent/protocol versions, and runs `check_protocol_compatibility()` — a pure function that compares the local build version against the agent's `protocol_version`.
 - **UI display**: Version is shown muted in the applet context menu (next to "Open Vault") and in the Settings panel.
 
 ## Account State & Snapshot Ordering
@@ -42,7 +42,7 @@ ordering matters:
 - **Lock epoch**: the agent stamps every `Response::Config` with `(session_id, lock_epoch)`.
   `session_id` is random per agent process; `lock_epoch` increments on every lock-state
   transition (lock, unlock, login, logout — `State::bump_epoch()`). Clients drop any
-  snapshot older than the newest one they have applied (`CosmicBWardenApp::last_config`),
+  snapshot older than the newest one they have applied (`CosmardenApp::last_config`),
   so a response computed before a transition can never bounce the UI back to a stale view
   (e.g. back to the lock screen right after a successful PIN unlock). A changed
   `session_id` (agent restart) is never treated as staleness.
@@ -92,7 +92,7 @@ ordering matters:
 - **Session Envelope**: the refresh token is persisted at `<data_dir>/session_<account_hash>.enc` under XChaCha20-Poly1305, keyed by HKDF-SHA256 over the vault encryption key with a dedicated label (`core/session_envelope.rs`). The vault keys only exist after an unlock — for PIN unlock, only after the TPM releases them under PolicyPCR(0,7) ∧ PolicyAuthValue — so the file inherits the TPM's PCR and PIN binding without a second sealed object. A refresh JWT (~660 bytes on Vaultwarden) is far past `TPM2_MAX_SYM_DATA` (256), which is why it cannot be sealed directly. The AEAD's AAD binds each envelope to one `(server, email)`, so it cannot be replayed across accounts or profiles.
 - **Granular Reprompts**: Full enforcement of Master Password reprompting for sensitive items.
 - **Reactive State**: The UI uses long-lived `Action::Subscribe` streams for agent-pushed events (`Locked`, `Unlocked`, `VaultChanged`) instead of polling.
-- **Safe Domain Matching**: Entry-to-page matching (popup suggestions, badge, save prompt) uses exact / label-boundary-subdomain / PSL eTLD+1 rules in `cosmic_bwarden_core::domain` — never label-stripping of the page host, so `victim.co.uk` can never surface other `.co.uk` entries. Rationale and feature gate in `docs/public_suffix_list.md`.
+- **Safe Domain Matching**: Entry-to-page matching (popup suggestions, badge, save prompt) uses exact / label-boundary-subdomain / PSL eTLD+1 rules in `cosmarden_core::domain` — never label-stripping of the page host, so `victim.co.uk` can never surface other `.co.uk` entries. Rationale and feature gate in `docs/public_suffix_list.md`.
 
 ### 🔄 Data Integrity
 - **Real-Time CRUD Sync**: Every Add, Update, and Delete operation is immediately synchronized with the server.

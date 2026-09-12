@@ -1,6 +1,6 @@
 # Upstream applet review: `pop-os/cosmic-applets` at `epoch-1.8.0`
 
-Reference material for the applet side of `cosmic-bwarden-ui`, refreshed for
+Reference material for the applet side of `cosmarden-ui`, refreshed for
 COSMIC Epoch 1.8. This document records the revisions held locally, what
 changed upstream since the previous snapshot, and which upstream practices are
 worth copying. The code-level comparison of our applet against the upstream
@@ -71,7 +71,7 @@ or removed between our previous snapshot and today.
 |---|---|---|
 | cosmic-applets `epoch-1.8.0` (this clone) | `d4d71fd5` | 2026-09-04 |
 | cosmic-applets `master` | `a401af8b` | 2026-09-10 |
-| cosmic-bwarden (`Cargo.lock`) | `53314201b` | 2026-09-11 |
+| cosmarden (`Cargo.lock`) | `53314201b` | 2026-09-11 |
 
 `d4d71fd5` is an ancestor of our `53314201b`, so the 1.8-era applets build
 against a libcosmic that is **17 commits older** than ours, inside the same API
@@ -125,9 +125,9 @@ Surface(surface::Action<Message>),
 return cosmic::task::message(cosmic::Action::Surface(a));
 ```
 
-`cosmic-bwarden` is already on the after-state
-(`crates/cosmic-bwarden-ui/src/message/mod.rs`,
-`crates/cosmic-bwarden-ui/src/app/update/applet.rs`), which is why the tag is
+`cosmarden` is already on the after-state
+(`crates/cosmarden-ui/src/message/mod.rs`,
+`crates/cosmarden-ui/src/app/update/applet.rs`), which is why the tag is
 the reference baseline here and `master` is not needed for it. Two facts make
 the tag preferable as a checkout: it pairs with a libcosmic revision whose whole
 graph resolves (section 3), and `master`'s revision `a401af8b` predates ours, so
@@ -173,7 +173,7 @@ in `CONTEXT.md` and `Cargo.toml` need correcting, not just extending.
 Upstream runs `desktop-file-validate` over every `*.desktop` in the repository
 (`.github/workflows/validate-desktop-files.yml`, an `ubuntu:25.10` container with
 `desktop-file-utils` and `findutils`). This project ships exactly one such file,
-`crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop`, plus the
+`crates/cosmarden-ui/resources/com.enikeev.cosmarden.desktop`, plus the
 applet's `.ron` metadata, and nothing checks either. A malformed key or a missing
 `StartupWMClass` breaks panel registration silently — the failure appears as "the
 applet does not show up", not as a build error.
@@ -187,7 +187,7 @@ the same property upstream has.
 Upstream's `ci.yml` runs `cargo +nightly fmt --all -- --check` and clippy over
 `--all --all-targets --all-features`. This project's `.github/workflows/ci.yml`
 runs `cargo fmt --check`, `cargo clippy --workspace --all-targets`, and a second
-clippy pass for `-p cosmic-bwarden-agent --features tpm` on stable. Nothing to
+clippy pass for `-p cosmarden-agent --features tpm` on stable. Nothing to
 copy; the only difference is upstream's nightly rustfmt, which brings formatting
 changes that stable rustfmt rejects — not worth the churn for one contributor
 and no nightly CI.
@@ -201,7 +201,7 @@ No action.
 
 ### 6.5 Release profile: ours is already stricter
 
-| Setting | Upstream | cosmic-bwarden |
+| Setting | Upstream | cosmarden |
 |---|---|---|
 | `opt-level` | `3` | `"z"` |
 | `lto` | `"thin"` | `"fat"` |
@@ -231,13 +231,13 @@ Upstream's translation updates arrive as automated commits from Hosted Weblate,
 and they cover panel-visible strings too: `i18n/<locale>/desktop_entries.ftl`
 holds localized `Name`/`Comment` output for every applet, on top of the
 per-crate `i18n/<locale>/<crate>.ftl` files. This project has one locale
-(`crates/cosmic-bwarden-ui/i18n/en/cosmic_bwarden_ui.ftl`) and no translation
-pipeline; the panel menu therefore reads "COSMIC BWarden" in every locale.
+(`crates/cosmarden-ui/i18n/en/cosmarden_ui.ftl`) and no translation
+pipeline; the panel menu therefore reads "Cosmarden" in every locale.
 
 Verdict: **worth doing, but it depends on a product decision, not on this
 review.** Registering the crate on a translation platform costs nothing until
 translators appear, and the Fluent plumbing is already in place. Two caveats:
-the display name is pinned to `COSMIC BWarden` across every layer
+the display name is pinned to `Cosmarden` across every layer
 (`AGENTS.md`, "Naming"), so a localized `Name=` needs an explicit exception to
 that rule; and `.desktop` files are installed statically, so localized names
 mean either `Name[xx]=` keys generated from the FTL files or upstream's
@@ -327,8 +327,8 @@ of them with `git show <hash>` inside `tmp_code_examples/libcosmic`.
 
 - `a8fe59f38` `refactor(surface): type surface actions on the message they carry`
   — the breaking change our migration paid for: `surface::Action<Message>` in
-  `crates/cosmic-bwarden-ui/src/message/mod.rs` and the root
-  `cosmic::Action::Surface` in `crates/cosmic-bwarden-ui/src/app/update/applet.rs`.
+  `crates/cosmarden-ui/src/message/mod.rs` and the root
+  `cosmic::Action::Surface` in `crates/cosmarden-ui/src/app/update/applet.rs`.
   Nothing optional remains about it; the pin does not compile without the
   change. The typing is a small win on top: a surface action carrying another
   app's message type is no longer representable.
@@ -342,7 +342,7 @@ of them with `git show <hash>` inside `tmp_code_examples/libcosmic`.
 ### 9.2 Maintainability: two heuristics in our applet may now be removable
 
 `Message::AppletIconClicked` in
-`crates/cosmic-bwarden-ui/src/app/update/applet.rs` carries two workarounds
+`crates/cosmarden-ui/src/app/update/applet.rs` carries two workarounds
 whose own comments name the failure they defend against: it `take()`s the popup
 id eagerly "instead of waiting for `WindowClosed`", because a stale `Some(id)`
 "would swallow every subsequent click"; and it suppresses a re-open inside

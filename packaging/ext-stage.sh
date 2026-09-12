@@ -13,7 +13,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 stage_dir="$(realpath -m "${1:-$repo_root/target/ext-stage}")"
-zip_path="$repo_root/target/cosmic-bwarden-extension.zip"
+zip_path="$repo_root/target/cosmarden-extension.zip"
 
 # The stage dir is wiped with rm -rf below: confine it to the repo (the
 # justfile never passes an argument; this guards direct invocations).

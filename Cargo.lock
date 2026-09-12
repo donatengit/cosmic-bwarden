@@ -1369,12 +1369,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "cosmic-bwarden-agent"
+name = "cosmarden-agent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "cosmic-bwarden-core",
+ "cosmarden-core",
  "env_logger",
  "libc",
  "log",
@@ -1399,18 +1399,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "cosmic-bwarden-cli"
+name = "cosmarden-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "cosmic-bwarden-core",
+ "cosmarden-core",
  "rpassword",
  "tokio",
 ]
 
 [[package]]
-name = "cosmic-bwarden-core"
+name = "cosmarden-core"
 version = "0.1.0"
 dependencies = [
  "aes",
@@ -1442,6 +1442,7 @@ dependencies = [
  "sha1",
  "sha2",
  "subtle",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "url",
@@ -1450,12 +1451,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "cosmic-bwarden-tests"
+name = "cosmarden-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "bollard",
- "cosmic-bwarden-core",
+ "cosmarden-core",
  "postcard",
  "reqwest",
  "serde_json",
@@ -1471,13 +1472,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "cosmic-bwarden-ui"
+name = "cosmarden-ui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-stream",
  "clap",
- "cosmic-bwarden-core",
+ "cosmarden-core",
  "i18n-embed",
  "i18n-embed-fl",
  "libcosmic",

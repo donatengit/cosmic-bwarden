@@ -1,0 +1,67 @@
+[package]
+name = "cosmarden-agent"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+authors = ["Don Enikeev <donat@enikeev.net>"]
+repository = "https://github.com/donatengit/cosmic-bwarden"
+homepage = "https://github.com/donatengit/cosmic-bwarden"
+description = "Background agent holding the cosmarden vault in memory-locked storage"
+
+[dependencies]
+cosmarden-core = { path = "../cosmarden-core" }
+anyhow = { workspace = true }
+rsa = { workspace = true, features = ["sha2"] }
+sha2 = { workspace = true }
+sha1 = { workspace = true }
+ssh-agent-lib = "0.5.1"
+signature = "2.2"
+rand = { workspace = true }
+rand_core = "0.6"
+tokio = { workspace = true, features = ["rt", "macros", "net", "time", "io-util", "sync", "io-std"] }
+tokio-stream = { version = "0.1", features = ["net"] }
+postcard = { workspace = true }
+clap = { version = "4.5", features = ["derive", "env"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+# default-features = false drops the `regex`/`humantime` deps (regex_automata
+# + aho_corasick + regex_syntax + jiff cost ~450KB of .text); env_filter still
+# supports plain `module=level` RUST_LOG directives without regex patterns.
+env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
+libc = "0.2"
+rustix = { workspace = true }
+zbus = { workspace = true }
+oo7 = { version = "0.3", optional = true }
+tss-esapi = { version = "8.0.0-alpha.2", optional = true, features = ["generate-bindings"] }
+totp-rs = { version = "5.7.1", features = ["otpauth"] }
+zeroize = { workspace = true }
+
+[lib]
+name = "cosmarden_agent"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cosmarden-agent"
+path = "src/main.rs"
+
+# TPM-enabled binary for E2E tests; produced by `cargo build -p cosmarden-agent --features tpm`.
+# Distinct source path from the default bin so both share `lib.rs` without cargo's
+# "file present in multiple build targets" warning.
+[[bin]]
+name = "cosmarden-agent-tpm"
+path = "src/bin/cosmarden-agent-tpm.rs"
+required-features = ["tpm"]
+
+[features]
+default = ["browser-host", "public_suffix_list"]
+keyring = ["dep:oo7"]
+browser-host = []
+tpm = ["dep:tss-esapi"]
+# Forwards to the core crate's PSL-backed eTLD+1 matching rule; see
+# docs/public_suffix_list.md. Disable for a smaller binary at the cost of
+# sibling-subdomain matching (accounts.google.com vs mail.google.com).
+public_suffix_list = ["cosmarden-core/public_suffix_list"]
+
+[lints]
+workspace = true

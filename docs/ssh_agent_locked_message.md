@@ -3,7 +3,7 @@
 Coding agents (and humans running `ssh-add -l` / `git push`) treat an
 empty identity list as “SSH is not set up” and then generate keys, rewrite
 remotes to HTTPS, or point `SSH_AUTH_SOCK` at a different agent. This
-document is the decision record for how COSMIC BWarden’s ssh-agent
+document is the decision record for how Cosmarden’s ssh-agent
 behaves while the vault is **locked**.
 
 User-facing protocol behaviour also lives in [`ssh-agent.md`](ssh-agent.md).
@@ -16,7 +16,7 @@ app icon). It does **not** auto-open the applet popup.
 | Topic | Choice |
 |---|---|
 | Identities while locked | List the **real** cached public-key blobs |
-| Comment while locked | Append the token `[cosmic-bwarden:locked]` to the entry name |
+| Comment while locked | Append the token `[cosmarden:locked]` to the entry name |
 | Comment while unlocked | Entry name only — no token |
 | Fake / sentinel identity | **Rejected** |
 | Sign while locked | **Block** until unlock in the same process, or fail after **90s** |
@@ -118,7 +118,7 @@ Agent-crate tests drive the shipped `SshAgent` `Session` against a real
 `State` (no mock session, no reimplemented list/sign):
 
 - unlocked list: real blob, comment without the token
-- lock then list: same blob, comment contains `[cosmic-bwarden:locked]`
+- lock then list: same blob, comment contains `[cosmarden:locked]`
 - unlock then list: token gone
 - logout / never-unlocked / unauthorized: empty list
 - sign while locked does not complete before unlock; after unlock it

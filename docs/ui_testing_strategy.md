@@ -1,6 +1,6 @@
 # UI Testing Strategy
 
-This document outlines the testing approach for the `cosmic-bwarden` COSMIC-native user interface.
+This document outlines the testing approach for the `cosmarden` COSMIC-native user interface.
 
 ## Core Philosophy
 We leverage the Model-View-Update (MVU) architecture provided by `iced` and `libcosmic` to test the application at two levels:
@@ -28,5 +28,5 @@ As we use **Manual Message Injection**, we do not mock the `AgentClient` network
 - This decouples UI logic testing from the background agent's availability.
 
 ## 4. Test Environment
-- Tests should be run via `cargo test -p cosmic-bwarden-ui`.
+- Tests should be run via `cargo test -p cosmarden-ui`.
 - CI environments do not need `WAYLAND_DISPLAY` as these tests are headless.

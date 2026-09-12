@@ -1,6 +1,6 @@
 # Browser Extension
 
-The COSMIC BWarden browser extension provides vault access inside Chrome/Firefox. It is a plain MV3 WebExtension (HTML/CSS/JS — no compilation step) and communicates with the running `cosmic-bwarden-agent` over native messaging.
+The Cosmarden browser extension provides vault access inside Chrome/Firefox. It is a plain MV3 WebExtension (HTML/CSS/JS — no compilation step) and communicates with the running `cosmarden-agent` over native messaging.
 
 For architecture details see [`browser_integration.md`](browser_integration.md).
 
@@ -48,7 +48,7 @@ For a permanent install, package the extension with `just pack-extension` and su
 
 ## Native messaging host
 
-The agent binary acts as the native messaging host (`com.enikeev.cosmic_bwarden`). Registration writes a wrapper script and a manifest into `~/.mozilla/native-messaging-hosts/`.
+The agent binary acts as the native messaging host (`com.enikeev.cosmarden`). Registration writes a wrapper script and a manifest into `~/.mozilla/native-messaging-hosts/`.
 
 **Post-install (normal users):** registration is done automatically by `just install`.
 
@@ -67,7 +67,7 @@ Chrome/Chromium registration is handled automatically during Playwright E2E test
 | Target | What it does |
 |---|---|
 | `just install` | User-local install — `~/.local/bin`, systemd `--user` unit, and native messaging host |
-| `just pack-extension` | Zip production files → `target/cosmic-bwarden-extension.zip` |
+| `just pack-extension` | Zip production files → `target/cosmarden-extension.zip` |
 | `just test-extension-setup` | `npm install` in `browser-extension/` |
 | `just test-extension-unit` | Run Vitest unit tests (popup logic, no browser) |
 | `just test-extension-e2e` | Playwright firefox-mock project (mocked native messaging) |
@@ -95,9 +95,9 @@ just test-extension-e2e-chrome
 
 The script (`tests/browser-extension/run-chrome-e2e.sh`) handles everything:
 
-1. Builds `cosmic-bwarden-agent` and `cosmic-bwarden-cli`
+1. Builds `cosmarden-agent` and `cosmarden-cli`
 2. Starts a Vaultwarden container on port 8081 (Docker or Podman auto-detected)
-3. Starts the agent under `COSMIC_BWARDEN_PROFILE=test-chrome-e2e`
+3. Starts the agent under `COSMARDEN_PROFILE=test-chrome-e2e`
 4. Runs `npx playwright test --project=chrome-full`
 5. Cleans up agent and container on exit
 
@@ -108,7 +108,7 @@ Environment variables used by the test suite:
 | `VW_URL` | `http://localhost:8081` | Vaultwarden base URL |
 | `VW_EMAIL` | `test-chrome@example.com` | Test account email |
 | `VW_PASSWORD` | `password123` | Test account password |
-| `COSMIC_BWARDEN_PROFILE` | `test-chrome-e2e` | Agent profile (isolates test data) |
+| `COSMARDEN_PROFILE` | `test-chrome-e2e` | Agent profile (isolates test data) |
 
 ### Running unit tests
 
@@ -150,7 +150,7 @@ The `chrome-full` suite (`tests/browser-extension/playwright/chrome-full.spec.js
 | SecureNote | Yes | Yes | Yes |
 | SshKey | **No** | Yes (public key + fingerprint only) | No |
 
-SSH keys must be created via the CLI (`cosmic-bwarden-cli add-ssh-key`) or the native COSMIC UI. The popup form intentionally has no SSH key type option — entering private key material via a browser popup is a security anti-pattern.
+SSH keys must be created via the CLI (`cosmarden-cli add-ssh-key`) or the native COSMIC UI. The popup form intentionally has no SSH key type option — entering private key material via a browser popup is a security anti-pattern.
 
 ---
 
@@ -160,11 +160,11 @@ SSH keys must be created via the CLI (`cosmic-bwarden-cli add-ssh-key`) or the n
 just pack-extension
 ```
 
-Produces `target/cosmic-bwarden-extension.zip` — alongside the Rust build artifacts, already covered by `.gitignore`. The zip contains only the **preselected production files**: an explicit allowlist (`manifest.json`, the `background*.js` and `content*.js` sets, every `popup/` file enumerated, `icons/`). Nothing that is not listed can ship — the previous exclude-list approach (`zip -r .` minus excludes) let `browser-extension/.env` leak into the artifact once that file came to exist.
+Produces `target/cosmarden-extension.zip` — alongside the Rust build artifacts, already covered by `.gitignore`. The zip contains only the **preselected production files**: an explicit allowlist (`manifest.json`, the `background*.js` and `content*.js` sets, every `popup/` file enumerated, `icons/`). Nothing that is not listed can ship — the previous exclude-list approach (`zip -r .` minus excludes) let `browser-extension/.env` leak into the artifact once that file came to exist.
 
 The packing logic lives in [`packaging/pack-extension.sh`](../packaging/pack-extension.sh) and is the *only* copy: `just pack-extension`, the CI `extension` job (every push, artifact uploaded), and `release.yml` (on a tag) all invoke it. It removes any previous zip first — `zip -r` updates an existing archive rather than replacing it, so a deleted file would otherwise survive in later builds — a listed file that does not exist fails the build, and the result is asserted: no dev or secrets files, all required files present, `manifest.json` parses.
 
-The zip is suitable for uploading to the Chrome Web Store or Firefox Add-ons (AMO). The extension ID in `manifest.json` is `cosmic-bwarden@enikeev.com` (Firefox) — Chrome assigns its own ID on first load.
+The zip is suitable for uploading to the Chrome Web Store or Firefox Add-ons (AMO). The extension ID in `manifest.json` is `cosmarden@enikeev.com` (Firefox) — Chrome assigns its own ID on first load.
 
 ## Self-hosted release pipeline (unlisted AMO channel)
 
@@ -174,7 +174,7 @@ a ready-to-install XPI in gitignored `dist/`:
 
 ```bash
 just sign-extension
-# → dist/cosmic-bwarden-<version>.xpi
+# → dist/cosmarden-<version>.xpi
 ```
 
 **Dev signing**: the current files are signed under a fresh **timestamp
@@ -214,11 +214,11 @@ Every `v*` tag triggers `.github/workflows/release.yml`, whose
   `https://github.com/<owner>/<repo>/releases/latest/download/updates.json` —
   a stable, always-current manifest location that every installed version
   polls. `update_link` entries are tag-scoped
-  (`…/releases/download/<tag>/cosmic-bwarden-<version>.xpi`) so the
+  (`…/releases/download/<tag>/cosmarden-<version>.xpi`) so the
   `update_hash` always describes the exact immutable file Firefox downloads;
   a moving "latest" link would break hash verification for older entries.
   Each release also carries a stable-named copy
-  (`cosmic-bwarden-firefox.xpi`) for manual "latest build" downloads. Note:
+  (`cosmarden-firefox.xpi`) for manual "latest build" downloads. Note:
   `releases/latest/…` only resolves once the draft release is **published** —
   publishing is the go-live step. The repository variable
   `EXT_UPDATE_BASE_URL` overrides the base for non-GitHub hosting; the job
@@ -234,7 +234,7 @@ Every `v*` tag triggers `.github/workflows/release.yml`, whose
   compares newer than all its alphas. A failed preflight uploads nothing to
   AMO, so it consumes no version.
 - **Outputs**: the signed XPI is uploaded as a workflow artifact
-  (`cosmic-bwarden-signed-xpi`) and attached to the draft GitHub release next
+  (`cosmarden-signed-xpi`) and attached to the draft GitHub release next
   to the `.deb` and the source zip.
 
 - **Credentials**: read from the environment, or from the local gitignored
@@ -286,7 +286,7 @@ Every `v*` tag triggers `.github/workflows/release.yml`, whose
   submission may still be approved afterwards at AMO; its XPI can also be
   downloaded from the Dev Hub (Manage Status & Versions).
 - **`updates.json`** entries carry `version`, `update_link`
-  (`<EXT_UPDATE_BASE_URL>/cosmic-bwarden-<version>.xpi`), and `update_hash`
+  (`<EXT_UPDATE_BASE_URL>/cosmarden-<version>.xpi`), and `update_hash`
   (`sha256:<hex>` of the signed XPI); appending a new version preserves every
   existing entry.
 

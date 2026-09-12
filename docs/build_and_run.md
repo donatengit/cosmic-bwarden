@@ -30,9 +30,9 @@ RUSTFLAGS="-C target-cpu=native" cargo build --release
 ```
 
 This will produce binaries in `target/release/`:
-- `cosmic-bwarden-agent`: The background daemon.
-- `cosmic-applet-bwarden`: The main GUI application and panel tray applet (built from the `cosmic-bwarden-ui` crate).
-- `cosmic-bwarden-cli`: The command-line interface.
+- `cosmarden-agent`: The background daemon.
+- `cosmarden-applet`: The main GUI application and panel tray applet (built from the `cosmarden-ui` crate).
+- `cosmarden-cli`: The command-line interface.
 
 ## Running the Components
 
@@ -40,7 +40,7 @@ This will produce binaries in `target/release/`:
 The agent must be running for the UI or CLI to function.
 
 ```bash
-./target/release/cosmic-bwarden-agent
+./target/release/cosmarden-agent
 ```
 *Note: In a production setup, this would typically be managed by a systemd user unit.*
 
@@ -48,56 +48,56 @@ The agent must be running for the UI or CLI to function.
 The same binary handles both the main window and the applet tray.
 
 ```bash
-./target/release/cosmic-applet-bwarden
+./target/release/cosmarden-applet
 ```
 
 ### 3. CLI Usage
-The `cosmic-bwarden-cli` provides a powerful interface for scripting and advanced management.
+The `cosmarden-cli` provides a powerful interface for scripting and advanced management.
 
 ```bash
 # Register a new account (prompts for the master password interactively)
-./target/release/cosmic-bwarden-cli register user@example.com
+./target/release/cosmarden register user@example.com
 
 # Register/login/unlock accept --password for scripts; without it the master
 # password is prompted interactively (keeping it out of argv/shell history).
-./target/release/cosmic-bwarden-cli register user@example.com --password 'correct horse battery staple'
+./target/release/cosmarden register user@example.com --password 'correct horse battery staple'
 
 # Add a secure note
-./target/release/cosmic-bwarden-cli add-note "My Private Key" --note "Content of the note..."
+./target/release/cosmarden add-note "My Private Key" --note "Content of the note..."
 
 # Add an SSH key
-./target/release/cosmic-bwarden-cli add-ssh-key "My SSH Key" --private-key-path ~/.ssh/id_rsa
+./target/release/cosmarden add-ssh-key "My SSH Key" --private-key-path ~/.ssh/id_rsa
 
 # List and Search
-./target/release/cosmic-bwarden-cli list
-./target/release/cosmic-bwarden-cli list | grep "My Secret"
+./target/release/cosmarden list
+./target/release/cosmarden list | grep "My Secret"
 
 # Get password (interactive reprompt if needed)
-./target/release/cosmic-bwarden-cli get "My Secret"
+./target/release/cosmarden get "My Secret"
 
 # Get a specific field (e.g. Note or SSH Private Key), revealing secrets
-./target/release/cosmic-bwarden-cli get "My Private Key" --fields notes --show-secrets
+./target/release/cosmarden get "My Private Key" --fields notes --show-secrets
 
 # Store a whole file as a note's contents, without it ever touching argv/shell
 # history, then restore it byte-for-byte later. `--stdin` works with either
 # a pipe or `< file` redirection (the latter skips the useless `cat`):
-cat credentials.yaml | ./target/release/cosmic-bwarden-cli note add "AWS Creds" --stdin
-./target/release/cosmic-bwarden-cli note add "AWS Creds" --stdin < credentials.yaml
-./target/release/cosmic-bwarden-cli get "AWS Creds" --fields notes --show-secrets > credentials.yaml
+cat credentials.yaml | ./target/release/cosmarden note add "AWS Creds" --stdin
+./target/release/cosmarden note add "AWS Creds" --stdin < credentials.yaml
+./target/release/cosmarden get "AWS Creds" --fields notes --show-secrets > credentials.yaml
 
 # `edit --stdin` replaces an existing entry's notes the same way:
-./target/release/cosmic-bwarden-cli edit "AWS Creds" --stdin < credentials.yaml
+./target/release/cosmarden edit "AWS Creds" --stdin < credentials.yaml
 
 # Names are not unique (Bitwarden allows e.g. two logins both called
 # "GitHub"), so `add` never overwrites an existing entry by name. Re-running
 # the add above a second time warns on stderr but still creates a second
 # "AWS Creds" note. Use --replace to delete any same-name-and-type entry
 # first instead:
-./target/release/cosmic-bwarden-cli note add "AWS Creds" --replace --stdin < credentials.yaml
+./target/release/cosmarden note add "AWS Creds" --replace --stdin < credentials.yaml
 
 # Remove an entry entirely with `edit --delete` (there is no separate
 # `delete`/`rm` subcommand):
-./target/release/cosmic-bwarden-cli edit "AWS Creds" --delete
+./target/release/cosmarden edit "AWS Creds" --delete
 ```
 
 `get --fields notes --show-secrets` is special-cased: when `notes` is the
@@ -110,13 +110,13 @@ prints the labeled, human-readable form.
 If you are running the COSMIC desktop, you can launch the applet to see it in your panel.
 
 ```bash
-./target/release/cosmic-applet-bwarden
+./target/release/cosmarden-applet
 ```
 
 ## Environment Variables
 
-- `COSMIC_BWARDEN_PROFILE`: Set this to use a different configuration profile (default is `cosmic-bwarden`).
-- `RUST_LOG`: Set to `info` or `debug` for verbose logging (e.g., `RUST_LOG=cosmic-bwarden_agent=debug`).
+- `COSMARDEN_PROFILE`: Set this to use a different configuration profile (default is `cosmarden`).
+- `RUST_LOG`: Set to `info` or `debug` for verbose logging (e.g., `RUST_LOG=cosmarden_agent=debug`).
   The HTTP stack (`reqwest`/`hyper`/`rustls`/`h2`) is capped at `info` even under
   `RUST_LOG=trace`: at trace level those crates print full request headers,
   including `Authorization: Bearer …` session tokens, and agent logs are
@@ -127,7 +127,7 @@ If you are running the COSMIC desktop, you can launch the applet to see it in yo
 To use the built-in SSH agent, export the following environment variable in your shell profile:
 
 ```bash
-export SSH_AUTH_SOCK=$(cosmic-bwarden-agent --print-ssh-socket-path) 
+export SSH_AUTH_SOCK=$(cosmarden-agent --print-ssh-socket-path) 
 # Or manually find it in the runtime directory managed by the agent.
 ```
 
@@ -143,7 +143,7 @@ used day to day.
 | `just build` | Release build of all Rust crates (auto-detects TPM) |
 | `just install` | Copy already-built `target/release` binaries to `~/.local/bin`, systemd `--user` unit, applet metadata, Firefox native host. Does not compile — run `just build` first. `just user-install` is an alias. |
 | `just clean-install` | `uninstall` then `install` |
-| `just pack-extension` | Zips preselected production files only (explicit allowlist in `packaging/pack-extension.sh` — nothing unlisted can ship; the old exclude-list approach leaked `.env` once) → `target/cosmic-bwarden-extension.zip`, with shape assertions. Not part of `build`. |
+| `just pack-extension` | Zips preselected production files only (explicit allowlist in `packaging/pack-extension.sh` — nothing unlisted can ship; the old exclude-list approach leaked `.env` once) → `target/cosmarden-extension.zip`, with shape assertions. Not part of `build`. |
 | `just register-browser-host` | Registers native host pointing at debug build (dev workflow) |
 | `just test` | Full Rust test suite in order: unit → agent → CLI → UI. The E2E steps auto-ensure a container socket via `ensure-container-socket` — podman is the primary runtime (`systemctl --user start podman.socket`; the harness auto-detects the user socket and needs no docker group); Docker is the fallback when `DOCKER_HOST`/`/var/run/docker.sock` exists |
 | `just test-unit` | Unit tests for every crate that has them |
@@ -151,7 +151,7 @@ used day to day.
 | `just test-extension-e2e` | Extension Playwright E2E (Firefox, mock agent) |
 | `just test-extension-e2e-full` | Extension Playwright E2E (Firefox, real agent + Vaultwarden) |
 | `just test-extension-e2e-chrome` | Same but Chrome |
-| `just sign-extension` | The single signing entry point: stage production files → inject a fresh timestamp version (`YYYY.M.D.mmm`, dev signing — no tag/clean-tree requirements) and gecko `update_url` from `EXT_UPDATE_BASE_URL` → `web-ext lint` → AMO unlisted sign → `dist/cosmic-bwarden-<version>.xpi` (+ `dist/updates.json` when the base URL is set; append preserves entries; `update_hash` = sha256 of the signed XPI). Requires `WEB_EXT_API_KEY`/`WEB_EXT_API_SECRET` and a pinned web-ext (10.6.0, checked at entry); refuses versions already shipped in `dist/`; prints one absolute output path per line for CI capture |
+| `just sign-extension` | The single signing entry point: stage production files → inject a fresh timestamp version (`YYYY.M.D.mmm`, dev signing — no tag/clean-tree requirements) and gecko `update_url` from `EXT_UPDATE_BASE_URL` → `web-ext lint` → AMO unlisted sign → `dist/cosmarden-<version>.xpi` (+ `dist/updates.json` when the base URL is set; append preserves entries; `update_hash` = sha256 of the signed XPI). Requires `WEB_EXT_API_KEY`/`WEB_EXT_API_SECRET` and a pinned web-ext (10.6.0, checked at entry); refuses versions already shipped in `dist/`; prints one absolute output path per line for CI capture |
 | `just test-ext-release` | Offline unit tests for the release pipeline's pure logic (`node --test packaging/*.test.mjs`) |
 | `just restart-panel` | Restart COSMIC panel after install |
 | `just enable-agent` | Enable + start agent systemd user service |

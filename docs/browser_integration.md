@@ -1,16 +1,16 @@
 # Browser Extension Integration
 
-COSMIC BWarden includes a native browser extension (currently targeting Firefox) that provides secure, high-performance vault access directly within the browser.
+Cosmarden includes a native browser extension (currently targeting Firefox) that provides secure, high-performance vault access directly within the browser.
 
 ## Architecture: The Native Messaging Bridge
 
-The extension follows a **"Thin Client" Invariant**: it contains no cryptographic logic and stores no secrets. Instead, it acts as a UI proxy for the `cosmic-bwarden-agent`.
+The extension follows a **"Thin Client" Invariant**: it contains no cryptographic logic and stores no secrets. Instead, it acts as a UI proxy for the `cosmarden-agent`.
 
 Communication is handled via the [WebExtensions Native Messaging API](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Native_messaging).
 
 ### 1. The `browser-host` Subcommand
 
-The `cosmic-bwarden-agent` includes a specialized mode triggered by the `browser-host` subcommand. This mode is responsible for:
+The `cosmarden-agent` includes a specialized mode triggered by the `browser-host` subcommand. This mode is responsible for:
 - Reading JSON messages from `stdin` (sent by the browser).
 - Translating JSON to the internal `Action` protocol (using Postcard).
 - Forwarding the action to the main agent process via the local Unix socket.
@@ -19,15 +19,15 @@ The `cosmic-bwarden-agent` includes a specialized mode triggered by the `browser
 
 ### 2. Configuration & Compilation
 
-The browser integration is guarded by a Cargo feature flag in `cosmic-bwarden-agent`:
+The browser integration is guarded by a Cargo feature flag in `cosmarden-agent`:
 
 - **Feature Name**: `browser-host`
 - **Default**: Enabled
-- **Crate**: `crates/cosmic-bwarden-agent`
+- **Crate**: `crates/cosmarden-agent`
 
 To compile the agent without browser support:
 ```bash
-cargo build -p cosmic-bwarden-agent --no-default-features
+cargo build -p cosmarden-agent --no-default-features
 ```
 
 The `browser-host` feature requires the `io-std` feature of `tokio` for asynchronous access to standard input and output streams.
@@ -83,7 +83,7 @@ just register-browser-host
 This runs `tools/register_browser_host.py`, which:
 1. Detects the agent's location in `target/debug`.
 2. Creates a wrapper script to handle the `browser-host` argument.
-3. Generates the host manifest JSON in `~/.mozilla/native-messaging-hosts/com.enikeev.cosmic_bwarden.json`.
+3. Generates the host manifest JSON in `~/.mozilla/native-messaging-hosts/com.enikeev.cosmarden.json`.
 
 ### Manual Installation
 1. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`.
@@ -158,7 +158,7 @@ can retry, or open the popup from the toolbar and dismiss the bar by hand.
   The agent compares the *submitted* password against its decrypted stored copy;
   the stored password never leaves the agent — the response is a single equality
   bit about a value the client already possesses. Domain matching uses the
-  shared rules in `cosmic_bwarden_core::domain` (exact / boundary-subdomain in
+  shared rules in `cosmarden_core::domain` (exact / boundary-subdomain in
   both directions / PSL eTLD+1 — see `docs/public_suffix_list.md`); URIs with
   match type `Never` are skipped, all other match types are treated as domain
   matching in v1. Legacy entries without URIs match via a hostname-shaped
@@ -196,7 +196,7 @@ can retry, or open the popup from the toolbar and dismiss the bar by hand.
 ## Generate Password (context menu + inline field icon)
 
 The password generator (settings, algorithm, and 7-day local history) lives
-entirely in the agent — see `crates/cosmic-bwarden-agent/src/handler/generator/`
+entirely in the agent — see `crates/cosmarden-agent/src/handler/generator/`
 and `docs/password_generator_plan.md` for the full design. The extension has
 two entry points into it, both fully local/offline (no server round trip).
 
@@ -313,7 +313,7 @@ can already call by the time its `await` resolves.
 
 ## Verification
 
-The integration is verified by an E2E test suite in `crates/cosmic-bwarden-tests/src/browser_host.rs`. This test:
+The integration is verified by an E2E test suite in `crates/cosmarden-tests/src/browser_host.rs`. This test:
 1. Spawns the main agent.
 2. Spawns the agent in `browser-host` mode.
 3. Simulates the browser by sending length-prefixed JSON to the bridge's `stdin`.
@@ -321,5 +321,5 @@ The integration is verified by an E2E test suite in `crates/cosmic-bwarden-tests
 
 To run the integration tests:
 ```bash
-cargo test -p cosmic-bwarden-tests --lib browser_host
+cargo test -p cosmarden-tests --lib browser_host
 ```

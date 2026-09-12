@@ -1,6 +1,6 @@
 # SSH Agent
 
-`cosmic-bwarden-agent` implements the `ssh-agent` protocol and serves SSH
+`cosmarden-agent` implements the `ssh-agent` protocol and serves SSH
 identities directly from your unlocked Bitwarden/Vaultwarden vault — no
 separate `ssh-agent`, `ssh-add`, or on-disk private key files needed.
 
@@ -8,12 +8,12 @@ separate `ssh-agent`, `ssh-add`, or on-disk private key files needed.
 
 - The agent exposes a Unix socket at:
   ```
-  $XDG_RUNTIME_DIR/cosmic-bwarden/ssh-agent-socket
+  $XDG_RUNTIME_DIR/cosmarden/ssh-agent-socket
   ```
-  (or `$XDG_RUNTIME_DIR/cosmic-bwarden-<PROFILE>/ssh-agent-socket` if
-  `COSMIC_BWARDEN_PROFILE` is set — used for test isolation, not normal use).
+  (or `$XDG_RUNTIME_DIR/cosmarden-<PROFILE>/ssh-agent-socket` if
+  `COSMARDEN_PROFILE` is set — used for test isolation, not normal use).
   If `XDG_RUNTIME_DIR` isn't set (rare — non-systemd sessions), it falls back
-  to `/tmp/cosmic-bwarden-<uid>/ssh-agent-socket`.
+  to `/tmp/cosmarden-<uid>/ssh-agent-socket`.
 - Every vault item of type **SSH Key** with a public key becomes an identity
   returned by `ssh-add -l` / `SSH2_AGENTC_REQUEST_IDENTITIES`.
 - Signing (`SSH2_AGENTC_SIGN_REQUEST`) decrypts the matching private key
@@ -21,7 +21,7 @@ separate `ssh-agent`, `ssh-add`, or on-disk private key files needed.
   written to disk.
 - **Listing while locked**: after the vault has been unlocked once in this
   agent process, `ssh-add -l` still returns the same public keys. Each
-  comment is the entry name plus `[cosmic-bwarden:locked]`. A process that
+  comment is the entry name plus `[cosmarden:locked]`. A process that
   has never been unlocked, or that has been logged out, still reports no
   identities.
 - **Signing while locked**: the agent does not sign with vault private-key
@@ -35,7 +35,7 @@ separate `ssh-agent`, `ssh-add`, or on-disk private key files needed.
 On startup the agent creates its runtime directory with mode `0700` and the
 `ssh-agent-socket` file with mode `0600` — the same model a real `ssh-agent`
 uses, so only your user (and root) can connect. Unlike the main IPC socket
-(`socket`, used by cosmic-bwarden's own UI/CLI), the ssh-agent socket does
+(`socket`, used by cosmarden's own UI/CLI), the ssh-agent socket does
 *not* enforce a peer-UID check: `SSH_AUTH_SOCK` is conventionally shared with
 `sudo`-elevated processes and containers/sandboxes that bind-mount it, and a
 strict UID match would break those workflows. Filesystem permissions are the
@@ -61,7 +61,7 @@ Add a key via the CLI (the private key is read from stdin/prompt if
 `private_key=` is omitted):
 
 ```sh
-cosmic-bwarden-cli sshkey add "My Work Key" \
+cosmarden-cli sshkey add "My Work Key" \
   private_key="$(cat ~/.ssh/id_ed25519)" \
   public_key="$(cat ~/.ssh/id_ed25519.pub)"
 ```
@@ -76,13 +76,13 @@ source of truth.
 With the agent running and the vault **unlocked**:
 
 ```sh
-export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/cosmic-bwarden/ssh-agent-socket"
+export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/cosmarden/ssh-agent-socket"
 ```
 
 Add this to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) so every new
 shell picks it up. If another `ssh-agent` (e.g. GNOME Keyring, a manually
 started `ssh-agent`) already owns `SSH_AUTH_SOCK`, this will override it for
-that shell — cosmic-bwarden does not chain to other agents.
+that shell — cosmarden does not chain to other agents.
 
 ## 3. Verifying it works
 
@@ -94,7 +94,7 @@ ssh-add -l
 
 You should see one line per SSH-key vault entry, with the comment set to the
 entry's name. After a lock in the same agent process the same keys are still
-listed, with `[cosmic-bwarden:locked]` on each comment; `The agent has no
+listed, with `[cosmarden:locked]` on each comment; `The agent has no
 identities.` means this process has not unlocked (or has logged out), not
 that the socket is broken.
 
@@ -109,7 +109,7 @@ ssh -o IdentitiesOnly=no user@host
 
 ## 4. Lock / unlock and login / logout behavior
 
-- **Lock**: public keys stay listed (comments gain `[cosmic-bwarden:locked]`);
+- **Lock**: public keys stay listed (comments gain `[cosmarden:locked]`);
   in-flight `sign` requests wait for unlock in this process (90s bound)
   rather than failing immediately. Unlocking restores signing of the same
   keys without any re-import.
@@ -129,11 +129,11 @@ ssh -o IdentitiesOnly=no user@host
 
 - **`ssh-add -l` says "no identities" but the vault has an SSH key entry**:
   this agent process has not unlocked since start (or you logged out).
-  Unlock (`cosmic-bwarden-cli unlocked` / the applet), then list again. If
+  Unlock (`cosmarden-cli unlocked` / the applet), then list again. If
   it's unlocked and the key still doesn't show up, check
-  `cosmic-bwarden-cli get "My Work Key"` returns a populated `public_key` —
+  `cosmarden-cli get "My Work Key"` returns a populated `public_key` —
   if it doesn't, the entry itself is missing key data (re-add it).
-- **`ssh-add -l` shows `[cosmic-bwarden:locked]`**: the vault is locked in
+- **`ssh-add -l` shows `[cosmarden:locked]`**: the vault is locked in
   this process; unlock the applet or app and retry the SSH/git command
   (a sign already in flight will complete on unlock).
 - **`sign` fails with "no matching key found"**: the public key offered by
@@ -149,13 +149,13 @@ ssh -o IdentitiesOnly=no user@host
 
 ## End-to-end test coverage
 
-`crates/cosmic-bwarden-tests/src/vault/ssh_agent.rs` and
+`crates/cosmarden-tests/src/vault/ssh_agent.rs` and
 `vault/ssh_agent_lifecycle.rs` exercise this entire flow against a real
 `sshd` container using real `ssh`/`ssh-add` commands (Ed25519 + RSA, plus
 lock/unlock and logout/login cycles). Run with:
 
 ```sh
-cargo test -p cosmic-bwarden-tests vault::ssh_agent -- --test-threads=1
+cargo test -p cosmarden-tests vault::ssh_agent -- --test-threads=1
 ```
 
 (requires Docker or Podman).

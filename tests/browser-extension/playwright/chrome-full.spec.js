@@ -6,9 +6,9 @@ import { execSync } from 'child_process';
 
 const EXTENSION_PATH = path.resolve(__dirname, '../../../browser-extension');
 const PROJECT_ROOT = path.resolve(__dirname, '../../..');
-const AGENT_BIN = path.join(PROJECT_ROOT, 'target/debug/cosmic-bwarden-agent');
-const CLI_BIN = path.join(PROJECT_ROOT, 'target/debug/cosmic-bwarden-cli');
-const HOST_NAME = 'com.enikeev.cosmic_bwarden';
+const AGENT_BIN = path.join(PROJECT_ROOT, 'target/debug/cosmarden-agent');
+const CLI_BIN = path.join(PROJECT_ROOT, 'target/debug/cosmarden');
+const HOST_NAME = 'com.enikeev.cosmarden';
 const VW_URL = process.env.VW_URL || 'http://localhost:8080';
 const PASSWORD = process.env.VW_PASSWORD || 'password123';
 const EMAIL = process.env.VW_EMAIL || 'test-chrome@example.com';
@@ -52,9 +52,9 @@ function pinEntry(name) {
 }
 
 function agentSocketPath() {
-  const profile = process.env.COSMIC_BWARDEN_PROFILE
-    ? `cosmic-bwarden-${process.env.COSMIC_BWARDEN_PROFILE}`
-    : 'cosmic-bwarden';
+  const profile = process.env.COSMARDEN_PROFILE
+    ? `cosmarden-${process.env.COSMARDEN_PROFILE}`
+    : 'cosmarden';
   const runtimeDir = process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}`;
   return path.join(runtimeDir, profile, 'socket');
 }
@@ -87,7 +87,7 @@ function registerNativeHost(extensionId, userDataDir) {
 
   for (const nmDir of nmDirs) {
     fs.mkdirSync(nmDir, { recursive: true });
-    const wrapperPath = path.join(nmDir, 'cosmic-bwarden-browser-host.sh');
+    const wrapperPath = path.join(nmDir, 'cosmarden-browser-host.sh');
     writeHostFile(wrapperPath, [
       '#!/bin/bash',
       `echo "$(date) [$$] nmDir=${nmDir} native host started, args: $*" >> /tmp/native-host-debug.log`,
@@ -97,7 +97,7 @@ function registerNativeHost(extensionId, userDataDir) {
     ].join('\n'), { mode: 0o755 });
     writeHostFile(path.join(nmDir, `${HOST_NAME}.json`), JSON.stringify({
       name: HOST_NAME,
-      description: 'COSMIC BWarden Chrome Test Host',
+      description: 'Cosmarden Chrome Test Host',
       path: wrapperPath,
       type: 'stdio',
       allowed_origins: [`chrome-extension://${extensionId}/`],

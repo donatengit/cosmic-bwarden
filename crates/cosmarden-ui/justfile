@@ -1,0 +1,13 @@
+prefix := "/usr"
+bin_dir := prefix + "/bin"
+res_dir := prefix + "/share"
+
+build:
+    cargo build --release
+
+install: build
+    install -Dm755 ../../target/release/cosmarden-ui {{bin_dir}}/cosmarden-ui
+    install -Dm644 resources/com.enikeev.cosmarden.desktop {{res_dir}}/applications/com.enikeev.cosmarden.desktop
+
+check:
+    cargo check

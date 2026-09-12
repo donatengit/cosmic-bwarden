@@ -91,7 +91,7 @@ export async function loadFirefoxAddon(port, addonPath) {
         // internal UUID from manifestURL.
         const msg = parseFrames(buffer);
         const addon = (msg && msg.addons || []).find(
-          (a) => a && a.id === 'cosmic-bwarden@enikeev.com'
+          (a) => a && a.id === 'cosmarden@enikeev.com'
         );
         const addonId = addon && addon.manifestURL ? addon.manifestURL.split('/')[2] : null;
         if (!addonId) {
@@ -139,11 +139,11 @@ export async function loadFirefoxAddon(port, addonPath) {
 }
 
 /**
- * Runs a COSMIC BWarden CLI command and returns the output.
+ * Runs a Cosmarden CLI command and returns the output.
  */
 export function runCli(args, env = {}) {
   const projectRoot = path.resolve(__dirname, '../../..');
-  const cliPath = path.join(projectRoot, 'target/debug/cosmic-bwarden-cli');
+  const cliPath = path.join(projectRoot, 'target/debug/cosmarden');
   
   // Intentionally inherits the XDG environment rather than redirecting it:
   // this CLI must resolve the *same* profile dirs as the agent that run-e2e.sh
@@ -153,7 +153,7 @@ export function runCli(args, env = {}) {
   // (cleanup_profile) — see docs/test_cleanup_plan.md.
   const defaultEnv = {
     ...process.env,
-    COSMIC_BWARDEN_PROFILE: 'test-extension-e2e',
+    COSMARDEN_PROFILE: 'test-extension-e2e',
     ...env
   };
 
@@ -172,7 +172,7 @@ export function runCli(args, env = {}) {
 export async function getExtensionId(page) {
   await page.goto('about:debugging#/runtime/this-firefox');
   // This is tricky as about:debugging is a system page.
-  // Alternatively, we can use the manifest ID "cosmic-bwarden@enikeev.com"
+  // Alternatively, we can use the manifest ID "cosmarden@enikeev.com"
   // to find the internal UUID if we need to open the popup URL directly.
-  return "cosmic-bwarden@enikeev.com";
+  return "cosmarden@enikeev.com";
 }

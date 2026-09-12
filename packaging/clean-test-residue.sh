@@ -1,5 +1,5 @@
 #!/bin/bash
-# Remove leftover `cosmic-bwarden-test-*` profile directories.
+# Remove leftover `cosmarden-test-*` profile directories.
 #
 # A correctly-behaving suite leaves none of these: each test redirects its XDG
 # dirs into a tempfile::TempDir, and each browser-extension script removes its
@@ -9,7 +9,7 @@
 # leaves anything behind, fix the test, do not reach for this.
 #
 # SAFETY. Every path removed must satisfy all of:
-#   * basename starts with `cosmic-bwarden-test-`  (so the live `cosmic-bwarden`
+#   * basename starts with `cosmarden-test-`  (so the live `cosmarden`
 #     profile can never match — it has no `-test-` suffix)
 #   * is a real directory, not a symlink (rm -rf through a symlink would delete
 #     the target)
@@ -49,7 +49,7 @@ for root in "${roots[@]}"; do
         name=$(basename "$path")
 
         case "$name" in
-            cosmic-bwarden-test-*) ;;
+            cosmarden-test-*) ;;
             *)
                 echo "skip (not a test profile): $path" >&2
                 skipped=$((skipped + 1)); continue ;;
@@ -72,7 +72,7 @@ for root in "${roots[@]}"; do
         else
             echo "would remove ($size files): $path"
         fi
-    done < <(find "$root" -maxdepth 1 -name 'cosmic-bwarden-*' -print0 2>/dev/null)
+    done < <(find "$root" -maxdepth 1 -name 'cosmarden-*' -print0 2>/dev/null)
 done
 
 echo
@@ -85,7 +85,7 @@ fi
 
 # Report, never touch, the live profile: it must still be there afterwards.
 for root in "${roots[@]}"; do
-    if [ -e "$root/cosmic-bwarden" ]; then
-        echo "live profile intact: $root/cosmic-bwarden"
+    if [ -e "$root/cosmarden" ]; then
+        echo "live profile intact: $root/cosmarden"
     fi
 done

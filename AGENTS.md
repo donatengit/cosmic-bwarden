@@ -1,4 +1,4 @@
-# cosmic-bwarden: Agent Guidelines
+# cosmarden: Agent Guidelines
 
 Instructions and hard rules only. No explanations, no design notes, no
 inventories — those live in the guides below.
@@ -56,22 +56,19 @@ Keep each layer in its own lane:
 
 | Layer | Canonical form | Where |
 |---|---|---|
-| Display name (user-visible) | `COSMIC BWarden` | `.desktop` `Name=`, applet `.ron` `name:`, AppStream `<name>`, `app-title`/`welcome-title` in the FTL, systemd `Description=`, extension `manifest.json` `name`, prose in README/docs |
-| Project / binary / package | `cosmic-bwarden` | repo, crate names, `cosmic-bwarden-{agent,cli,ui,core,tests}`, deb/AUR package |
-| App ID | `com.enikeev.cosmic_bwarden` | `APP_ID`, `.desktop`/`.ron`/metainfo filenames, D-Bus path, `StartupWMClass`, native-messaging host name |
-| Code identifiers | `CosmicBWarden*` | `CosmicBWardenApp`, `CosmicBWardenConfig`, `CosmicBWardenFlags` — Rust types, never rename to match the display name |
+| Display name (user-visible) | `Cosmarden` | `.desktop` `Name=`, applet `.ron` `name:`, AppStream `<name>`, `app-title`/`welcome-title` in the FTL, systemd `Description=`, extension `manifest.json` `name`, prose in README/docs |
+| Project / binary / package | `cosmarden` | repo, crate names, `cosmarden-{agent,cli,ui,core,tests}`, deb/AUR package |
+| App ID | `com.enikeev.cosmarden` | `APP_ID`, `.desktop`/`.ron`/metainfo filenames, D-Bus path, `StartupWMClass`, native-messaging host name |
+| Code identifiers | `Cosmarden*` | `CosmardenApp`, `CosmardenConfig` — Rust types, never rename to match the display name. `AppFlags` implements libcosmic `CosmicFlags`. |
 
-`com.system76.CosmicBWarden` appears only in the justfile's legacy-cleanup
-`rm -f` lines; it is a historical app ID, not a name — leave it byte-for-byte.
-
-The project URL is `cosmic_bwarden_core::HOMEPAGE` on the Rust side. The
+The project URL is `cosmarden_core::HOMEPAGE` on the Rust side. The
 non-Rust manifests (metainfo, systemd units, `manifest.json`, `package.json`,
 PKGBUILD) carry their own copy and must be updated together if the repo moves.
 
 ## Versioning
 
 - **Build version**: `YYYY.MM-N-<git_id>` generated in `core/build.rs`. Reused across crates via a 30-second `target/build_version.txt` cache.
-- **Protocol version**: Independent of the build version — `cosmic_bwarden_core::PROTOCOL_VERSION`, a small integer string bumped ONLY on breaking wire-protocol changes (adding a field to a postcard-encoded `Action`/`Response` variant counts). `Response::Version` always includes both `version` and `protocol_version` fields.
+- **Protocol version**: Independent of the build version — `cosmarden_core::PROTOCOL_VERSION`, a small integer string bumped ONLY on breaking wire-protocol changes (adding a field to a postcard-encoded `Action`/`Response` variant counts). `Response::Version` always includes both `version` and `protocol_version` fields.
 - **Compatibility check**: Pure function `check_protocol_compatibility()` in the CLI crate compares local version against agent's `protocol_version`. Unit-tested for both match and mismatch scenarios.
 - **Adding a version subcommand**: Always add `Commands::Version` to the CLI's enum, route it to the auth handler, and include the `check_protocol_compatibility()` call. Update `preprocess_args` if the new command name conflicts with type keywords.
 - **Breaking protocol changes**: Bump the `protocol_version` in `Response::Version` by updating `check_protocol_compatibility` expectations if the protocol surface changes incompatibly.
@@ -86,7 +83,7 @@ These must never regress. Treat violations as build-blocking bugs.
 - **Persistent IPC connections**: The agent keeps client connections alive across multiple requests (one `tokio::spawn` per connected socket, inner `loop` for subsequent requests). Subscribe connections are long-lived; all others reuse the same socket until the client disconnects.
 - **Sensitive memory**: Use memory-locked storage for all key material and plaintext secrets.
 - **Plaintext secrets cross IPC as `db::Secret`, never `String`** (review-blocking). `Secret` is `ZeroizeOnDrop`, so the plaintext is scrubbed when the response is dropped instead of lingering in freed heap. It is `#[serde(transparent)]`, so this costs nothing on the wire — `protocol::tests::secret_fields_are_wire_identical_to_plain_strings` pins that, and no version bump is needed to adopt it. Applies to `Response::{Password, Totp, GeneratedPassword}` and `GeneratorHistoryEntry::password`; propagate it through client state too (the UI's `OnDemandPayload` and secret-carrying `Message` variants) rather than unwrapping at the IPC boundary, which only moves the leak inward.
-  - **`Secret`'s `Display` prints `********`.** Converting a field from `String` to `Secret` silently changes any `println!("{x}")` from the value to asterisks — it compiles clean and the compiler says nothing. This shipped once: `cosmic-bwarden-cli generate` printed asterisks. Where a command's purpose *is* to emit the value (CLI stdout, clipboard), call `.expose()` explicitly and say why in a comment.
+  - **`Secret`'s `Display` prints `********`.** Converting a field from `String` to `Secret` silently changes any `println!("{x}")` from the value to asterisks — it compiles clean and the compiler says nothing. This shipped once: `cosmarden-cli generate` printed asterisks. Where a command's purpose *is* to emit the value (CLI stdout, clipboard), call `.expose()` explicitly and say why in a comment.
   - Legitimate conversion points are the clipboard and the `secure_input` widget — both plaintext by nature. Everything upstream of them stays wrapped.
   - `Secret` also wraps *ciphertext* in this codebase (`protected_key`, `protected_org_keys`). Those need no zeroization; "it's a `Secret`" does not by itself mean "sensitive in memory".
 - **No silent failures**: Any operation that can fail and affect data availability, integrity, or security must log at `warn` or `error` level. **Anything that can corrupt or lose data logs `error!` — no exceptions.** Specifically:
@@ -113,14 +110,14 @@ These must never regress. Treat violations as build-blocking bugs.
 ### Tests must never touch real user state (review-blocking)
 
 `dirs::config_file()`, `db_file()`, `device_id_file()` and friends fall back to
-the live user paths (`~/.config/cosmic-bwarden/`, `~/.cache/…`) whenever the
-`COSMIC_BWARDEN_*` overrides are unset, so a test that reaches a save path
+the live user paths (`~/.config/cosmarden/`, `~/.cache/…`) whenever the
+`COSMARDEN_*` overrides are unset, so a test that reaches a save path
 overwrites the developer's own account. Full rationale and the verification
 recipe: `docs/test_cleanup_plan.md`.
 
 - Any test that can reach `save_legacy()`, `Db::save()`, or a keyring/TPM write
   must redirect the path first. In the UI crate use
-  `app/tests/config_env.rs::ConfigFile`; elsewhere set the `COSMIC_BWARDEN_*`
+  `app/tests/config_env.rs::ConfigFile`; elsewhere set the `COSMARDEN_*`
   override explicitly.
 - Env overrides are process-global — serialize such tests behind the helper's
   lock rather than hoping the scheduler is kind.
@@ -129,12 +126,12 @@ recipe: `docs/test_cleanup_plan.md`.
   persist its whole in-memory struct.
 - **Tests must clean up their own state, and never inherit their environment.**
   Any test or script that spawns the agent or CLI must pass an **explicit**
-  `COSMIC_BWARDEN_PROFILE`, `HOME`, and **all four** `XDG_*` vars — never
+  `COSMARDEN_PROFILE`, `HOME`, and **all four** `XDG_*` vars — never
   inherit them. A partial set is not partial safety: `directories` falls back
   to the passwd entry when `$HOME` is unset, so a missing `XDG_DATA_HOME` still
   lands in the real `~/.local/share` even under `env_clear()`. Test profiles
   must be named `test-*`. Each test/script then removes the
-  `cosmic-bwarden-<profile>` dirs it created — config, cache, data, **and
+  `cosmarden-<profile>` dirs it created — config, cache, data, **and
   runtime** — and restores any real user file it overwrote (browser
   native-messaging manifests especially) in its own teardown path (Rust `Drop`,
   script `cleanup()` trap; `wait` for the agent first, or its shutdown writes
@@ -143,7 +140,7 @@ recipe: `docs/test_cleanup_plan.md`.
   manual sweep or a `clean-test-data` command.
   - **Never compute a deletion path from `dirs::`** (`cache_dir()`,
     `data_dir()`, …). They read process-global env, so an unset profile
-    resolves to the live `cosmic-bwarden` profile and the "cleanup" erases the
+    resolves to the live `cosmarden` profile and the "cleanup" erases the
     developer's real vault cache. Derive removal paths only from the test's own
     recorded temp roots, and assert the target is under them.
   - Shell teardown goes through `cleanup_profile()` in
@@ -154,7 +151,7 @@ recipe: `docs/test_cleanup_plan.md`.
     in `~/.cache/podman/storage/volumes` forever.
   - **Every `kill()` needs a matching `wait()`.** An unreaped child stays a
     zombie for the rest of the test binary's life.
-  - `just clean-test-residue` lists leftover `cosmic-bwarden-test-*` dirs and
+  - `just clean-test-residue` lists leftover `cosmarden-test-*` dirs and
     `clean-test-residue-apply` removes them. This is a recovery tool for a
     SIGKILLed run, not part of the loop: a clean run leaves nothing, and if one
     does not, fix the test.
@@ -177,7 +174,7 @@ Keep both layers; full explanation: `docs/testing.md`.
 - **Layer 2, containers**: rootless podman puts each container in a scope that
   is a sibling of the test scope, so it inherits nothing from layer 1.
   Containers are capped separately at 2 CPUs / 1024 MB by fixed constants in
-  `crates/cosmic-bwarden-tests/src/container_limits.rs`,
+  `crates/cosmarden-tests/src/container_limits.rs`,
   `tools/run_vaultwarden.sh`, and `tests/browser-extension/run-chrome-e2e.sh` —
   keep the three in step.
 - **Rust suites**: call `container_limits::apply(container.id(), "<label>")`
@@ -236,26 +233,26 @@ the last time it happened.
 
 When a crate's main logic grows, decompose using these established patterns:
 
-- **`cosmic-bwarden-agent`**: Split into `handler.rs` (request routing), `server.rs` (API interaction), and `logind.rs` (DBus events).
-- **`cosmic-bwarden-core`**:
+- **`cosmarden-agent`**: Split into `handler.rs` (request routing), `server.rs` (API interaction), and `logind.rs` (DBus events).
+- **`cosmarden-core`**:
     - `api/`: Split into `models.rs` (DTOs) and `client.rs` (Network logic).
     - `db/`: Split into `models.rs` (Data structs) and `persistence.rs` (File I/O).
-- **`cosmic-bwarden-ui`**: Split into `app/state.rs` (State), `app/update.rs` (MVU logic), and `app/tasks.rs` (Async tasks).
+- **`cosmarden-ui`**: Split into `app/state.rs` (State), `app/update.rs` (MVU logic), and `app/tasks.rs` (Async tasks).
 
 - **When splitting**: prefer extracting into a sibling module (`mod foo;` in the parent) rather than a new crate unless the boundary is a genuine abstraction layer.
 - **Before adding to a file**: check its current line count. If it's above 200, consider whether the new code belongs in an existing or new sibling module instead.
 
 ## Internationalization (UI)
 
-**Every user-facing string in `cosmic-bwarden-ui` must go through the `fl!` macro** — never a bare string literal in a widget (`text::body`, `button::*`, `secure_input`/`text_input` placeholders, `.title`/`.body`, dialog captions, dropdown entries). This is a review-blocking rule for the UI crate.
+**Every user-facing string in `cosmarden-ui` must go through the `fl!` macro** — never a bare string literal in a widget (`text::body`, `button::*`, `secure_input`/`text_input` placeholders, `.title`/`.body`, dialog captions, dropdown entries). This is a review-blocking rule for the UI crate.
 
-- **Where strings live**: `crates/cosmic-bwarden-ui/i18n/en/cosmic_bwarden_ui.ftl` (the fallback locale). Add a kebab-case key there, then reference it with `fl!("my-key")`.
+- **Where strings live**: `crates/cosmarden-ui/i18n/en/cosmarden_ui.ftl` (the fallback locale). Add a kebab-case key there, then reference it with `fl!("my-key")`.
 - **Interpolation**: use Fluent placeables, e.g. `pin-min-chars = PIN (min { $count } characters)` called as `fl!("pin-min-chars", count = value)`. Do **not** build display strings with `format!`. Bind ambiguous numeric expressions (e.g. `a / b`) to a typed local first — `FluentValue` conversion can't infer the type inline. Add a `# comment` above the key documenting each `$arg`.
 - **Logic keys vs. display labels**: strings used as match/lookup keys (e.g. `EditFieldChanged`/`revealed_fields` field names in `view/vault/detail.rs`) must stay stable literals. Localize only their *display* via a mapping helper (`field_label`) — never the key itself.
 - **Not localized**: symbols/glyphs (`—`, `…`), the version string, and runtime text already produced by the agent (diagnostics, agent error messages). Compact unit suffixes (`2h`, `90m`) are left numeric by design; only the words around them are keyed.
 - **Bidi isolation** is disabled in the loader (`set_use_isolating(false)`), so interpolated values render/compare without U+2068/U+2069 marks.
-- **PIN length**: the single source is `cosmic_bwarden_core::MIN_PIN_LEN`; the UI (`crate::MIN_PIN_LEN`) and agent (`tpm_pin::MIN_PIN_LEN`) aliases and the CLI prompt all derive from it. Captions/validation use the constant, never a hardcoded number — a hardcoded "min 4" caption survived one bump already.
-- `i18n_embed_fl::fl!` verifies message IDs against the fallback `.ftl` **at compile time** — a typo'd key fails the build, so `cargo check -p cosmic-bwarden-ui` is the guard.
+- **PIN length**: the single source is `cosmarden_core::MIN_PIN_LEN`; the UI (`crate::MIN_PIN_LEN`) and agent (`tpm_pin::MIN_PIN_LEN`) aliases and the CLI prompt all derive from it. Captions/validation use the constant, never a hardcoded number — a hardcoded "min 4" caption survived one bump already.
+- `i18n_embed_fl::fl!` verifies message IDs against the fallback `.ftl` **at compile time** — a typo'd key fails the build, so `cargo check -p cosmarden-ui` is the guard.
 
 ## Tool Discipline
 
@@ -271,7 +268,7 @@ Seals the vault symmetric keys in a TPM2 object protected by a user PIN and
 bound to PCR{0,7} (firmware + Secure Boot state). Design, blob format, blob
 paths, and the code layout: `docs/tpm.md`.
 
-- **Check it with the feature on**: `cargo check -p cosmic-bwarden-agent --features tpm`. TPM code is invisible to a plain `cargo check` and to `cargo test`.
+- **Check it with the feature on**: `cargo check -p cosmarden-agent --features tpm`. TPM code is invisible to a plain `cargo check` and to `cargo test`.
 - **Seal the vault keys, never `identity.keys`.** `handle_unlock_with_pin` uses
   the unsealed bytes directly as `state.keys`, so sealing the KDF keys would
   decrypt nothing. This shipped once as a mismatch between the two setup paths.
@@ -312,12 +309,12 @@ threat model: `docs/password_generator_plan.md`.
   never `rand::rng()`/`ThreadRng`, and never the seeded `StdRng` used elsewhere
   in this codebase for deterministic fuzz tests.
 - **Settings are device-global** and must not be folded into
-  `CosmicBWardenConfig`, which is account-shaped and unavailable pre-login.
+  `CosmardenConfig`, which is account-shaped and unavailable pre-login.
 - **History is encrypted at rest and pruned to 7 days on every read and write**
   — no background sweep. Persist it atomically (tmp+rename) with mode `0600`,
   the same pattern as `db::persistence::Db::save`.
 - Every surface shares one settings set and one history: desktop pane, applet
-  quick-gen (works while locked), `cosmic-bwarden-cli generate`, and the browser
+  quick-gen (works while locked), `cosmarden-cli generate`, and the browser
   extension. Do not fork the storage per surface.
 
 ### Browser Extension
@@ -354,7 +351,7 @@ protocol translation, and the script-load-order gotcha:
 
 ```sh
 cargo check -p <crate>
-cargo check -p cosmic-bwarden-agent --features tpm    # tpm code is invisible otherwise
+cargo check -p cosmarden-agent --features tpm    # tpm code is invisible otherwise
 just test                                            # whole Rust suite
 just test-tpm-smoke                                  # TPM suite; auto-skips without swtpm
 just test-extension-unit

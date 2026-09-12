@@ -1,0 +1,6 @@
+(
+    name: "Cosmarden",
+    description: "Bitwarden-compatible password manager for COSMIC DE",
+    identifier: "com.enikeev.cosmarden",
+    icon: "com.enikeev.cosmarden-symbolic",
+)

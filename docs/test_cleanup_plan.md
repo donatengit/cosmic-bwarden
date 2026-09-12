@@ -21,8 +21,8 @@ cited by symbol instead. Line numbers for files the change did not touch
 
 Two distinct classes of residue, with very different severity:
 
-1. **Empty profile directories** named `cosmic-bwarden-test-<uuid>` and
-   `cosmic-bwarden-test-<fixed-name>` under `~/.cache`, `~/.local/share`,
+1. **Empty profile directories** named `cosmarden-test-<uuid>` and
+   `cosmarden-test-<fixed-name>` under `~/.cache`, `~/.local/share`,
    `~/.config`, and `/run/user/$UID`. On a developer machine with a long
    history these number in the dozens. Every UUID-named one inspected
    contained **zero files** — they are cosmetic clutter, not data.
@@ -36,25 +36,25 @@ Two distinct classes of residue, with very different severity:
 
 ### Which code creates which directory
 
-`cosmic_bwarden_core::dirs::make_all()` (`crates/cosmic-bwarden-core/src/dirs.rs:17-23`)
+`cosmarden_core::dirs::make_all()` (`crates/cosmarden-core/src/dirs.rs:17-23`)
 `create_dir_all`s three dirs at 0700 for the current profile — **cache,
 runtime, and data**. It does **not** create the config dir:
 
 | Dir | Path | Created by |
 |---|---|---|
-| cache | `$XDG_CACHE_HOME/cosmic-bwarden-<profile>` | `dirs.rs:18` (`make_all`), `db/persistence.rs:60,85` (`Db::save`) |
-| runtime | `$XDG_RUNTIME_DIR/cosmic-bwarden-<profile>`, else `/tmp/cosmic-bwarden-<profile>-<uid>` (`dirs.rs:141-155`) | `dirs.rs:19` (`make_all`), `lib.rs:179-190` (socket parent) |
-| data | `$XDG_DATA_HOME/cosmic-bwarden-<profile>` | `dirs.rs:20` (`make_all`), `generator_settings.rs:29`, `handler/generator/storage.rs:60,94`, `session_store.rs:128` |
-| config | `$XDG_CONFIG_HOME/cosmic-bwarden-<profile>` | **`config.rs:192`** on config save — never by `make_all` |
+| cache | `$XDG_CACHE_HOME/cosmarden-<profile>` | `dirs.rs:18` (`make_all`), `db/persistence.rs:60,85` (`Db::save`) |
+| runtime | `$XDG_RUNTIME_DIR/cosmarden-<profile>`, else `/tmp/cosmarden-<profile>-<uid>` (`dirs.rs:141-155`) | `dirs.rs:19` (`make_all`), `lib.rs:179-190` (socket parent) |
+| data | `$XDG_DATA_HOME/cosmarden-<profile>` | `dirs.rs:20` (`make_all`), `generator_settings.rs:29`, `handler/generator/storage.rs:60,94`, `session_store.rs:128` |
+| config | `$XDG_CONFIG_HOME/cosmarden-<profile>` | **`config.rs:192`** on config save — never by `make_all` |
 
-The agent calls `make_all()` at `crates/cosmic-bwarden-agent/src/lib.rs:171`.
+The agent calls `make_all()` at `crates/cosmarden-agent/src/lib.rs:171`.
 Note that `browser-host` mode **returns at `lib.rs:154-165`, before that call**,
 and `agent/src/browser_host.rs` contains no `dirs::` use at all — so a
 browser-host spawn creates no profile dirs and is not a leak source.
 
 The profile name comes from `dirs::profile()` (`dirs.rs:157-162`), which maps
-`COSMIC_BWARDEN_PROFILE=<x>` to `cosmic-bwarden-<x>` and an unset/empty value
-to the **live** `cosmic-bwarden` profile.
+`COSMARDEN_PROFILE=<x>` to `cosmarden-<x>` and an unset/empty value
+to the **live** `cosmarden` profile.
 
 ### Why dirs land in the real home
 
@@ -69,22 +69,22 @@ to `$HOME/.cache`, `$HOME/.local/share`, `$HOME/.config`.
 `paths.rs`'s `test_config_socket_override` and `test_override_priority` spawned
 the agent with **no environment set at all** — no profile, no XDG. `Command` inherits the
 parent's current environment, and 59 sibling tests in the same crate call
-`std::env::set_var("COSMIC_BWARDEN_PROFILE", &env.profile)` process-globally and
+`std::env::set_var("COSMARDEN_PROFILE", &env.profile)` process-globally and
 **never restore it** (0 matching `remove_var` calls). The tests crate is a
 single lib-test binary, i.e. one process.
 
 So the profile those two spawns inherit is *whatever the last test to run set*:
 
 - If a UUID-profile test ran first → the agent creates
-  `~/.cache/`, `~/.local/share/`, and `/run/user/$UID/cosmic-bwarden-test-<uuid>`.
+  `~/.cache/`, `~/.local/share/`, and `/run/user/$UID/cosmarden-test-<uuid>`.
   Reproduced directly: spawning the debug agent with an inherited UUID profile
   and no XDG created exactly those three dirs, all empty.
 - If `paths.rs` runs before any of them → the var is unset and the agent runs
-  against the **live `cosmic-bwarden` profile**.
+  against the **live `cosmarden` profile**.
 
 This is why the leaked UUID dirs are cache+data+runtime but never config: both
 spawns pass `--config <tempdir>/config.json`, and `lib.rs:117-118` turns that
-into a `COSMIC_BWARDEN_CONFIG` override, so `config_file()` never resolves under
+into a `COSMARDEN_CONFIG` override, so `config_file()` never resolves under
 `config_dir()`.
 
 **Consequence for the fix:** the bug is environment *inheritance*, not merely
@@ -148,7 +148,7 @@ then on the `Command`:
 .env_clear()                      // or set every var below explicitly
 .env("PATH", std::env::var("PATH").unwrap_or_default())
 .env("HOME", base)                // see the warning below — required
-.env("COSMIC_BWARDEN_PROFILE", format!("test-{}", uuid::Uuid::new_v4()))
+.env("COSMARDEN_PROFILE", format!("test-{}", uuid::Uuid::new_v4()))
 .env("XDG_CONFIG_HOME",  base.join("config"))
 .env("XDG_CACHE_HOME",   base.join("cache"))
 .env("XDG_DATA_HOME",    base.join("data"))
@@ -163,7 +163,7 @@ no leftover, no manual command.
 > **`.env_clear()` alone does not protect you — all four XDG vars are
 > mandatory, and so is `HOME`.** Verified by experiment: an agent spawned with
 > `env -i` (no `HOME` at all) and only three of the four XDG vars set still
-> created `~/.local/share/cosmic-bwarden-<profile>` in the **real** home. The
+> created `~/.local/share/cosmarden-<profile>` in the **real** home. The
 > `directories` crate resolves the home directory from the passwd database
 > (`getpwuid`) when `$HOME` is unset, so clearing the environment removes the
 > protection you might expect and silently falls back to the developer's
@@ -172,10 +172,10 @@ no leftover, no manual command.
 > the same spawn leaked nothing.
 
 This also fixes the real-user-state violation: `paths.rs` can currently run the
-agent against the live `cosmic-bwarden` profile.
+agent against the live `cosmarden` profile.
 
 **Also (done):** all 59 unrestored
-`std::env::set_var("COSMIC_BWARDEN_PROFILE", …)` calls are now
+`std::env::set_var("COSMARDEN_PROFILE", …)` calls are now
 `let _profile = state_guard::ProfileEnv::set(&env.profile);`, a scoped guard
 that restores the previous value on drop (the pattern at
 `agent/src/lib.rs:500-523`). They were the reason spawn inheritance was
@@ -190,8 +190,8 @@ These are not empty dirs; they change how the developer's real browser behaves
 after the suite exits.
 
 - **`tests/browser-extension/playwright/setup_native_host.sh`**
-  overwrites `~/.mozilla/native-messaging-hosts/cosmic-bwarden-browser-host.sh`
-  with a wrapper hardcoding `COSMIC_BWARDEN_PROFILE=test-extension-e2e`, and
+  overwrites `~/.mozilla/native-messaging-hosts/cosmarden-browser-host.sh`
+  with a wrapper hardcoding `COSMARDEN_PROFILE=test-extension-e2e`, and
   never restores it. After `just test-extension-e2e`, the developer's real
   Firefox extension talks to the test profile.
   **Action:** back the file up before overwriting and restore it in
@@ -230,11 +230,11 @@ cleanup_profile() {
     local profile="$1" uid
     uid=$(id -u)
     rm -rf -- \
-      "${XDG_CONFIG_HOME:-$HOME/.config}/cosmic-bwarden-$profile" \
-      "${XDG_CACHE_HOME:-$HOME/.cache}/cosmic-bwarden-$profile" \
-      "${XDG_DATA_HOME:-$HOME/.local/share}/cosmic-bwarden-$profile" \
-      "${XDG_RUNTIME_DIR:-/run/user/$uid}/cosmic-bwarden-$profile" \
-      "${TMPDIR:-/tmp}/cosmic-bwarden-$profile-$uid"
+      "${XDG_CONFIG_HOME:-$HOME/.config}/cosmarden-$profile" \
+      "${XDG_CACHE_HOME:-$HOME/.cache}/cosmarden-$profile" \
+      "${XDG_DATA_HOME:-$HOME/.local/share}/cosmarden-$profile" \
+      "${XDG_RUNTIME_DIR:-/run/user/$uid}/cosmarden-$profile" \
+      "${TMPDIR:-/tmp}/cosmarden-$profile-$uid"
 }
 ```
 
@@ -258,7 +258,7 @@ Per script:
 not under `playwright/`, since `minimal_verify.sh` is not a Playwright script),
 so the removal list stays in sync. It refuses an empty name, a non-`test-*`
 profile, and any name containing a path separator or `..`, and re-checks each
-target's basename against the live `cosmic-bwarden` dir before removing.
+target's basename against the live `cosmarden` dir before removing.
 `backup_file()` / `restore_file()` in the same file handle the native-messaging
 manifests, recording *absence* too so a file the test creates is removed rather
 than left behind.
@@ -272,9 +272,9 @@ standalone, give it the same explicit XDG env.
 The original draft of this plan proposed recording
 `config_dir`/`cache_dir`/`data_dir` in `TestEnv` and `remove_dir_all`-ing them
 in `Drop`. **Do not do that.** Those functions read process-global env
-(`dirs.rs:126-162`), and — per the Root cause section — `COSMIC_BWARDEN_PROFILE`
+(`dirs.rs:126-162`), and — per the Root cause section — `COSMARDEN_PROFILE`
 in the test process is whatever the last sibling test left, or unset. Unset
-resolves to the live `cosmic-bwarden` profile, so `Drop` would
+resolves to the live `cosmarden` profile, so `Drop` would
 `remove_dir_all` the developer's real vault cache. That is the same class of
 incident as the 2026-08-10 `test_settings_flow` config wipe recorded in
 AGENTS.md, reintroduced inside the teardown meant to prevent it. (It also does
@@ -285,7 +285,7 @@ Everything `TestEnv` creates already lives under `_temp_dir`, which drops. So
 the safety net should **detect** a non-redirected spawn rather than delete
 after one:
 
-- Add a helper that snapshots the set of `cosmic-bwarden*` entries under the
+- Add a helper that snapshots the set of `cosmarden*` entries under the
   four real roots (`${XDG_CONFIG_HOME:-$HOME/.config}` etc., plus
   `${XDG_RUNTIME_DIR:-/run/user/$uid}` and `${TMPDIR:-/tmp}`).
 - Take a snapshot at the start of the test binary and compare at the end;
@@ -307,11 +307,11 @@ after one:
   or into `target/`.
 - `/tmp` logs written by the scripts and specs and never removed:
   `/tmp/native-host-debug.log` (`chrome-full.spec.js`),
-  `/tmp/cosmic-bwarden-browser-host.log` (`setup_native_host.sh`,
+  `/tmp/cosmarden-browser-host.log` (`setup_native_host.sh`,
   `minimal_verify.sh`), `/tmp/agent_test.log`, `/tmp/agent_chrome_test.log`,
   `/tmp/vaultwarden_test.log`, `/tmp/vaultwarden_chrome_test.log`.
   Either route them into the run's temp dir or remove them in `cleanup()`.
-- `~/.cache/cosmic-bwarden-probe` exists on at least one developer machine and
+- `~/.cache/cosmarden-probe` exists on at least one developer machine and
   matches **no profile anywhere in the tree** — an orphan from a removed test.
   Note it here so the one-time sweep below is not scoped to `test-*` only.
 - **Removing a container must also remove its anonymous volumes** — pass
@@ -331,15 +331,15 @@ normative docs so every current *and future* test follows it.
   rule, cross-referencing the existing Golden Rule on generated artifacts:
 
   > **Tests must clean up their own state.** Any test or test script that
-  > spawns the agent or CLI must pass an **explicit** `COSMIC_BWARDEN_PROFILE`,
+  > spawns the agent or CLI must pass an **explicit** `COSMARDEN_PROFILE`,
   > `HOME`, and **all four** `XDG_*` vars — never inherit them, since
-  > `COSMIC_BWARDEN_PROFILE` is process-global and an unset value resolves to
+  > `COSMARDEN_PROFILE` is process-global and an unset value resolves to
   > the *live* profile. Setting only some of them is not partial safety:
   > `directories` falls back to the passwd entry when `$HOME` is unset, so a
   > missing `XDG_DATA_HOME` lands in the developer's real
   > `~/.local/share` even under `env_clear()`. It must then remove, in its own teardown path (Rust
   > `Drop`/async guard, script `cleanup()` trap), every
-  > `cosmic-bwarden-<profile>` directory it caused to be created under
+  > `cosmarden-<profile>` directory it caused to be created under
   > `$XDG_CONFIG_HOME`, `$XDG_CACHE_HOME`, `$XDG_DATA_HOME`,
   > `$XDG_RUNTIME_DIR`, and `$TMPDIR` — and restore any real user file it
   > overwrote (native-messaging manifests especially). Test profiles must be
@@ -357,7 +357,7 @@ normative docs so every current *and future* test follows it.
 - **`docs/testing.md`** / **`docs/configurable_paths.md`** — add a "Cleanup
   after tests" subsection naming the teardown path each suite must use
   (`TestEnv`'s `_temp_dir`, script `cleanup()` trap) and how to verify.
-  `docs/testing.md:124` documents `export COSMIC_BWARDEN_PROFILE=manual-test`
+  `docs/testing.md:124` documents `export COSMARDEN_PROFILE=manual-test`
   for manual runs with no cleanup note — add one there, pointing at
   `cleanup_profile()`.
 
@@ -371,7 +371,7 @@ normative docs so every current *and future* test follows it.
   lives with each test/script teardown so it happens automatically.
 - Do **not** add cleanup to the agent's production `make_all()` or any
   production code path — the dirs are created by test runs, not by the agent.
-- Do **not** remove the live `cosmic-bwarden` profile dirs, and do **not**
+- Do **not** remove the live `cosmarden` profile dirs, and do **not**
   compute any removal path from process-global env (see Fix 4).
 
 ## Verification
@@ -379,7 +379,7 @@ normative docs so every current *and future* test follows it.
 A glob `ls` is too weak — a no-match glob returns nonzero and silently misses
 non-`test-*` profiles and the runtime dir. Use a set diff over all roots.
 
-Note the `find` rather than a quoted glob: `ls -d "${roots[@]/%//cosmic-bwarden*}"`
+Note the `find` rather than a quoted glob: `ls -d "${roots[@]/%//cosmarden*}"`
 does **not** expand the `*` (quoted expansions are not globbed), so with
 `2>/dev/null` it reports "clean" unconditionally. The version below was run
 against a dirty machine and correctly returned 67 entries.
@@ -393,15 +393,15 @@ snapshot() {
   for r in "${XDG_CONFIG_HOME:-$HOME/.config}" "${XDG_CACHE_HOME:-$HOME/.cache}" \
            "${XDG_DATA_HOME:-$HOME/.local/share}" "${XDG_RUNTIME_DIR:-/run/user/$uid}" \
            "${TMPDIR:-/tmp}"; do
-    [ -d "$r" ] && find "$r" -maxdepth 1 -name "cosmic-bwarden*" 2>/dev/null
+    [ -d "$r" ] && find "$r" -maxdepth 1 -name "cosmarden*" 2>/dev/null
   done | sort
 }
 
-NM=~/.mozilla/native-messaging-hosts/cosmic-bwarden-browser-host.sh
+NM=~/.mozilla/native-messaging-hosts/cosmarden-browser-host.sh
 snapshot > /tmp/cbw-before.txt
 [ -f "$NM" ] && md5sum "$NM" > /tmp/cbw-nm-before.txt
 
-cargo test -p cosmic-bwarden-tests -- --test-threads=1
+cargo test -p cosmarden-tests -- --test-threads=1
 just test-extension-e2e
 just test-extension-e2e-chrome
 bash tests/browser-extension/minimal_verify.sh
@@ -410,7 +410,7 @@ bash tests/browser-extension/minimal_verify.sh
 snapshot > /tmp/cbw-after.txt; diff /tmp/cbw-before.txt /tmp/cbw-after.txt
 [ -f /tmp/cbw-nm-before.txt ] && md5sum -c /tmp/cbw-nm-before.txt
 find ~/.config/chromium ~/.config/google-chrome ~/.config/google-chrome-for-testing \
-     -maxdepth 2 -name 'cosmic-bwarden*' -o -name 'com.enikeev.cosmic_bwarden.json' 2>/dev/null
+     -maxdepth 2 -name 'cosmarden*' -o -name 'com.enikeev.cosmarden.json' 2>/dev/null
 ```
 
 Run the suites in that order and do **not** interleave a cleanup. Dropping the
@@ -419,18 +419,18 @@ inherited process state, so it must be exercised inside the full run, not in
 isolation where nothing has set the profile.
 
 The already-collected residue from past runs is a pre-existing one-time
-condition. A single `rm -rf` of the `cosmic-bwarden-test-*` dirs (plus the
-orphaned `cosmic-bwarden-probe` from Fix 5) clears it; that sweep is not part
+condition. A single `rm -rf` of the `cosmarden-test-*` dirs (plus the
+orphaned `cosmarden-probe` from Fix 5) clears it; that sweep is not part
 of the ongoing workflow, and the diff above is what keeps it from returning.
 
 ## Acceptance criteria
 
 - Every Rust spawn of the agent or CLI passes an explicit profile, `HOME`, and
-  all four XDG vars; none inherits `COSMIC_BWARDEN_PROFILE` from the test
+  all four XDG vars; none inherits `COSMARDEN_PROFILE` from the test
   process.
-- `paths.rs` never runs the agent against the live `cosmic-bwarden` profile,
+- `paths.rs` never runs the agent against the live `cosmarden` profile,
   under any test ordering.
-- Every test/script removes the `cosmic-bwarden-<profile>` dirs it created —
+- Every test/script removes the `cosmarden-<profile>` dirs it created —
   config, cache, data, **and runtime** — in its own teardown path.
 - The Firefox and Chrome native-messaging manifests are byte-identical before
   and after every suite run, or restored via `just register-browser-host`.
@@ -443,4 +443,4 @@ of the ongoing workflow, and the diff above is what keeps it from returning.
   their suites.
 - Running every suite in sequence with **no** cleanup command in between ends
   with an empty `diff` from the Verification block.
-- The live `cosmic-bwarden` profile dirs are never removed by any test/script.
+- The live `cosmarden` profile dirs are never removed by any test/script.

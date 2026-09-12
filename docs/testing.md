@@ -1,4 +1,4 @@
-# Testing cosmic-bwarden
+# Testing cosmarden
 
 Tests run in complexity order: fast isolated unit tests first (encryption,
 serialization, MVU state transitions), then the E2E suite against a real agent
@@ -95,7 +95,7 @@ These are fixed constants, not variables: reaching them from `just` would mean
 adding an environment variable, and the values are generous enough that no run
 has needed to change them. They live in three places, which must stay in step:
 
-- `crates/cosmic-bwarden-tests/src/container_limits.rs` (the Rust suite)
+- `crates/cosmarden-tests/src/container_limits.rs` (the Rust suite)
 - `tools/run_vaultwarden.sh` (`CONTAINER_CPUS` / `CONTAINER_MEM_MB`)
 - `tests/browser-extension/run-chrome-e2e.sh` (same names)
 
@@ -118,7 +118,7 @@ asserts on the limit. The Rust harness captures stderr for passing tests, so
 that line only appears under `--nocapture` or when a test fails. To check:
 
 ```bash
-cargo test -p cosmic-bwarden-tests -- --test-threads=1 --nocapture 2>&1 | grep container-limits
+cargo test -p cosmarden-tests -- --test-threads=1 --nocapture 2>&1 | grep container-limits
 ```
 
 ## Prerequisites
@@ -188,7 +188,7 @@ production code rather than by the test author.
 For the full test suite to pass, the Vaultwarden container must be configured with certain experimental features enabled.
 
 - **SSH Keys**: Set `EXPERIMENTAL_CLIENT_FEATURE_FLAGS=ssh-key-vault-item` to enable support for Bitwarden type 5 (SSH Key) items.
-- **Client Version**: The client version reported by `cosmic-bwarden` is set to `2025.1.0` to ensure compatibility with modern Bitwarden features during synchronization.
+- **Client Version**: The client version reported by `cosmarden` is set to `2025.1.0` to ensure compatibility with modern Bitwarden features during synchronization.
 
 ## Automated Manual Testing
 
@@ -200,18 +200,18 @@ The CLI supports non-interactive flags for use in scripts or CI environments:
 # refuses any profile not named test-*, so a `manual-test` profile cannot be
 # torn down with the shared helper — and its dirs would linger in ~/.cache,
 # ~/.config, ~/.local/share and $XDG_RUNTIME_DIR.
-export COSMIC_BWARDEN_PROFILE=test-manual
-./target/debug/cosmic-bwarden-agent &
+export COSMARDEN_PROFILE=test-manual
+./target/debug/cosmarden-agent &
 
 # Login (prompts for the master password)
-./target/debug/cosmic-bwarden-cli login user@example.com --server http://localhost:8080
+./target/debug/cosmarden login user@example.com --server http://localhost:8080
 
 # Add an entry with a secret
-./target/debug/cosmic-bwarden-cli add "My Secret" --username "admin" --password "supersecret"
+./target/debug/cosmarden add "My Secret" --username "admin" --password "supersecret"
 
 # Sync and verify
-./target/debug/cosmic-bwarden-cli sync
-./target/debug/cosmic-bwarden-cli get "My Secret"
+./target/debug/cosmarden sync
+./target/debug/cosmarden get "My Secret"
 
 # Tear the profile's state back down when finished.
 source tests/browser-extension/cleanup.sh
@@ -220,11 +220,11 @@ cleanup_profile test-manual
 
 ## Cleanup after tests
 
-`just clean-test-residue` lists any leftover `cosmic-bwarden-test-*` profile
+`just clean-test-residue` lists any leftover `cosmarden-test-*` profile
 directory across `$XDG_CONFIG_HOME`, `$XDG_CACHE_HOME`, `$XDG_DATA_HOME`,
 `$XDG_RUNTIME_DIR` and `$TMPDIR`; `just clean-test-residue-apply` removes them.
-It refuses anything not named `cosmic-bwarden-test-*`, any symlink, and any
-non-directory, so the live `cosmic-bwarden` profile cannot match. Use it after
+It refuses anything not named `cosmarden-test-*`, any symlink, and any
+non-directory, so the live `cosmarden` profile cannot match. Use it after
 a run is SIGKILLed, which skips every teardown path — not as part of the normal
 loop.
 
@@ -253,13 +253,13 @@ Two things are worth knowing before writing a new test:
 
 - **Rust E2E** — `TestEnv` redirects all four XDG vars into a
   `tempfile::tempdir()`, so its dirs never reach the home. `TestEnv::Drop`
-  additionally *reports* (never deletes) any `cosmic-bwarden*` dir that
+  additionally *reports* (never deletes) any `cosmarden*` dir that
   appeared in the real roots during the test, via `state_guard.rs`. If you see
   `[state-guard] ERROR:` in the output, a spawn is missing its explicit
   environment.
 - **Browser-extension scripts** — `tests/browser-extension/cleanup.sh` provides
   `cleanup_profile()` (guards against empty, non-`test-*`, and traversal names,
-  and refuses to touch the live `cosmic-bwarden` dirs) plus
+  and refuses to touch the live `cosmarden` dirs) plus
   `backup_file()`/`restore_file()` for the native-messaging manifests the
   suites overwrite.
 

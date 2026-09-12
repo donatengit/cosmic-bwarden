@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Unit tests for the pure TPM dictionary-attack feedback formatting in
-// popup-lock.js — mirrors CosmicBWardenApp::tpm_da_line/pin_feedback_line
-// and view/mod.rs's format_secs (crates/cosmic-bwarden-ui).
+// popup-lock.js — mirrors CosmardenApp::tpm_da_line/pin_feedback_line
+// and view/mod.rs's format_secs (crates/cosmarden-ui).
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';

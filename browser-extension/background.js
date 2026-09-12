@@ -9,7 +9,7 @@ const queue = [];
 let isProcessing = false;
 
 function connect() {
-    port = browser.runtime.connectNative("com.enikeev.cosmic_bwarden");
+    port = browser.runtime.connectNative("com.enikeev.cosmarden");
 
     port.onDisconnect.addListener((p) => {
         const lastErr = chrome.runtime.lastError;
@@ -167,8 +167,8 @@ try {
 try {
     browser.contextMenus.create(
         {
-            id: 'cosmic-bwarden-generate-password',
-            title: 'Generate password (COSMIC BWarden)',
+            id: 'cosmarden-generate-password',
+            title: 'Generate password (Cosmarden)',
             contexts: ['editable'],
         },
         () => { void chrome.runtime.lastError; }
@@ -176,7 +176,7 @@ try {
 } catch { /* already registered */ }
 
 browser.contextMenus.onClicked.addListener(async (info, tab) => {
-    if (info.menuItemId !== 'cosmic-bwarden-generate-password') return;
+    if (info.menuItemId !== 'cosmarden-generate-password') return;
     try {
         const response = await sendToAgent({ GeneratePassword: { settings: null } });
         if (response && response.GeneratedPassword && tab && typeof tab.id === 'number') {

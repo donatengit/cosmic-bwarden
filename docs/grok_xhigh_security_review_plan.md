@@ -1,4 +1,4 @@
-# COSMIC BWarden — remediation plan for the 2026-08-22 xhigh security review
+# Cosmarden — remediation plan for the 2026-08-22 xhigh security review
 
 Input: [`docs/grok_xhigh_security_review.md`](grok_xhigh_security_review.md)
 (findings as of 2026-08-22). This file is the **fix plan**, not a restatement
@@ -149,7 +149,7 @@ later popup row shows SSN, it must use an on-demand fetch (reveal), not meta.
 
 **Automated-test impact: same.** Extend agent-side unit coverage of
 `redact_entry_secrets` / `merge_redacted_secrets` and
-`crates/cosmic-bwarden-tests/src/security.rs` `test_reprompt` (meta must not
+`crates/cosmarden-tests/src/security.rs` `test_reprompt` (meta must not
 include the new slots; `GetEntry` after a correct password still does).
 `cli_secret_mask_test.rs` should assert IBAN/SSN are absent without
 `--show-secrets`. No new harness.
@@ -157,7 +157,7 @@ include the new slots; `GetEntry` after a correct password still does).
 ### S2-2 — Keyring store/get collection mismatch
 
 **Where:** `keyring::store_tokens` falls back to
-`create_collection("cosmic-bwarden")`; `get_tokens` / `delete_tokens` only
+`create_collection("cosmarden")`; `get_tokens` / `delete_tokens` only
 open `default_collection`.
 
 **Observable outcome:** store, get, and delete share one collection helper.
@@ -256,7 +256,7 @@ file cannot be used to unlock. Happy-path disable/unlock is unchanged.
 **Automated-test impact: same.** Filesystem unit tests of `clear` (missing
 file → Ok; path is a directory or parent not writable → Err) need no TPM.
 `handle_unlock_with_pin` flag check is unit-testable with a config fixture
-(`COSMIC_BWARDEN_*` overrides). Existing `tpm-smoke` / `tpm_lifecycle` happy
+(`COSMARDEN_*` overrides). Existing `tpm-smoke` / `tpm_lifecycle` happy
 paths stay. Do **not** add live TPM fault-injection or `swtpm` unlink hooks —
 that would be harder.
 
@@ -306,7 +306,7 @@ timing of the bar.
 
 **Observable outcome:** claimed response length `> 8 MiB` is refused on **both**
 sides: the agent does not write it; the client does not allocate it. Share
-the constant (move to `cosmic_bwarden_core` if both crates need it). Browser
+the constant (move to `cosmarden_core` if both crates need it). Browser
 host inbound stays 1 MiB.
 
 **UX:** none for legitimate responses (vault payloads are far under 8 MiB).
@@ -447,7 +447,7 @@ leave those stubs.
 
 ### S3-1 — `config.json` / config dir not forced `0600` / `0700`
 
-**Where:** `CosmicBWardenConfig::save_legacy` (`create_dir_all` +
+**Where:** `CosmardenConfig::save_legacy` (`create_dir_all` +
 `File::create`, umask-dependent).
 
 **Observable outcome:** parent dir `0700` (same `DirBuilder::mode` pattern as
@@ -459,11 +459,11 @@ still holds email/URLs/TPM flags, not tokens.
 
 **Automated-test impact: same.** Mode assertion next to existing dir-mode
 checks (`ipc_hardening.rs` `test_socket_file_modes`, or a `config.rs` unit
-test under a `COSMIC_BWARDEN_CONFIG` override). No extra process.
+test under a `COSMARDEN_CONFIG` override). No extra process.
 
 ### S3-2 — UI `Message` derived `Debug` can carry secrets
 
-**Where:** `crates/cosmic-bwarden-ui/src/message.rs`.
+**Where:** `crates/cosmarden-ui/src/message.rs`.
 
 **Observable outcome:** handwritten `Debug` for `Message` (variant +
 non-secret scalars), same contract as `protocol/debug_impls.rs`. Clipboard /
@@ -497,7 +497,7 @@ re-`GetEntry`s. No new browser-session harness.
 
 ### S3-4 — `prctl(PR_SET_DUMPABLE, 0)` return ignored
 
-**Where:** `cosmic_bwarden_agent::run`.
+**Where:** `cosmarden_agent::run`.
 
 **Observable outcome:** non-zero `prctl` logs `error!` (AGENTS.md: anything
 that can affect the dumpable bit is not silent). Startup still continues

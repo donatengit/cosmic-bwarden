@@ -1,10 +1,10 @@
 [workspace]
 members = [
-    "crates/cosmic-bwarden-core",
-    "crates/cosmic-bwarden-agent",
-    "crates/cosmic-bwarden-ui",
-    "crates/cosmic-bwarden-cli",
-    "crates/cosmic-bwarden-tests",
+    "crates/cosmarden-core",
+    "crates/cosmarden-agent",
+    "crates/cosmarden-ui",
+    "crates/cosmarden-cli",
+    "crates/cosmarden-tests",
 ]
 resolver = "3"
 

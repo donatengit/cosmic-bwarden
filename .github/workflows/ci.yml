@@ -1,4 +1,4 @@
-# CI for cosmic-bwarden.
+# CI for cosmarden.
 #
 # Fast gates (lint, unit, extension-unit) run on every push/PR. The full Rust
 # E2E suite needs a container runtime and ~20 min, so it runs nightly and on
@@ -43,7 +43,7 @@ jobs:
       - name: clippy (workspace)
         run: cargo clippy --workspace --all-targets
       - name: clippy (agent + tpm)
-        run: cargo clippy -p cosmic-bwarden-agent --features tpm
+        run: cargo clippy -p cosmarden-agent --features tpm
 
   unit:
     name: unit tests
@@ -61,13 +61,13 @@ jobs:
       - name: check (all features)
         run: |
           cargo check --workspace
-          cargo check -p cosmic-bwarden-agent --features tpm
+          cargo check -p cosmarden-agent --features tpm
       - name: unit tests
         run: |
-          cargo test -p cosmic-bwarden-core --quiet
-          cargo test -p cosmic-bwarden-agent --quiet
-          cargo test -p cosmic-bwarden-cli --quiet
-          cargo test -p cosmic-bwarden-ui --quiet
+          cargo test -p cosmarden-core --quiet
+          cargo test -p cosmarden-agent --quiet
+          cargo test -p cosmarden-cli --quiet
+          cargo test -p cosmarden-ui --quiet
 
   audit:
     name: cargo audit
@@ -129,8 +129,8 @@ jobs:
         run: packaging/pack-extension.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: cosmic-bwarden-extension
-          path: target/cosmic-bwarden-extension.zip
+          name: cosmarden-extension
+          path: target/cosmarden-extension.zip
           if-no-files-found: error
 
   e2e:
@@ -149,8 +149,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build binaries the harness launches
-        run: cargo build -p cosmic-bwarden-agent -p cosmic-bwarden-cli
+        run: cargo build -p cosmarden-agent -p cosmarden-cli
       - name: E2E suite (one retry for container flakes)
         run: |
-          cargo test -p cosmic-bwarden-tests -- --test-threads=1 \
-            || cargo test -p cosmic-bwarden-tests -- --test-threads=1
+          cargo test -p cosmarden-tests -- --test-threads=1 \
+            || cargo test -p cosmarden-tests -- --test-threads=1

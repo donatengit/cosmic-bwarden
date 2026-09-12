@@ -1,10 +1,10 @@
 # Configurable Paths and Isolation
 
-COSMIC BWarden allows you to customize the paths for its IPC socket, SSH agent socket, and configuration file. This is useful for running multiple instances, testing, or advanced system configurations.
+Cosmarden allows you to customize the paths for its IPC socket, SSH agent socket, and configuration file. This is useful for running multiple instances, testing, or advanced system configurations.
 
 ## Command Line Arguments
 
-All binaries (`cosmic-bwarden-agent`, `cosmic-bwarden-cli`, and `cosmic-bwarden-ui`) support the following flags:
+All binaries (`cosmarden-agent`, `cosmarden-cli`, and `cosmarden-ui`) support the following flags:
 
 - `--config <PATH>`: Use a specific configuration file.
 - `--socket <PATH>`: Use a specific Unix socket for IPC.
@@ -16,9 +16,9 @@ The agent also supports:
 
 You can also set these paths via environment variables:
 
-- `COSMIC_BWARDEN_CONFIG`: Path to the configuration file.
-- `COSMIC_BWARDEN_SOCKET`: Path to the main IPC socket.
-- `COSMIC_BWARDEN_SSH_SOCKET`: Path to the SSH agent socket.
+- `COSMARDEN_CONFIG`: Path to the configuration file.
+- `COSMARDEN_SOCKET`: Path to the main IPC socket.
+- `COSMARDEN_SSH_SOCKET`: Path to the SSH agent socket.
 
 ## Configuration File Settings
 
@@ -36,7 +36,7 @@ The `config.json` file supports these keys:
 The application resolves paths in the following order (highest to lowest priority):
 
 1. **Command Line Argument** (`--socket`)
-2. **Environment Variable** (`COSMIC_BWARDEN_SOCKET`)
+2. **Environment Variable** (`COSMARDEN_SOCKET`)
 3. **Configuration File** (`socket_path` in `config.json`)
 4. **Default System Path** (usually in `XDG_RUNTIME_DIR`)
 
@@ -44,35 +44,35 @@ The application resolves paths in the following order (highest to lowest priorit
 
 These features are used by the E2E test suite to ensure that every test run is completely isolated from the user's daily client. Each test starts an agent on a unique socket in a temporary directory, preventing data corruption or interference.
 
-`COSMIC_BWARDEN_PROFILE` namespaces the whole state tree: with it set to `<x>`,
-the config, cache, data, and runtime dirs all become `cosmic-bwarden-<x>` under
+`COSMARDEN_PROFILE` namespaces the whole state tree: with it set to `<x>`,
+the config, cache, data, and runtime dirs all become `cosmarden-<x>` under
 their respective XDG roots (`dirs::profile()`). Unset — or empty — it resolves
-to the **live** `cosmic-bwarden` profile.
+to the **live** `cosmarden` profile.
 
 ## Cleanup after tests
 
 A spawn that inherits its environment is the failure mode to design against.
-`COSMIC_BWARDEN_PROFILE` is process-global, and the E2E crate sets it in ~59
+`COSMARDEN_PROFILE` is process-global, and the E2E crate sets it in ~59
 places without restoring it, so a subprocess launched with no explicit
 environment silently adopts another test's profile — or the live one.
 
 Rules (the normative copy is in `AGENTS.md`; the full rationale and the
 verification recipe are in `docs/test_cleanup_plan.md`):
 
-- Pass an **explicit** `COSMIC_BWARDEN_PROFILE`, `HOME`, and **all four**
+- Pass an **explicit** `COSMARDEN_PROFILE`, `HOME`, and **all four**
   `XDG_*` vars on every agent/CLI spawn. A partial set is not partial safety:
   `directories` falls back to the passwd entry when `$HOME` is unset, so a
   missing `XDG_DATA_HOME` still writes into the real `~/.local/share` even
   under `env_clear()`.
 - Name test profiles `test-*`.
-- Remove the four `cosmic-bwarden-<profile>` dirs — config, cache, data, **and
+- Remove the four `cosmarden-<profile>` dirs — config, cache, data, **and
   runtime** — in the same teardown that kills the agent, after `wait`ing for
   it. Redirecting all four XDG vars into a `tempfile::tempdir()` satisfies
   this without an explicit `rm`, and is preferred for Rust spawns.
 - Restore any real user file the test overwrote — browser native-messaging
   manifests especially, since those outlive the run and repoint a real browser.
 - **Never derive a deletion path from `dirs::`.** Those functions read
-  process-global env; an unset profile resolves to the live `cosmic-bwarden`
+  process-global env; an unset profile resolves to the live `cosmarden`
   profile, so such a "cleanup" would erase the developer's real vault cache.
 
 Teardown helpers:

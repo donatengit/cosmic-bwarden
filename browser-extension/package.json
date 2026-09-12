@@ -1,7 +1,7 @@
 {
-  "name": "cosmic-bwarden-extension",
+  "name": "cosmarden-extension",
   "version": "1.0.0",
-  "description": "Firefox extension for COSMIC BWarden",
+  "description": "Firefox extension for Cosmarden",
   "private": true,
   "license": "GPL-3.0-only",
   "author": "Don Enikeev <donat@enikeev.net>",

@@ -90,7 +90,7 @@ payloads.
   defensively.
 - **L2** — main IPC read allocated up to 4 GiB attacker-controlled: cap message
   size (match browser host's 1 MiB).
-- **L3** — remove stray `crates/cosmic-bwarden-core/src/protocol.rs.fix.tmp`.
+- **L3** — remove stray `crates/cosmarden-core/src/protocol.rs.fix.tmp`.
 - **L4** — `dirs::db_file` percent-encodes server but not email: encode email too.
 - (Deferred, documented) KDF runs under the state lock on a current-thread runtime;
   reprompt hash compare is not constant-time; IPC plaintext passwords linger as

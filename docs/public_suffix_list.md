@@ -1,6 +1,6 @@
 # Domain Matching and the Public Suffix List
 
-How cosmic-bwarden decides whether a vault entry belongs to the web page the
+How cosmarden decides whether a vault entry belongs to the web page the
 browser is on — the extension popup's suggestions, the toolbar badge count,
 and the save/update prompt (`CheckLoginMatch`) all use the same rules.
 
@@ -26,7 +26,7 @@ dependent on vault contents.
 
 ## The rules
 
-`cosmic_bwarden_core::domain::hosts_match(a, b)` — applied between the tab's
+`cosmarden_core::domain::hosts_match(a, b)` — applied between the tab's
 full host and each host stored on an entry (URI hosts; hostname-shaped name
 as fallback for legacy URI-less entries). In order:
 
@@ -60,8 +60,8 @@ domain matching (v1 simplification, same as `CheckLoginMatch`).
 
 ## The `public_suffix_list` feature
 
-- **Crates**: declared in `cosmic-bwarden-core` (`dep:psl`), forwarded by
-  `cosmic-bwarden-agent` and `cosmic-bwarden-ui`. **Enabled by default.**
+- **Crates**: declared in `cosmarden-core` (`dep:psl`), forwarded by
+  `cosmarden-agent` and `cosmarden-ui`. **Enabled by default.**
 - **What the `psl` crate does**: a codegen step converts Mozilla's Public
   Suffix List into a ~2.5 MB generated Rust match-tree compiled into `.text`.
   No heap allocation, no startup parsing, no runtime fetch (a runtime fetch
@@ -100,9 +100,9 @@ already cached there (same sensitivity class; noted in `CONTEXT.md`).
 
 ## Verification
 
-- Rule unit tests (both feature states): `cargo test -p cosmic-bwarden-core
+- Rule unit tests (both feature states): `cargo test -p cosmarden-core
   --features public_suffix_list domain::` and without the flag.
 - Agent-path E2E (encrypted URIs → host cache → filter):
-  `cargo test -p cosmic-bwarden-tests -- vault::domain_matching --test-threads=1`.
+  `cargo test -p cosmarden-tests -- vault::domain_matching --test-threads=1`.
 - Extension flow: `just test-extension-e2e` (`popup.spec.js`,
   "domain-based filtering").

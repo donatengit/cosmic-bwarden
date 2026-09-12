@@ -1,13 +1,13 @@
 # Maintainer: Don Enikeev <donat@enikeev.net>
-# AUR package skeleton for cosmic-bwarden.
+# AUR package skeleton for cosmarden.
 # Before submitting to the AUR: cut a `vYYYY.MM.P` tag, replace the `SKIP`
 # checksum with the real tarball sha256, and validate with
 # `makepkg --printsrcinfo` plus a clean chroot build.
 
-pkgname=cosmic-bwarden
+pkgname=cosmarden
 pkgver=2026.07.0
 pkgrel=1
-pkgdesc="Native Bitwarden/Vaultwarden client for the COSMIC desktop (agent, applet, CLI, SSH agent)"
+pkgdesc="Bitwarden-compatible password manager for COSMIC DE"
 arch=(x86_64)
 url="https://github.com/donatengit/cosmic-bwarden"
 license=(GPL-3.0-only)
@@ -29,16 +29,16 @@ build() {
 
 package() {
   cd "$pkgname-$pkgver"
-  install -Dm755 target/release/cosmic-bwarden-agent "$pkgdir/usr/bin/cosmic-bwarden-agent"
-  install -Dm755 target/release/cosmic-applet-bwarden "$pkgdir/usr/bin/cosmic-applet-bwarden"
-  install -Dm755 target/release/cosmic-bwarden-cli "$pkgdir/usr/bin/cosmic-bwarden-cli"
-  install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop \
-    "$pkgdir/usr/share/applications/com.enikeev.cosmic_bwarden.desktop"
-  install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.metainfo.xml \
-    "$pkgdir/usr/share/metainfo/com.enikeev.cosmic_bwarden.metainfo.xml"
-  install -Dm644 packaging/com.enikeev.cosmic_bwarden.ron \
-    "$pkgdir/usr/share/cosmic/applets/com.enikeev.cosmic_bwarden.ron"
-  install -Dm644 packaging/cosmic-bwarden-agent.deb.service \
-    "$pkgdir/usr/lib/systemd/user/cosmic-bwarden-agent.service"
+  install -Dm755 target/release/cosmarden-agent "$pkgdir/usr/bin/cosmarden-agent"
+  install -Dm755 target/release/cosmarden-applet "$pkgdir/usr/bin/cosmarden-applet"
+  install -Dm755 target/release/cosmarden "$pkgdir/usr/bin/cosmarden"
+  install -Dm644 crates/cosmarden-ui/resources/com.enikeev.cosmarden.desktop \
+    "$pkgdir/usr/share/applications/com.enikeev.cosmarden.desktop"
+  install -Dm644 crates/cosmarden-ui/resources/com.enikeev.cosmarden.metainfo.xml \
+    "$pkgdir/usr/share/metainfo/com.enikeev.cosmarden.metainfo.xml"
+  install -Dm644 packaging/com.enikeev.cosmarden.ron \
+    "$pkgdir/usr/share/cosmic/applets/com.enikeev.cosmarden.ron"
+  install -Dm644 packaging/cosmarden-agent.deb.service \
+    "$pkgdir/usr/lib/systemd/user/cosmarden-agent.service"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

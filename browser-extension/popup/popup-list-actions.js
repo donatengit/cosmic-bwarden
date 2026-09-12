@@ -46,7 +46,7 @@ function makeDropdownItem(label, onSelect) {
     return btn;
 }
 
-// Mirrors is_uri_like in crates/cosmic-bwarden-ui/src/app/applet_search.rs
+// Mirrors is_uri_like in crates/cosmarden-ui/src/app/applet_search.rs
 // (used there to decide whether the desktop applet's open-URI button is enabled):
 // true if `name` looks like a URL or bare hostname a browser can open (has
 // a dot, no spaces, no @).

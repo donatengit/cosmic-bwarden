@@ -10,7 +10,7 @@
 #     `cargo tree -p <shipped-crate> -e normal -i <crate>` before adding one.
 #   - Re-check the list whenever dependencies move; drop the entry the moment a
 #     patched version becomes reachable. A stale ignore is worse than no audit.
-#   - Never add an advisory that is reachable from cosmic-bwarden-agent,
+#   - Never add an advisory that is reachable from cosmarden-agent,
 #     -ui, or -cli at runtime without an explicit written risk acceptance.
 
 [advisories]
@@ -51,16 +51,16 @@ ignore = [
     # RUSTSEC-2024-0336 (rustls 0.20.9 infinite loop) and RUSTSEC-2025-0009
     # (ring 0.16.20 panic on AES overflow). Both arrive via
     # thirtyfour -> fantoccini -> hyper-rustls 0.23, which is an OPTIONAL
-    # dependency of cosmic-bwarden-tests behind the `browser-e2e` feature.
+    # dependency of cosmarden-tests behind the `browser-e2e` feature.
     # Verified absent from agent/ui/cli:
-    #   cargo tree -p cosmic-bwarden-agent -e normal -i rustls  -> 0.23.40 only
+    #   cargo tree -p cosmarden-agent -e normal -i rustls  -> 0.23.40 only
     # Shipped code uses rustls 0.23.40 (unaffected) through reqwest.
     "RUSTSEC-2024-0336",
     "RUSTSEC-2025-0009",
 
     # RUSTSEC-2025-0111 — tokio-tar PAX header parsing allows file smuggling.
     # No patched release. Reached only by testcontainers, a dev-dependency of
-    # cosmic-bwarden-tests; the tarballs it handles are container images we
+    # cosmarden-tests; the tarballs it handles are container images we
     # build in CI, not untrusted input. Absent from all shipped binaries.
     "RUSTSEC-2025-0111",
 
@@ -70,7 +70,7 @@ ignore = [
     # testcontainers turns on reqwest's DNS feature, and Cargo unifies features
     # across the workspace. The shipped binaries resolve DNS through the system
     # resolver — verified:
-    #   cargo tree -p cosmic-bwarden-agent -e normal -i hickory-proto -> absent
+    #   cargo tree -p cosmarden-agent -e normal -i hickory-proto -> absent
     "RUSTSEC-2026-0118",
     "RUSTSEC-2026-0119",
 ]

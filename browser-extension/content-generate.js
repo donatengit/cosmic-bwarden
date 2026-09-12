@@ -148,7 +148,7 @@ async function onGenerateClick(group) {
 function makeIcon(input, group) {
     const host = document.createElement('div');
     // Identifies the host for tests/debugging; not used by any styling.
-    host.setAttribute('data-cosmic-bwarden-generate-icon', input.name || input.id || '');
+    host.setAttribute('data-cosmarden-generate-icon', input.name || input.id || '');
     // themeCss() (theme.js) supplies the palette as custom properties on the
     // host; the shadow <style> consumes them via var(--...) — the same token
     // names popup.css uses. display:block so a page rule like
@@ -161,8 +161,8 @@ function makeIcon(input, group) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'icon-btn';
-    btn.title = 'Generate password (COSMIC BWarden)';
-    btn.setAttribute('aria-label', 'Generate password (COSMIC BWarden)');
+    btn.title = 'Generate password (Cosmarden)';
+    btn.setAttribute('aria-label', 'Generate password (Cosmarden)');
     // Inline SVG (a four-pip dice), same visual language as the popup's
     // icons; this content script cannot see popup/icons.js.
     btn.innerHTML =

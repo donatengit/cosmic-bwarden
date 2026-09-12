@@ -45,7 +45,7 @@ _limited := "./packaging/run-limited.sh " + test_cpus + " " + test_memory
 _build_limited := _limited
 
 # Auto-detect TPM2 support: enable the agent's `tpm` feature when libtss2-esys is present.
-_tpm_features := `pkg-config --exists tss2-esys 2>/dev/null && echo '--features cosmic-bwarden-agent/tpm' || true`
+_tpm_features := `pkg-config --exists tss2-esys 2>/dev/null && echo '--features cosmarden-agent/tpm' || true`
 
 # Default task: build the project
 default: build
@@ -57,15 +57,15 @@ build:
 # Copy already-built release binaries and metadata into ~/.local.
 # Does not compile — run `just build` first. Deb/AUR remain the system-wide path.
 install:
-    test -x target/release/cosmic-bwarden-agent \
-        -a -x target/release/cosmic-applet-bwarden \
-        -a -x target/release/cosmic-bwarden-cli \
+    test -x target/release/cosmarden-agent \
+        -a -x target/release/cosmarden-applet \
+        -a -x target/release/cosmarden \
         || { echo "missing target/release binaries; run: just build" >&2; exit 1; }
     echo "Installing binaries to {{local_bin}}..."
     mkdir -p {{local_bin}}
-    install -Dm755 target/release/cosmic-bwarden-agent {{local_bin}}/cosmic-bwarden-agent
-    install -Dm755 target/release/cosmic-applet-bwarden {{local_bin}}/cosmic-applet-bwarden
-    install -Dm755 target/release/cosmic-bwarden-cli {{local_bin}}/cosmic-bwarden-cli
+    install -Dm755 target/release/cosmarden-agent {{local_bin}}/cosmarden-agent
+    install -Dm755 target/release/cosmarden-applet {{local_bin}}/cosmarden-applet
+    install -Dm755 target/release/cosmarden {{local_bin}}/cosmarden
 
     echo "Installing desktop entry..."
     # cosmic-panel spawns Exec via its own PATH, which is the systemd user
@@ -74,32 +74,32 @@ install:
     # in the picker and then nothing starts. Distro packages keep the
     # unqualified name (binary is on PATH); user-local install writes the
     # absolute path.
-    install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.desktop {{local_apps}}/com.enikeev.cosmic_bwarden.desktop
-    sed -i "s|^Exec=cosmic-applet-bwarden|Exec={{local_bin}}/cosmic-applet-bwarden|" {{local_apps}}/com.enikeev.cosmic_bwarden.desktop
+    install -Dm644 crates/cosmarden-ui/resources/com.enikeev.cosmarden.desktop {{local_apps}}/com.enikeev.cosmarden.desktop
+    sed -i "s|^Exec=cosmarden-applet|Exec={{local_bin}}/cosmarden-applet|" {{local_apps}}/com.enikeev.cosmarden.desktop
 
     echo "Installing AppStream metainfo..."
-    install -Dm644 crates/cosmic-bwarden-ui/resources/com.enikeev.cosmic_bwarden.metainfo.xml {{local_metainfo}}/com.enikeev.cosmic_bwarden.metainfo.xml
+    install -Dm644 crates/cosmarden-ui/resources/com.enikeev.cosmarden.metainfo.xml {{local_metainfo}}/com.enikeev.cosmarden.metainfo.xml
 
     echo "Installing application icon..."
-    install -Dm644 icons/black.svg {{local_icons}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
-    install -Dm644 icons/black16.png {{local_icons}}/16x16/apps/com.enikeev.cosmic_bwarden.png
-    install -Dm644 icons/black32.png {{local_icons}}/32x32/apps/com.enikeev.cosmic_bwarden.png
-    install -Dm644 icons/black64.png {{local_icons}}/64x64/apps/com.enikeev.cosmic_bwarden.png
-    install -Dm644 icons/black128.png {{local_icons}}/128x128/apps/com.enikeev.cosmic_bwarden.png
-    install -Dm644 crates/cosmic-bwarden-ui/resources/icons/cosmic-bwarden-symbolic.svg {{local_icons}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg
+    install -Dm644 icons/black.svg {{local_icons}}/scalable/apps/com.enikeev.cosmarden.svg
+    install -Dm644 icons/black16.png {{local_icons}}/16x16/apps/com.enikeev.cosmarden.png
+    install -Dm644 icons/black32.png {{local_icons}}/32x32/apps/com.enikeev.cosmarden.png
+    install -Dm644 icons/black64.png {{local_icons}}/64x64/apps/com.enikeev.cosmarden.png
+    install -Dm644 icons/black128.png {{local_icons}}/128x128/apps/com.enikeev.cosmarden.png
+    install -Dm644 crates/cosmarden-ui/resources/icons/cosmarden-symbolic.svg {{local_icons}}/scalable/apps/com.enikeev.cosmarden-symbolic.svg
 
     echo "Installing COSMIC applet metadata..."
     mkdir -p {{local_applets}}
-    echo '( name: "COSMIC BWarden", description: "Secure Bitwarden client for COSMIC", identifier: "com.enikeev.cosmic_bwarden", icon: "com.enikeev.cosmic_bwarden-symbolic", )' > {{local_applets}}/com.enikeev.cosmic_bwarden.ron
+    echo '( name: "Cosmarden", description: "Bitwarden-compatible password manager for COSMIC DE", identifier: "com.enikeev.cosmarden", icon: "com.enikeev.cosmarden-symbolic", )' > {{local_applets}}/com.enikeev.cosmarden.ron
 
     echo "Installing systemd user service..."
     mkdir -p {{local_systemd}}
-    sed "s|@BINDIR@|{{local_bin}}|g" crates/cosmic-bwarden-agent/res/cosmic-bwarden-agent.service > {{local_systemd}}/cosmic-bwarden-agent.service
+    sed "s|@BINDIR@|{{local_bin}}|g" crates/cosmarden-agent/res/cosmarden-agent.service > {{local_systemd}}/cosmarden-agent.service
     echo "Reloading systemd user daemon..."
     systemctl --user daemon-reload
     echo "Registering Firefox native messaging host..."
     python3 tests/browser-extension/register_host.py \
-        --agent-path {{local_bin}}/cosmic-bwarden-agent \
+        --agent-path {{local_bin}}/cosmarden-agent \
         --home {{home}}
     echo "Done. Binaries are in {{local_bin}} (keep that directory on PATH). Run 'just restart-panel' and 'just enable-agent'."
 
@@ -117,34 +117,28 @@ restart-panel:
 
 # Enable and start the agent service for the current user
 enable-agent:
-    systemctl --user enable --now cosmic-bwarden-agent
+    systemctl --user enable --now cosmarden-agent
 
 # Disable and stop the agent service for the current user
 disable-agent:
-    systemctl --user disable --now cosmic-bwarden-agent
+    systemctl --user disable --now cosmarden-agent
 
 # Remove root-owned files from older `sudo just install` runs. Needs sudo.
 # Does not touch the current user-local install (~/.local, ~/.config/systemd/user).
 uninstall-system:
-    sudo rm -f {{bin_dir}}/cosmic-bwarden-agent
-    sudo rm -f {{bin_dir}}/cosmic-applet-bwarden
-    sudo rm -f {{bin_dir}}/cosmic-bwarden-cli
-    sudo rm -f {{apps_dir}}/com.enikeev.cosmic_bwarden.desktop
-    sudo rm -f {{metainfo_dir}}/com.enikeev.cosmic_bwarden.metainfo.xml
-    sudo rm -f {{applets_dir}}/com.enikeev.cosmic_bwarden.ron
-    sudo rm -f {{systemd_user_dir}}/cosmic-bwarden-agent.service
-    sudo rm -f {{apps_dir}}/com.system76.CosmicBWarden.desktop
-    sudo rm -f {{applets_dir}}/com.system76.CosmicBWarden.ron
-    sudo rm -f {{bin_dir}}/com.system76.CosmicBWarden
-    sudo rm -f {{bin_dir}}/cosmic-bwarden-ui
-    sudo rm -f {{apps_dir}}/com.enikeev.cosmic-bwarden.desktop
-    sudo rm -f {{applets_dir}}/com.enikeev.cosmic-bwarden.ron
-    sudo rm -f {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
-    sudo rm -f {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg
-    sudo rm -f {{icons_dir}}/16x16/apps/com.enikeev.cosmic_bwarden.png
-    sudo rm -f {{icons_dir}}/32x32/apps/com.enikeev.cosmic_bwarden.png
-    sudo rm -f {{icons_dir}}/64x64/apps/com.enikeev.cosmic_bwarden.png
-    sudo rm -f {{icons_dir}}/128x128/apps/com.enikeev.cosmic_bwarden.png
+    sudo rm -f {{bin_dir}}/cosmarden-agent
+    sudo rm -f {{bin_dir}}/cosmarden-applet
+    sudo rm -f {{bin_dir}}/cosmarden
+    sudo rm -f {{apps_dir}}/com.enikeev.cosmarden.desktop
+    sudo rm -f {{metainfo_dir}}/com.enikeev.cosmarden.metainfo.xml
+    sudo rm -f {{applets_dir}}/com.enikeev.cosmarden.ron
+    sudo rm -f {{systemd_user_dir}}/cosmarden-agent.service
+    sudo rm -f {{icons_dir}}/scalable/apps/com.enikeev.cosmarden.svg
+    sudo rm -f {{icons_dir}}/scalable/apps/com.enikeev.cosmarden-symbolic.svg
+    sudo rm -f {{icons_dir}}/16x16/apps/com.enikeev.cosmarden.png
+    sudo rm -f {{icons_dir}}/32x32/apps/com.enikeev.cosmarden.png
+    sudo rm -f {{icons_dir}}/64x64/apps/com.enikeev.cosmarden.png
+    sudo rm -f {{icons_dir}}/128x128/apps/com.enikeev.cosmarden.png
     sudo gtk-update-icon-cache -f {{icons_dir}} 2>/dev/null || true
     sudo update-desktop-database {{apps_dir}} 2>/dev/null || true
     systemctl --user daemon-reload
@@ -154,31 +148,23 @@ uninstall-system:
 # installs are removed only if this user can write them (no sudo).
 uninstall:
     echo "Uninstalling from local paths..."
-    rm -f {{local_apps}}/com.enikeev.cosmic_bwarden.desktop
-    rm -f {{local_metainfo}}/com.enikeev.cosmic_bwarden.metainfo.xml
-    rm -f {{local_applets}}/com.enikeev.cosmic_bwarden.ron
-    rm -f {{local_icons}}/scalable/apps/com.enikeev.cosmic_bwarden.svg
-    rm -f {{local_icons}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg
-    rm -f {{local_icons}}/16x16/apps/com.enikeev.cosmic_bwarden.png
-    rm -f {{local_icons}}/32x32/apps/com.enikeev.cosmic_bwarden.png
-    rm -f {{local_icons}}/64x64/apps/com.enikeev.cosmic_bwarden.png
-    rm -f {{local_icons}}/128x128/apps/com.enikeev.cosmic_bwarden.png
-    rm -f {{local_bin}}/cosmic-bwarden-agent
-    rm -f {{local_bin}}/cosmic-applet-bwarden
-    rm -f {{local_bin}}/cosmic-bwarden-cli
-    rm -f {{local_systemd}}/cosmic-bwarden-agent.service
-    # Legacy app-ID / binary names (transitional cleanup across renames)
-    rm -f {{local_apps}}/com.system76.CosmicBWarden.desktop
-    rm -f {{local_applets}}/com.system76.CosmicBWarden.ron
-    rm -f {{local_bin}}/com.system76.CosmicBWarden
-    rm -f {{local_bin}}/cosmic-bwarden-ui
-    rm -f {{local_apps}}/com.enikeev.cosmic-bwarden.desktop
-    rm -f {{local_applets}}/com.enikeev.cosmic-bwarden.ron
-    echo "Removing Firefox native messaging host..."
-    rm -f {{home}}/.mozilla/native-messaging-hosts/com.enikeev.cosmic_bwarden.json
-    rm -f {{home}}/.mozilla/native-messaging-hosts/cosmic-bwarden-browser-host.sh
+    rm -f {{local_apps}}/com.enikeev.cosmarden.desktop
+    rm -f {{local_metainfo}}/com.enikeev.cosmarden.metainfo.xml
+    rm -f {{local_applets}}/com.enikeev.cosmarden.ron
+    rm -f {{local_icons}}/scalable/apps/com.enikeev.cosmarden.svg
+    rm -f {{local_icons}}/scalable/apps/com.enikeev.cosmarden-symbolic.svg
+    rm -f {{local_icons}}/16x16/apps/com.enikeev.cosmarden.png
+    rm -f {{local_icons}}/32x32/apps/com.enikeev.cosmarden.png
+    rm -f {{local_icons}}/64x64/apps/com.enikeev.cosmarden.png
+    rm -f {{local_icons}}/128x128/apps/com.enikeev.cosmarden.png
+    rm -f {{local_bin}}/cosmarden-agent
+    rm -f {{local_bin}}/cosmarden-applet
+    rm -f {{local_bin}}/cosmarden
+    rm -f {{local_systemd}}/cosmarden-agent.service
+    rm -f {{home}}/.mozilla/native-messaging-hosts/com.enikeev.cosmarden.json
+    rm -f {{home}}/.mozilla/native-messaging-hosts/cosmarden-browser-host.sh
     echo "Removing leftover system-wide files if writable..."
-    rm -f {{bin_dir}}/cosmic-bwarden-agent {{bin_dir}}/cosmic-applet-bwarden {{bin_dir}}/cosmic-bwarden-cli {{apps_dir}}/com.enikeev.cosmic_bwarden.desktop {{metainfo_dir}}/com.enikeev.cosmic_bwarden.metainfo.xml {{applets_dir}}/com.enikeev.cosmic_bwarden.ron {{systemd_user_dir}}/cosmic-bwarden-agent.service {{apps_dir}}/com.system76.CosmicBWarden.desktop {{applets_dir}}/com.system76.CosmicBWarden.ron {{bin_dir}}/com.system76.CosmicBWarden {{bin_dir}}/cosmic-bwarden-ui {{apps_dir}}/com.enikeev.cosmic-bwarden.desktop {{applets_dir}}/com.enikeev.cosmic-bwarden.ron {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden.svg {{icons_dir}}/scalable/apps/com.enikeev.cosmic_bwarden-symbolic.svg {{icons_dir}}/16x16/apps/com.enikeev.cosmic_bwarden.png {{icons_dir}}/32x32/apps/com.enikeev.cosmic_bwarden.png {{icons_dir}}/64x64/apps/com.enikeev.cosmic_bwarden.png {{icons_dir}}/128x128/apps/com.enikeev.cosmic_bwarden.png 2>/dev/null || true
+    rm -f {{bin_dir}}/cosmarden-agent {{bin_dir}}/cosmarden-applet {{bin_dir}}/cosmarden {{apps_dir}}/com.enikeev.cosmarden.desktop {{metainfo_dir}}/com.enikeev.cosmarden.metainfo.xml {{applets_dir}}/com.enikeev.cosmarden.ron {{systemd_user_dir}}/cosmarden-agent.service {{icons_dir}}/scalable/apps/com.enikeev.cosmarden.svg {{icons_dir}}/scalable/apps/com.enikeev.cosmarden-symbolic.svg {{icons_dir}}/16x16/apps/com.enikeev.cosmarden.png {{icons_dir}}/32x32/apps/com.enikeev.cosmarden.png {{icons_dir}}/64x64/apps/com.enikeev.cosmarden.png {{icons_dir}}/128x128/apps/com.enikeev.cosmarden.png 2>/dev/null || true
 
 # Clean build artifacts
 clean: uninstall
@@ -201,10 +187,10 @@ test-all: test test-extension-unit test-ext-release
 # 1. Unit tests for every crate that has them
 test-unit:
     echo "--- 1. Unit Tests (all crates) ---"
-    {{_limited}} cargo test --quiet -p cosmic-bwarden-core
-    {{_limited}} cargo test --quiet -p cosmic-bwarden-ui
-    {{_limited}} cargo test --quiet -p cosmic-bwarden-agent
-    {{_limited}} cargo test --quiet -p cosmic-bwarden-cli
+    {{_limited}} cargo test --quiet -p cosmarden-core
+    {{_limited}} cargo test --quiet -p cosmarden-ui
+    {{_limited}} cargo test --quiet -p cosmarden-agent
+    {{_limited}} cargo test --quiet -p cosmarden-cli
 
 # Requires libtss2-esys; skipped automatically when it is absent.
 #
@@ -212,7 +198,7 @@ test-unit:
 test-unit-tpm:
     echo "--- Unit Tests (agent, tpm feature) ---"
     if pkg-config --exists tss2-esys 2>/dev/null; then \
-        {{_limited}} cargo test --quiet -p cosmic-bwarden-agent --features tpm; \
+        {{_limited}} cargo test --quiet -p cosmarden-agent --features tpm; \
     else \
         echo "libtss2-esys not present; skipping"; \
     fi
@@ -224,8 +210,8 @@ test-unit-tpm:
 test-tpm-smoke: (ensure-container-socket)
     echo "--- TPM smoke tests (swtpm emulator) ---"
     if command -v swtpm >/dev/null 2>&1 && command -v swtpm_setup >/dev/null 2>&1 && pkg-config --exists tss2-esys 2>/dev/null; then \
-        {{_limited}} cargo build --quiet -p cosmic-bwarden-agent --features tpm --bin cosmic-bwarden-agent-tpm; \
-        {{_limited}} cargo test -p cosmic-bwarden-tests --lib --features tpm-smoke -- tpm --test-threads=1; \
+        {{_limited}} cargo build --quiet -p cosmarden-agent --features tpm --bin cosmarden-agent-tpm; \
+        {{_limited}} cargo test -p cosmarden-tests --lib --features tpm-smoke -- tpm --test-threads=1; \
     else \
         echo "swtpm/swtpm_setup or libtss2-esys not present; skipping"; \
     fi
@@ -235,7 +221,7 @@ test-tpm-smoke: (ensure-container-socket)
 #
 # Rebuild the debug binaries the E2E harness launches
 build-test-binaries:
-    {{_build_limited}} cargo build --quiet -p cosmic-bwarden-agent -p cosmic-bwarden-cli
+    {{_build_limited}} cargo build --quiet -p cosmarden-agent -p cosmarden-cli
 
 # Container runtime: podman is the primary path — the test harness
 # auto-detects the podman user socket (no docker group required). Docker is
@@ -244,7 +230,7 @@ build-test-binaries:
 # 2. The complete E2E suite (all modules, no filters)
 test-e2e: build-test-binaries (ensure-container-socket)
     echo "--- 2. E2E Suite (complete) ---"
-    {{_limited}} cargo test --quiet -p cosmic-bwarden-tests --lib -- --test-threads=1
+    {{_limited}} cargo test --quiet -p cosmarden-tests --lib -- --test-threads=1
 
 # --- Focused subsets, for iterating on one area. Not a partition of the suite;
 # --- use `just test-e2e` for full coverage.
@@ -252,23 +238,23 @@ test-e2e: build-test-binaries (ensure-container-socket)
 # [subset] Agent & protocol E2E tests
 test-agent: build-test-binaries (ensure-container-socket)
     echo "--- [subset] Agent & Protocol E2E Tests ---"
-    {{_limited}} cargo test --quiet -p cosmic-bwarden-tests --lib -- agent security vault pinned_ops ipc_hardening --test-threads=1
+    {{_limited}} cargo test --quiet -p cosmarden-tests --lib -- agent security vault pinned_ops ipc_hardening --test-threads=1
 
 # [subset] CLI E2E tests
 test-cli: build-test-binaries (ensure-container-socket)
     echo "--- [subset] CLI E2E Tests ---"
-    {{_limited}} cargo test --quiet -p cosmic-bwarden-tests --lib -- cli_lifecycle cli_secret_mask_test custom_fields_cli --test-threads=1
+    {{_limited}} cargo test --quiet -p cosmarden-tests --lib -- cli_lifecycle cli_secret_mask_test custom_fields_cli --test-threads=1
 
 # [subset] UI E2E tests
 test-ui: build-test-binaries (ensure-container-socket)
     echo "--- [subset] UI E2E Tests ---"
-    {{_limited}} cargo test --quiet -p cosmic-bwarden-tests --lib -- window_flow custom_fields_ui --test-threads=1
+    {{_limited}} cargo test --quiet -p cosmarden-tests --lib -- window_flow custom_fields_ui --test-threads=1
 
 # A correct run leaves none of these: tests redirect XDG into a tempdir and the
 # extension scripts clean their fixed profiles in a trap. This is for residue
 # from before that was true, and for recovery after a SIGKILLed run. If a clean
 # run leaves anything, fix the test rather than running this.
-# Refuses anything not named cosmic-bwarden-test-*, symlinks, and non-directories.
+# Refuses anything not named cosmarden-test-*, symlinks, and non-directories.
 #
 # List leftover test profile dirs without removing them
 clean-test-residue:
@@ -288,13 +274,13 @@ ensure-container-socket:
 # Run the agent and UI for testing
 run: build
     echo "Starting agent in background..."
-    ./target/release/cosmic-bwarden-agent &
+    ./target/release/cosmarden-agent &
     echo "Starting UI..."
-    ./target/release/cosmic-applet-bwarden
+    ./target/release/cosmarden-applet
 
 # [Dev] Register native messaging host pointing to debug build (use without a full install)
 register-browser-host:
-    {{_build_limited}} cargo build -p cosmic-bwarden-agent --quiet
+    {{_build_limited}} cargo build -p cosmarden-agent --quiet
     python3 tests/browser-extension/register_host.py
 
 # Pack the browser extension for distribution (production files only → target/)
@@ -367,12 +353,20 @@ sign-extension-preflight:
     if [ "${EXT_SIGN_MODE:-dev}" = "release" ]; then mode=""; else mode="--dev"; fi; \
     if [ "${ALLOW_DIRTY:-0}" = "1" ]; then allow="--allow-dirty"; else allow=""; fi; \
     mkdir -p target; \
+    dist_dir=dist; \
+    if ! mkdir -p "$dist_dir" 2>/dev/null || [ ! -w "$dist_dir" ]; then \
+        dist_dir=target/ext-signed; \
+        mkdir -p "$dist_dir"; \
+        echo "warning: dist/ is not writable (often leftover from a sudo sign); writing signed XPI to $dist_dir" >&2; \
+        ls -ld dist >&2 || true; \
+    fi; \
+    printf '%s\n' "$dist_dir" > target/ext-sign-dist-dir; \
     node packaging/ext-release.mjs preflight $mode $allow > target/ext-sign-version.txt; \
     echo "signing version: $(cat target/ext-sign-version.txt)" >&2
 
 # The whole signing flow in one target: stage the production files (update_url
 # injected from EXT_UPDATE_BASE_URL when set) → lint → AMO unlisted sign →
-# dist/cosmic-bwarden-<version>.xpi, plus dist/updates.json when the base URL
+# dist/cosmarden-<version>.xpi, plus dist/updates.json when the base URL
 # is set. Dev mode (default) signs the current files under a timestamp
 # version; EXT_SIGN_MODE=release signs a v* tag release (tag version injected
 # into the staged manifest — no manifest.json bumps needed). Credentials (from the
@@ -430,11 +424,13 @@ sign-extension: sign-extension-preflight ext-check-webext
         --timeout "${EXT_SIGN_TIMEOUT_MS:-1800000}" || sign_rc=$?; \
     cp -f target/ext-stage/.amo-upload-uuid target/ext-sign-upload-uuid 2>/dev/null || true; \
     if [ -n "${sign_rc:-}" ]; then exit "$sign_rc"; fi; \
-    node packaging/ext-release.mjs finalize-sign target/ext-sign-artifacts "$ver" dist >/dev/null; \
-    echo "$PWD/dist/cosmic-bwarden-$ver.xpi"; \
+    dist_dir="$(cat target/ext-sign-dist-dir 2>/dev/null || echo dist)"; \
+    mkdir -p "$dist_dir"; \
+    node packaging/ext-release.mjs finalize-sign target/ext-sign-artifacts "$ver" "$dist_dir" >/dev/null; \
+    echo "$PWD/$dist_dir/cosmarden-$ver.xpi"; \
     if [ -n "${EXT_UPDATE_BASE_URL:-}" ]; then \
-        node packaging/ext-release.mjs updates-json "dist/cosmic-bwarden-$ver.xpi" "$EXT_UPDATE_BASE_URL" "$ver" dist/updates.json "${EXT_UPDATE_LINK_BASE:-}" >/dev/null; \
-        echo "$PWD/dist/updates.json"; \
+        node packaging/ext-release.mjs updates-json "$dist_dir/cosmarden-$ver.xpi" "$EXT_UPDATE_BASE_URL" "$ver" "$dist_dir/updates.json" "${EXT_UPDATE_LINK_BASE:-}" >/dev/null; \
+        echo "$PWD/$dist_dir/updates.json"; \
     fi
 
 # Offline, no AMO credentials needed.

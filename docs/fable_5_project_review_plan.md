@@ -1,6 +1,6 @@
 # Project Review Plan — Road to a SOTA COSMIC Password Manager
 
-**Reviewer stance**: senior architect reviewing `cosmic-bwarden` end-to-end, with the goal of
+**Reviewer stance**: senior architect reviewing `cosmarden` end-to-end, with the goal of
 making it the reference-quality Bitwarden client for the COSMIC desktop.
 
 **Scope snapshot** (2026-07): 5 workspace crates (~23k lines of Rust), a vanilla-JS browser

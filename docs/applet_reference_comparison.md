@@ -1,4 +1,4 @@
-# Applet implementation comparison: libcosmic reference vs cosmic-bwarden
+# Applet implementation comparison: libcosmic reference vs cosmarden
 
 Status: research notes, 2026. Purpose: compare how COSMIC panel applets are
 implemented in the reference material under `tmp_code_examples/` with the
@@ -17,8 +17,8 @@ to follow the line references:
   out of scope except where its patterns (e.g. secrets-handling discipline)
   inform review spots.
 
-This repo's applet lives in `crates/cosmic-bwarden-ui`; the agent it talks to
-is `crates/cosmic-bwarden-agent` / `cosmic-bwarden-core`.
+This repo's applet lives in `crates/cosmarden-ui`; the agent it talks to
+is `crates/cosmarden-agent` / `cosmarden-core`.
 
 ## 1. How a reference applet is implemented (libcosmic)
 
@@ -70,18 +70,18 @@ Registration is panel-driven, not token-based:
 There is no search UI in the reference applet framework; search lives in
 cosmic-settings' panel-applets page.
 
-## 2. How cosmic-bwarden's applet is implemented
+## 2. How cosmarden's applet is implemented
 
-- **One binary, two modes.** `cosmic-applet-bwarden` (`Cargo.toml:10`, the `[[bin]]` name);
+- **One binary, two modes.** `cosmarden-applet` (`Cargo.toml:10`, the `[[bin]]` name);
   `detect_run_mode()` keys on `COSMIC_PANEL_NAME` (`main.rs:41-49`), then
-  `run_applet` → `cosmic::applet::run::<CosmicBWardenApp>` vs
+  `run_applet` → `cosmic::applet::run::<CosmardenApp>` vs
   `run_application` → `cosmic::app::run_single_instance` (`main.rs:328-356`).
   Same `Application` impl: `view()` renders only `applet_view()` in applet
   mode (`main.rs:191-238`), `style()` is `cosmic::applet::style()`
   (`main.rs:306-313`), and the activation-token subscription is armed only in
   applet mode (`main.rs:297-301`).
 - **Registration:** desktop file `X-CosmicApplet=true`, `X-CosmicHoverPopup=Auto`
-  (`resources/com.enikeev.cosmic_bwarden.desktop`); applet metadata `.ron`
+  (`resources/com.enikeev.cosmarden.desktop`); applet metadata `.ron`
   written by the justfile (`justfile:50-52`) and shipped via deb/PKGBUILD
   (`packaging/`). No row/column config — left to COSMIC Settings
   (`docs/cosmic_integration.md:99-100`).
@@ -118,7 +118,7 @@ cosmic-settings' panel-applets page.
   30 s auto-clear clipboard.
 - **Open vault window:** requests an activation token
   (`TokenRequest { app_id, exec: "open-vault" }`), then spawns the same
-  binary as a second process with `COSMIC_BWARDEN_MODE=application`,
+  binary as a second process with `COSMARDEN_MODE=application`,
   `COSMIC_PANEL_NAME` removed, and `XDG_ACTIVATION_TOKEN`/
   `DESKTOP_STARTUP_ID` set (`applet.rs:107-132`) — the reference power-applet
   pattern. Deep-link handoff via `SetPendingEntry` → agent → `Event::OpenEntry`
@@ -128,12 +128,12 @@ cosmic-settings' panel-applets page.
 
 ## 3. Comparison — alignment and divergences
 
-| Aspect | Reference (libcosmic example) | cosmic-bwarden | Verdict |
+| Aspect | Reference (libcosmic example) | cosmarden | Verdict |
 |---|---|---|---|
 | Entry | `cosmic::applet::run` | same | aligned |
 | Application shape | minimal `Application` impl + `applet::style()` | same, mode-aware | aligned |
 | Popup anchor math | inline in `on_press_with_rectangle` closure | coordinates travel through `Message::AppletIconClicked`; same math in `open_applet_popup_task` | deliberate divergence — testability, matches repo's "pure builder" rule; watch that raw screen coords in a `Message` stay a UI-internal concern |
-| Popup id tracking | state field + `PopupClosed` | state field + `WindowState::Popup` map + stale-popup guard | cosmic-bwarden is more defensive (guards double-click/race) |
+| Popup id tracking | state field + `PopupClosed` | state field + `WindowState::Popup` map + stale-popup guard | cosmarden is more defensive (guards double-click/race) |
 | Tooltip / popup surfaces | framework-provided (input-zone quarantine, grab) | same framework calls | aligned — no custom surface code |
 | Registration | panel-driven via `.desktop` + `COSMIC_PANEL_*` env | same; plus `.ron` metadata written by justfile/deb/PKGBUILD | aligned; no token for placement anywhere |
 | Activation token | used to launch other apps | used to launch the vault window as a separate process | aligned |
@@ -157,7 +157,7 @@ Non-issues confirmed while comparing:
 Severity is a review-priority guess, not a confirmed vulnerability. All paths
 repo-relative.
 
-1. **`xdg-open` with a vault-derived URI** — `crates/cosmic-bwarden-ui/src/app/update/applet.rs`'s `AppletOpenLink` arm
+1. **`xdg-open` with a vault-derived URI** — `crates/cosmarden-ui/src/app/update/applet.rs`'s `AppletOpenLink` arm
    spawns `xdg-open <uri>` where `uri` comes from a login entry's name field
    (vault data → external program). The gate `is_uri_like`
    (`app/applet_search.rs:52-59`) is conservative: it strips only
@@ -215,7 +215,7 @@ record what changed.
   `"Session expired — click to log in again"` and `"Not synced — click to
   retry"` — as bare literals passed to `text::caption`. **Fixed:** both now go
   through `fl!` via new keys `sync-session-expired-tooltip` and
-  `sync-not-synced-tooltip` (`i18n/en/cosmic_bwarden_ui.ftl`). Dedicated keys
+  `sync-not-synced-tooltip` (`i18n/en/cosmarden_ui.ftl`). Dedicated keys
   were chosen over reusing the existing `session-expired`/`not-synced` keys
   because the sidebar (view/vault/sidebar.rs:141,147) uses those for status
   labels while the applet tooltips describe the click action.

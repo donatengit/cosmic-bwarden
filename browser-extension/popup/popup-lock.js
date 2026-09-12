@@ -6,7 +6,7 @@
 // must be defined first. Only function *bodies* here reference popup.js's
 // globals; nothing at this file's top level calls them, so load order is
 // otherwise safe. Mirrors the desktop UI's PIN-unlock flow
-// (crates/cosmic-bwarden-ui/src/view/auth.rs, app/update/auth.rs) but the
+// (crates/cosmarden-ui/src/view/auth.rs, app/update/auth.rs) but the
 // extension only ever offers PIN entry here — master password unlock stays a
 // desktop/CLI-only action, so the fallback just points the user there instead
 // of collecting the master password in the popup.
@@ -19,17 +19,17 @@ const lockedFeedback   = document.getElementById('locked-feedback');
 const lockedFallbackBtn = document.getElementById('locked-fallback-btn');
 
 // Stable error string the agent uses for a failed TPM unseal (wrong PIN,
-// changed PCRs, or DA lockout) — see cosmic_bwarden_core::protocol::ERR_TPM_UNSEAL_FAILED.
+// changed PCRs, or DA lockout) — see cosmarden_core::protocol::ERR_TPM_UNSEAL_FAILED.
 // Any other Error message is an environmental failure (no account, agent
 // error, etc.) and is shown as-is rather than mislabeled as a wrong PIN.
 const ERR_TPM_UNSEAL_FAILED = 'TPM unseal failed';
 
 // Stable error string for a PCR-state change (BIOS/firmware update, Secure
-// Boot toggle) — see cosmic_bwarden_core::protocol::ERR_TPM_STATE_CHANGED.
+// Boot toggle) — see cosmarden_core::protocol::ERR_TPM_STATE_CHANGED.
 // The PIN itself is fine: this must never be shown as a wrong PIN.
 const ERR_TPM_STATE_CHANGED = 'TPM state changed';
 
-// Mirrors format_secs in crates/cosmic-bwarden-ui/src/view/mod.rs.
+// Mirrors format_secs in crates/cosmarden-ui/src/view/mod.rs.
 function formatSecs(secs) {
     if (secs === 0) return 'a moment';
     if (secs % 3600 === 0) return `${Math.floor(secs / 3600)}h`;
@@ -38,7 +38,7 @@ function formatSecs(secs) {
     return `${secs}s`;
 }
 
-// Mirrors CosmicBWardenApp::tpm_da_line — a one-line summary of the TPM
+// Mirrors CosmardenApp::tpm_da_line — a one-line summary of the TPM
 // dictionary-attack lockout state, or null if there is nothing to show.
 function tpmDaLine(status) {
     if (!status || !status.available) return null;
@@ -56,7 +56,7 @@ function tpmDaLine(status) {
     return null;
 }
 
-// Mirrors CosmicBWardenApp::pin_feedback_line — the DA line when known, else
+// Mirrors CosmardenApp::pin_feedback_line — the DA line when known, else
 // a plain "Incorrect PIN".
 function pinFeedbackLine(status) {
     return tpmDaLine(status) || 'Incorrect PIN';

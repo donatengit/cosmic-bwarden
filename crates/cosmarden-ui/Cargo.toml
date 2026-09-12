@@ -1,0 +1,91 @@
+[package]
+name = "cosmarden-ui"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+authors = ["Don Enikeev <donat@enikeev.net>"]
+repository = "https://github.com/donatengit/cosmic-bwarden"
+homepage = "https://github.com/donatengit/cosmic-bwarden"
+description = "Cosmarden panel applet and vault window"
+
+[[bin]]
+name = "cosmarden-applet"
+path = "src/main.rs"
+
+# `cargo deb -p cosmarden-ui --no-build` packages the whole app (all three
+# release binaries + desktop entry + applet metadata + hardened systemd user
+# unit + icons). Build the workspace release binaries first (`just build`).
+# NOTE for Debian-host finalization: `depends` is a conservative manual list —
+# $auto needs dpkg tooling, absent on non-Debian dev machines. Verify with
+# `dpkg-shlibdeps` on a real Debian/Ubuntu host before publishing.
+[package.metadata.deb]
+name = "cosmarden"
+maintainer = "Don Enikeev <donat@enikeev.net>"
+copyright = "2026, Donat Enikeev"
+license-file = "../../LICENSE"
+extended-description = """\
+Bitwarden-compatible password manager for COSMIC DE. Background agent \
+holding the vault in memory-locked storage, panel applet, CLI, SSH agent, and \
+browser-extension native host."""
+depends = "libc6, libxkbcommon0, libwayland-client0, libwayland-egl1, libegl1"
+section = "utils"
+priority = "optional"
+assets = [
+    ["../../target/release/cosmarden-agent", "usr/bin/", "755"],
+    ["../../target/release/cosmarden-applet", "usr/bin/", "755"],
+    ["../../target/release/cosmarden", "usr/bin/", "755"],
+    ["resources/com.enikeev.cosmarden.desktop", "usr/share/applications/", "644"],
+    # AppStream metadata — where software centres and distro package pages pick
+    # up the homepage/bugtracker/VCS links (the Homepage: control field comes
+    # from [package] homepage above; this is the richer, user-visible copy).
+    ["resources/com.enikeev.cosmarden.metainfo.xml", "usr/share/metainfo/", "644"],
+    ["../../packaging/com.enikeev.cosmarden.ron", "usr/share/cosmic/applets/", "644"],
+    ["../../packaging/cosmarden-agent.deb.service", "usr/lib/systemd/user/cosmarden-agent.service", "644"],
+    # Mirrors `just install`'s hicolor layout (docs/cosmic_integration.md).
+    # There is no dark-theme variant of the plain app icon: Linux desktops
+    # don't swap a hicolor app icon by system theme (verified against
+    # cosmic-settings/toot in tmp_code_examples — every COSMIC app ships
+    # exactly one). The `-symbolic` sibling below is the one icon a
+    # theme-aware consumer (e.g. app-icon pickers, the panel button we
+    # already render this way) can actually auto-recolor.
+    ["../../icons/black.svg", "usr/share/icons/hicolor/scalable/apps/com.enikeev.cosmarden.svg", "644"],
+    ["../../icons/black16.png", "usr/share/icons/hicolor/16x16/apps/com.enikeev.cosmarden.png", "644"],
+    ["../../icons/black32.png", "usr/share/icons/hicolor/32x32/apps/com.enikeev.cosmarden.png", "644"],
+    ["../../icons/black64.png", "usr/share/icons/hicolor/64x64/apps/com.enikeev.cosmarden.png", "644"],
+    ["../../icons/black128.png", "usr/share/icons/hicolor/128x128/apps/com.enikeev.cosmarden.png", "644"],
+    ["resources/icons/cosmarden-symbolic.svg", "usr/share/icons/hicolor/scalable/apps/com.enikeev.cosmarden-symbolic.svg", "644"],
+]
+
+[dependencies]
+cosmarden-core = { path = "../cosmarden-core" }
+anyhow = { workspace = true }
+libcosmic = { workspace = true, features = ["applet", "applet-token", "process", "single-instance"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-util"] }
+serde = { workspace = true }
+postcard = { workspace = true }
+clap = { version = "4.5", features = ["derive", "env"] }
+tracing = { workspace = true }
+async-stream = "0.3"
+tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
+tracing-journald = "0.3"
+i18n-embed = { workspace = true }
+i18n-embed-fl = { workspace = true }
+rust-embed = { workspace = true }
+zeroize = { workspace = true }
+zbus = { workspace = true }
+
+[dev-dependencies]
+# Settings-persistence regression tests write a real config file through the
+# COSMARDEN_CONFIG override (see app/tests/settings_persist.rs).
+tempfile = "3.10"
+serde_json = { workspace = true }
+
+[features]
+default = ["public_suffix_list"]
+# PSL-backed eTLD+1 extraction for applet row labels (e.g. shows
+# "example.co.uk", not "co.uk"). Without it labels fall back to the full
+# host, never a naive last-two-labels cut. See docs/public_suffix_list.md.
+public_suffix_list = ["cosmarden-core/public_suffix_list"]
+
+[lints]
+workspace = true

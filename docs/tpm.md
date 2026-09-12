@@ -1,6 +1,6 @@
 # TPM PIN Unlock
 
-`cosmic-bwarden-agent` can seal your vault keys inside a TPM 2.0 chip so
+`cosmarden-agent` can seal your vault keys inside a TPM 2.0 chip so
 unlocking requires only a short PIN rather than your full master password.
 An optional second blob stores a sealed copy of your master password hash,
 enabling silent Bitwarden server re-authentication (for sync) after a PIN unlock.
@@ -14,7 +14,7 @@ these keys are re-derived from your master password every time you unlock. TPM
 PIN unlock seals a copy of those keys inside the hardware chip so a short PIN
 suffices instead.
 
-1. During setup (`cosmic-bwarden-cli tpm setup`) the agent derives your vault's
+1. During setup (`cosmarden-cli tpm setup`) the agent derives your vault's
    encryption keys from your master password, then asks for a 6-character-minimum
    PIN.
 2. A symmetric primary key is created deterministically from the TPM's owner
@@ -39,7 +39,7 @@ suffices instead.
    cannot be unsealed and must be re-created via PIN setup.
 4. The sealed blob is written to:
    ```
-   ~/.local/share/cosmic-bwarden/tpm_sealed_<hex16>.bin
+   ~/.local/share/cosmarden/tpm_sealed_<hex16>.bin
    ```
    where `<hex16>` is the first 16 hex characters of SHA-256(`server + "\0" + email`),
    scoped so one blob exists per account.
@@ -55,7 +55,7 @@ Protect your PIN like a password.
 
 PIN unlock restores the local vault decryption keys, and with them the server
 session: the vault keys decrypt the **session envelope**
-(`~/.local/share/cosmic-bwarden/session_<hex16>.enc`), which holds the server
+(`~/.local/share/cosmarden/session_<hex16>.enc`), which holds the server
 refresh token under XChaCha20-Poly1305. The agent exchanges that token for a
 fresh access token and syncs, with no master-password prompt.
 
@@ -123,7 +123,7 @@ instead of a master password prompt.
 ### Via the CLI
 
 ```sh
-cosmic-bwarden-cli tpm setup
+cosmarden-cli tpm setup
 ```
 
 The CLI prompts for your master password (to verify and load vault keys) then
@@ -140,7 +140,7 @@ Settings → TPM section → **Remove PIN unlock**.
 ### Via the CLI
 
 ```sh
-cosmic-bwarden-cli tpm remove
+cosmarden-cli tpm remove
 ```
 
 This deletes the sealed blob for the current account. The TPM primary key is
@@ -172,7 +172,7 @@ to override the probe order.
 You can also run:
 
 ```sh
-cosmic-bwarden-cli tpm diagnostics
+cosmarden-cli tpm diagnostics
 ```
 
 to see the same four-item report in the terminal.
@@ -206,7 +206,7 @@ to see the same four-item report in the terminal.
 
 ## End-to-end test coverage
 
-`crates/cosmic-bwarden-tests/src/vault/tpm.rs` and `src/tpm_lifecycle/`
+`crates/cosmarden-tests/src/vault/tpm.rs` and `src/tpm_lifecycle/`
 exercise the full flow against a live Vaultwarden container. They require a
 software TPM emulator (`swtpm`) in the test environment. Run with:
 
@@ -214,7 +214,7 @@ software TPM emulator (`swtpm`) in the test environment. Run with:
 just test-tpm-smoke
 ```
 
-The recipe builds `target/debug/cosmic-bwarden-agent-tpm` with `--features tpm`
+The recipe builds `target/debug/cosmarden-agent-tpm` with `--features tpm`
 first, and skips itself when `swtpm`, `swtpm_setup`, or libtss2-esys is absent.
 Requires Docker or Podman for the Vaultwarden container.
 
@@ -240,11 +240,11 @@ confirm a test run is on the emulator rather than the host chip.
 
 | Piece | Where |
 |---|---|
-| Seal / unseal / clear, TCTI probe order, policy, blob format | `crates/cosmic-bwarden-agent/src/tpm/` — API in `mod.rs`, policy in `policy.rs`, blob format in `blob.rs`, operations in `ops.rs` |
-| IPC handlers (`status`, `setup`, `unlock`, `disable`) | `crates/cosmic-bwarden-agent/src/handler/auth/tpm_pin/` |
+| Seal / unseal / clear, TCTI probe order, policy, blob format | `crates/cosmarden-agent/src/tpm/` — API in `mod.rs`, policy in `policy.rs`, blob format in `blob.rs`, operations in `ops.rs` |
+| IPC handlers (`status`, `setup`, `unlock`, `disable`) | `crates/cosmarden-agent/src/handler/auth/tpm_pin/` |
 | Agent state | `tpm_configured` in the agent's `State` |
-| UI state | `tpm_available` / `show_pin_unlock` on `CosmicBWardenApp`, which is what hides or shows the PIN controls |
+| UI state | `tpm_available` / `show_pin_unlock` on `CosmardenApp`, which is what hides or shows the PIN controls |
 
 Enabled by the optional `tpm` feature (agent and UI). Build with
-`cargo check -p cosmic-bwarden-agent --features tpm`. Seal/unseal goes through
+`cargo check -p cosmarden-agent --features tpm`. Seal/unseal goes through
 `tss-esapi`.

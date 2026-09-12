@@ -197,7 +197,7 @@ export function checkVersionPreflight({
       errors.push(`version ${version} already exists in dist/updates.json (AMO rejects duplicate versions)`);
     }
     if (distXpiVersions.includes(version)) {
-      errors.push(`dist/cosmic-bwarden-${version}.xpi already exists — refusing to re-sign`);
+      errors.push(`dist/cosmarden-${version}.xpi already exists — refusing to re-sign`);
     }
   }
 
@@ -221,7 +221,7 @@ export function checkVersionPreflight({
 export function entryFor({ version, baseUrl, sha256Hex, linkBase }) {
   return {
     version,
-    update_link: `${normalizeBaseUrl(linkBase ?? baseUrl)}/cosmic-bwarden-${version}.xpi`,
+    update_link: `${normalizeBaseUrl(linkBase ?? baseUrl)}/cosmarden-${version}.xpi`,
     update_hash: `sha256:${sha256Hex}`,
   };
 }
@@ -267,7 +267,7 @@ export function checkDevVersion({ version, updatesJsonVersions = [], distXpiVers
     errors.push(`version ${version} already exists in dist/updates.json (AMO rejects duplicate versions)`);
   }
   if (distXpiVersions.includes(version)) {
-    errors.push(`dist/cosmic-bwarden-${version}.xpi already exists — refusing to re-sign`);
+    errors.push(`dist/cosmarden-${version}.xpi already exists — refusing to re-sign`);
   }
   return { ok: errors.length === 0, errors, version };
 }
@@ -357,7 +357,7 @@ function versionsInDist(distDir) {
   }
   const found = [];
   for (const name of readdirSync(distDir)) {
-    const match = /^cosmic-bwarden-(.+)\.xpi$/.exec(name);
+    const match = /^cosmarden-(.+)\.xpi$/.exec(name);
     if (match) {
       found.push(match[1]);
     }
@@ -441,7 +441,7 @@ async function updatesJson(args) {
 function finalizeSign(args) {
   const [artifactsDir, version, distDir] = args;
   const artifactsAbs = withinRepo(artifactsDir);
-  const dest = join(withinRepo(distDir), `cosmic-bwarden-${version}.xpi`);
+  const dest = join(withinRepo(distDir), `cosmarden-${version}.xpi`);
   const entries = readdirSync(artifactsAbs).filter(
     (name) => name.endsWith(".xpi") && lstatSync(join(artifactsAbs, name)).isFile()
   );

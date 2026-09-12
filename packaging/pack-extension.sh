@@ -16,7 +16,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 src="$repo_root/browser-extension"
-out="$repo_root/target/cosmic-bwarden-extension.zip"
+out="$repo_root/target/cosmarden-extension.zip"
 
 mkdir -p "$repo_root/target"
 # `zip -r` UPDATES an existing archive instead of replacing it: without this,
