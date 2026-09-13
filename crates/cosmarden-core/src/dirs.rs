@@ -18,7 +18,6 @@ pub fn set_ssh_socket_override(path: PathBuf) {
 }
 
 pub fn make_all() -> Result<()> {
-    profile::migrate_legacy_dirs();
     create_dir_all_with_permissions(&cache_dir(), 0o700)?;
     create_dir_all_with_permissions(&runtime_dir(), 0o700)?;
     create_dir_all_with_permissions(&data_dir(), 0o700)?;

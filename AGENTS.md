@@ -61,9 +61,6 @@ Keep each layer in its own lane:
 | App ID | `com.enikeev.cosmarden` | `APP_ID`, `.desktop`/`.ron`/metainfo filenames, D-Bus path, `StartupWMClass`, native-messaging host name |
 | Code identifiers | `Cosmarden*` | `CosmardenApp`, `CosmardenConfig` — Rust types, never rename to match the display name. `AppFlags` implements libcosmic `CosmicFlags`. |
 
-`com.system76.CosmicBWarden` appears only in the justfile's leftover-cleanup
-`rm -f` lines; it is a historical app ID, not a name — leave it byte-for-byte.
-
 The project URL is `cosmarden_core::HOMEPAGE` on the Rust side. The
 non-Rust manifests (metainfo, systemd units, `manifest.json`, `package.json`,
 PKGBUILD) carry their own copy and must be updated together if the repo moves.
