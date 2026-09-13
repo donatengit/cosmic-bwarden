@@ -89,9 +89,17 @@ impl CosmardenApp {
 
                 if let Some(popup_id) = self.applet_popup.take() {
                     self.windows.remove(&popup_id);
-                    tasks.push(Task::done(cosmic::Action::Surface(
-                        cosmic::surface::action::destroy_popup(popup_id),
-                    )));
+                    // The COSMIC popup is a Wayland popup surface; the tray's
+                    // compact popup (`kde.rs`) is an ordinary window. Destroying
+                    // a popup surface that was never created as one is a no-op,
+                    // so the tray popup has to be closed as a window.
+                    tasks.push(if crate::detect_run_mode() == crate::RunMode::Tray {
+                        cosmic::iced::window::close(popup_id)
+                    } else {
+                        Task::done(cosmic::Action::Surface(
+                            cosmic::surface::action::destroy_popup(popup_id),
+                        ))
+                    });
                 }
 
                 if let Some(tx) = self.token_tx.as_ref() {
@@ -99,11 +107,12 @@ impl CosmardenApp {
                         app_id: crate::app::state::APP_ID.to_string(),
                         exec: "open-vault".to_string(),
                     });
-                } else if crate::detect_run_mode() != crate::RunMode::Tray {
-                    // No activation-token channel: this binary was not started
-                    // by the COSMIC panel, so spawn the vault window directly
-                    // (`spawn_vault_app` re-runs this executable). The tray
-                    // binary has no vault window and hides the button.
+                } else {
+                    // No activation-token channel: this process was not started
+                    // by the COSMIC panel, so spawn the vault binary directly.
+                    // `spawn_vault_app` resolves `cosmarden-applet`, a sibling
+                    // of the running binary — the tray opens the full app
+                    // instead of re-running itself.
                     tasks.push(crate::app::update::activation::spawn_vault_app(None));
                 }
 

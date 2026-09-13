@@ -19,15 +19,20 @@ application mode, the same binary COSMIC uses.
 All KDE-specific code is gated on **`--features kde`** (UI crate, not
 default, not auto-detected). `just build` / `just test-unit` stay
 COSMIC. `just build-kde` produces **`cosmarden-tray`**, a separate
-agent-only process (StatusNotifierItem + compact popup). It does not
-open the vault window. Context menu: copy username/secret, generate,
-lock, logout, quit — one Quit row, matching the popup footer
-(`app::applet_menu::quit_actions`); the dropped Lock-and-Quit /
-Logout-and-Quit pair are no longer in the popup either. Left-click /
-Unlock opens a popup that reuses `view/applet/` (`secure_input` for
-PIN/password). DBusMenu cannot host a password field. `cosmarden-applet`
-stays the COSMIC applet / vault window and does not host the tray.
-`just test-unit-kde` runs the gated tests.
+agent-only process (StatusNotifierItem + compact popup). It owns no
+vault UI of its own: everything it can do is either an agent action or
+a hand-off to the full app. Context menu: Open Vault, copy
+username/secret, generate, lock, logout, quit — one Quit row, matching
+the popup footer (`app::applet_menu::quit_actions`); the dropped
+Lock-and-Quit / Logout-and-Quit pair are no longer in the popup either.
+Left-click / Unlock opens a compact popup that reuses `view/applet/`
+(search, favourites, per-row copy/open, `secure_input` for
+PIN/password); DBusMenu cannot host a password field. **Open Vault
+spawns `cosmarden-applet`** in application mode
+(`activation::spawn_vault_app`), the same binary COSMIC opens, resolved
+as a sibling of the running tray binary — the tray must never re-spawn
+itself, since it only ever calls `run_tray`. `just test-unit-kde` runs
+the gated tests.
 
 This inventory is taken from the shipped UI source, not from
 `CONTEXT.md` / `docs/cosmic_integration.md`. Where those docs disagree
@@ -71,7 +76,7 @@ Both link the same `Application` impl in `runtime.rs`. Popup content is
 | Control | Wiring | Agent IPC |
 |---|---|---|
 | Protocol mismatch | If `protocol_mismatch`: body `fl!("protocol-version-mismatch")` + Quit (`Message::Exit`). Nothing else. | `Action::Version` compared to `PROTOCOL_VERSION` (`app/tasks.rs` `check_protocol_version`) |
-| Open Vault Window | `Message::OpenVaultRequested`. Destructive styling when `sync_failed && unlocked`. | Closes popup; requests a COSMIC activation token with `exec: "open-vault"` (`update/activation.rs` `classify_activation` → `SpawnVault`). Spawns **this same binary** with `COSMARDEN_MODE=application` and `COSMIC_PANEL_NAME` removed. |
+| Open Vault Window | `Message::OpenVaultRequested`. Destructive styling when `sync_failed && unlocked`. Shown on every surface, the Plasma tray's compact popup included. | Closes the popup, then: with a token channel (COSMIC panel) requests an activation token with `exec: "open-vault"` (`update/activation.rs` `classify_activation` → `SpawnVault`); without one (tray, direct launch) resolves the vault binary itself. Both spawn `cosmarden-applet` with `COSMARDEN_MODE=application` and `COSMIC_PANEL_NAME` removed. |
 | Not-synced icon | Only `sync_failed && unlocked`. Session-expired (`error` contains `"session token"`) → `Message::LogoutClicked`; else `Message::SyncClicked`. | `Action::Logout` or `Action::Sync` |
 | Generate | Always shown. `Message::AppletGeneratePasswordRequested` | `Action::GeneratePassword { settings: None }` via `generator_actions::generate_with_stored` — reuses last-used settings, does not persist new ones. Works locked and with no account. |
 | Lock | Unlocked only. `Message::LockClicked` | `Action::Lock` via `auth_actions::lock` |
@@ -113,7 +118,7 @@ switch immediately.
 | Empty state | `no-pinned-entries` vs `no-results` | none |
 | Login label | Copies username already on `SidebarEntry` (`AppletCopyPrimary`). No extra IPC. Disabled if no username. Tooltip is the username. Label is PSL eTLD+1 of the name (`extract_domain_label`), truncated to 28 chars. | clipboard only |
 | 🔑 / note-or-ssh label | `AppletCopySecret` | `Action::GetPassword { id, password: None }` via `vault_actions::fetch_password`. Agent maps login password / note body / SSH private key into `Response::Password { password: Secret }`. |
-| 📂 | `AppletOpenInVault` | `Action::SetPendingEntry { id }` then the Open Vault Window path. Agent delivers `Event::OpenEntry` to a Subscribe client (the vault window). Rendered disabled in `RunMode::Tray` (`search.rs` `open_in_vault` returns `None`), which has no vault window. |
+| 📂 | `AppletOpenInVault` | `Action::SetPendingEntry { id }` then the Open Vault Window path, so the spawned window selects that entry. Agent delivers `Event::OpenEntry` to a Subscribe client (the vault window). Available in the Plasma tray's popup too, which spawns the app the same way. |
 | 🔗 | `AppletOpenLink` if `is_uri_like(name)` | none. Detached `xdg-open` (`activation::open_link`) |
 | Reprompt row | Replaces that result row when GetPassword returns `"reprompt_required"`. Secure input + submit + cancel + reveal | `GetPassword { id, password: Some(master) }` |
 
@@ -169,6 +174,8 @@ and the `cosmarden-tray` binary (`src/bin/cosmarden-tray.rs`). That binary sets
 `COSMARDEN_MODE=tray` and calls `runtime::run_tray`, which uses
 `cosmic::app::run` rather than `run_single_instance`, so it coexists with
 `cosmarden-applet`; its main window stays empty and only the popup is shown.
+It renders no vault UI of its own — every action is an agent call, a popup
+shown from the shared `view/applet/` widgets, or a hand-off to the full app.
 
 | Piece | Wiring | Notes |
 |---|---|---|
@@ -177,6 +184,8 @@ and the `cosmarden-tray` binary (`src/bin/cosmarden-tray.rs`). That binary sets
 | Left click | `activate()` → `TrayCommand::TogglePopup` → `Message::KdeTray` | Opens or closes the compact popup window (372×480, `AlwaysOnTop`) that reuses `view/applet/`. |
 | Context menu | `kde/menu.rs` `build_menu()` — a pure `MenuNode` tree, unit-tested without a tray host. | Copy rows come from `applet_search::build_applet_rows`; chrome from `chrome_commands()`. |
 | State push | `kde::publish_snapshot` after every applet-search update and after each tray command. | DBusMenu is read on demand, so the menu is rebuilt from the pushed snapshot. |
+| Open Vault | `TrayCommand::OpenVault` → `Message::OpenVaultRequested`, the popup header's own handler. | Spawns `cosmarden-applet`: override `COSMARDEN_APPLET_BIN`, else the sibling of the running binary, else `PATH` (`activation::resolve_vault_binary`). Resolution is unit-tested, including that the tray never resolves to itself. |
+| Popup close | The tray popup is opened with `window::open` and closed with `window::close`; the COSMIC popup is a Wayland popup surface closed with `surface::action::destroy_popup`. | `destroy_popup` on a plain window is a no-op, which would have left the tray popup on screen after Open Vault. |
 | Quit row | `chrome_commands()` ends in `Exit`; the lock/logout-and-quit pair was dropped along with the popup's. | See the Doc-vs-source table. |
 
 `Message::KdeTray` is intercepted at the top of `update_app`, before the
@@ -226,7 +235,7 @@ Grounded in KDE's Plasma 6 widget docs:
 | 16 | Open URI via xdg-open | **Possible** | `QDesktopServices::openUrl` or detached `xdg-open`. Do not `Command::spawn` and drop `Child` (COSMIC already hit the zombie). |
 | 17 | Protocol mismatch surface | **Possible** | `Action::Version` vs `PROTOCOL_VERSION`. |
 | 18 | Not-configured caption (no login form) | **Possible** | Same as COSMIC applet: tell the user; login is not a popup job. |
-| 19 | Open Vault Window / 📂 open-in-vault | **Possible** (libcosmic window on Plasma) | The same `cosmarden-applet` binary opens as a normal window when `COSMIC_PANEL_NAME` is unset. Confirmed on Plasma: the vault UI runs; libcosmic then logs theme-connection `ERROR`s without `cosmic-settings-daemon` (demoted under `--features kde`). A plasmoid cannot share the applet *process*, but it can spawn this binary like COSMIC's `SpawnVault`. `OnlyShowIn=COSMIC;` hides it from KDE app launchers — a KDE `.desktop` belongs behind `--features kde`, not in the default install. `SetPendingEntry` / `Event::OpenEntry` still work if that window is subscribed. |
+| 19 | Open Vault Window / 📂 open-in-vault | **Shipped** for the tray (libcosmic window on Plasma) | The tray spawns the same `cosmarden-applet` binary COSMIC spawns, in application mode; the vault UI then runs on Plasma with libcosmic's theme-connection `ERROR`s demoted under `--features kde`. It resolves the binary as its own sibling (or `COSMARDEN_APPLET_BIN`/`PATH`), because a tray that re-spawned itself would start a second tray. `SetPendingEntry` / `Event::OpenEntry` still work: the spawned window subscribes and opens the targeted entry. A plasmoid could do the same, but not share the applet *process*. `OnlyShowIn=COSMIC;` still hides the applet's `.desktop` from KDE app launchers — a KDE `.desktop` belongs behind `--features kde`, not in the default install. |
 | 20 | Activation-token `exec` (`open-vault`, `activate:lock`, `activate:generate`) | **Impossible** (COSMIC panel API) | `cosmic::applet::token::subscription`. Plasma has XDG activation for launching windows, but not this exec-string router, and there is no same-binary vault to spawn. |
 | 21 | Quit tearing down the **UI process** | **Partial** | The plasmoid lives **inside plasmashell**. It cannot exit a panel process the way `Message::Exit` closes `cosmarden-applet` (or `cosmarden-tray`, which is its own process and does exit). Map Lock/Logout to IPC; map "just quit" to collapsing the popup (`plasmoid.expanded = false`). Do not send `Action::Quit` (that kills the agent). |
 | 22 | 200 ms Wayland same-press popup debounce | **Partial** | Plasma's `expanded` toggle is a different event path. May still need a small debounce; do not copy libcosmic popup `anchor_rect` code. |

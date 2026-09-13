@@ -12,6 +12,9 @@ use crate::message::Message;
 pub enum TrayCommand {
     /// Left-click / Unlock: show the compact applet popup (search + PIN/password).
     TogglePopup,
+    /// Open the full app (`cosmarden-applet`): the only surface with the vault
+    /// list, settings and the generator pane.
+    OpenVault,
     Generate,
     Lock,
     Logout,
@@ -44,11 +47,17 @@ pub fn chrome_commands(protocol_mismatch: bool, setup: bool, unlocked: bool) -> 
     if protocol_mismatch {
         return vec![TrayCommand::Exit];
     }
+    // The full app is always one entry away, in every state but a protocol
+    // mismatch (where the applet popup itself offers nothing but Quit either).
+    let mut out = vec![TrayCommand::OpenVault];
     if setup {
-        // No account yet: nothing to unlock, lock or log out of.
-        return vec![TrayCommand::Generate, TrayCommand::Exit];
+        // No account yet: nothing to unlock, lock or log out of. The compact
+        // popup stays reachable because a login form is not a DBusMenu job.
+        out.push(TrayCommand::TogglePopup);
+        out.push(TrayCommand::Generate);
+        out.push(TrayCommand::Exit);
+        return out;
     }
-    let mut out = Vec::new();
     if !unlocked {
         out.push(TrayCommand::TogglePopup);
     }
@@ -140,6 +149,7 @@ pub fn build_menu(
 fn chrome_label(cmd: &TrayCommand) -> String {
     match cmd {
         TrayCommand::TogglePopup => fl!("tray-unlock"),
+        TrayCommand::OpenVault => fl!("open-vault-window"),
         TrayCommand::Generate => fl!("generate-password"),
         TrayCommand::Lock => fl!("lock"),
         TrayCommand::Logout => fl!("logout"),
@@ -163,6 +173,7 @@ pub fn command_to_message(cmd: TrayCommand) -> Message {
     match cmd {
         // Re-enters `update_app`, which routes it to `kde::handle_tray_command`.
         TrayCommand::TogglePopup => Message::KdeTray(TrayCommand::TogglePopup),
+        TrayCommand::OpenVault => Message::OpenVaultRequested,
         TrayCommand::Generate => Message::AppletGeneratePasswordRequested,
         TrayCommand::Lock => Message::LockClicked,
         TrayCommand::Logout => Message::LogoutClicked,
@@ -218,11 +229,24 @@ mod tests {
     }
 
     #[test]
-    fn setup_chrome_offers_no_session_actions() {
+    fn setup_chrome_offers_the_full_app_and_the_popup() {
         assert_eq!(
             chrome_commands(false, true, false),
-            vec![TrayCommand::Generate, TrayCommand::Exit]
+            vec![
+                TrayCommand::OpenVault,
+                TrayCommand::TogglePopup,
+                TrayCommand::Generate,
+                TrayCommand::Exit
+            ]
         );
+    }
+
+    #[test]
+    fn open_vault_maps_to_the_shared_popup_handler() {
+        assert!(matches!(
+            command_to_message(TrayCommand::OpenVault),
+            Message::OpenVaultRequested
+        ));
     }
 
     /// The popup footer is one Quit row (`app::applet_menu::quit_actions`);
@@ -241,20 +265,23 @@ mod tests {
         }
     }
 
+    /// The tray is agent-only, so `Open Vault` must spawn `cosmarden-applet`
+    /// (`activation::spawn_vault_app`) instead of opening a window of its own.
+    /// It is offered in every state that has an app to open.
     #[test]
-    fn tray_chrome_never_opens_the_vault_window() {
-        for (mismatch, setup, unlocked) in [
-            (false, false, false),
-            (false, false, true),
-            (false, true, false),
-            (true, false, true),
-        ] {
-            let labels = node_labels(&build_menu(mismatch, setup, unlocked, &[]));
+    fn tray_chrome_offers_the_full_app() {
+        for (setup, unlocked) in [(false, false), (false, true), (true, false)] {
+            let labels = node_labels(&build_menu(false, setup, unlocked, &[]));
             assert!(
-                !labels.iter().any(|l| l == &fl!("open-vault-window")),
-                "agent-only tray must not offer Open Vault (mismatch={mismatch} setup={setup} unlocked={unlocked})"
+                labels.iter().any(|l| l == &fl!("open-vault-window")),
+                "the tray must reach the full app (setup={setup} unlocked={unlocked}): {labels:?}"
             );
         }
+        let labels = node_labels(&build_menu(true, false, true, &[]));
+        assert!(
+            !labels.iter().any(|l| l == &fl!("open-vault-window")),
+            "a protocol mismatch offers nothing but Quit: {labels:?}"
+        );
     }
 
     #[test]

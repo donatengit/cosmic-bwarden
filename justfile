@@ -73,6 +73,12 @@ install:
     install -Dm755 target/release/cosmarden-agent {{local_bin}}/cosmarden-agent
     install -Dm755 target/release/cosmarden-applet {{local_bin}}/cosmarden-applet
     install -Dm755 target/release/cosmarden {{local_bin}}/cosmarden
+    # The Plasma tray is built by `just build-kde`, not by `build`; install it
+    # when it is there. It resolves `cosmarden-applet` as its own sibling to
+    # open the full app, so the two have to land in the same directory.
+    if [ -x target/release/cosmarden-tray ]; then \
+        install -Dm755 target/release/cosmarden-tray {{local_bin}}/cosmarden-tray; \
+    fi
 
     echo "Installing desktop entry..."
     # cosmic-panel spawns Exec via its own PATH, which is the systemd user

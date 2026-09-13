@@ -310,10 +310,20 @@ and why a plasma tray is not a plasmoid: `docs/kde_applet_parity.md`.
 - **`cosmarden-tray` is the only binary behind the flag** (`just build-kde`).
   It is agent-only: tray menu, compact popup, no vault window. The default
   `just build` must not produce it.
-- **Never make the tray the only way to reach an action.** The popup views in
-  `view/applet/` stay shared: the tray maps its commands onto the popup's
-  existing messages (`Message::KdeTray` is intercepted in `update_app`), and
-  vault-window actions are hidden — not duplicated — in `RunMode::Tray`.
+- **The tray owns no vault UI.** The popup views in `view/applet/` stay
+  shared: the tray maps its commands onto the popup's existing messages
+  (`Message::KdeTray` is intercepted in `update_app`), and reaching the vault
+  list, settings or the generator pane means spawning `cosmarden-applet`
+  (`activation::spawn_vault_app`), never rendering a second app in the tray
+  process.
+- **Resolve that binary by name, never re-spawn the current executable.** The
+  tray only ever calls `run_tray`, so `current_exe()` there is another tray.
+  `activation::resolve_vault_binary` (override, sibling, `PATH`) is the single
+  resolver and is unit-tested for exactly that case.
+- **The tray popup is a plain window, the COSMIC popup a Wayland popup
+  surface.** Close them with `window::close` and `surface::action::destroy_popup`
+  respectively (`RunMode` decides); the wrong one is a silent no-op that leaves
+  the popup on screen.
 - **`RunMode::{Applet, Application, Tray}` is decided from the environment**
   (`lib.rs::detect_run_mode`). Tests that assert tray behavior must set
   `COSMARDEN_MODE` explicitly and restore it, like every other env override.
