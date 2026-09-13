@@ -60,6 +60,33 @@ pub fn migrate_legacy_dirs() {
     if let (Some(n), Some(o)) = (new.runtime_dir(), old.runtime_dir()) {
         rename_if_needed(n, o);
     }
+
+    let cosmic_new = cosmic_app_dir(crate::config::CONFIG_ID);
+    for legacy_id in ["com.system76.CosmicBWarden", "com.enikeev.cosmic_bwarden"] {
+        let cosmic_old = cosmic_app_dir(legacy_id);
+        rename_if_needed(&cosmic_new, &cosmic_old);
+        remove_empty_dir(&cosmic_old);
+    }
+}
+
+fn cosmic_app_dir(app_id: &str) -> std::path::PathBuf {
+    let config_home = std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| directories::BaseDirs::new().map(|b| b.config_dir().to_path_buf()))
+        .unwrap_or_else(|| std::path::PathBuf::from(".config"));
+    config_home.join("cosmic").join(app_id)
+}
+
+fn remove_empty_dir(path: &std::path::Path) {
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let child = entry.path();
+            if child.is_dir() {
+                remove_empty_dir(&child);
+            }
+        }
+    }
+    let _ = std::fs::remove_dir(path);
 }
 
 fn rename_if_needed(new: &std::path::Path, old: &std::path::Path) {
@@ -200,6 +227,36 @@ mod tests {
             std::fs::read_to_string(crate::dirs::config_file()).unwrap(),
             "{\"migrated\":true}"
         );
+    }
+
+    #[test]
+    fn migrate_legacy_dirs_moves_cosmic_config_app_id() {
+        let _g = EnvGuard::capture();
+        std::env::remove_var(PROFILE_ENV);
+        std::env::remove_var(LEGACY_PROFILE_ENV);
+        let tmp = tempfile::TempDir::new().unwrap();
+        redirect_xdg(tmp.path());
+        let old = cosmic_app_dir("com.system76.CosmicBWarden");
+        let new = cosmic_app_dir(crate::config::CONFIG_ID);
+        std::fs::create_dir_all(old.join("v1")).unwrap();
+        std::fs::write(old.join("v1").join("config.ron"), "()").unwrap();
+        migrate_legacy_dirs();
+        assert!(new.join("v1").join("config.ron").is_file());
+        assert!(!old.exists());
+    }
+
+    #[test]
+    fn migrate_legacy_dirs_drops_empty_cosmic_config_leftover() {
+        let _g = EnvGuard::capture();
+        std::env::remove_var(PROFILE_ENV);
+        std::env::remove_var(LEGACY_PROFILE_ENV);
+        let tmp = tempfile::TempDir::new().unwrap();
+        redirect_xdg(tmp.path());
+        let old = cosmic_app_dir("com.system76.CosmicBWarden");
+        std::fs::create_dir_all(old.join("v1")).unwrap();
+        std::fs::create_dir_all(cosmic_app_dir(crate::config::CONFIG_ID)).unwrap();
+        migrate_legacy_dirs();
+        assert!(!old.exists());
     }
 
     #[test]

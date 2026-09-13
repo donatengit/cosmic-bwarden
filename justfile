@@ -125,6 +125,8 @@ remove-previous-identity:
     rm -f {{local_icons}}/16x16/apps/com.enikeev.cosmic_bwarden.png {{local_icons}}/32x32/apps/com.enikeev.cosmic_bwarden.png {{local_icons}}/64x64/apps/com.enikeev.cosmic_bwarden.png {{local_icons}}/128x128/apps/com.enikeev.cosmic_bwarden.png
     rm -f {{home}}/.mozilla/native-messaging-hosts/com.enikeev.cosmic_bwarden.json
     rm -f {{home}}/.mozilla/native-messaging-hosts/cosmic-bwarden-browser-host.sh
+    rm -rf {{home}}/.config/cosmic/com.system76.CosmicBWarden
+    rm -rf {{home}}/.config/cosmic/com.enikeev.cosmic_bwarden
     systemctl --user daemon-reload 2>/dev/null || true
 
 # Restart the COSMIC panel to discover new applets
