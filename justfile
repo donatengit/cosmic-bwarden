@@ -199,6 +199,23 @@ clean: uninstall
 # an earlier filter list silently left 41 of 90 E2E tests unrun. Keep the full
 # run filter-free so it cannot drift again.
 #
+fmt:
+    {{_limited}} cargo fmt --all
+
+# Same commands as the CI "fmt + clippy" job. fmt is seconds; clippy is a
+# compile. `just hooks` installs the git hooks that run fmt on commit and
+# this recipe on push.
+lint:
+    {{_limited}} cargo fmt --check
+    {{_limited}} cargo clippy --workspace --all-targets
+    {{_limited}} cargo clippy -p cosmarden-agent --features tpm
+
+# Point git at packaging/githooks (tracked). Replaces the untracked
+# .git/hooks/pre-commit rustfmt check with the same script, plus pre-push clippy.
+hooks:
+    git config core.hooksPath packaging/githooks
+    echo "git hooks: $(git config --get core.hooksPath) (pre-commit fmt, pre-push just lint)"
+
 # Run the whole Rust test suite: unit tests, then the complete E2E crate
 test: test-unit test-e2e
 

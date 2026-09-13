@@ -21,15 +21,19 @@ real bug; please don't relitigate them in a PR.
 A change is ready when all of these are green:
 
 ```sh
-cargo fmt --check
-cargo clippy --workspace --all-targets --all-features
+just lint                                    # cargo fmt --check + clippy; same as CI
 cargo check --workspace --all-features       # --all-features matters: tpm code is
                                              # invisible to a plain check
-cargo test -p cosmarden-core -p cosmarden-agent \
-           -p cosmarden-cli -p cosmarden-ui    # unit tests, seconds
+just test-unit                               # unit tests, seconds
 just test                                    # full E2E; needs a podman/docker socket
 just test-extension-unit                     # browser-extension unit tests
 ```
+
+`just fmt` is seconds (no compile). `just lint` also runs clippy, which is a
+full compile — cheap on a warm cache, not something to put on every commit.
+`just hooks` sets `core.hooksPath` to `packaging/githooks/`: rustfmt on
+commit, `just lint` on push when the commits touch Rust. `git push --no-verify`
+skips the push hook.
 
 `warnings = "deny"` is set workspace-wide. If a warning is genuinely unavoidable, use a
 narrowly scoped `#[allow(...)]` with a comment explaining why — don't relax the lint.

@@ -1,0 +1,15 @@
+#!/bin/sh
+# Refuse to commit when rustfmt is dirty. Matches CI `cargo fmt --check`.
+# Clippy is a compile — that lives in pre-push / `just lint`.
+
+if ! command -v cargo >/dev/null 2>&1; then
+    echo "pre-commit: cargo not found, skipping rustfmt check" >&2
+    exit 0
+fi
+
+if ! cargo fmt --check >/dev/null 2>&1; then
+    echo "pre-commit: rustfmt check FAILED — run 'cargo fmt --all' and re-stage before committing." >&2
+    exit 1
+fi
+
+exit 0
