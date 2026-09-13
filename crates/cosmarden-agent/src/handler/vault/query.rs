@@ -357,7 +357,6 @@ pub async fn handle_get_entries(
                     (EntryType::SecureNote, cosmarden_core::db::EntryData::SecureNote) => (),
                     (EntryType::SshKey, cosmarden_core::db::EntryData::SshKey { .. }) => (),
                     (EntryType::BankAccount, cosmarden_core::db::EntryData::BankAccount { .. }) => {
-                        ()
                     }
                     (
                         EntryType::DriversLicense,
