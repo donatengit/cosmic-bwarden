@@ -237,9 +237,6 @@ impl CosmardenApp {
                         Ok(entries) => {
                             self.applet_search_results = entries;
                             self.applet_error = None;
-                            // The tray menu lists these rows.
-                            #[cfg(feature = "kde")]
-                            crate::kde::publish_snapshot(self);
                         }
                         // Expected while locked; the unlock UI is already shown.
                         Err(e) if e == "agent is locked" => {}

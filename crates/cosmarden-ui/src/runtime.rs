@@ -156,7 +156,17 @@ impl Application for CosmardenApp {
     }
 
     fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
-        self.update_app(message)
+        let task = self.update_app(message);
+        // The DBusMenu is read back on demand, so the tray needs a snapshot of
+        // the state *after* every update: lock/unlock, logout, vault changes
+        // and the row list all arrive as messages, and publishing here is the
+        // one place that cannot miss a transition. Cheap: it only builds a
+        // ≤10-row vec and hands it to ksni.
+        #[cfg(feature = "kde")]
+        if detect_run_mode() == RunMode::Tray {
+            crate::kde::publish_snapshot(self);
+        }
+        task
     }
 
     fn view(&self) -> cosmic::Element<'_, Self::Message> {

@@ -24,14 +24,12 @@ pub(crate) const CLIPBOARD_CLEAR_SECS: u64 = 30;
 
 impl CosmardenApp {
     pub fn update_app(&mut self, message: Message) -> Task<Message> {
-        // Tray clicks and menu actions are not vault operations: they open or
-        // close the compact popup and republish the menu snapshot after the
-        // state change.
+        // Tray clicks and menu actions are not vault operations: they only
+        // open or close the compact popup. The menu snapshot is republished by
+        // `Application::update`, once per message.
         #[cfg(feature = "kde")]
         if let Message::KdeTray(cmd) = message.clone() {
-            let task = crate::kde::handle_tray_command(self, cmd);
-            crate::kde::publish_snapshot(self);
-            return task;
+            return crate::kde::handle_tray_command(self, cmd);
         }
         if let Some(task) = self.update_lifecycle(message.clone()) {
             return task;
