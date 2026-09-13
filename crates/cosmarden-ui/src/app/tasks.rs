@@ -1,3 +1,5 @@
+use crate::app::applet_search;
+use crate::app::state::CosmardenApp;
 use crate::app::update::{generator_actions, vault_actions};
 use crate::message::Message;
 use cosmarden_core::agent_client::AgentClient;
@@ -63,6 +65,34 @@ pub fn fetch_sidebar_entries(
         },
         move |res| Action::App(Message::EntriesReceived(id, res)),
     )
+}
+
+/// Fetch the applet rows for the current query and favourites toggle, and
+/// return the task for the caller's batch.
+///
+/// One definition for all three callers — the two lifecycle refreshes and the
+/// tray's popup open — because a caller that passed its own `only_pinned`
+/// showed the pinned set under a non-empty search box.
+pub fn applet_rows_task(app: &mut CosmardenApp) -> Task<Message> {
+    app.applet_search_id += 1;
+    let (query, only_pinned) =
+        applet_rows_request(&app.applet_search_query, app.applet_search_only_favourites);
+    fetch_applet_search(app.applet_search_id, query, only_pinned)
+}
+
+/// Pure request behind [`applet_rows_task`]: an empty query always means
+/// "favourites only" (`effective_only_pinned`), and then `query` is sent as
+/// `None` rather than an empty string. Kept separate so the pairing is
+/// testable: the tray passed a hardcoded `only_pinned = true` with
+/// `query = None`, which showed the pinned set under a non-empty search box.
+fn applet_rows_request(query: &str, favourites_toggle: bool) -> (Option<String>, bool) {
+    let only_pinned = applet_search::effective_only_pinned(query, favourites_toggle);
+    let query = if query.trim().is_empty() {
+        None
+    } else {
+        Some(query.to_string())
+    };
+    (query, only_pinned)
 }
 
 pub fn fetch_applet_search(id: u32, query: Option<String>, only_pinned: bool) -> Task<Message> {
@@ -150,5 +180,21 @@ mod tests {
         let build_version = cosmarden_core::version();
         assert_ne!(build_version, cosmarden_core::PROTOCOL_VERSION);
         assert!(!protocol_mismatch(cosmarden_core::PROTOCOL_VERSION));
+    }
+
+    #[test]
+    fn applet_rows_request_keeps_query_and_toggle_in_step() {
+        // Empty query: favourites only, and no query string on the wire.
+        assert_eq!(applet_rows_request("", false), (None, true));
+        assert_eq!(applet_rows_request("   ", true), (None, true));
+        // Non-empty query: the toggle decides, and the query is sent.
+        assert_eq!(
+            applet_rows_request("mail", false),
+            (Some("mail".to_string()), false)
+        );
+        assert_eq!(
+            applet_rows_request("mail", true),
+            (Some("mail".to_string()), true)
+        );
     }
 }

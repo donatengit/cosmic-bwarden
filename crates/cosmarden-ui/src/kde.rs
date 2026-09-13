@@ -11,6 +11,7 @@ mod tray;
 
 use crate::app::applet_search;
 use crate::app::state::CosmardenApp;
+use crate::app::tasks::applet_rows_task;
 use crate::fl;
 use crate::message::{Message, View, WindowState};
 use cosmic::app::Task;
@@ -72,6 +73,11 @@ fn toggle_popup(app: &mut CosmardenApp) -> Task<Message> {
         app.windows.remove(&id);
         return window::close(id);
     }
+    // Same reset and focus as the COSMIC popup: a typed master password must
+    // not outlive the window, and the unlock field has to be ready to type in.
+    app.reset_applet_popup_state();
+    let focus = app.applet_popup_focus_task();
+    let rows = applet_rows_task(app);
     let settings = window::Settings {
         size: Size::new(372.0, 480.0),
         position: Position::Centered,
@@ -90,14 +96,8 @@ fn toggle_popup(app: &mut CosmardenApp) -> Task<Message> {
         open.map(|_| Action::None),
         app.set_window_title(title, id),
         crate::app::tasks::check_protocol_version(),
-        crate::app::tasks::fetch_applet_search(
-            {
-                app.applet_search_id += 1;
-                app.applet_search_id
-            },
-            None,
-            true,
-        ),
+        focus,
+        rows,
     ])
 }
 

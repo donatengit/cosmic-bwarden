@@ -18,9 +18,32 @@ use zeroize::Zeroize;
 use super::helpers::{clamped_anchor_rect, unlock_focus_id};
 
 impl CosmardenApp {
-    /// Resets transient popup state and builds the task that opens the
-    /// applet popup, focused on whichever unlock field is actually shown
-    /// (PIN when TPM PIN unlock is active, master password otherwise).
+    /// Clear everything transient that a popup must not carry across a close:
+    /// the typed unlock and reprompt passwords (zeroized), their reveal flags,
+    /// the last error and the hovered row. The search query and the favourites
+    /// toggle are deliberately preserved, so the popup re-opens with the last
+    /// search intact.
+    ///
+    /// Shared by the COSMIC popup and the Plasma tray's popup — the tray used
+    /// to keep a typed master password in memory after it was closed.
+    pub(crate) fn reset_applet_popup_state(&mut self) {
+        self.applet_unlock_password.zeroize();
+        self.applet_unlock_password_revealed = false;
+        self.applet_reprompt_id = None;
+        self.applet_reprompt_password.zeroize();
+        self.applet_reprompt_password_revealed = false;
+        self.applet_error = None;
+        self.applet_hovered_row_id = None;
+    }
+
+    /// Focus the field a freshly opened popup should start on.
+    pub(crate) fn applet_popup_focus_task(&self) -> Task<Message> {
+        text_input::focus(unlock_focus_id(self.unlock_mode))
+    }
+
+    /// Builds the task that opens the applet popup, focused on whichever
+    /// unlock field is actually shown (PIN when TPM PIN unlock is active,
+    /// master password otherwise).
     ///
     /// `(offset, bounds)` come from the icon click and position the popup
     /// next to the clicked applet icon. Only ever called from a click:
@@ -31,19 +54,11 @@ impl CosmardenApp {
         &mut self,
         anchor: (cosmic::iced::Vector, cosmic::iced::Rectangle),
     ) -> Task<Message> {
-        // Reset only truly transient state; preserve search query and
-        // favourites-filter so the popup re-opens with the last search intact.
-        self.applet_unlock_password.zeroize();
-        self.applet_unlock_password_revealed = false;
-        self.applet_reprompt_id = None;
-        self.applet_reprompt_password.zeroize();
-        self.applet_reprompt_password_revealed = false;
-        self.applet_error = None;
-        self.applet_hovered_row_id = None;
+        self.reset_applet_popup_state();
 
         let mut tasks = Vec::new();
         tasks.push(check_protocol_version());
-        tasks.push(text_input::focus(unlock_focus_id(self.unlock_mode)));
+        tasks.push(self.applet_popup_focus_task());
         tasks.push(Task::perform(
             async {
                 let agent = AgentClient::new();

@@ -25,6 +25,38 @@ fn entry(id: &str, name: &str, entry_type: EntryType) -> SidebarEntry {
     }
 }
 
+/// A closed popup must not keep a typed master password, a stale error or the
+/// hovered row; the last search is deliberately preserved. The tray reuses this
+/// reset, so the Plasma popup cannot keep a secret the COSMIC popup wipes.
+#[test]
+fn reset_applet_popup_state_wipes_transients_and_keeps_the_search() {
+    let (mut app, _) = popup_app(View::Unlock);
+    app.applet_unlock_password = "master-password".to_string();
+    app.applet_unlock_password_revealed = true;
+    app.applet_reprompt_id = Some("entry-1".to_string());
+    app.applet_reprompt_password = "master-password".to_string();
+    app.applet_reprompt_password_revealed = true;
+    app.applet_error = Some("agent is locked".to_string());
+    app.applet_hovered_row_id = Some("row-1".to_string());
+    app.applet_search_query = "mail".to_string();
+    app.applet_search_only_favourites = true;
+
+    app.reset_applet_popup_state();
+
+    assert!(
+        app.applet_unlock_password.is_empty(),
+        "unlock password wiped"
+    );
+    assert!(app.applet_reprompt_password.is_empty(), "reprompt wiped");
+    assert_eq!(app.applet_reprompt_id, None);
+    assert!(!app.applet_unlock_password_revealed);
+    assert!(!app.applet_reprompt_password_revealed);
+    assert_eq!(app.applet_error, None);
+    assert_eq!(app.applet_hovered_row_id, None);
+    assert_eq!(app.applet_search_query, "mail", "last search survives");
+    assert!(app.applet_search_only_favourites);
+}
+
 #[test]
 fn test_unlock_focus_id_prefers_pin_when_pin_unlock_active() {
     assert_eq!(unlock_focus_id(UnlockMode::Pin), unlock::pin_input_id());
