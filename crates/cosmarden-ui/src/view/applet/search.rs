@@ -118,6 +118,12 @@ fn result_row_view(row_data: AppletRow, show_actions: bool) -> Element<'static, 
         .into()
 }
 
+/// Open-in-vault action for a search row. The tray has no vault window, so
+/// the button is rendered disabled there (`row_action_btn` takes `None`).
+fn open_in_vault(id: String) -> Option<Message> {
+    (crate::detect_run_mode() != crate::RunMode::Tray).then(|| Message::AppletOpenInVault(id))
+}
+
 fn login_row_view(
     id: String,
     label: String,
@@ -147,7 +153,7 @@ fn login_row_view(
         .push(row_action_btn(
             crate::view::symbolic::applet_open_in_vault_icon(),
             fl!("open-in-vault"),
-            Some(Message::AppletOpenInVault(id.clone())),
+            open_in_vault(id.clone()),
         ))
         .push(row_action_btn(
             crate::view::symbolic::applet_open_link_icon(),
@@ -179,7 +185,7 @@ fn secret_row_view(id: String, label: String, show_actions: bool) -> Element<'st
         .push(row_action_btn(
             crate::view::symbolic::applet_open_in_vault_icon(),
             fl!("open-in-vault"),
-            Some(Message::AppletOpenInVault(id.clone())),
+            open_in_vault(id.clone()),
         ))
         .push(row_action_btn(
             crate::view::symbolic::applet_copy_secret_icon(),

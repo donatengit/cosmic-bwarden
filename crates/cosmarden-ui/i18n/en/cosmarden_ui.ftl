@@ -186,6 +186,14 @@ add-new-entry = Add New Entry
 copied-to-clipboard = Copied to clipboard
 public-key-label = Public key
 generate-password = Generate password
+# KDE StatusNotifierItem context menu (`src/kde/menu.rs`). Unlock opens the
+# compact popup — DBusMenu cannot host a password field.
+tray-unlock = Unlock
+tray-copy-username = Copy username
+tray-copy-password = Copy password
+tray-copy-note = Copy note
+tray-copy-key = Copy private key
+tray-copy-secret = Copy secret
 # Applet header tooltips shown while unlocked when the last sync failed; the
 # icon button next to the tooltip performs the described action.
 sync-session-expired-tooltip = Session expired — click to log in again

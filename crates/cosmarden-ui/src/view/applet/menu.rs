@@ -8,6 +8,9 @@ use cosmic::widget::{button, icon, row, space, text, tooltip};
 use cosmic::Element;
 
 /// Top header row: "Open Vault" (sync-failed uses a destructive style) + icon buttons.
+///
+/// The agent-only tray has no vault window to open, so it renders the icon
+/// row alone (`RunMode::Tray`).
 pub fn header_row(app: &CosmardenApp) -> Element<'static, Message> {
     let is_unlocked = app.view.is_unlocked();
 
@@ -88,10 +91,11 @@ pub fn header_row(app: &CosmardenApp) -> Element<'static, Message> {
     // overlay plus `space_xs` on the scrollable) so the last header icon
     // matches those rows instead of sitting on the popup edge.
     let space_xs = cosmic::theme::active().cosmic().spacing.space_xs;
-    row::with_capacity(3)
-        .spacing(5)
-        .align_y(Alignment::Center)
-        .push(open_btn)
+    let mut header = row::with_capacity(3).spacing(5).align_y(Alignment::Center);
+    if crate::detect_run_mode() != crate::RunMode::Tray {
+        header = header.push(open_btn);
+    }
+    header
         .push(action_row)
         .push(space::horizontal().width(Length::Fixed(f32::from(space_xs.saturating_mul(2)))))
         .into()

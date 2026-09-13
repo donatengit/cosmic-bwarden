@@ -99,6 +99,12 @@ impl CosmardenApp {
                         app_id: crate::app::state::APP_ID.to_string(),
                         exec: "open-vault".to_string(),
                     });
+                } else if crate::detect_run_mode() != crate::RunMode::Tray {
+                    // No activation-token channel: this binary was not started
+                    // by the COSMIC panel, so spawn the vault window directly
+                    // (`spawn_vault_app` re-runs this executable). The tray
+                    // binary has no vault window and hides the button.
+                    tasks.push(crate::app::update::activation::spawn_vault_app(None));
                 }
 
                 Some(Task::batch(tasks))
@@ -231,6 +237,9 @@ impl CosmardenApp {
                         Ok(entries) => {
                             self.applet_search_results = entries;
                             self.applet_error = None;
+                            // The tray menu lists these rows.
+                            #[cfg(feature = "kde")]
+                            crate::kde::publish_snapshot(self);
                         }
                         // Expected while locked; the unlock UI is already shown.
                         Err(e) if e == "agent is locked" => {}

@@ -8,9 +8,23 @@ repository = "https://github.com/donatengit/cosmic-bwarden"
 homepage = "https://github.com/donatengit/cosmic-bwarden"
 description = "Cosmarden panel applet and vault window"
 
+# Shared library behind both binaries: `cosmarden-applet` (COSMIC panel
+# applet + vault window) and `cosmarden-tray` (Plasma StatusNotifierItem,
+# agent-only). See `src/lib.rs`.
+[lib]
+name = "cosmarden_ui"
+path = "src/lib.rs"
+
 [[bin]]
 name = "cosmarden-applet"
 path = "src/main.rs"
+
+# Agent-only Plasma tray, built by `just build-kde`; the default COSMIC build
+# skips it (`required-features`).
+[[bin]]
+name = "cosmarden-tray"
+path = "src/bin/cosmarden-tray.rs"
+required-features = ["kde"]
 
 # `cargo deb -p cosmarden-ui --no-build` packages the whole app (all three
 # release binaries + desktop entry + applet metadata + hardened systemd user
@@ -73,6 +87,11 @@ i18n-embed-fl = { workspace = true }
 rust-embed = { workspace = true }
 zeroize = { workspace = true }
 zbus = { workspace = true }
+# `--features kde` only: StatusNotifierItem host, and the raw RGBA pixmap the
+# tray hands to Plasma (`ksni::Icon` is ARGB32, built in `src/kde/icon.rs`).
+ksni = { version = "0.3", optional = true }
+png = { version = "0.17", optional = true }
+futures-util = { version = "0.3", optional = true, default-features = false, features = ["std"] }
 
 [dev-dependencies]
 # Settings-persistence regression tests write a real config file through the
@@ -86,6 +105,12 @@ default = ["public_suffix_list"]
 # "example.co.uk", not "co.uk"). Without it labels fall back to the full
 # host, never a naive last-two-labels cut. See docs/public_suffix_list.md.
 public_suffix_list = ["cosmarden-core/public_suffix_list"]
+# Plasma/KDE extras. Not default and not auto-detected: `just build` on a KDE
+# machine must still produce the COSMIC binary. Opt in with `--features kde`
+# (see docs/kde_applet_parity.md). Compiles `src/kde.rs` (theme-connection log
+# demotion, StatusNotifierItem tray) and the `cosmarden-tray` binary. A
+# plasmoid still belongs behind this flag, not in `view/applet/`.
+kde = ["dep:ksni", "dep:png", "dep:futures-util"]
 
 [lints]
 workspace = true

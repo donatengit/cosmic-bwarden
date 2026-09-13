@@ -19,6 +19,7 @@ below; invoking `cargo test` directly skips all of it.
 | `just test-all` | `just test` plus the offline JS suites (extension unit tests, release-pipeline tests) |
 | `just test-unit` | Unit tests only (core, ui, agent, cli) |
 | `just test-unit-tpm` | The TPM-gated agent unit tests, which a plain `cargo test` cannot see |
+| `just test-unit-kde` | UI unit tests with `--features kde` (tray menu model, theme-noise filter). A plain `just test-unit` does not enable the feature, and `app/tests/kde_gate.rs` asserts that |
 | `just test-e2e` | The complete E2E crate |
 | `just test-agent` / `test-cli` / `test-ui` | Focused subsets for iterating on one area — **not** a partition of the suite |
 | `just test-extension-unit` | Extension JS unit tests (vitest) |

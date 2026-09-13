@@ -141,6 +141,7 @@ The applet popup (`view/applet/`) is self-sufficient for everyday use without op
 - [`docs/browser_integration.md`](docs/browser_integration.md) — browser extension IPC
 - [`docs/configurable_paths.md`](docs/configurable_paths.md) — path overrides and multi-instance isolation
 - [`docs/cosmic_integration.md`](docs/cosmic_integration.md) — COSMIC panel applet registration
+- [`docs/kde_applet_parity.md`](docs/kde_applet_parity.md) — the `--features kde` Plasma tray, and why a plasma plasmoid was rejected
 - [`docs/testing.md`](docs/testing.md) — test suite structure and run order
 - [`docs/build_and_run.md`](docs/build_and_run.md) — build instructions and run modes
 - [`docs/implementation.md`](docs/implementation.md) — crypto and vault sync internals

@@ -297,6 +297,27 @@ paths, and the code layout: `docs/tpm.md`.
   - The agent logs `TPM: using TCTI from TSS2_TCTI (…)` at debug — grep for it
     to confirm a test run is on the emulator.
 
+### KDE / Plasma extras (`--features kde`)
+
+Opt-in, **not** default and **not** auto-detected (unlike TPM): `just build` /
+`just test-unit` on a Plasma machine must still produce the COSMIC binary. The
+libcosmic vault window already runs on KDE; this flag is the compile home for
+Plasma-only work so it cannot leak into COSMIC panel code. What ships behind it,
+and why a plasma tray is not a plasmoid: `docs/kde_applet_parity.md`.
+
+- **Check it with the feature on**: `cargo check -p cosmarden-ui --features kde`.
+  The tray code is invisible to a plain `cargo check` and to `just test-unit`.
+- **`cosmarden-tray` is the only binary behind the flag** (`just build-kde`).
+  It is agent-only: tray menu, compact popup, no vault window. The default
+  `just build` must not produce it.
+- **Never make the tray the only way to reach an action.** The popup views in
+  `view/applet/` stay shared: the tray maps its commands onto the popup's
+  existing messages (`Message::KdeTray` is intercepted in `update_app`), and
+  vault-window actions are hidden — not duplicated — in `RunMode::Tray`.
+- **`RunMode::{Applet, Application, Tray}` is decided from the environment**
+  (`lib.rs::detect_run_mode`). Tests that assert tray behavior must set
+  `COSMARDEN_MODE` explicitly and restore it, like every other env override.
+
 ### Password Generator
 
 Generation must work with the vault **locked** and even with **no account
@@ -352,6 +373,7 @@ protocol translation, and the script-load-order gotcha:
 ```sh
 cargo check -p <crate>
 cargo check -p cosmarden-agent --features tpm    # tpm code is invisible otherwise
+cargo check -p cosmarden-ui --features kde       # tray code is invisible otherwise
 just test                                            # whole Rust suite
 just test-tpm-smoke                                  # TPM suite; auto-skips without swtpm
 just test-extension-unit

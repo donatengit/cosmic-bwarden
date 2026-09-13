@@ -24,6 +24,15 @@ pub(crate) const CLIPBOARD_CLEAR_SECS: u64 = 30;
 
 impl CosmardenApp {
     pub fn update_app(&mut self, message: Message) -> Task<Message> {
+        // Tray clicks and menu actions are not vault operations: they open or
+        // close the compact popup and republish the menu snapshot after the
+        // state change.
+        #[cfg(feature = "kde")]
+        if let Message::KdeTray(cmd) = message.clone() {
+            let task = crate::kde::handle_tray_command(self, cmd);
+            crate::kde::publish_snapshot(self);
+            return task;
+        }
         if let Some(task) = self.update_lifecycle(message.clone()) {
             return task;
         }
@@ -173,6 +182,9 @@ impl CosmardenApp {
             | Message::ToggleRevealField(_, _)
             | Message::CopySecretField(_, _)
             | Message::OnDemandSecretLoaded { .. } => Task::none(),
+            // Intercepted at the top of `update_app`; listed for exhaustiveness.
+            #[cfg(feature = "kde")]
+            Message::KdeTray(_) => Task::none(),
 
             Message::CopyToClipboard(text) => self.copy_to_clipboard_with_autoclear(text),
             Message::ClipboardClearElapsed(generation) => {

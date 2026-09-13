@@ -148,7 +148,9 @@ impl CosmardenApp {
                                 fetch_sidebar_entries(self.search_id, None, None, false),
                                 check_tpm_task(),
                             ];
-                            if self.applet_popup.is_some() {
+                            if self.applet_popup.is_some()
+                                || crate::detect_run_mode() == crate::RunMode::Tray
+                            {
                                 self.applet_search_id += 1;
                                 let only_pinned = applet_search::effective_only_pinned(
                                     &self.applet_search_query,
@@ -337,7 +339,9 @@ impl CosmardenApp {
                     self.search_id += 1;
                     tasks.push(fetch_sidebar_entries(self.search_id, None, None, false));
 
-                    if self.applet_popup.is_some() {
+                    if self.applet_popup.is_some()
+                        || crate::detect_run_mode() == crate::RunMode::Tray
+                    {
                         self.applet_search_id += 1;
                         let only_pinned = applet_search::effective_only_pinned(
                             &self.applet_search_query,

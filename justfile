@@ -54,6 +54,13 @@ default: build
 build:
     RUSTFLAGS="-C target-cpu=native" {{_build_limited}} cargo build --release --quiet {{_tpm_features}}
 
+# Same as `build`, plus `--features cosmarden-ui/kde`: compiles the Plasma tray
+# (`cosmarden-tray`) and the theme-noise log demotion. The feature is opt-in and
+# never auto-detected — `just build` on a Plasma machine must still produce the
+# COSMIC binary.
+build-kde:
+    RUSTFLAGS="-C target-cpu=native" {{_build_limited}} cargo build --release --quiet {{_tpm_features}} --features cosmarden-ui/kde
+
 # Copy already-built release binaries and metadata into ~/.local.
 # Does not compile — run `just build` first. Deb/AUR remain the system-wide path.
 install:
@@ -232,6 +239,14 @@ test-unit:
     {{_limited}} cargo test --quiet -p cosmarden-ui
     {{_limited}} cargo test --quiet -p cosmarden-agent
     {{_limited}} cargo test --quiet -p cosmarden-cli
+
+# KDE extras (`--features kde`) are opt-in and not auto-detected: `just
+# test-unit` stays COSMIC-only (app/tests/kde_gate.rs asserts that).
+#
+# Unit tests for the KDE-gated UI code: tray menu model, theme-noise filter
+test-unit-kde:
+    echo "--- Unit Tests (ui, kde feature) ---"
+    {{_limited}} cargo test --quiet -p cosmarden-ui --features kde
 
 # Requires libtss2-esys; skipped automatically when it is absent.
 #

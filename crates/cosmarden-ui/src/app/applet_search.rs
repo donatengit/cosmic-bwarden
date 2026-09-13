@@ -3,6 +3,8 @@ use cosmarden_core::protocol::{EntryType, SidebarEntry};
 pub const APPLET_SEARCH_LIMIT: usize = 10;
 pub const APPLET_LABEL_MAX_LEN: usize = 28;
 
+/// The KDE tray snapshot clones and compares these rows (`src/kde/tray.rs`).
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AppletRowKind {
     Login {
         username: Option<String>,
@@ -13,6 +15,7 @@ pub enum AppletRowKind {
 }
 
 /// A single result row in the applet search popup.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AppletRow {
     pub id: String,
     pub label: String,
