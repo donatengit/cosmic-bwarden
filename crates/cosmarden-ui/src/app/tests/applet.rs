@@ -352,6 +352,36 @@ async fn test_applet_protocol_mismatch_renders_quit() {
     let _ = app.view_window(id);
 }
 
+/// Quit is the one row that has to end the process, and only the tray needs a
+/// real exit: `cosmarden-tray` runs with `no_main_window(true)` and
+/// `exit_on_close(false)`, so libcosmic's `Action::Close` closes nothing and
+/// the Quit row looked dead while the panel icon stayed. The applet (a
+/// panel-hosted surface) and the vault window (`exit_on_close(true)`) exit by
+/// closing the main window.
+#[test]
+fn quit_path_is_an_exit_only_for_the_tray() {
+    use crate::app::update::applet::{quit_path, QuitPath};
+    use crate::RunMode;
+
+    assert_eq!(quit_path(RunMode::Tray), QuitPath::ExitProcess);
+    assert_eq!(quit_path(RunMode::Applet), QuitPath::CloseMainWindow);
+    assert_eq!(quit_path(RunMode::Application), QuitPath::CloseMainWindow);
+}
+
+/// Whatever the run mode, the Quit row owns the popup: it must not be left
+/// tracked (`applet_popup`) after the row is pressed, or the next icon click
+/// would only "close" a popup that is already gone.
+#[test]
+fn quit_row_clears_the_popup_state() {
+    let (mut app, id) = popup_app(View::Vault);
+    app.applet_popup = Some(id);
+
+    let _ = app.update(Message::Exit);
+
+    assert!(app.applet_popup.is_none());
+    assert!(!app.windows.contains_key(&id));
+}
+
 // ── Search-row hover (action icons only while hovered) ───────────────────────
 
 #[tokio::test]

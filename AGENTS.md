@@ -324,6 +324,12 @@ and why a plasma tray is not a plasmoid: `docs/kde_applet_parity.md`.
   surface.** Close them with `window::close` and `surface::action::destroy_popup`
   respectively (`RunMode` decides); the wrong one is a silent no-op that leaves
   the popup on screen.
+- **Quit must end the tray process, not close a window it does not have.**
+  `cosmarden-tray` runs with `no_main_window(true)` and `exit_on_close(false)`,
+  so `cosmic::app::Action::Close` closes nothing there: the Quit row looked
+  dead and the panel icon stayed. `app/update/applet.rs::quit_path` is the one
+  decision — `iced::exit()` for `RunMode::Tray`, `Action::Close` for the applet
+  and the vault window, which have a main window and exit through it.
 - **`RunMode::{Applet, Application, Tray}` is decided from the environment**
   (`lib.rs::detect_run_mode`). Tests that assert tray behavior must set
   `COSMARDEN_MODE` explicitly and restore it, like every other env override.

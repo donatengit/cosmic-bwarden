@@ -186,7 +186,7 @@ shown from the shared `view/applet/` widgets, or a hand-off to the full app.
 | State push | `kde::publish_snapshot` after every applet-search update and after each tray command. | DBusMenu is read on demand, so the menu is rebuilt from the pushed snapshot. |
 | Open Vault | `TrayCommand::OpenVault` → `Message::OpenVaultRequested`, the popup header's own handler. | Spawns `cosmarden-applet`: override `COSMARDEN_APPLET_BIN`, else the sibling of the running binary, else `PATH` (`activation::resolve_vault_binary`). Resolution is unit-tested, including that the tray never resolves to itself. |
 | Popup close | The tray popup is opened with `window::open` and closed with `window::close`; the COSMIC popup is a Wayland popup surface closed with `surface::action::destroy_popup`. | `destroy_popup` on a plain window is a no-op, which would have left the tray popup on screen after Open Vault. |
-| Quit row | `chrome_commands()` ends in `Exit`; the lock/logout-and-quit pair was dropped along with the popup's. | See the Doc-vs-source table. |
+| Quit row | `chrome_commands()` ends in `Exit` → `Message::Exit`. `app/update/applet.rs::quit_path` decides the teardown: tray-mode closes the popup as a **window** and calls `iced::exit()`, the applet and vault window keep `Action::Close` + `destroy_popup`. | The shared arm used to close libcosmic's main window unconditionally, which the tray does not have (`no_main_window(true)`, `exit_on_close(false)`) — pressing Quit left the icon and the popup in place. The lock/logout-and-quit pair was dropped along with the popup's. See the Doc-vs-source table. |
 
 `Message::KdeTray` is intercepted at the top of `update_app`, before the
 lifecycle/auth/vault groups, and reassembles the snapshot after handling. Its
