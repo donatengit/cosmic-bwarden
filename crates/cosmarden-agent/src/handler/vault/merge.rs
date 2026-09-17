@@ -15,8 +15,13 @@ use cosmarden_core::db::{Entry, EntryData};
 
 /// Fill redacted (`None`) secret slots in `entry` from the decrypted `stored`
 /// entry: login password/TOTP, card number/code, SSH private key, and hidden
-/// custom-field values.
+/// custom-field values. Also restores the cipher's item-level `key` when the
+/// incoming entry carries none: the fields written by an update are encrypted
+/// with that key, so losing it here would leave the server copy undecryptable.
 pub fn merge_redacted_secrets(entry: &mut Entry, stored: &Entry) {
+    if entry.key.is_none() {
+        entry.key = stored.key.clone();
+    }
     match (&mut entry.data, &stored.data) {
         (
             EntryData::Login { password, totp, .. },
@@ -208,6 +213,30 @@ mod tests {
             }
             _ => panic!("expected login"),
         }
+    }
+
+    /// An edit that arrives without the cipher's item-level key must not clear
+    /// it: the update encrypts the fields with that key, so dropping it makes
+    /// the server copy undecryptable ("invalid mac" on every field).
+    #[test]
+    fn missing_item_key_is_restored_from_the_stored_entry() {
+        let mut incoming = login_entry(Some("p"), None);
+        let mut stored = login_entry(Some("p"), None);
+        stored.key = Some("2.iv|ct|mac".to_string());
+
+        merge_redacted_secrets(&mut incoming, &stored);
+        assert_eq!(incoming.key.as_deref(), Some("2.iv|ct|mac"));
+    }
+
+    #[test]
+    fn a_present_item_key_is_never_overwritten() {
+        let mut incoming = login_entry(Some("p"), None);
+        incoming.key = Some("2.incoming".to_string());
+        let mut stored = login_entry(Some("p"), None);
+        stored.key = Some("2.stored".to_string());
+
+        merge_redacted_secrets(&mut incoming, &stored);
+        assert_eq!(incoming.key.as_deref(), Some("2.incoming"));
     }
 
     #[test]

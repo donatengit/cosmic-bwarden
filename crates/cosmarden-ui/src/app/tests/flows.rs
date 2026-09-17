@@ -187,6 +187,122 @@ async fn test_e2e_user_flow_login_and_add_note() {
     assert!(app.editing_entry.is_none());
 }
 
+/// The edit half of the user's flow, on an entry the server already owns:
+/// open it for editing (the pane's Edit button fetches the full entry), type
+/// into the name and a field, press Save — and check what the UI would send.
+///
+/// Asserting the mapping from the state the flow built is deliberate: a test
+/// that feeds itself `SaveEditResult(Ok(()))` asserts a success it invented
+/// and stays green even when the dispatched action is one the server rejects
+/// (see docs/testing.md).
+#[test]
+fn test_e2e_user_flow_edit_name_and_field_then_save() {
+    let mut app = CosmardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
+
+    // An entry as `GetEntry` returns it, including its item-level key: the
+    // fields an update writes are encrypted with that key, so a client that
+    // drops it renders the server copy undecryptable.
+    let mut stored = full_entry("48d20cf2-a97a-422b-844e-acf400d8e8d1", "Old Name");
+    stored.key = Some("2.iv|ct|mac".to_string());
+    if let EntryData::Login { username, .. } = &mut stored.data {
+        *username = Some("before".to_string());
+    }
+    app.selected_entry_id = Some(stored.id.clone());
+    app.selected_entry = Some(stored.clone());
+
+    // Press Edit, then receive the full entry (the reprompt-free path).
+    let _ = app.update(Message::EditEntry);
+    let _ = app.update(Message::EditEntryLoaded(Ok(stored)));
+
+    // Type into the name input and the username input.
+    let _ = app.update(Message::EditNameChanged("Renamed".to_string()));
+    let _ = app.update(Message::EditFieldChanged(
+        "Username".to_string(),
+        "after".to_string(),
+    ));
+
+    // Press Save: production code builds the action from that state.
+    let draft = app
+        .editing_entry
+        .clone()
+        .expect("the draft must still be pending before save");
+    match save_action(draft) {
+        AgentAction::UpdateEntry { entry } => {
+            assert_eq!(
+                entry.id, "48d20cf2-a97a-422b-844e-acf400d8e8d1",
+                "an edit must keep the server id, not mint a new entry"
+            );
+            assert_eq!(entry.name, "Renamed", "the typed name must be saved");
+            match &entry.data {
+                EntryData::Login { username, .. } => {
+                    assert_eq!(username.as_deref(), Some("after"));
+                }
+                other => panic!("expected a login, got {:?}", other),
+            }
+            assert_eq!(
+                entry.key.as_deref(),
+                Some("2.iv|ct|mac"),
+                "the entry's item key must survive the edit round trip"
+            );
+        }
+        other => panic!(
+            "an existing entry must be updated in place, got {}",
+            other.variant_name()
+        ),
+    }
+
+    let _ = app.update(Message::SaveEdit);
+    let _ = app.update(Message::SaveEditResult(Ok(())));
+    assert!(app.editing_entry.is_none());
+}
+
+/// Cancel must discard the draft: the stored entry is what the pane shows
+/// again, and nothing typed reaches a save.
+#[test]
+fn test_e2e_user_flow_cancel_discards_typed_values() {
+    let mut app = CosmardenApp {
+        view: View::Vault,
+        ..Default::default()
+    };
+
+    let mut stored = full_entry("entry-1", "Old Name");
+    if let EntryData::Login { username, .. } = &mut stored.data {
+        *username = Some("before".to_string());
+    }
+    app.selected_entry_id = Some(stored.id.clone());
+    app.selected_entry = Some(stored.clone());
+
+    let _ = app.update(Message::EditEntry);
+    let _ = app.update(Message::EditEntryLoaded(Ok(stored)));
+
+    let _ = app.update(Message::EditNameChanged("Scratched out".to_string()));
+    let _ = app.update(Message::EditFieldChanged(
+        "Username".to_string(),
+        "typed-then-cancelled".to_string(),
+    ));
+
+    let _ = app.update(Message::CancelEdit);
+
+    assert!(
+        app.editing_entry.is_none(),
+        "cancel must close the edit buffer"
+    );
+    let shown = app
+        .selected_entry
+        .as_ref()
+        .expect("the stored entry stays on screen");
+    assert_eq!(shown.name, "Old Name", "cancel must not rename the entry");
+    match &shown.data {
+        EntryData::Login { username, .. } => {
+            assert_eq!(username.as_deref(), Some("before"));
+        }
+        other => panic!("expected a login, got {:?}", other),
+    }
+}
+
 #[test]
 fn failed_save_keeps_the_users_edits() {
     // Regression: SaveEdit used to `take()` the edit buffer, so a rejected

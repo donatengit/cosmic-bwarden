@@ -297,6 +297,14 @@ impl Client {
 
     // Mirrors the Bitwarden endpoint's flat payload; a params struct is tracked
     // in docs/roadmap.md ("API parameter structs").
+    //
+    // `key` is the cipher's own item-level key, exactly as the server returned
+    // it (`Cipher.Key`). Pass it back unchanged whenever the cipher has one:
+    // `PUT /ciphers/{id}` replaces the whole cipher, so a request without a
+    // `key` clears the stored one, while this request's fields were encrypted
+    // *with* that key — which is how an edit rendered every field of such a
+    // cipher undecryptable ("invalid mac", and the raw base64 cipherstring
+    // shown as the name).
     #[allow(clippy::too_many_arguments)]
     pub async fn update_cipher(
         &self,
@@ -315,12 +323,15 @@ impl Client {
         notes: Option<&str>,
         reprompt: Option<CipherRepromptType>,
         fields: Option<Vec<CipherField>>,
+        key: Option<&str>,
+        password_history: Vec<CipherPasswordHistoryEntry>,
     ) -> Result<()> {
         let req = CiphersPutReq {
             ty,
             folder_id: None,
             organization_id: None,
             favorite,
+            key: key.map(String::from),
             name: name.to_string(),
             notes: notes.map(String::from),
             login,
@@ -336,7 +347,7 @@ impl Client {
             bank_account,
             drivers_license,
             passport,
-            password_history: Vec::new(),
+            password_history,
             reprompt: reprompt.unwrap_or(CipherRepromptType::None),
         };
 

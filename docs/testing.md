@@ -171,6 +171,19 @@ it through the same `entry_save::save_action` the UI calls, and sends the
 result to a real agent and Vaultwarden. The action under test is chosen by
 production code rather than by the test author.
 
+**Fixtures must be shaped like real server data.** An entry this suite creates
+itself is not: `AddEntry` leaves `Cipher.Key` and `PasswordHistory` unset, while
+items created by the official Bitwarden clients carry an item-level key (every
+field encrypted with it) and a per-item password history. That difference hid a
+data-destroying bug — `PUT /ciphers/{id}` replaces a cipher wholesale, so an
+update body without `key` cleared it while writing fields encrypted with it,
+and the entry came back as an unreadable base64 cipherstring; an empty
+`passwordHistory` likewise deleted the user's history on every edit.
+`test_ui_edit_of_item_key_entry_keeps_it_decryptable` therefore builds its
+fixture through the server API with an item key and a history entry (deriving
+the vault keys in the test process), then drives the same edit-and-save flow and
+checks what the server stored, including both.
+
 ## Known Gaps & Coverage
 
 - **Missing**: `test_ssh_key_crud_lifecycle` is currently documented but NOT implemented.
