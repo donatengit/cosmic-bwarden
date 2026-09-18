@@ -44,6 +44,15 @@ _limited := "./packaging/run-limited.sh " + test_cpus + " " + test_memory
 # what they are; there is deliberately no separate knob to keep in step.
 _build_limited := _limited
 
+# Which flavor the release binaries in target/release came from: `build` records
+# `cosmic`, `build-kde` records `kde`. `install` gates the KDE-only artifacts on
+# it instead of on a file that happens to be in target/release, because `just
+# build` after `just build-kde` leaves the old tray binary there and installing
+# it would ship KDE artifacts that the current binaries do not match.
+# Only the two `just` build recipes write this — a bare
+# `cargo build --release` leaves the previous value, so keep using `just build`.
+_build_flavor := "target/release/.cosmarden-build-flavor"
+
 # Auto-detect TPM2 support: enable the agent's `tpm` feature when libtss2-esys is present.
 _tpm_features := `pkg-config --exists tss2-esys 2>/dev/null && echo '--features cosmarden-agent/tpm' || true`
 
@@ -53,6 +62,7 @@ default: build
 # Release build. This is the only recipe that compiles.
 build:
     RUSTFLAGS="-C target-cpu=native" {{_build_limited}} cargo build --release --quiet {{_tpm_features}}
+    printf 'cosmic\n' > {{_build_flavor}}
 
 # Same as `build`, plus the two KDE-only artifacts: the applet with
 # `--features cosmarden-ui/kde` (libcosmic's missing-COSMIC-session log noise
@@ -64,6 +74,7 @@ build:
 build-kde:
     RUSTFLAGS="-C target-cpu=native" {{_build_limited}} cargo build --release --quiet {{_tpm_features}} --features cosmarden-ui/kde
     RUSTFLAGS="-C target-cpu=native" {{_build_limited}} cargo build --release --quiet -p cosmarden-plasma-tray
+    printf 'kde\n' > {{_build_flavor}}
 
 # Copy already-built release binaries and metadata into ~/.local.
 # Does not compile — run `just build` first. Deb/AUR remain the system-wide path.
@@ -77,11 +88,17 @@ install:
     install -Dm755 target/release/cosmarden-agent {{local_bin}}/cosmarden-agent
     install -Dm755 target/release/cosmarden-applet {{local_bin}}/cosmarden-applet
     install -Dm755 target/release/cosmarden {{local_bin}}/cosmarden
-    # The Plasma tray is built by `just build-kde`, not by `build`; install it
-    # when it is there. It resolves `cosmarden-applet` as its own sibling to
-    # open the full app, so the two have to land in the same directory.
-    if [ -x target/release/cosmarden-plasma-tray ]; then \
+    # The Plasma tray is a `build-kde` artifact. Gate on the flavor the last
+    # build recorded, not on the file's presence: `just build` after
+    # `just build-kde` leaves the old tray binary in target/release, and
+    # installing it would pair it with a `cosmarden-applet` that no longer has
+    # the kde feature. The tray resolves `cosmarden-applet` as its own sibling
+    # to open the full app, so the two have to land in the same directory.
+    flavor="$(cat {{_build_flavor}} 2>/dev/null || true)"; \
+    if [ "$flavor" = kde ] && [ -x target/release/cosmarden-plasma-tray ]; then \
         install -Dm755 target/release/cosmarden-plasma-tray {{local_bin}}/cosmarden-plasma-tray; \
+    else \
+        echo "note: skipping cosmarden-plasma-tray — the last build recorded '${flavor:-nothing}', not 'kde'. Run 'just build-kde install' for the KDE install; 'just uninstall' removes an installed tray." >&2; \
     fi
 
     echo "Installing desktop entry..."
@@ -133,6 +150,10 @@ clean-install: uninstall install
 remove-previous-identity:
     systemctl --user disable --now cosmic-bwarden-agent 2>/dev/null || true
     rm -f {{local_bin}}/cosmic-bwarden-agent {{local_bin}}/cosmic-applet-bwarden {{local_bin}}/cosmic-bwarden-cli {{local_bin}}/cosmic-bwarden-ui
+    # The retired libcosmic tray (`cosmarden-tray`, replaced by
+    # `cosmarden-plasma-tray`). Left behind it is a second, dead tray icon in the
+    # session — it links libcosmic and has no relation to the current build.
+    rm -f {{local_bin}}/cosmarden-tray
     rm -f {{local_apps}}/com.enikeev.cosmic_bwarden.desktop {{local_metainfo}}/com.enikeev.cosmic_bwarden.metainfo.xml {{local_applets}}/com.enikeev.cosmic_bwarden.ron
     rm -f {{local_apps}}/com.enikeev.cosmic-bwarden.desktop {{local_applets}}/com.enikeev.cosmic-bwarden.ron
     rm -f {{local_systemd}}/cosmic-bwarden-agent.service
@@ -200,6 +221,8 @@ uninstall:
     rm -f {{local_bin}}/cosmarden-agent
     rm -f {{local_bin}}/cosmarden-applet
     rm -f {{local_bin}}/cosmarden
+    # Absent unless a `build-kde` install ran; `rm -f` covers both cases.
+    rm -f {{local_bin}}/cosmarden-plasma-tray
     rm -f {{local_systemd}}/cosmarden-agent.service
     rm -f {{home}}/.mozilla/native-messaging-hosts/com.enikeev.cosmarden.json
     rm -f {{home}}/.mozilla/native-messaging-hosts/cosmarden-browser-host.sh

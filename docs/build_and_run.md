@@ -41,6 +41,12 @@ the Plasma log-noise filter compiled in:
 - `cosmarden-plasma-tray`: the Plasma tray — one menu, no libcosmic
   (`docs/kde_applet_parity.md`, "Thin Plasma tray")
 
+`just install` copies the tray only when the last build was `just build-kde`: it
+reads the flavor that build recorded in `target/release/.cosmarden-build-flavor`,
+so a plain `just build` after a KDE build does not install the tray binary the
+older build left behind (it prints a note naming the command to run instead).
+`just uninstall` removes the tray with the other binaries.
+
 ## Running the Components
 
 ### 1. Start the Agent

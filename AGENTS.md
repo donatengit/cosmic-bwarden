@@ -311,7 +311,11 @@ plasma plasmoid was rejected: `docs/kde_applet_parity.md`.
   libcosmic** (`crates/cosmarden-plasma-tray`, built only by `just build-kde`).
   It is a non-default workspace member, so no default `cargo build` pulls
   ksni/zbus into a COSMIC build; check it with `cargo check -p
-  cosmarden-plasma-tray` and test it with `just test-unit-kde`.
+  cosmarden-plasma-tray` and test it with `just test-unit-kde`. **`just install`
+  installs it only from a `build-kde` build** — it reads the flavor recorded in
+  `target/release/.cosmarden-build-flavor`, never the presence of the file in
+  `target/release`, which survives a later `just build` and would pair the tray
+  with an applet built without the `kde` feature.
 - **It has no window, so it cannot unlock anything.** A tray *menu* is drawn by
   the host from a DBusMenu tree, which has no text-input item; `Open Vault`
   spawns `cosmarden-applet` and that is the only way in — including for a
