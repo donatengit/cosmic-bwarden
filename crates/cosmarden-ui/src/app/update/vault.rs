@@ -111,22 +111,42 @@ impl CosmardenApp {
             Message::EntryReceived(res) => {
                 match res {
                     Ok(entry) => {
-                        self.notes_content = cosmic::widget::text_editor::Content::with_text(
-                            entry.notes.as_deref().unwrap_or(""),
-                        );
+                        // Notes are a secret-class slot: the agent redacts them in
+                        // every `GetEntryMeta`/bulk read, so seeding the edit buffer
+                        // from this entry put an empty body behind the "Notes"
+                        // heading. The edit form seeds it (`EditEntryLoaded`); here
+                        // it is only cleared, so no plaintext outlives its entry.
+                        self.notes_content = cosmic::widget::text_editor::Content::new();
+                        // A SecureNote's content *is* its notes, which the meta read
+                        // redacts: fetch the body on selection or the item opens
+                        // unreadable. The fetch arrives as a reveal, so the view
+                        // shows it without a second click.
+                        let notes_fetch = vault_actions::notes_fetch_after_selection(&entry);
                         self.selected_entry = Some(entry);
                         self.show_reprompt = None;
                         self.reprompt_password.zeroize();
                         self.reprompt_password_revealed = false;
+                        match notes_fetch {
+                            Some(action) => {
+                                self.pending_secret_field = Some("Notes".to_string());
+                                Some(super::vault_secrets::dispatch_secret_fetch(
+                                    action,
+                                    "Notes".to_string(),
+                                    false,
+                                ))
+                            }
+                            None => Some(Task::none()),
+                        }
                     }
                     Err(e) if e == "reprompt_required" => {
                         self.show_reprompt = self.selected_entry_id.clone();
+                        Some(Task::none())
                     }
                     Err(e) => {
                         self.error = Some(e);
+                        Some(Task::none())
                     }
                 }
-                Some(Task::none())
             }
             Message::DeleteEntry(id) => {
                 self.show_delete_confirm = Some(id);

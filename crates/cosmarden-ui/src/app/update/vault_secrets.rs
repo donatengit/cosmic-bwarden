@@ -124,6 +124,18 @@ pub(super) fn dispatch_on_demand(
     reprompt: Option<String>,
 ) -> Task<Message> {
     let action = vault_actions::on_demand_secret(&field, id, reprompt);
+    dispatch_secret_fetch(action, field, copy)
+}
+
+/// Send an already-built secret-fetch action and route the parsed result back
+/// through `OnDemandSecretLoaded`. Callers build the action with a pure builder
+/// (`vault_actions::on_demand_secret`, `notes_fetch_after_selection`) so the
+/// variant under test is the one production sends.
+pub(super) fn dispatch_secret_fetch(
+    action: cosmarden_core::protocol::Action,
+    field: String,
+    copy: bool,
+) -> Task<Message> {
     let field_for_parse = field.clone();
     Task::perform(
         async move {

@@ -268,7 +268,7 @@ fn test_filter_idx_roundtrip() {
 }
 
 #[test]
-fn test_cancel_edit_restores_notes() {
+fn test_cancel_edit_drops_the_notes_draft() {
     let mut app = CosmardenApp::default();
     let entry = create_test_entry("1", "Login");
     app.selected_entry_id = Some("1".to_string());
@@ -278,13 +278,17 @@ fn test_cancel_edit_restores_notes() {
     let _ = app.update(Message::EditEntry);
     let _ = app.update(Message::EditEntryLoaded(Ok(entry.clone())));
     assert!(app.editing_entry.is_some());
+    assert_eq!(app.notes_content.text().trim(), "old-notes");
 
     // Simulate the user scratching out the note before hitting Cancel.
     app.notes_content = widget::text_editor::Content::with_text("scratched-out");
 
     let _ = app.update(Message::CancelEdit);
     assert!(app.editing_entry.is_none());
-    assert_eq!(app.notes_content.text().trim(), "old-notes");
+    // Cancel discards the draft: the view's notes area reads the redacted
+    // `selected_entry` behind its reveal, so a restored buffer would be
+    // plaintext sitting in memory for an editor that is closed.
+    assert_eq!(app.notes_content.text(), "");
 }
 
 #[test]

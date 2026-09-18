@@ -26,8 +26,7 @@ fn entry(id: &str, name: &str, entry_type: EntryType) -> SidebarEntry {
 }
 
 /// A closed popup must not keep a typed master password, a stale error or the
-/// hovered row; the last search is deliberately preserved. The tray reuses this
-/// reset, so the Plasma popup cannot keep a secret the COSMIC popup wipes.
+/// hovered row; the last search is deliberately preserved.
 #[test]
 fn reset_applet_popup_state_wipes_transients_and_keeps_the_search() {
     let (mut app, _) = popup_app(View::Unlock);
@@ -352,22 +351,6 @@ async fn test_applet_protocol_mismatch_renders_quit() {
     let _ = app.view_window(id);
 }
 
-/// Quit is the one row that has to end the process, and only the tray needs a
-/// real exit: `cosmarden-tray` runs with `no_main_window(true)` and
-/// `exit_on_close(false)`, so libcosmic's `Action::Close` closes nothing and
-/// the Quit row looked dead while the panel icon stayed. The applet (a
-/// panel-hosted surface) and the vault window (`exit_on_close(true)`) exit by
-/// closing the main window.
-#[test]
-fn quit_path_is_an_exit_only_for_the_tray() {
-    use crate::app::update::applet::{quit_path, QuitPath};
-    use crate::RunMode;
-
-    assert_eq!(quit_path(RunMode::Tray), QuitPath::ExitProcess);
-    assert_eq!(quit_path(RunMode::Applet), QuitPath::CloseMainWindow);
-    assert_eq!(quit_path(RunMode::Application), QuitPath::CloseMainWindow);
-}
-
 /// Whatever the run mode, the Quit row owns the popup: it must not be left
 /// tracked (`applet_popup`) after the row is pressed, or the next icon click
 /// would only "close" a popup that is already gone.
@@ -448,7 +431,7 @@ async fn test_applet_header_row_renders_setup() {
 #[tokio::test]
 async fn test_applet_login_row_with_link_renders() {
     let (mut app, id) = popup_app(View::Vault);
-    // Name looks like a hostname → is_uri_like → open-URI button is active
+    // Name looks like a hostname → the row carries a link → open-URI button is active
     app.applet_search_results = vec![SidebarEntry {
         id: "1".to_string(),
         name: "account.facebook.com".to_string(),

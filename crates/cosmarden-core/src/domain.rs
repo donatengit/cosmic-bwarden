@@ -78,6 +78,55 @@ pub fn registrable_domain(_host: &str) -> Option<&str> {
     None
 }
 
+/// Whether an entry *name* is a URL or bare hostname a browser can open.
+/// Every "Open Link" affordance (the COSMIC applet's 🔗 button, the Plasma
+/// tray's menu row) keys off this one decision, so it lives here rather than
+/// being re-derived per frontend. Uses [`host_from_name`], which rejects
+/// free-text names, emails, and dotless hosts.
+pub fn is_uri_like(name: &str) -> bool {
+    host_from_name(name).is_some()
+}
+
+/// The URI to hand a browser for an entry name, or `None` when there is none to
+/// hand over. A bare hostname gets `https://` prepended — `xdg-open` needs a
+/// scheme; a name that already carries one is passed through unchanged, path
+/// and all (`https://example.com/login` stays exactly that).
+///
+/// Only `http`/`https` survive. A vault name can hold any scheme
+/// (`ftp://host`, `ssh://host`), and handing an arbitrary one to `xdg-open`
+/// dispatches it to whatever handler the desktop registered for it. The browser
+/// extension already refuses anything else before opening a tab
+/// (`browser-extension/popup/popup-list-actions.js`, decision S3-7); this is the
+/// same rule for the surfaces that hand a URI to the desktop.
+pub fn open_uri_for_name(name: &str) -> Option<String> {
+    let n = name.trim();
+    if !is_uri_like(n) {
+        return None;
+    }
+    let uri = if n.contains("://") {
+        n.to_string()
+    } else {
+        format!("https://{n}")
+    };
+    let (scheme, _) = uri.split_once("://")?;
+    (scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")).then_some(uri)
+}
+
+/// Compact display label for an entry name: the registrable domain when the
+/// name is URI-like (`account.facebook.com` → `facebook.com`), otherwise the
+/// name verbatim (`My Facebook`). Without the `public_suffix_list` feature the
+/// label is the full host, never a naive last-two-labels cut (which displayed
+/// `example.co.uk` as `co.uk`).
+pub fn display_label_for_name(name: &str) -> String {
+    match host_from_name(name) {
+        Some(host) => match registrable_domain(&host) {
+            Some(domain) => domain.to_string(),
+            None => host,
+        },
+        None => name.to_string(),
+    }
+}
+
 /// Whether two already-normalized hosts (lowercase, no scheme/port — i.e.
 /// [`host_from_uri`] output) refer to the same site for credential-matching
 /// purposes. See the module docs for the rules and their ordering.
@@ -143,6 +192,61 @@ mod tests {
         assert_eq!(host_from_name("user@gmail.com"), None);
         assert_eq!(host_from_name("My example.com login"), None);
         assert_eq!(host_from_name("localhost"), None);
+    }
+
+    /// The "Open Link" decision, shared by the applet and the Plasma tray.
+    #[test]
+    fn uri_like_names_accept_hosts_and_urls_only() {
+        assert!(is_uri_like("account.facebook.com"));
+        assert!(is_uri_like("facebook.com"));
+        assert!(is_uri_like("https://account.facebook.com/login"));
+        assert!(is_uri_like("http://example.co.uk"));
+        assert!(!is_uri_like("My Bank Account"));
+        assert!(!is_uri_like("user@gmail.com"));
+        assert!(!is_uri_like("nodot"));
+    }
+
+    /// A scheme other than http/https is not offered as a link: `xdg-open`
+    /// would hand it to whatever handler owns that scheme.
+    #[test]
+    fn open_uri_refuses_non_web_schemes() {
+        for name in ["ftp://example.com", "ssh://example.com", "javascript://x"] {
+            assert_eq!(open_uri_for_name(name), None, "{name} must not open");
+        }
+        assert!(
+            is_uri_like("ftp://example.com"),
+            "it is still a host-shaped name"
+        );
+        assert_eq!(
+            open_uri_for_name("HTTPS://Example.com/login"),
+            Some("HTTPS://Example.com/login".into()),
+            "the scheme check is case-insensitive"
+        );
+    }
+
+    #[test]
+    fn open_uri_prepends_the_scheme_only_when_missing() {
+        assert_eq!(
+            open_uri_for_name("account.facebook.com"),
+            Some("https://account.facebook.com".into())
+        );
+        assert_eq!(
+            open_uri_for_name("https://account.facebook.com/login"),
+            Some("https://account.facebook.com/login".into())
+        );
+        assert_eq!(open_uri_for_name("My Facebook"), None);
+        // Never hand a browser a URI with whitespace in it.
+        assert_eq!(
+            open_uri_for_name("  facebook.com  "),
+            Some("https://facebook.com".into())
+        );
+    }
+
+    #[test]
+    fn display_label_is_the_registrable_domain_or_the_name() {
+        assert_eq!(display_label_for_name("www.facebook.com"), "facebook.com");
+        assert_eq!(display_label_for_name("My Facebook"), "My Facebook");
+        assert_eq!(display_label_for_name("localhost"), "localhost");
     }
 
     #[test]

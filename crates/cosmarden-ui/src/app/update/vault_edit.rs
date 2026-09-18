@@ -99,12 +99,11 @@ impl CosmardenApp {
             }
             Message::CancelEdit => {
                 self.editing_entry = None;
-                self.notes_content = cosmic::widget::text_editor::Content::with_text(
-                    self.selected_entry
-                        .as_ref()
-                        .and_then(|e| e.notes.as_deref())
-                        .unwrap_or(""),
-                );
+                // Cancel discards the draft, so nothing is left to show: the
+                // view's notes area reads the (redacted) `selected_entry` behind
+                // its reveal, and a buffer kept here would be plaintext left in
+                // memory for a closed editor.
+                self.notes_content = cosmic::widget::text_editor::Content::new();
                 Some(Task::none())
             }
             Message::SaveEdit => {

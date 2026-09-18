@@ -1,5 +1,5 @@
 //! iced/libcosmic `Application` impl and the process entry points shared by
-//! the `cosmarden-applet` and `cosmarden-tray` binaries.
+//! the `cosmarden-applet` binary.
 
 use crate::app::{AppFlags, CosmardenApp, APP_ID};
 use crate::message::{Message, View};
@@ -148,37 +148,19 @@ impl Application for CosmardenApp {
 
     fn on_window_resize(&mut self, id: window::Id, width: f32, _height: f32) {
         // Only the standalone vault window drives the sidebar split; ignore
-        // applet surfaces and tracked popups. The tray popup is tracked in
-        // `windows` too, so tray mode never reaches this either.
+        // applet surfaces and tracked popups (also in `windows`).
         if !self.windows.contains_key(&id) && detect_run_mode() != RunMode::Applet {
             self.vault_window_resized(width);
         }
     }
 
     fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
-        let task = self.update_app(message);
-        // The DBusMenu is read back on demand, so the tray needs a snapshot of
-        // the state *after* every update: lock/unlock, logout, vault changes
-        // and the row list all arrive as messages, and publishing here is the
-        // one place that cannot miss a transition. Cheap: it only builds a
-        // ≤10-row vec and hands it to ksni.
-        #[cfg(feature = "kde")]
-        if detect_run_mode() == RunMode::Tray {
-            crate::kde::publish_snapshot(self);
-        }
-        task
+        self.update_app(message)
     }
 
     fn view(&self) -> cosmic::Element<'_, Self::Message> {
         match detect_run_mode() {
             RunMode::Applet => self.applet_view(),
-            // The tray popup is a separate window (`view_window`); the surface
-            // this returns is the empty main window `cosmic::app::run` creates,
-            // which nobody should see.
-            RunMode::Tray => container(cosmic::widget::text::body(""))
-                .width(Length::Shrink)
-                .height(Length::Shrink)
-                .into(),
             RunMode::Application => application_view(self),
         }
     }
@@ -188,11 +170,7 @@ impl Application for CosmardenApp {
     }
 
     fn subscription(&self) -> Subscription<Self::Message> {
-        Subscription::batch(vec![
-            agent_subscription(),
-            token_subscription(),
-            tray_subscription(),
-        ])
+        Subscription::batch(vec![agent_subscription(), token_subscription()])
     }
 
     fn style(&self) -> Option<cosmic::iced::theme::Style> {
@@ -298,8 +276,8 @@ fn agent_subscription() -> Subscription<Message> {
     )
 }
 
-/// Activation tokens exist only under a COSMIC panel; the vault window and the
-/// Plasma tray never receive one.
+/// Activation tokens exist only under a COSMIC panel; the vault window never
+/// receives one.
 fn token_subscription() -> Subscription<Message> {
     use cosmic::applet::token::subscription::activation_token_subscription;
 
@@ -308,15 +286,6 @@ fn token_subscription() -> Subscription<Message> {
     } else {
         Subscription::none()
     }
-}
-
-/// StatusNotifierItem commands; only the tray binary subscribes.
-fn tray_subscription() -> Subscription<Message> {
-    #[cfg(feature = "kde")]
-    if detect_run_mode() == RunMode::Tray {
-        return crate::kde::subscription();
-    }
-    Subscription::none()
 }
 
 pub fn run_applet(flags: AppFlags) -> cosmic::iced::Result {
@@ -332,21 +301,4 @@ pub fn run_application(flags: AppFlags) -> cosmic::iced::Result {
         .default_mmap_threshold(Some(131072));
 
     cosmic::app::run_single_instance::<CosmardenApp>(settings, flags)
-}
-
-/// Agent-only tray: no vault window and no `run_single_instance`, so it can
-/// coexist with `cosmarden-applet`. Closing the compact popup leaves the tray
-/// running.
-#[cfg(feature = "kde")]
-pub fn run_tray(flags: AppFlags) -> cosmic::iced::Result {
-    // Read by `detect_run_mode`; gates the vault-window actions in the applet
-    // views (`Open Vault` in the header, the per-row open button).
-    std::env::set_var("COSMARDEN_MODE", "tray");
-    tracing::info!("Running in Tray mode (agent-only)");
-    let settings = cosmic::app::Settings::default()
-        .no_main_window(true)
-        .exit_on_close(false)
-        .default_mmap_threshold(Some(131072));
-
-    cosmic::app::run::<CosmardenApp>(settings, flags)
 }

@@ -25,32 +25,6 @@ pub(crate) use helpers::should_suppress_popup_reopen;
 #[cfg(test)]
 pub(crate) use helpers::{clamped_anchor_rect, unlock_focus_id, APPLET_POPUP_REOPEN_DEBOUNCE_MS};
 
-/// How a Quit row tears the process down.
-///
-/// The COSMIC applet is a surface hosted by the panel, and the vault window
-/// runs with `exit_on_close(true)`, so closing libcosmic's main window *is* the
-/// exit for both. `cosmarden-tray` has no main window
-/// (`no_main_window(true)`) and runs with `exit_on_close(false)`, which makes
-/// `cosmic::app::Action::Close` a silent no-op: the Quit row appeared to do
-/// nothing and the panel icon stayed forever. The tray has to ask for a real
-/// exit instead — and its compact popup is an ordinary window, so it must be
-/// closed as one (`destroy_popup` on a non-surface is also a silent no-op).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum QuitPath {
-    /// Close the main window (`cosmic::app::Action::Close`).
-    CloseMainWindow,
-    /// Close the popup window and end the process (`iced::exit`).
-    ExitProcess,
-}
-
-pub(crate) fn quit_path(mode: crate::RunMode) -> QuitPath {
-    if mode == crate::RunMode::Tray {
-        QuitPath::ExitProcess
-    } else {
-        QuitPath::CloseMainWindow
-    }
-}
-
 impl CosmardenApp {
     pub fn update_applet(&mut self, message: Message) -> Option<Task<Message>> {
         match message {
@@ -95,32 +69,23 @@ impl CosmardenApp {
             // variant is typed on our message, so it cannot be handled here.
             Message::Surface(action) => Some(Task::done(cosmic::Action::Surface(action))),
             Message::Exit => {
-                let path = quit_path(crate::detect_run_mode());
                 let mut tasks = Vec::new();
 
                 if let Some(popup_id) = self.applet_popup.take() {
                     self.windows.remove(&popup_id);
-                    // Same split as `OpenVaultRequested`: the tray popup is an
-                    // ordinary window, so destroying it as a popup surface
-                    // leaves it on screen.
-                    tasks.push(match path {
-                        QuitPath::ExitProcess => cosmic::iced::window::close(popup_id),
-                        QuitPath::CloseMainWindow => Task::done(cosmic::Action::Surface(
-                            cosmic::surface::action::destroy_popup(popup_id),
-                        )),
-                    });
+                    tasks.push(Task::done(cosmic::Action::Surface(
+                        cosmic::surface::action::destroy_popup(popup_id),
+                    )));
                 }
 
-                tasks.push(match path {
-                    // With no main window to close, `Action::Close` ends
-                    // nothing; `iced::exit` is what stops the run loop.
-                    // `Task<M>` is `Task<cosmic::Action<M>>` here, so the
-                    // effect is typed on the action, as libcosmic does it.
-                    QuitPath::ExitProcess => cosmic::iced::exit::<Action<Message>>(),
-                    QuitPath::CloseMainWindow => {
-                        Task::done(cosmic::Action::Cosmic(cosmic::app::Action::Close))
-                    }
-                });
+                // The applet is a surface hosted by the panel and the vault
+                // window runs with `exit_on_close(true)`, so closing
+                // libcosmic's main window *is* the exit for both. A process
+                // with no main window (the retired libcosmic Plasma tray) had
+                // to ask for `iced::exit` instead; nothing here does.
+                tasks.push(Task::done(cosmic::Action::Cosmic(
+                    cosmic::app::Action::Close,
+                )));
 
                 Some(Task::batch(tasks))
             }
@@ -129,17 +94,9 @@ impl CosmardenApp {
 
                 if let Some(popup_id) = self.applet_popup.take() {
                     self.windows.remove(&popup_id);
-                    // The COSMIC popup is a Wayland popup surface; the tray's
-                    // compact popup (`kde.rs`) is an ordinary window. Destroying
-                    // a popup surface that was never created as one is a no-op,
-                    // so the tray popup has to be closed as a window.
-                    tasks.push(if crate::detect_run_mode() == crate::RunMode::Tray {
-                        cosmic::iced::window::close(popup_id)
-                    } else {
-                        Task::done(cosmic::Action::Surface(
-                            cosmic::surface::action::destroy_popup(popup_id),
-                        ))
-                    });
+                    tasks.push(Task::done(cosmic::Action::Surface(
+                        cosmic::surface::action::destroy_popup(popup_id),
+                    )));
                 }
 
                 if let Some(tx) = self.token_tx.as_ref() {
@@ -151,8 +108,7 @@ impl CosmardenApp {
                     // No activation-token channel: this process was not started
                     // by the COSMIC panel, so spawn the vault binary directly.
                     // `spawn_vault_app` resolves `cosmarden-applet`, a sibling
-                    // of the running binary — the tray opens the full app
-                    // instead of re-running itself.
+                    // of the running binary, and starts it in application mode.
                     tasks.push(crate::app::update::activation::spawn_vault_app(None));
                 }
 

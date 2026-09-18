@@ -170,6 +170,10 @@ field-nationality = Nationality
 field-passport-number = Passport Number
 field-passport-type = Passport Type
 field-national-identification-number = National Identification Number
+# Placeholder in the detail pane's notes area while the body is not loaded.
+# Notes are a secret-class slot: `GetEntryMeta` redacts them, so the pane shows
+# this until an explicit reveal fetches the body.
+notes-hidden = Hidden until revealed
 notes = Notes
 delete-entry = Delete Entry
 delete-entry-title = Delete Entry?
@@ -186,14 +190,6 @@ add-new-entry = Add New Entry
 copied-to-clipboard = Copied to clipboard
 public-key-label = Public key
 generate-password = Generate password
-# KDE StatusNotifierItem context menu (`src/kde/menu.rs`). Unlock opens the
-# compact popup — DBusMenu cannot host a password field.
-tray-unlock = Unlock
-tray-copy-username = Copy username
-tray-copy-password = Copy password
-tray-copy-note = Copy note
-tray-copy-key = Copy private key
-tray-copy-secret = Copy secret
 # Applet header tooltips shown while unlocked when the last sync failed; the
 # icon button next to the tooltip performs the described action.
 sync-session-expired-tooltip = Session expired — click to log in again

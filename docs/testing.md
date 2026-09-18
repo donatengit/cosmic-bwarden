@@ -19,7 +19,7 @@ below; invoking `cargo test` directly skips all of it.
 | `just test-all` | `just test` plus the offline JS suites (extension unit tests, release-pipeline tests) |
 | `just test-unit` | Unit tests only (core, ui, agent, cli) |
 | `just test-unit-tpm` | The TPM-gated agent unit tests, which a plain `cargo test` cannot see |
-| `just test-unit-kde` | UI unit tests with `--features kde` (tray menu model, theme-noise filter). A plain `just test-unit` does not enable the feature, and `app/tests/kde_gate.rs` asserts that |
+| `just test-unit-kde` | The KDE surfaces that `just test-unit` cannot see: UI unit tests with `--features kde` (the theme-noise filter) and the Plasma tray crate (`cosmarden-plasma-tray`: menu model, agent state, icon, panel colour). A plain `just test-unit` enables neither the feature nor the crate, and `app/tests/kde_gate.rs` asserts that |
 | `just test-e2e` | The complete E2E crate |
 | `just test-agent` / `test-cli` / `test-ui` | Focused subsets for iterating on one area — **not** a partition of the suite |
 | `just test-extension-unit` | Extension JS unit tests (vitest) |
@@ -183,6 +183,26 @@ and the entry came back as an unreadable base64 cipherstring; an empty
 fixture through the server API with an item key and a history entry (deriving
 the vault keys in the test process), then drives the same edit-and-save flow and
 checks what the server stored, including both.
+
+**Fixtures must also be shaped like real *agent* data.** The same trap in the
+other direction: `GetEntryMeta` — the action the desktop pane sends on a plain
+selection — answers with a *redacted* entry (`redact_entry_secrets`), so notes,
+passwords, and every other secret-class slot are absent from it. A UI fixture
+built by hand as a full entry, or a test that seeds `notes_content` itself,
+asserts a state production never receives, and passed while the detail pane
+rendered empty notes: `MainWindow`'s `select_entry` helper did exactly that.
+
+Two suites now cover that path, at their own layers:
+
+- `app/tests/notes.rs` drives the real messages from a redacted entry
+  (`EntryReceived` on a meta read, then the reveal) and asserts the decisions —
+  which fetch a selection owes (`vault_actions::notes_fetch_after_selection`),
+  whether the body is displayable (`notes_display`), what the copy gesture puts
+  on the clipboard.
+- `vault/meta_redaction.rs` (E2E) pins the agent's half of the contract: what a
+  meta read withholds, what it reports as filled, and that the reveal it forces
+  returns the plaintext. Nothing in this suite sent `GetEntryMeta` before, which
+  is how a redaction change broke the pane with every test green.
 
 ## Known Gaps & Coverage
 

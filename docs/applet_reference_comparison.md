@@ -159,7 +159,7 @@ repo-relative.
 
 1. **`xdg-open` with a vault-derived URI** — `crates/cosmarden-ui/src/app/update/applet.rs`'s `AppletOpenLink` arm
    spawns `xdg-open <uri>` where `uri` comes from a login entry's name field
-   (vault data → external program). The gate `is_uri_like`
+   (vault data → external program). The gate `domain::open_uri_for_name`
    (`app/applet_search.rs:52-59`) is conservative: it strips only
    `https://`/`http://`, then requires the part before the first `/` to
    contain a `.` and no space/`@`, which effectively rejects non-http(s)

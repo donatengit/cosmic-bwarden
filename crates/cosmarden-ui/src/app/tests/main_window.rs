@@ -2,7 +2,6 @@ use crate::app::CosmardenApp;
 use crate::message::View;
 use cosmarden_core::db::{Entry, EntryData};
 use cosmarden_core::protocol::{EntryType, SidebarEntry};
-use cosmic::widget;
 use cosmic::Application;
 
 fn sidebar_entry(id: &str, name: &str, entry_type: EntryType) -> SidebarEntry {
@@ -76,9 +75,14 @@ fn note_entry(id: &str, name: &str) -> Entry {
     }
 }
 
+/// Point the app at a *full* entry for the render smoke tests below.
+///
+/// These assert the pane builds for each `EntryData` variant, so they do not
+/// model the redacted entry a real selection receives, and they do not reach
+/// the notes display rule (`app/tests/notes.rs` drives the real messages from a
+/// redacted entry for that). Seeding `notes_content` no longer affects the view:
+/// the edit form owns that buffer.
 fn select_entry(app: &mut CosmardenApp, entry: Entry) {
-    app.notes_content =
-        widget::text_editor::Content::with_text(entry.notes.as_deref().unwrap_or(""));
     app.selected_entry_id = Some(entry.id.clone());
     app.selected_entry = Some(entry);
 }

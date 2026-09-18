@@ -275,11 +275,6 @@ pub enum Message {
     // Applet popup: quick-generate (last-saved settings, copies to clipboard)
     AppletGeneratePasswordRequested,
     AppletGeneratePasswordReceived(Result<Secret, String>),
-
-    /// KDE StatusNotifierItem click or context-menu action. The variant is
-    /// always declared; only `--features kde` builds construct it.
-    #[cfg(feature = "kde")]
-    KdeTray(crate::kde::KdeTrayCommand),
 }
 
 #[cfg(test)]

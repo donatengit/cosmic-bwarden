@@ -284,6 +284,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "arboard"
+version = "3.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0348a1c054491f4bfe6ab86a7b6ab1e44e45d899005de92f58b3df180b36ddaf"
+dependencies = [
+ "clipboard-win",
+ "log",
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "parking_lot",
+ "percent-encoding",
+ "windows-sys 0.60.2",
+ "x11rb",
+]
+
+[[package]]
 name = "arc-swap"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1451,6 +1468,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "cosmarden-plasma-tray"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arboard",
+ "cosmarden-core",
+ "futures-util",
+ "ksni",
+ "png 0.17.16",
+ "postcard",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "zbus 5.15.0",
+ "zeroize",
+]
+
+[[package]]
 name = "cosmarden-tests"
 version = "0.1.0"
 dependencies = [
@@ -1479,12 +1515,9 @@ dependencies = [
  "async-stream",
  "clap",
  "cosmarden-core",
- "futures-util",
  "i18n-embed",
  "i18n-embed-fl",
- "ksni",
  "libcosmic",
- "png 0.17.16",
  "postcard",
  "rust-embed",
  "serde",
@@ -4920,6 +4953,7 @@ dependencies = [
  "block2 0.6.2",
  "objc2 0.6.4",
  "objc2-core-foundation",
+ "objc2-core-graphics",
  "objc2-foundation 0.3.2",
 ]
 
@@ -4954,8 +4988,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e022c9d066895efa1345f8e33e584b9f958da2fd4cd116792e15e07e4720a807"
 dependencies = [
  "bitflags 2.13.2",
+ "dispatch2",
  "libc",
+ "objc2 0.6.4",
  "objc2-core-foundation",
+ "objc2-io-surface",
 ]
 
 [[package]]
@@ -5007,6 +5044,17 @@ checksum = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
 dependencies = [
  "bitflags 2.13.2",
  "block2 0.6.2",
+ "objc2 0.6.4",
+ "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-io-surface"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "180788110936d59bab6bd83b6060ffdfffb3b922ba1396b312ae795e1de9d81d"
+dependencies = [
+ "bitflags 2.13.2",
  "objc2 0.6.4",
  "objc2-core-foundation",
 ]

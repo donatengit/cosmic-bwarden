@@ -147,9 +147,7 @@ impl CosmardenApp {
                                 fetch_sidebar_entries(self.search_id, None, None, false),
                                 check_tpm_task(),
                             ];
-                            if self.applet_popup.is_some()
-                                || crate::detect_run_mode() == crate::RunMode::Tray
-                            {
+                            if self.applet_popup.is_some() {
                                 tasks.push(applet_rows_task(self));
                             }
                             if let Some(id) = self.pending_vault_entry.take() {
@@ -324,9 +322,7 @@ impl CosmardenApp {
                     self.search_id += 1;
                     tasks.push(fetch_sidebar_entries(self.search_id, None, None, false));
 
-                    if self.applet_popup.is_some()
-                        || crate::detect_run_mode() == crate::RunMode::Tray
-                    {
+                    if self.applet_popup.is_some() {
                         tasks.push(applet_rows_task(self));
                     }
                 }

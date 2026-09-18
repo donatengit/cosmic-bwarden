@@ -170,7 +170,7 @@ file can stay instructions-only.
 - [`docs/cosmic_applets_review_1.8.md`](docs/cosmic_applets_review_1.8.md) — upstream applets at COSMIC 1.8: reference revisions, what changed, which patches matter, what to adopt
 
 **KDE / Plasma**
-- [`docs/kde_applet_parity.md`](docs/kde_applet_parity.md) — the `--features kde` tray: what it reuses from the COSMIC popup, what it hides, and why a plasma plasmoid was rejected
+- [`docs/kde_applet_parity.md`](docs/kde_applet_parity.md) — the Plasma tray (`cosmarden-plasma-tray`, no libcosmic), why a plasma plasmoid was rejected, and what the retired libcosmic tray left behind
 
 **Browser extension**
 - [`docs/browser_extension.md`](docs/browser_extension.md) — user-facing extension guide

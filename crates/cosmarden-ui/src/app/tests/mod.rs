@@ -7,5 +7,6 @@ pub mod interactions;
 pub mod kde_gate;
 pub mod lifecycle;
 pub mod main_window;
+pub mod notes;
 pub mod pwgen;
 pub mod settings_persist;

@@ -1,10 +1,10 @@
-//! Shared UI crate: COSMIC applet/vault window and (behind `--features kde`)
-//! the Plasma tray binary. `src/main.rs` is `cosmarden-applet`;
-//! `src/bin/cosmarden-tray.rs` is the thin agent-only tray.
+//! Shared UI crate: the COSMIC applet and the vault window, built into the
+//! single `cosmarden-applet` binary (`src/main.rs`). The Plasma tray is a
+//! separate crate that links no libcosmic (`cosmarden-plasma-tray`); nothing
+//! here serves it.
 //!
-//! The crate is a library so both binaries share the `Application` impl, the
-//! applet/vault views and the tray module; `main.rs` only picks the entry
-//! point.
+//! The crate is a library so the applet and vault entry points share the
+//! `Application` impl and the views.
 
 pub mod app;
 #[cfg(feature = "kde")]
@@ -15,8 +15,6 @@ mod runtime;
 pub mod view;
 
 pub use app::{AppFlags, CosmardenApp, APP_ID};
-#[cfg(feature = "kde")]
-pub use runtime::run_tray;
 pub use runtime::{parse_cli_flags, run_applet, run_application};
 
 /// Minimum PIN length for TPM-backed unlock; single source in core. Used in
@@ -28,19 +26,13 @@ pub const MIN_PIN_LEN: usize = cosmarden_core::MIN_PIN_LEN;
 pub enum RunMode {
     Applet,
     Application,
-    /// Agent-only StatusNotifierItem (`cosmarden-tray`): compact popup, no
-    /// vault window.
-    Tray,
 }
 
-/// The COSMIC panel sets `COSMIC_PANEL_NAME`. `cosmarden-tray` sets
-/// `COSMARDEN_MODE=tray` before run, `spawn_vault_app` sets
+/// The COSMIC panel sets `COSMIC_PANEL_NAME`; `spawn_vault_app` sets
 /// `COSMARDEN_MODE=application`. Anything else is the vault window.
 pub fn detect_run_mode() -> RunMode {
     if std::env::var("COSMIC_PANEL_NAME").is_ok() {
         RunMode::Applet
-    } else if std::env::var("COSMARDEN_MODE").as_deref() == Ok("tray") {
-        RunMode::Tray
     } else {
         RunMode::Application
     }

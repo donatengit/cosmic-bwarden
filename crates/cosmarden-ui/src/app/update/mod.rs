@@ -18,19 +18,12 @@ use crate::message::Message;
 use cosmic::app::Task;
 use zeroize::Zeroize as _;
 
-/// How long a copied value stays in the clipboard before the auto-clear
-/// fires (`[P1-9]`). Matches upstream Bitwarden clients' default.
-pub(crate) const CLIPBOARD_CLEAR_SECS: u64 = 30;
+/// How long a copied value stays in the clipboard before the auto-clear fires.
+/// Defined in core so the Plasma tray clears at the same moment.
+pub(crate) use cosmarden_core::CLIPBOARD_CLEAR_SECS;
 
 impl CosmardenApp {
     pub fn update_app(&mut self, message: Message) -> Task<Message> {
-        // Tray clicks and menu actions are not vault operations: they only
-        // open or close the compact popup. The menu snapshot is republished by
-        // `Application::update`, once per message.
-        #[cfg(feature = "kde")]
-        if let Message::KdeTray(cmd) = message.clone() {
-            return crate::kde::handle_tray_command(self, cmd);
-        }
         if let Some(task) = self.update_lifecycle(message.clone()) {
             return task;
         }
@@ -180,9 +173,6 @@ impl CosmardenApp {
             | Message::ToggleRevealField(_, _)
             | Message::CopySecretField(_, _)
             | Message::OnDemandSecretLoaded { .. } => Task::none(),
-            // Intercepted at the top of `update_app`; listed for exhaustiveness.
-            #[cfg(feature = "kde")]
-            Message::KdeTray(_) => Task::none(),
 
             Message::CopyToClipboard(text) => self.copy_to_clipboard_with_autoclear(text),
             Message::ClipboardClearElapsed(generation) => {

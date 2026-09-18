@@ -54,12 +54,16 @@ default: build
 build:
     RUSTFLAGS="-C target-cpu=native" {{_build_limited}} cargo build --release --quiet {{_tpm_features}}
 
-# Same as `build`, plus `--features cosmarden-ui/kde`: compiles the Plasma tray
-# (`cosmarden-tray`) and the theme-noise log demotion. The feature is opt-in and
-# never auto-detected — `just build` on a Plasma machine must still produce the
-# COSMIC binary.
+# Same as `build`, plus the two KDE-only artifacts: the applet with
+# `--features cosmarden-ui/kde` (libcosmic's missing-COSMIC-session log noise
+# demoted to `off`) and the Plasma tray `cosmarden-plasma-tray`. Both are opt-in
+# and never auto-detected — `just build` on a Plasma machine must still produce
+# the COSMIC binary, and must not pull ksni/zbus into a COSMIC build. The tray
+# is not a default workspace member for the same reason, so it is named
+# explicitly.
 build-kde:
     RUSTFLAGS="-C target-cpu=native" {{_build_limited}} cargo build --release --quiet {{_tpm_features}} --features cosmarden-ui/kde
+    RUSTFLAGS="-C target-cpu=native" {{_build_limited}} cargo build --release --quiet -p cosmarden-plasma-tray
 
 # Copy already-built release binaries and metadata into ~/.local.
 # Does not compile — run `just build` first. Deb/AUR remain the system-wide path.
@@ -76,8 +80,8 @@ install:
     # The Plasma tray is built by `just build-kde`, not by `build`; install it
     # when it is there. It resolves `cosmarden-applet` as its own sibling to
     # open the full app, so the two have to land in the same directory.
-    if [ -x target/release/cosmarden-tray ]; then \
-        install -Dm755 target/release/cosmarden-tray {{local_bin}}/cosmarden-tray; \
+    if [ -x target/release/cosmarden-plasma-tray ]; then \
+        install -Dm755 target/release/cosmarden-plasma-tray {{local_bin}}/cosmarden-plasma-tray; \
     fi
 
     echo "Installing desktop entry..."
@@ -249,10 +253,15 @@ test-unit:
 # KDE extras (`--features kde`) are opt-in and not auto-detected: `just
 # test-unit` stays COSMIC-only (app/tests/kde_gate.rs asserts that).
 #
-# Unit tests for the KDE-gated UI code: tray menu model, theme-noise filter
+# Unit tests for the KDE surfaces `just test-unit` cannot see: the KDE-gated UI
+# code (`src/kde.rs`, the theme-noise filter) and the Plasma tray crate (menu
+# model, agent state, icon, panel colour). The tray is excluded from the default
+# workspace members, so it has to be named here too — a suite nothing runs is
+# not wired up.
 test-unit-kde:
-    echo "--- Unit Tests (ui, kde feature) ---"
+    echo "--- Unit Tests (ui, kde feature + plasma tray) ---"
     {{_limited}} cargo test --quiet -p cosmarden-ui --features kde
+    {{_limited}} cargo test --quiet -p cosmarden-plasma-tray
 
 # Requires libtss2-esys; skipped automatically when it is absent.
 #
@@ -307,10 +316,13 @@ test-cli: build-test-binaries (ensure-container-socket)
     echo "--- [subset] CLI E2E Tests ---"
     {{_limited}} cargo test --quiet -p cosmarden-tests --lib -- cli_lifecycle cli_secret_mask_test custom_fields_cli --test-threads=1
 
-# [subset] UI E2E tests
+# [subset] UI E2E tests — the protocol-level simulations of the desktop flows,
+# plus the agent's half of the pane's selection contract (`GetEntryMeta`
+# redaction + filled_secrets, `vault::meta_redaction`), which is what tells a
+# client whether to draw a field or fetch it.
 test-ui: build-test-binaries (ensure-container-socket)
     echo "--- [subset] UI E2E Tests ---"
-    {{_limited}} cargo test --quiet -p cosmarden-tests --lib -- window_flow custom_fields_ui --test-threads=1
+    {{_limited}} cargo test --quiet -p cosmarden-tests --lib -- window_flow custom_fields_ui meta_redaction --test-threads=1
 
 # A correct run leaves none of these: tests redirect XDG into a tempdir and the
 # extension scripts clean their fixed profiles in a trap. This is for residue

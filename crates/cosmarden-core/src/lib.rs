@@ -17,6 +17,7 @@ pub mod session_envelope;
 #[cfg(test)]
 mod tests;
 pub mod vault;
+pub mod vault_binary;
 
 pub fn version() -> &'static str {
     env!("COSMARDEN_VERSION")
@@ -66,6 +67,13 @@ pub fn ct_eq(a: &[u8], b: &[u8]) -> bool {
     use subtle::ConstantTimeEq as _;
     bool::from(a.ct_eq(b))
 }
+
+/// How long a copied value stays in the clipboard before the auto-clear fires
+/// (`[P1-9]`). Matches upstream Bitwarden clients' default. Single source for
+/// every client that copies a secret: the UI (`copy_to_clipboard_with_autoclear`)
+/// and the Plasma tray (`cosmarden-plasma-tray`'s `clipboard`), so the two do
+/// not drift apart on how long plaintext sits in the selection.
+pub const CLIPBOARD_CLEAR_SECS: u64 = 30;
 
 /// Minimum length for a TPM-unlock PIN. Single source of truth for the agent
 /// (authoritative validation), the UI (captions and submit validation), and

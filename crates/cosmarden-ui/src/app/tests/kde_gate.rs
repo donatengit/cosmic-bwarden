@@ -1,5 +1,7 @@
 //! Compile-time gate: the default UI test binary must not enable `kde`.
 //! The feature's own tests live in `src/kde.rs` and run via `just test-unit-kde`.
+//! The Plasma tray is a separate crate (`cosmarden-plasma-tray`) with its own
+//! unit tests in the same recipe.
 
 #[cfg(not(feature = "kde"))]
 #[test]
@@ -22,14 +24,4 @@ fn kde_feature_compiles_the_theme_noise_filter() {
         crate::kde::THEME_NOISE_DIRECTIVES.contains(&"cosmic::theme=off"),
         "must demote cosmic::theme ERROR (missing cosmic-settings-daemon)"
     );
-}
-
-#[cfg(feature = "kde")]
-#[test]
-fn tray_left_click_is_toggle_popup_for_secret_inputs() {
-    use crate::kde::KdeTrayCommand;
-    assert!(matches!(
-        crate::kde::menu::command_to_message(KdeTrayCommand::TogglePopup),
-        crate::message::Message::KdeTray(KdeTrayCommand::TogglePopup)
-    ));
 }

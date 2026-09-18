@@ -5,6 +5,7 @@ pub mod domain_matching;
 pub mod entry_types;
 pub mod lifecycle_errors;
 pub mod login_fields;
+pub mod meta_redaction;
 pub mod new_item_types;
 pub mod ssh;
 pub mod ssh_agent;

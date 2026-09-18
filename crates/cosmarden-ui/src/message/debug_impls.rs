@@ -139,8 +139,6 @@ impl Message {
             Self::GeneratorHistoryDeleted(_) => "GeneratorHistoryDeleted",
             Self::AppletGeneratePasswordRequested => "AppletGeneratePasswordRequested",
             Self::AppletGeneratePasswordReceived(_) => "AppletGeneratePasswordReceived",
-            #[cfg(feature = "kde")]
-            Self::KdeTray(_) => "KdeTray",
         }
     }
 }

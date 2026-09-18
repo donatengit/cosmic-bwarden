@@ -34,6 +34,13 @@ This will produce binaries in `target/release/`:
 - `cosmarden-applet`: The main GUI application and panel tray applet (built from the `cosmarden-ui` crate).
 - `cosmarden`: The command-line interface (crate `cosmarden-cli`).
 
+The KDE-only tray is **not** part of that build, because it would pull D-Bus and
+ksni/zbus into a COSMIC build. `just build-kde` produces it, plus the applet with
+the Plasma log-noise filter compiled in:
+
+- `cosmarden-plasma-tray`: the Plasma tray — one menu, no libcosmic
+  (`docs/kde_applet_parity.md`, "Thin Plasma tray")
+
 ## Running the Components
 
 ### 1. Start the Agent

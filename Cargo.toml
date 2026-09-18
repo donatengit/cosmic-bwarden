@@ -5,6 +5,18 @@ members = [
     "crates/cosmarden-ui",
     "crates/cosmarden-cli",
     "crates/cosmarden-tests",
+    "crates/cosmarden-plasma-tray",
+]
+# Everything except the Plasma tray: that crate is KDE-only and links ksni/zbus,
+# which must not enter a default (COSMIC) build. Build it explicitly with
+# `just build-kde` (`-p cosmarden-plasma-tray`); `cargo clippy --workspace`
+# still names every member, so it is linted with the rest.
+default-members = [
+    "crates/cosmarden-core",
+    "crates/cosmarden-agent",
+    "crates/cosmarden-ui",
+    "crates/cosmarden-cli",
+    "crates/cosmarden-tests",
 ]
 resolver = "3"
 

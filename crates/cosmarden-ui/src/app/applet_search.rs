@@ -3,7 +3,6 @@ use cosmarden_core::protocol::{EntryType, SidebarEntry};
 pub const APPLET_SEARCH_LIMIT: usize = 10;
 pub const APPLET_LABEL_MAX_LEN: usize = 28;
 
-/// The KDE tray snapshot clones and compares these rows (`src/kde/tray.rs`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AppletRowKind {
     Login {
@@ -36,29 +35,12 @@ pub fn truncate_label(s: &str) -> String {
 /// Extracts a compact domain label (e.g. `"facebook.com"`) from a
 /// hostname-like name. Falls back to the original name if it doesn't look
 /// like a URL/hostname. With the `public_suffix_list` feature the label is
-/// the PSL-derived eTLD+1 (`www.example.co.uk` → `example.co.uk`); without
-/// it, the full host — never a naive last-two-labels cut, which displayed
-/// `example.co.uk` as `co.uk`.
+/// the PSL-derived eTLD+1 (`www.example.co.uk` → `example.co.uk`).
+///
+/// Delegates to `cosmarden_core::domain` so the applet, the Plasma tray and
+/// the extension label the same name the same way.
 pub fn extract_domain_label(name: &str) -> String {
-    let Some(host) = cosmarden_core::domain::host_from_name(name) else {
-        return name.to_string();
-    };
-    match cosmarden_core::domain::registrable_domain(&host) {
-        Some(d) => d.to_string(),
-        None => host,
-    }
-}
-
-/// Returns `true` if `name` looks like a URL or bare hostname that a browser
-/// can open (has a dot, no spaces, no `@`).  Used to decide whether to enable
-/// the open-URI button for a login row.
-pub fn is_uri_like(name: &str) -> bool {
-    let stripped = name
-        .strip_prefix("https://")
-        .or_else(|| name.strip_prefix("http://"))
-        .unwrap_or(name);
-    let host = stripped.split('/').next().unwrap_or(stripped);
-    !host.contains(' ') && host.contains('.') && !host.contains('@')
+    cosmarden_core::domain::display_label_for_name(name)
 }
 
 /// Builds the applet result rows from sidebar entries, dropping entry types
@@ -73,13 +55,7 @@ pub fn build_applet_rows(entries: &[SidebarEntry]) -> Vec<AppletRow> {
                 label: truncate_label(&extract_domain_label(&e.name)),
                 kind: AppletRowKind::Login {
                     username: e.username.clone(),
-                    link: is_uri_like(&e.name).then(|| {
-                        if e.name.contains("://") {
-                            e.name.clone()
-                        } else {
-                            format!("https://{}", e.name)
-                        }
-                    }),
+                    link: cosmarden_core::domain::open_uri_for_name(&e.name),
                 },
             }),
             EntryType::SecureNote => Some(AppletRow {
@@ -186,21 +162,9 @@ mod tests {
         assert_eq!(extract_domain_label("facebook.com"), "facebook.com");
     }
 
-    #[test]
-    fn is_uri_like_accepts_hostnames_and_urls() {
-        assert!(is_uri_like("account.facebook.com"));
-        assert!(is_uri_like("facebook.com"));
-        assert!(is_uri_like("https://account.facebook.com/login"));
-        assert!(is_uri_like("http://example.co.uk"));
-    }
-
-    #[test]
-    fn is_uri_like_rejects_plain_names_and_emails() {
-        assert!(!is_uri_like("My Bank Account"));
-        assert!(!is_uri_like("user@gmail.com"));
-        assert!(!is_uri_like("nodot"));
-    }
-
+    /// The applet's 🔗 and the tray's `Open link` both come from
+    /// `cosmarden_core::domain::open_uri_for_name`; these pin the wiring, the
+    /// predicate itself is tested in core.
     #[test]
     fn build_applet_rows_sets_link_for_hostname_name() {
         let mut e = entry("1", EntryType::Login);

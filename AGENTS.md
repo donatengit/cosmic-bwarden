@@ -49,6 +49,8 @@ shipped. Everything explanatory belongs in the guides.
   would settle it — do not hedge with vague qualifiers. Report failures and
   gaps directly, including your own.
 - **Never commit generated or temporary artifacts.** Build output, `node_modules`, test-runner results (`test-results/`, `playwright-report/`), coverage, and logs belong in `.gitignore`, never in a commit. If `git status` shows a generated path, add it to `.gitignore` rather than staging it (note: a slash-suffixed pattern matches directories only — drop the slash to also catch symlinks).
+- **Put scratch in the repo's `./tmp/`.** Probe scripts, throwaway fixtures, captured logs, downloaded references, and anything else that is not part of the change go in `./tmp/` (already in `.gitignore`), or `~/.cache/tmp/` when it must live outside the repo. Never put scratch in `/tmp`, in `$HOME`, or in any other directory shared with the user's running session: on a live desktop `/tmp` holds sockets and singleton files belonging to Xwayland, Steam, session managers and D-Bus clients, so a mistaken cleanup there breaks the session and cannot be undone. Clean up what you created by literal path, and only what you created.
+- **Never run a recursive delete on a path you have not just verified.** Not a variable that may be empty or may have resolved elsewhere, not a glob, not a path derived from `dirs::`. `rm -rf "$TMP"` did not delete a scratch directory: `$TMP` had expanded to `/tmp`, and the run removed live `/tmp/.X11-unix/*` and Steam sockets from a working desktop. Echo the value or guard it with `case` immediately before deleting, or delete a literal path.
 
 ## Naming (one spelling per layer)
 
@@ -297,42 +299,49 @@ paths, and the code layout: `docs/tpm.md`.
   - The agent logs `TPM: using TCTI from TSS2_TCTI (…)` at debug — grep for it
     to confirm a test run is on the emulator.
 
-### KDE / Plasma extras (`--features kde`)
+### KDE / Plasma extras
 
 Opt-in, **not** default and **not** auto-detected (unlike TPM): `just build` /
 `just test-unit` on a Plasma machine must still produce the COSMIC binary. The
-libcosmic vault window already runs on KDE; this flag is the compile home for
-Plasma-only work so it cannot leak into COSMIC panel code. What ships behind it,
-and why a plasma tray is not a plasmoid: `docs/kde_applet_parity.md`.
+libcosmic vault window already runs on KDE; this is the compile home for
+Plasma-only work so it cannot leak into COSMIC panel code. What ships, and why a
+plasma plasmoid was rejected: `docs/kde_applet_parity.md`.
 
-- **Check it with the feature on**: `cargo check -p cosmarden-ui --features kde`.
-  The tray code is invisible to a plain `cargo check` and to `just test-unit`.
-- **`cosmarden-tray` is the only binary behind the flag** (`just build-kde`).
-  It is agent-only: tray menu, compact popup, no vault window. The default
-  `just build` must not produce it.
-- **The tray owns no vault UI.** The popup views in `view/applet/` stay
-  shared: the tray maps its commands onto the popup's existing messages
-  (`Message::KdeTray` is intercepted in `update_app`), and reaching the vault
-  list, settings or the generator pane means spawning `cosmarden-applet`
-  (`activation::spawn_vault_app`), never rendering a second app in the tray
-  process.
-- **Resolve that binary by name, never re-spawn the current executable.** The
-  tray only ever calls `run_tray`, so `current_exe()` there is another tray.
-  `activation::resolve_vault_binary` (override, sibling, `PATH`) is the single
-  resolver and is unit-tested for exactly that case.
-- **The tray popup is a plain window, the COSMIC popup a Wayland popup
-  surface.** Close them with `window::close` and `surface::action::destroy_popup`
-  respectively (`RunMode` decides); the wrong one is a silent no-op that leaves
-  the popup on screen.
-- **Quit must end the tray process, not close a window it does not have.**
-  `cosmarden-tray` runs with `no_main_window(true)` and `exit_on_close(false)`,
-  so `cosmic::app::Action::Close` closes nothing there: the Quit row looked
-  dead and the panel icon stayed. `app/update/applet.rs::quit_path` is the one
-  decision — `iced::exit()` for `RunMode::Tray`, `Action::Close` for the applet
-  and the vault window, which have a main window and exit through it.
-- **`RunMode::{Applet, Application, Tray}` is decided from the environment**
-  (`lib.rs::detect_run_mode`). Tests that assert tray behavior must set
-  `COSMARDEN_MODE` explicitly and restore it, like every other env override.
+- **The Plasma tray is `cosmarden-plasma-tray`, a separate crate that links no
+  libcosmic** (`crates/cosmarden-plasma-tray`, built only by `just build-kde`).
+  It is a non-default workspace member, so no default `cargo build` pulls
+  ksni/zbus into a COSMIC build; check it with `cargo check -p
+  cosmarden-plasma-tray` and test it with `just test-unit-kde`.
+- **It has no window, so it cannot unlock anything.** A tray *menu* is drawn by
+  the host from a DBusMenu tree, which has no text-input item; `Open Vault`
+  spawns `cosmarden-applet` and that is the only way in — including for a
+  reprompt-gated entry, whose `GetPassword` answers `reprompt_required` because
+  a menu has no field to ask in. That path logs and points at `Open Vault`.
+- **Copying a secret is allowed here, and only through one boundary.**
+  `Copy password` is a single `GetPassword` whose `Response::Password` goes
+  straight to `clipboard.rs`; `Copy login` uses the username the sidebar already
+  returned. There, and nowhere else, `Secret::expose()` may be called: never log
+  a value (log the row's label), never widen it to a `String` that outlives the
+  write, and keep the clear-after policy on `cosmarden_core::CLIPBOARD_CLEAR_SECS`
+  (shared with the UI so both clear at the same moment). A clipboard test would
+  write to the developer's own selection — keep clipboard I/O out of tests and
+  test the pure policy instead.
+- **One menu for both mouse buttons.** The item sets
+  `ksni::Tray::MENU_ON_ACTIVATE` (`ItemIsMenu`); Plasma ≥ 6.4 then never calls
+  `Activate`, and older hosts get ksni's `UnknownMethod("ItemIsMenu")` answer and
+  show the menu themselves. Do not add an `activate()` handler or a popup.
+- **Decisions stay pure and unit-tested**: `menu::build_menu`, `menu::agent_action`
+  and `state::login_rows` — the menu a user sees is what those return, with no
+  tray host in the loop.
+- **Resolve the vault binary through `cosmarden_core::vault_binary`, never by
+  re-spawning the current executable.** The resolver (override, sibling, `PATH`)
+  and `vault_command` (application mode, no `COSMIC_PANEL_NAME`) are shared with
+  the applet's own `Open Vault` path and unit-tested for exactly that case.
+- **`RunMode::{Applet, Application}` is decided from the environment**
+  (`lib.rs::detect_run_mode`). The tray is a separate process and has no
+  `RunMode`; `--features cosmarden-ui/kde` now only compiles `src/kde.rs`, which
+  demotes libcosmic's missing-COSMIC-session log noise to `off` for the vault
+  window. Check that with `cargo check -p cosmarden-ui --features kde`.
 
 ### Password Generator
 

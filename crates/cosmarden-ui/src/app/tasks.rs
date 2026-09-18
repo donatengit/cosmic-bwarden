@@ -70,9 +70,8 @@ pub fn fetch_sidebar_entries(
 /// Fetch the applet rows for the current query and favourites toggle, and
 /// return the task for the caller's batch.
 ///
-/// One definition for all three callers — the two lifecycle refreshes and the
-/// tray's popup open — because a caller that passed its own `only_pinned`
-/// showed the pinned set under a non-empty search box.
+/// One definition for both lifecycle refreshes, because a caller that passed
+/// its own `only_pinned` showed the pinned set under a non-empty search box.
 pub fn applet_rows_task(app: &mut CosmardenApp) -> Task<Message> {
     app.applet_search_id += 1;
     let (query, only_pinned) =
@@ -83,8 +82,8 @@ pub fn applet_rows_task(app: &mut CosmardenApp) -> Task<Message> {
 /// Pure request behind [`applet_rows_task`]: an empty query always means
 /// "favourites only" (`effective_only_pinned`), and then `query` is sent as
 /// `None` rather than an empty string. Kept separate so the pairing is
-/// testable: the tray passed a hardcoded `only_pinned = true` with
-/// `query = None`, which showed the pinned set under a non-empty search box.
+/// testable: passing a hardcoded `only_pinned` with `query = None` showed the
+/// pinned set under a non-empty search box.
 fn applet_rows_request(query: &str, favourites_toggle: bool) -> (Option<String>, bool) {
     let only_pinned = applet_search::effective_only_pinned(query, favourites_toggle);
     let query = if query.trim().is_empty() {

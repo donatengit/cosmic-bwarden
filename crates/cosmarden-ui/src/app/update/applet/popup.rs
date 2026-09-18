@@ -22,10 +22,7 @@ impl CosmardenApp {
     /// the typed unlock and reprompt passwords (zeroized), their reveal flags,
     /// the last error and the hovered row. The search query and the favourites
     /// toggle are deliberately preserved, so the popup re-opens with the last
-    /// search intact.
-    ///
-    /// Shared by the COSMIC popup and the Plasma tray's popup — the tray used
-    /// to keep a typed master password in memory after it was closed.
+    /// search intact: a typed master password must not outlive the window.
     pub(crate) fn reset_applet_popup_state(&mut self) {
         self.applet_unlock_password.zeroize();
         self.applet_unlock_password_revealed = false;

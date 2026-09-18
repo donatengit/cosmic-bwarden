@@ -9,8 +9,8 @@ use cosmic::Element;
 
 /// Top header row: "Open Vault" (sync-failed uses a destructive style) + icon buttons.
 ///
-/// Shared by the COSMIC panel popup and the Plasma tray's compact popup, so
-/// both hand off to the full app the same way.
+/// `Open Vault` hands off to `cosmarden-applet` as the app, which is also how
+/// the Plasma tray's own menu row does it (`cosmarden_core::vault_binary`).
 pub fn header_row(app: &CosmardenApp) -> Element<'static, Message> {
     let is_unlocked = app.view.is_unlocked();
 

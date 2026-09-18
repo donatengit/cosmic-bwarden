@@ -43,7 +43,15 @@ This file tracks the testing progress for all screens, components, and interacti
 - [✅] Lock/Logout clears sensitive data and revealed fields | ✅ Complete
 - [✅] Secret masking with reveal toggle (eye icon) | ✅ Complete
 - [✅] Support for SSH Keys, Cards, and Identities | ✅ Complete
-- [✅] Notes field includes copy button | ✅ Complete
+- [✅] Notes are masked on a meta selection, revealed on demand, and an
+  emptied edit buffer never masquerades as the body | ✅ Complete
+  (`app/tests/notes.rs`; the render smoke tests in `app/tests/main_window.rs`
+  only assert the pane builds, they hand-feed a full entry)
+- [✅] Notes copy button fetches the body (`GetEntry`) and copies it | ✅ Complete
+- [✅] Selecting a SecureNote fetches its content (`GetEntry`) instead of
+  opening unreadable | ✅ Complete
+- [✅] The agent half of the meta contract (redaction + `filled_secrets`) |
+  ✅ Complete (`crates/cosmarden-tests/src/vault/meta_redaction.rs`)
 
 ### Settings Screen
 - [✅] Edit button enters editing mode | ✅ Complete
