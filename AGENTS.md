@@ -323,6 +323,17 @@ plasma plasmoid was rejected: `docs/kde_applet_parity.md`.
   spawns `cosmarden-applet` and that is the only way in — including for a
   reprompt-gated entry, whose `GetPassword` answers `reprompt_required` because
   a menu has no field to ask in. That path logs and points at `Open Vault`.
+- **The autostart entry is what starts it at login.** Nothing else does, and
+  nothing Plasma-side has to be configured: a StatusNotifierItem appears because
+  the process registers with `org.kde.StatusNotifierWatcher`, so
+  `crates/cosmarden-plasma-tray/resources/com.enikeev.cosmarden-tray.desktop` is
+  the whole story. `just install` writes it to `~/.config/autostart/` with an
+  absolute `Exec=` (a session's PATH need not contain `~/.local/bin`). The
+  packaged path is `/etc/xdg/autostart/` with the **same basename**, so a user's
+  `Hidden=true` copy disables the shipped one — neither package ships it yet, and
+  that gap is why a packaged install has no tray. Never set
+  `X-systemd-skip=true`: KDE's own components use it to mean *no unit is
+  generated*.
 - **Copying a secret is allowed here, and only through one boundary.**
   `Copy password` is a single `GetPassword` whose `Response::Password` goes
   straight to `clipboard.rs`; `Copy login` uses the username the sidebar already

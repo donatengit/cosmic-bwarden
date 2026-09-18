@@ -20,6 +20,11 @@ local_metainfo := local_share + "/metainfo"
 local_icons := local_share + "/icons/hicolor"
 local_bin := home + "/.local/bin"
 local_systemd := home + "/.config/systemd/user"
+# XDG autostart, where Plasma 6's `systemd-xdg-autostart-generator` turns each
+# entry into an `app-<name>@autostart.service` unit. Only the Plasma tray has
+# anything here: the agent is a systemd user unit, and the applet is started by
+# the panel.
+local_autostart := home + "/.config/autostart"
 
 # ── Build and test resource caps ──────────────────────────────────────────
 # Every build and test recipe runs inside a transient systemd scope, so a long
@@ -90,18 +95,23 @@ install:
     install -Dm755 target/release/cosmarden-agent {{local_bin}}/cosmarden-agent
     install -Dm755 target/release/cosmarden-applet {{local_bin}}/cosmarden-applet
     install -Dm755 target/release/cosmarden {{local_bin}}/cosmarden
-    # The Plasma tray is a `build-kde` artifact. Gate on the flavor the last
-    # build recorded, not on the file's presence: `just build` after
-    # `just build-kde` leaves the old tray binary in target/release, and a COSMIC
-    # install should not carry a KDE-only binary. The applet binary needs no such
-    # care — both flavors are equivalent (`_build_flavor` above). The tray
-    # resolves `cosmarden-applet` as its own sibling to open the full app, so the
-    # two have to land in the same directory.
+    # The Plasma tray and its XDG autostart entry are `build-kde` artifacts. Gate
+    # on the flavor the last build recorded, not on the file's presence: `just
+    # build` after `just build-kde` leaves the old tray binary in target/release,
+    # and a COSMIC install should not carry a KDE-only binary. The applet binary
+    # needs no such care — both flavors are equivalent (`_build_flavor` above).
+    # The tray resolves `cosmarden-applet` as its own sibling to open the full
+    # app, so the two have to land in the same directory; the autostart entry
+    # takes the absolute path for the same reason (a session's PATH need not
+    # contain ~/.local/bin, and a bare name would simply not start).
     flavor="$(cat {{_build_flavor}} 2>/dev/null || true)"; \
     if [ "$flavor" = kde ] && [ -x target/release/cosmarden-plasma-tray ]; then \
         install -Dm755 target/release/cosmarden-plasma-tray {{local_bin}}/cosmarden-plasma-tray; \
+        install -Dm644 crates/cosmarden-plasma-tray/resources/com.enikeev.cosmarden-tray.desktop {{local_autostart}}/com.enikeev.cosmarden-tray.desktop; \
+        sed -i "s|^Exec=cosmarden-plasma-tray|Exec={{local_bin}}/cosmarden-plasma-tray|" {{local_autostart}}/com.enikeev.cosmarden-tray.desktop; \
+        echo "note: cosmarden-plasma-tray starts with the next KDE session; start it now with {{local_bin}}/cosmarden-plasma-tray &" >&2; \
     else \
-        echo "note: skipping cosmarden-plasma-tray — the last build recorded '${flavor:-nothing}', not 'kde'. Run 'just build-kde install' for the KDE install; 'just uninstall' removes an installed tray." >&2; \
+        echo "note: skipping cosmarden-plasma-tray and its autostart entry — the last build recorded '${flavor:-nothing}', not 'kde'. Run 'just build-kde install' for the KDE install; 'just uninstall' removes both." >&2; \
     fi
 
     echo "Installing desktop entry..."
@@ -226,6 +236,7 @@ uninstall:
     rm -f {{local_bin}}/cosmarden
     # Absent unless a `build-kde` install ran; `rm -f` covers both cases.
     rm -f {{local_bin}}/cosmarden-plasma-tray
+    rm -f {{local_autostart}}/com.enikeev.cosmarden-tray.desktop
     rm -f {{local_systemd}}/cosmarden-agent.service
     rm -f {{home}}/.mozilla/native-messaging-hosts/com.enikeev.cosmarden.json
     rm -f {{home}}/.mozilla/native-messaging-hosts/cosmarden-browser-host.sh

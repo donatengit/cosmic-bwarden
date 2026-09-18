@@ -50,6 +50,13 @@ what the last build produced: the two applet builds are equivalent, because
 `--features cosmarden-ui/kde` only quiets libcosmic's log noise on Plasma
 (`crates/cosmarden-ui/src/kde.rs`).
 
+A `build-kde` install also writes the tray's XDG autostart entry to
+`~/.config/autostart/com.enikeev.cosmarden-tray.desktop`, with `Exec=` rewritten
+to the absolute `~/.local/bin/cosmarden-plasma-tray` — that entry is what starts
+the tray at login, and Plasma 6 turns it into an `app-…@autostart.service` unit
+(docs/kde_applet_parity.md, "Wiring"). It takes effect at the next login; in the
+current session start the binary by hand.
+
 ## Running the Components
 
 ### 1. Start the Agent
