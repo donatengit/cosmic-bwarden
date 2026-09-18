@@ -45,12 +45,14 @@ _limited := "./packaging/run-limited.sh " + test_cpus + " " + test_memory
 _build_limited := _limited
 
 # Which flavor the release binaries in target/release came from: `build` records
-# `cosmic`, `build-kde` records `kde`. `install` gates the KDE-only artifacts on
-# it instead of on a file that happens to be in target/release, because `just
-# build` after `just build-kde` leaves the old tray binary there and installing
-# it would ship KDE artifacts that the current binaries do not match.
-# Only the two `just` build recipes write this — a bare
-# `cargo build --release` leaves the previous value, so keep using `just build`.
+# `cosmic`, `build-kde` records `kde`. `install` gates the KDE-only files on it,
+# so a COSMIC install cannot pick up an artifact an older `build-kde` left in
+# target/release (`just build` never removes the tray binary from there). The
+# applet builds themselves are equivalent — `--features cosmarden-ui/kde` only
+# quiets libcosmic's log noise on Plasma (`src/kde.rs`) — so this is about
+# shipping what the last build produced, not about a broken pairing.
+# Only the two `just` build recipes write this; a bare `cargo build --release`
+# leaves the previous value, so keep using `just build`.
 _build_flavor := "target/release/.cosmarden-build-flavor"
 
 # Auto-detect TPM2 support: enable the agent's `tpm` feature when libtss2-esys is present.
@@ -90,10 +92,11 @@ install:
     install -Dm755 target/release/cosmarden {{local_bin}}/cosmarden
     # The Plasma tray is a `build-kde` artifact. Gate on the flavor the last
     # build recorded, not on the file's presence: `just build` after
-    # `just build-kde` leaves the old tray binary in target/release, and
-    # installing it would pair it with a `cosmarden-applet` that no longer has
-    # the kde feature. The tray resolves `cosmarden-applet` as its own sibling
-    # to open the full app, so the two have to land in the same directory.
+    # `just build-kde` leaves the old tray binary in target/release, and a COSMIC
+    # install should not carry a KDE-only binary. The applet binary needs no such
+    # care — both flavors are equivalent (`_build_flavor` above). The tray
+    # resolves `cosmarden-applet` as its own sibling to open the full app, so the
+    # two have to land in the same directory.
     flavor="$(cat {{_build_flavor}} 2>/dev/null || true)"; \
     if [ "$flavor" = kde ] && [ -x target/release/cosmarden-plasma-tray ]; then \
         install -Dm755 target/release/cosmarden-plasma-tray {{local_bin}}/cosmarden-plasma-tray; \

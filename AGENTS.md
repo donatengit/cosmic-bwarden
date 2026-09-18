@@ -314,8 +314,10 @@ plasma plasmoid was rejected: `docs/kde_applet_parity.md`.
   cosmarden-plasma-tray` and test it with `just test-unit-kde`. **`just install`
   installs it only from a `build-kde` build** — it reads the flavor recorded in
   `target/release/.cosmarden-build-flavor`, never the presence of the file in
-  `target/release`, which survives a later `just build` and would pair the tray
-  with an applet built without the `kde` feature.
+  `target/release`, which survives a later `just build`. Nothing breaks either
+  way (`--features cosmarden-ui/kde` only quiets libcosmic's log noise, so the
+  two applet builds are equivalent), but a COSMIC install must not carry a
+  KDE-only binary.
 - **It has no window, so it cannot unlock anything.** A tray *menu* is drawn by
   the host from a DBusMenu tree, which has no text-input item; `Open Vault`
   spawns `cosmarden-applet` and that is the only way in — including for a

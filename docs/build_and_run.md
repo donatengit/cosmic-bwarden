@@ -44,8 +44,11 @@ the Plasma log-noise filter compiled in:
 `just install` copies the tray only when the last build was `just build-kde`: it
 reads the flavor that build recorded in `target/release/.cosmarden-build-flavor`,
 so a plain `just build` after a KDE build does not install the tray binary the
-older build left behind (it prints a note naming the command to run instead).
-`just uninstall` removes the tray with the other binaries.
+older build left behind (it prints a note naming the command to run instead), and
+`just uninstall` removes it with the other binaries. The gate is about shipping
+what the last build produced: the two applet builds are equivalent, because
+`--features cosmarden-ui/kde` only quiets libcosmic's log noise on Plasma
+(`crates/cosmarden-ui/src/kde.rs`).
 
 ## Running the Components
 
