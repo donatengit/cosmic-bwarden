@@ -90,6 +90,22 @@ just restart-panel   # let the COSMIC panel discover the applet
 A `.deb` is produced by `cargo deb -p cosmarden-ui --no-build` after `just build`;
 an AUR `PKGBUILD` lives in [`packaging/`](packaging/).
 
+### Optional features
+
+Both are opt-in; the default build stays plain COSMIC.
+
+- **`tpm`** — TPM2 PIN unlock. `just build` enables it automatically when
+  `tss2-esys` is present (needs `libtss2-dev`). Vault keys are sealed to a
+  TPM2 object bound to firmware + Secure Boot state (PCR 0/7); unlock with a
+  short PIN under the TPM's anti-hammering lockout. Tests: `just test-unit-tpm`,
+  `just test-tpm-smoke` (swtpm emulator). Design: [docs/tpm.md](docs/tpm.md).
+- **`kde`** — Plasma extras via `just build-kde`: a standalone tray
+  (`cosmarden-plasma-tray`, no libcosmic) with login rows, copy actions, and
+  an XDG autostart entry. `just install` ships it only from a `build-kde`
+  build, so a COSMIC install never carries the KDE binary. The UI-side
+  `--features kde` only quiets libcosmic log noise on Plasma. Tests:
+  `just test-unit-kde`. Details: [docs/kde_applet_parity.md](docs/kde_applet_parity.md).
+
 ## First run
 
 1. Add the applet: COSMIC Settings → Desktop → Panel → Configure panel applets →
