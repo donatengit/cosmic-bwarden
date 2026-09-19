@@ -47,22 +47,44 @@ pub fn classify_activation(exec: &str) -> ActivationAction {
     }
 }
 
-/// Launch the standalone vault window as a separate process, handing it the
-/// XDG activation token so the compositor focuses it properly (the
-/// notifications applet's pattern for opening its main window from the
-/// applet).
+/// File name of the vault-window binary. The same in every install layout:
+/// `target/release`, `~/.local/bin` (`just install`) and `/usr/bin` (deb, AUR).
+pub use cosmarden_core::vault_binary::{APPLET_BINARY, APPLET_BINARY_ENV};
+
+/// [cosmarden_core::vault_binary::vault_binary] against the real environment.
+pub use cosmarden_core::vault_binary::vault_binary;
+
+/// [cosmarden_core::vault_binary::vault_command]: the applet binary in
+/// application mode. Re-exported so callers name one builder — the resolution
+/// rule and the argv/env are shared with the thin Plasma tray.
+pub use cosmarden_core::vault_binary::vault_command;
+
+/// Launch the standalone vault window, handing it the XDG activation token so
+/// the compositor focuses it properly (the notifications applet's pattern for
+/// opening its main window from the applet).
+///
+/// Two callers: the COSMIC panel's activation-token flow, where the running
+/// binary already *is* the vault binary, and the Plasma tray's `Open Vault`,
+/// which has no token channel and resolves its sibling binary instead.
 pub fn spawn_vault_app(token: Option<String>) -> Task<Message> {
-    if let Ok(exe) = std::env::current_exe() {
-        let mut cmd = std::process::Command::new(exe);
-        cmd.env("COSMARDEN_MODE", "application");
-        cmd.env_remove("COSMIC_PANEL_NAME");
-        if let Some(token) = token {
-            cmd.env("XDG_ACTIVATION_TOKEN", &token);
-            cmd.env("DESKTOP_STARTUP_ID", &token);
-        }
-        tokio::spawn(cosmic::process::spawn(cmd));
-    }
+    let Some(exe) = vault_binary() else {
+        // Never fail silently: the click asked for the full app, and there is
+        // no way to show it.
+        tracing::error!(
+            "no {APPLET_BINARY} beside this executable or in PATH; \
+             set {APPLET_BINARY_ENV} to open the vault window"
+        );
+        return Task::none();
+    };
+    spawn_vault(&exe, token);
     Task::none()
+}
+
+fn spawn_vault(exe: &std::path::Path, token: Option<String>) {
+    tokio::spawn(spawn_detached(
+        vault_command(exe, token.as_deref()),
+        format!("vault window ({})", exe.display()),
+    ));
 }
 
 /// Build the `xdg-open` command for a link: a single exact argument, no
@@ -143,6 +165,50 @@ mod tests {
             cmd.get_args().collect::<Vec<_>>(),
             vec![std::ffi::OsStr::new("https://example.com/path?q=1")]
         );
+    }
+
+    /// End-to-end spawn (real fork+exec, no panel needed): the script exits
+    /// non-zero unless it was started as the vault window, and writes the token
+    /// it saw. Existence of the marker therefore proves both.
+    #[tokio::test]
+    #[cfg(target_os = "linux")]
+    async fn spawn_vault_starts_the_binary_as_the_vault_window() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let marker = dir.path().join("marker");
+        let script = dir.path().join(APPLET_BINARY);
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\n\
+                 [ \"$COSMARDEN_MODE\" = application ] || exit 3\n\
+                 [ -z \"${{COSMIC_PANEL_NAME:-}}\" ] || exit 4\n\
+                 printf '%s' \"${{XDG_ACTIVATION_TOKEN:-}}\" > {}\n",
+                marker.display()
+            ),
+        )
+        .expect("write fake applet");
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
+            .expect("chmod fake applet");
+
+        spawn_vault(&script, Some("t0k3n".to_string()));
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            if let Ok(token) = std::fs::read_to_string(&marker) {
+                assert_eq!(
+                    token, "t0k3n",
+                    "the activation token must reach the spawned vault window"
+                );
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "spawned vault window never ran: COSMARDEN_MODE / COSMIC_PANEL_NAME wrong?"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
     }
 
     #[tokio::test]

@@ -18,7 +18,7 @@ the URI button.
 | Glyph | Was | Now |
 |---|---|---|
 | 📂 | `view/applet/search.rs` `login_row_view` / `secret_row_view` — `AppletOpenInVault` | `preferences-workspaces-symbolic` + tooltip `open-in-vault` |
-| 🔗 | `login_row_view` — `AppletOpenLink` (`on_press_maybe` when `is_uri_like`) | `window-pop-out-symbolic` + tooltip `open-uri` |
+| 🔗 | `login_row_view` — `AppletOpenLink` (`on_press_maybe` when the row carries a link, `domain::open_uri_for_name`) | `window-pop-out-symbolic` + tooltip `open-uri` |
 | 🔑 | both row kinds — `AppletCopySecret` | `network-vpn-symbolic` + tooltip `copy-secret` |
 | ✅ | `view/settings.rs` `tpm_settings_section` pass prefix | `object-select-symbolic` |
 | ❌ | same, fail prefix | `process-stop-symbolic` |

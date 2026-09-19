@@ -18,9 +18,9 @@ use crate::message::Message;
 use cosmic::app::Task;
 use zeroize::Zeroize as _;
 
-/// How long a copied value stays in the clipboard before the auto-clear
-/// fires (`[P1-9]`). Matches upstream Bitwarden clients' default.
-pub(crate) const CLIPBOARD_CLEAR_SECS: u64 = 30;
+/// How long a copied value stays in the clipboard before the auto-clear fires.
+/// Defined in core so the Plasma tray clears at the same moment.
+pub(crate) use cosmarden_core::CLIPBOARD_CLEAR_SECS;
 
 impl CosmardenApp {
     pub fn update_app(&mut self, message: Message) -> Task<Message> {

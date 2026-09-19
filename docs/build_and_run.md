@@ -34,6 +34,29 @@ This will produce binaries in `target/release/`:
 - `cosmarden-applet`: The main GUI application and panel tray applet (built from the `cosmarden-ui` crate).
 - `cosmarden`: The command-line interface (crate `cosmarden-cli`).
 
+The KDE-only tray is **not** part of that build, because it would pull D-Bus and
+ksni/zbus into a COSMIC build. `just build-kde` produces it, plus the applet with
+the Plasma log-noise filter compiled in:
+
+- `cosmarden-plasma-tray`: the Plasma tray — one menu, no libcosmic
+  (`docs/kde_applet_parity.md`, "Thin Plasma tray")
+
+`just install` copies the tray only when the last build was `just build-kde`: it
+reads the flavor that build recorded in `target/release/.cosmarden-build-flavor`,
+so a plain `just build` after a KDE build does not install the tray binary the
+older build left behind (it prints a note naming the command to run instead), and
+`just uninstall` removes it with the other binaries. The gate is about shipping
+what the last build produced: the two applet builds are equivalent, because
+`--features cosmarden-ui/kde` only quiets libcosmic's log noise on Plasma
+(`crates/cosmarden-ui/src/kde.rs`).
+
+A `build-kde` install also writes the tray's XDG autostart entry to
+`~/.config/autostart/com.enikeev.cosmarden-tray.desktop`, with `Exec=` rewritten
+to the absolute `~/.local/bin/cosmarden-plasma-tray` — that entry is what starts
+the tray at login, and Plasma 6 turns it into an `app-…@autostart.service` unit
+(docs/kde_applet_parity.md, "Wiring"). It takes effect at the next login; in the
+current session start the binary by hand.
+
 ## Running the Components
 
 ### 1. Start the Agent

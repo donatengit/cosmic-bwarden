@@ -494,9 +494,28 @@ pub async fn update_entry_on_server(
     let entry_id = entry.id.clone();
     let reprompt = entry.master_password_reprompt;
     let favorite = entry.favorite;
+    // Send the cipher's item-level key back unchanged. The fields above were
+    // encrypted with it (`crypt_keys`), and `PUT /ciphers/{id}` replaces the
+    // cipher wholesale, so a body without `key` would clear it and leave
+    // everything in this request undecryptable.
+    let entry_key = entry.key.clone();
+    // The same replace semantics apply to the per-item password history:
+    // `Entry.history` holds the server's own cipherstrings (nothing decrypts
+    // them), so they are sent back verbatim. Omitting them deletes the user's
+    // history on every edit.
+    let password_history: Vec<cosmarden_core::api::CipherPasswordHistoryEntry> = entry
+        .history
+        .iter()
+        .map(|h| cosmarden_core::api::CipherPasswordHistoryEntry {
+            last_used_date: h.last_used_date.clone(),
+            password: h.password.expose().to_string(),
+        })
+        .collect();
 
     with_refresh(state, |at| {
         let entry_id = entry_id.clone();
+        let entry_key = entry_key.clone();
+        let password_history = password_history.clone();
         let name_enc = name_enc.clone();
         let login_payload = login_payload.clone();
         let ssh_key_payload = ssh_key_payload.clone();
@@ -528,6 +547,8 @@ pub async fn update_entry_on_server(
                     notes_enc.as_deref(),
                     Some(reprompt),
                     Some(fields_enc),
+                    entry_key.as_deref(),
+                    password_history,
                 )
                 .await
         }

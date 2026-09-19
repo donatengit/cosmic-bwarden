@@ -25,6 +25,37 @@ fn entry(id: &str, name: &str, entry_type: EntryType) -> SidebarEntry {
     }
 }
 
+/// A closed popup must not keep a typed master password, a stale error or the
+/// hovered row; the last search is deliberately preserved.
+#[test]
+fn reset_applet_popup_state_wipes_transients_and_keeps_the_search() {
+    let (mut app, _) = popup_app(View::Unlock);
+    app.applet_unlock_password = "master-password".to_string();
+    app.applet_unlock_password_revealed = true;
+    app.applet_reprompt_id = Some("entry-1".to_string());
+    app.applet_reprompt_password = "master-password".to_string();
+    app.applet_reprompt_password_revealed = true;
+    app.applet_error = Some("agent is locked".to_string());
+    app.applet_hovered_row_id = Some("row-1".to_string());
+    app.applet_search_query = "mail".to_string();
+    app.applet_search_only_favourites = true;
+
+    app.reset_applet_popup_state();
+
+    assert!(
+        app.applet_unlock_password.is_empty(),
+        "unlock password wiped"
+    );
+    assert!(app.applet_reprompt_password.is_empty(), "reprompt wiped");
+    assert_eq!(app.applet_reprompt_id, None);
+    assert!(!app.applet_unlock_password_revealed);
+    assert!(!app.applet_reprompt_password_revealed);
+    assert_eq!(app.applet_error, None);
+    assert_eq!(app.applet_hovered_row_id, None);
+    assert_eq!(app.applet_search_query, "mail", "last search survives");
+    assert!(app.applet_search_only_favourites);
+}
+
 #[test]
 fn test_unlock_focus_id_prefers_pin_when_pin_unlock_active() {
     assert_eq!(unlock_focus_id(UnlockMode::Pin), unlock::pin_input_id());
@@ -320,6 +351,20 @@ async fn test_applet_protocol_mismatch_renders_quit() {
     let _ = app.view_window(id);
 }
 
+/// Whatever the run mode, the Quit row owns the popup: it must not be left
+/// tracked (`applet_popup`) after the row is pressed, or the next icon click
+/// would only "close" a popup that is already gone.
+#[test]
+fn quit_row_clears_the_popup_state() {
+    let (mut app, id) = popup_app(View::Vault);
+    app.applet_popup = Some(id);
+
+    let _ = app.update(Message::Exit);
+
+    assert!(app.applet_popup.is_none());
+    assert!(!app.windows.contains_key(&id));
+}
+
 // ── Search-row hover (action icons only while hovered) ───────────────────────
 
 #[tokio::test]
@@ -386,7 +431,7 @@ async fn test_applet_header_row_renders_setup() {
 #[tokio::test]
 async fn test_applet_login_row_with_link_renders() {
     let (mut app, id) = popup_app(View::Vault);
-    // Name looks like a hostname → is_uri_like → open-URI button is active
+    // Name looks like a hostname → the row carries a link → open-URI button is active
     app.applet_search_results = vec![SidebarEntry {
         id: "1".to_string(),
         name: "account.facebook.com".to_string(),

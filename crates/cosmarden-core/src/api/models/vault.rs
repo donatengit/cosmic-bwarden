@@ -455,6 +455,12 @@ pub(crate) struct CiphersPutReq {
     pub(crate) folder_id: Option<String>,
     pub(crate) organization_id: Option<String>,
     pub(crate) favorite: bool,
+    /// The cipher's own (item-level) key, encrypted with the user or
+    /// organization key — the same value the server returns as `Key`. Every
+    /// field of a cipher that has one is encrypted with it, so a request that
+    /// omits this makes the server drop the key and leaves the fields it
+    /// writes undecryptable. See `update_cipher`.
+    pub(crate) key: Option<String>,
     pub(crate) name: String,
     pub(crate) notes: Option<String>,
     pub(crate) login: Option<serde_json::Value>,
@@ -466,8 +472,21 @@ pub(crate) struct CiphersPutReq {
     pub(crate) bank_account: Option<CipherBankAccount>,
     pub(crate) drivers_license: Option<CipherDriversLicense>,
     pub(crate) passport: Option<CipherPassport>,
-    pub(crate) password_history: Vec<serde_json::Value>,
+    /// The cipher's per-item password history, sent back verbatim. `PUT
+    /// /ciphers/{id}` replaces the cipher wholesale, so a body that leaves this
+    /// out (or sends an empty list) deletes the history the user accumulated.
+    /// The `password` values are cipherstrings, never re-encrypted here.
+    pub(crate) password_history: Vec<CipherPasswordHistoryEntry>,
     pub(crate) reprompt: CipherRepromptType,
+}
+
+/// One entry of a cipher's password history, in the shape the server stores:
+/// `lastUsedDate` plus the previous password as a cipherstring.
+#[derive(serde::Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CipherPasswordHistoryEntry {
+    pub last_used_date: String,
+    pub password: String,
 }
 
 #[derive(

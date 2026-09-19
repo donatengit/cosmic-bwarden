@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Cosmarden Tray
+Comment=Copy vault secrets and lock the vault from the Plasma system tray
+Exec=cosmarden-plasma-tray
+Icon=com.enikeev.cosmarden-symbolic
+Terminal=false
+Type=Application
+Categories=Utility;
+NoDisplay=true
+OnlyShowIn=KDE;

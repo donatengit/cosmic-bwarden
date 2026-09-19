@@ -103,10 +103,35 @@ pub fn on_demand_secret(field: &str, id: String, reprompt_password: Option<Strin
     }
 }
 
+/// The extra fetch a plain selection needs beyond `GetEntryMeta`.
+///
+/// A `SecureNote`'s content *is* its notes, and the meta read redacts notes
+/// (`redact_entry_secrets`) — so without this the item opens unreadable. Every
+/// other type waits for the user to reveal the notes slot (`"Notes"`, the key
+/// the agent's `filled_secret_keys` reports and `on_demand_secret` fetches with
+/// `GetEntry`). Returns `None` when there is nothing to fetch: a body already in
+/// the entry, or a type whose notes are a slot like any other. A SecureNote that
+/// genuinely has no notes still costs one round-trip — the meta read cannot tell
+/// "empty" from "redacted", which is what the agent's `filled_secrets` list is
+/// for.
+pub fn notes_fetch_after_selection(entry: &cosmarden_core::db::Entry) -> Option<AgentAction> {
+    match (&entry.data, entry.notes.is_some()) {
+        (cosmarden_core::db::EntryData::SecureNote, false) => {
+            Some(fetch_full_entry(entry.id.clone(), None))
+        }
+        _ => None,
+    }
+}
+
 /// Whether `selected_entry` already holds plaintext for `field` (no extra IPC).
 /// TOTP always fetches: the pane shows a live code, not the stored seed.
 pub fn secret_is_loaded(entry: &cosmarden_core::db::Entry, field: &str) -> bool {
     use cosmarden_core::db::EntryData;
+    // Notes are a secret-class slot: a body in the entry means a `GetEntry`
+    // brought it back, since every meta/bulk read redacts it.
+    if field == "Notes" {
+        return entry.notes.is_some();
+    }
     match (&entry.data, field) {
         (
             EntryData::Login {
@@ -244,6 +269,11 @@ pub fn parse_on_demand_response(
 
 pub fn field_plaintext(entry: &cosmarden_core::db::Entry, field: &str) -> Option<String> {
     use cosmarden_core::db::EntryData;
+    // Notes any entry type can carry, and one of the slots the meta read
+    // redacts: the plaintext is only here once an explicit reveal loaded it.
+    if field == "Notes" {
+        return entry.notes.as_ref().map(|n| n.expose().to_string());
+    }
     match (&entry.data, field) {
         (
             EntryData::Login {

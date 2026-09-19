@@ -170,6 +170,10 @@ field-nationality = Nationality
 field-passport-number = Passport Number
 field-passport-type = Passport Type
 field-national-identification-number = National Identification Number
+# Placeholder in the detail pane's notes area while the body is not loaded.
+# Notes are a secret-class slot: `GetEntryMeta` redacts them, so the pane shows
+# this until an explicit reveal fetches the body.
+notes-hidden = Hidden until revealed
 notes = Notes
 delete-entry = Delete Entry
 delete-entry-title = Delete Entry?

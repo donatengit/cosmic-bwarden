@@ -1,0 +1,40 @@
+[package]
+name = "cosmarden-plasma-tray"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+authors = ["Don Enikeev <donat@enikeev.net>"]
+repository = "https://github.com/donatengit/cosmic-bwarden"
+homepage = "https://github.com/donatengit/cosmic-bwarden"
+description = "Thin Plasma StatusNotifierItem tray for cosmarden (no libcosmic)"
+
+[[bin]]
+name = "cosmarden-plasma-tray"
+path = "src/main.rs"
+
+# No libcosmic, no iced, no GUI toolkit: a StatusNotifierItem, its D-Bus menu,
+# and the agent protocol. See docs/kde_applet_parity.md ("Thin Plasma tray").
+[dependencies]
+cosmarden-core = { path = "../cosmarden-core", features = ["public_suffix_list"] }
+anyhow = { workspace = true }
+# Text-only clipboard (`Copy login` / `Copy password`). Default features would
+# pull the image-data support this tray has no use for.
+arboard = { version = "3.4", default-features = false }
+ksni = "0.3"
+png = "0.17"
+postcard = { workspace = true }
+# The appearance portal (panel light/dark, and its change signal). zbus is
+# already in the graph as ksni's transport, so this adds no new build.
+zbus = { workspace = true }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "time", "sync", "io-util"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
+# Wiping our own copy of a clipboard read-back (the `Secret` type owns the rest).
+zeroize = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.10"
+
+[lints]
+workspace = true

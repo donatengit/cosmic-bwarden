@@ -20,6 +20,11 @@ local_metainfo := local_share + "/metainfo"
 local_icons := local_share + "/icons/hicolor"
 local_bin := home + "/.local/bin"
 local_systemd := home + "/.config/systemd/user"
+# XDG autostart, where Plasma 6's `systemd-xdg-autostart-generator` turns each
+# entry into an `app-<name>@autostart.service` unit. Only the Plasma tray has
+# anything here: the agent is a systemd user unit, and the applet is started by
+# the panel.
+local_autostart := home + "/.config/autostart"
 
 # ── Build and test resource caps ──────────────────────────────────────────
 # Every build and test recipe runs inside a transient systemd scope, so a long
@@ -44,6 +49,17 @@ _limited := "./packaging/run-limited.sh " + test_cpus + " " + test_memory
 # what they are; there is deliberately no separate knob to keep in step.
 _build_limited := _limited
 
+# Which flavor the release binaries in target/release came from: `build` records
+# `cosmic`, `build-kde` records `kde`. `install` gates the KDE-only files on it,
+# so a COSMIC install cannot pick up an artifact an older `build-kde` left in
+# target/release (`just build` never removes the tray binary from there). The
+# applet builds themselves are equivalent — `--features cosmarden-ui/kde` only
+# quiets libcosmic's log noise on Plasma (`src/kde.rs`) — so this is about
+# shipping what the last build produced, not about a broken pairing.
+# Only the two `just` build recipes write this; a bare `cargo build --release`
+# leaves the previous value, so keep using `just build`.
+_build_flavor := "target/release/.cosmarden-build-flavor"
+
 # Auto-detect TPM2 support: enable the agent's `tpm` feature when libtss2-esys is present.
 _tpm_features := `pkg-config --exists tss2-esys 2>/dev/null && echo '--features cosmarden-agent/tpm' || true`
 
@@ -53,6 +69,19 @@ default: build
 # Release build. This is the only recipe that compiles.
 build:
     RUSTFLAGS="-C target-cpu=native" {{_build_limited}} cargo build --release --quiet {{_tpm_features}}
+    printf 'cosmic\n' > {{_build_flavor}}
+
+# Same as `build`, plus the two KDE-only artifacts: the applet with
+# `--features cosmarden-ui/kde` (libcosmic's missing-COSMIC-session log noise
+# demoted to `off`) and the Plasma tray `cosmarden-plasma-tray`. Both are opt-in
+# and never auto-detected — `just build` on a Plasma machine must still produce
+# the COSMIC binary, and must not pull ksni/zbus into a COSMIC build. The tray
+# is not a default workspace member for the same reason, so it is named
+# explicitly.
+build-kde:
+    RUSTFLAGS="-C target-cpu=native" {{_build_limited}} cargo build --release --quiet {{_tpm_features}} --features cosmarden-ui/kde
+    RUSTFLAGS="-C target-cpu=native" {{_build_limited}} cargo build --release --quiet -p cosmarden-plasma-tray
+    printf 'kde\n' > {{_build_flavor}}
 
 # Copy already-built release binaries and metadata into ~/.local.
 # Does not compile — run `just build` first. Deb/AUR remain the system-wide path.
@@ -66,6 +95,24 @@ install:
     install -Dm755 target/release/cosmarden-agent {{local_bin}}/cosmarden-agent
     install -Dm755 target/release/cosmarden-applet {{local_bin}}/cosmarden-applet
     install -Dm755 target/release/cosmarden {{local_bin}}/cosmarden
+    # The Plasma tray and its XDG autostart entry are `build-kde` artifacts. Gate
+    # on the flavor the last build recorded, not on the file's presence: `just
+    # build` after `just build-kde` leaves the old tray binary in target/release,
+    # and a COSMIC install should not carry a KDE-only binary. The applet binary
+    # needs no such care — both flavors are equivalent (`_build_flavor` above).
+    # The tray resolves `cosmarden-applet` as its own sibling to open the full
+    # app, so the two have to land in the same directory; the autostart entry
+    # takes the absolute path for the same reason (a session's PATH need not
+    # contain ~/.local/bin, and a bare name would simply not start).
+    flavor="$(cat {{_build_flavor}} 2>/dev/null || true)"; \
+    if [ "$flavor" = kde ] && [ -x target/release/cosmarden-plasma-tray ]; then \
+        install -Dm755 target/release/cosmarden-plasma-tray {{local_bin}}/cosmarden-plasma-tray; \
+        install -Dm644 crates/cosmarden-plasma-tray/resources/com.enikeev.cosmarden-tray.desktop {{local_autostart}}/com.enikeev.cosmarden-tray.desktop; \
+        sed -i "s|^Exec=cosmarden-plasma-tray|Exec={{local_bin}}/cosmarden-plasma-tray|" {{local_autostart}}/com.enikeev.cosmarden-tray.desktop; \
+        echo "note: cosmarden-plasma-tray starts with the next KDE session; start it now with {{local_bin}}/cosmarden-plasma-tray &" >&2; \
+    else \
+        echo "note: skipping cosmarden-plasma-tray and its autostart entry — the last build recorded '${flavor:-nothing}', not 'kde'. Run 'just build-kde install' for the KDE install; 'just uninstall' removes both." >&2; \
+    fi
 
     echo "Installing desktop entry..."
     # cosmic-panel spawns Exec via its own PATH, which is the systemd user
@@ -116,6 +163,10 @@ clean-install: uninstall install
 remove-previous-identity:
     systemctl --user disable --now cosmic-bwarden-agent 2>/dev/null || true
     rm -f {{local_bin}}/cosmic-bwarden-agent {{local_bin}}/cosmic-applet-bwarden {{local_bin}}/cosmic-bwarden-cli {{local_bin}}/cosmic-bwarden-ui
+    # The retired libcosmic tray (`cosmarden-tray`, replaced by
+    # `cosmarden-plasma-tray`). Left behind it is a second, dead tray icon in the
+    # session — it links libcosmic and has no relation to the current build.
+    rm -f {{local_bin}}/cosmarden-tray
     rm -f {{local_apps}}/com.enikeev.cosmic_bwarden.desktop {{local_metainfo}}/com.enikeev.cosmic_bwarden.metainfo.xml {{local_applets}}/com.enikeev.cosmic_bwarden.ron
     rm -f {{local_apps}}/com.enikeev.cosmic-bwarden.desktop {{local_applets}}/com.enikeev.cosmic-bwarden.ron
     rm -f {{local_systemd}}/cosmic-bwarden-agent.service
@@ -183,6 +234,9 @@ uninstall:
     rm -f {{local_bin}}/cosmarden-agent
     rm -f {{local_bin}}/cosmarden-applet
     rm -f {{local_bin}}/cosmarden
+    # Absent unless a `build-kde` install ran; `rm -f` covers both cases.
+    rm -f {{local_bin}}/cosmarden-plasma-tray
+    rm -f {{local_autostart}}/com.enikeev.cosmarden-tray.desktop
     rm -f {{local_systemd}}/cosmarden-agent.service
     rm -f {{home}}/.mozilla/native-messaging-hosts/com.enikeev.cosmarden.json
     rm -f {{home}}/.mozilla/native-messaging-hosts/cosmarden-browser-host.sh
@@ -232,6 +286,19 @@ test-unit:
     {{_limited}} cargo test --quiet -p cosmarden-ui
     {{_limited}} cargo test --quiet -p cosmarden-agent
     {{_limited}} cargo test --quiet -p cosmarden-cli
+
+# KDE extras (`--features kde`) are opt-in and not auto-detected: `just
+# test-unit` stays COSMIC-only (app/tests/kde_gate.rs asserts that).
+#
+# Unit tests for the KDE surfaces `just test-unit` cannot see: the KDE-gated UI
+# code (`src/kde.rs`, the theme-noise filter) and the Plasma tray crate (menu
+# model, agent state, icon, panel colour). The tray is excluded from the default
+# workspace members, so it has to be named here too — a suite nothing runs is
+# not wired up.
+test-unit-kde:
+    echo "--- Unit Tests (ui, kde feature + plasma tray) ---"
+    {{_limited}} cargo test --quiet -p cosmarden-ui --features kde
+    {{_limited}} cargo test --quiet -p cosmarden-plasma-tray
 
 # Requires libtss2-esys; skipped automatically when it is absent.
 #
@@ -286,10 +353,13 @@ test-cli: build-test-binaries (ensure-container-socket)
     echo "--- [subset] CLI E2E Tests ---"
     {{_limited}} cargo test --quiet -p cosmarden-tests --lib -- cli_lifecycle cli_secret_mask_test custom_fields_cli --test-threads=1
 
-# [subset] UI E2E tests
+# [subset] UI E2E tests — the protocol-level simulations of the desktop flows,
+# plus the agent's half of the pane's selection contract (`GetEntryMeta`
+# redaction + filled_secrets, `vault::meta_redaction`), which is what tells a
+# client whether to draw a field or fetch it.
 test-ui: build-test-binaries (ensure-container-socket)
     echo "--- [subset] UI E2E Tests ---"
-    {{_limited}} cargo test --quiet -p cosmarden-tests --lib -- window_flow custom_fields_ui --test-threads=1
+    {{_limited}} cargo test --quiet -p cosmarden-tests --lib -- window_flow custom_fields_ui meta_redaction --test-threads=1
 
 # A correct run leaves none of these: tests redirect XDG into a tempdir and the
 # extension scripts clean their fixed profiles in a trap. This is for residue

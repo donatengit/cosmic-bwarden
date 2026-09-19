@@ -78,6 +78,11 @@ impl CosmardenApp {
                     )));
                 }
 
+                // The applet is a surface hosted by the panel and the vault
+                // window runs with `exit_on_close(true)`, so closing
+                // libcosmic's main window *is* the exit for both. A process
+                // with no main window (the retired libcosmic Plasma tray) had
+                // to ask for `iced::exit` instead; nothing here does.
                 tasks.push(Task::done(cosmic::Action::Cosmic(
                     cosmic::app::Action::Close,
                 )));
@@ -99,6 +104,12 @@ impl CosmardenApp {
                         app_id: crate::app::state::APP_ID.to_string(),
                         exec: "open-vault".to_string(),
                     });
+                } else {
+                    // No activation-token channel: this process was not started
+                    // by the COSMIC panel, so spawn the vault binary directly.
+                    // `spawn_vault_app` resolves `cosmarden-applet`, a sibling
+                    // of the running binary, and starts it in application mode.
+                    tasks.push(crate::app::update::activation::spawn_vault_app(None));
                 }
 
                 Some(Task::batch(tasks))

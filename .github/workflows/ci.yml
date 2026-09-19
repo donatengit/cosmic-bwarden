@@ -68,6 +68,13 @@ jobs:
           cargo test -p cosmarden-agent --quiet
           cargo test -p cosmarden-cli --quiet
           cargo test -p cosmarden-ui --quiet
+          # Same two suites as `just test-unit-kde`: the KDE-gated UI code and
+          # the Plasma tray. The tray is not a default workspace member, so the
+          # `-p` lines above never reach it, and the KDE feature is off by
+          # default — without these two, neither is tested anywhere but a
+          # developer's machine.
+          cargo test -p cosmarden-ui --features kde --quiet
+          cargo test -p cosmarden-plasma-tray --quiet
 
   audit:
     name: cargo audit

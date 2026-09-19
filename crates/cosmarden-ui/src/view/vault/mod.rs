@@ -1,5 +1,7 @@
 mod detail;
+mod field;
 pub(crate) mod generator;
+pub(crate) mod notes;
 pub(crate) mod sidebar;
 
 use crate::app::state::{VaultPane, SIDEBAR_MIN_WIDTH};

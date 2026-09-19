@@ -8,11 +8,18 @@ repository = "https://github.com/donatengit/cosmic-bwarden"
 homepage = "https://github.com/donatengit/cosmic-bwarden"
 description = "Cosmarden panel applet and vault window"
 
+# Shared library behind `cosmarden-applet` (COSMIC panel applet + vault
+# window). The Plasma tray is a separate crate, `cosmarden-plasma-tray`. See
+# `src/lib.rs`.
+[lib]
+name = "cosmarden_ui"
+path = "src/lib.rs"
+
 [[bin]]
 name = "cosmarden-applet"
 path = "src/main.rs"
 
-# `cargo deb -p cosmarden-ui --no-build` packages the whole app (all three
+# `cargo deb -p cosmarden-ui --no-build` packages the whole app (the three
 # release binaries + desktop entry + applet metadata + hardened systemd user
 # unit + icons). Build the workspace release binaries first (`just build`).
 # NOTE for Debian-host finalization: `depends` is a conservative manual list —
@@ -86,6 +93,12 @@ default = ["public_suffix_list"]
 # "example.co.uk", not "co.uk"). Without it labels fall back to the full
 # host, never a naive last-two-labels cut. See docs/public_suffix_list.md.
 public_suffix_list = ["cosmarden-core/public_suffix_list"]
+# Plasma/KDE extras for the vault window. Not default and not auto-detected:
+# `just build` on a KDE machine must still produce the COSMIC binary. Opt in
+# with `--features kde` (see docs/kde_applet_parity.md): compiles `src/kde.rs`,
+# which demotes libcosmic's missing-COSMIC-session log noise to `off`. The
+# Plasma tray is a separate crate with no libcosmic dependency at all.
+kde = []
 
 [lints]
 workspace = true

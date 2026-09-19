@@ -1,6 +1,5 @@
-use crate::app::applet_search;
 use crate::app::state::CosmardenApp;
-use crate::app::tasks::{fetch_applet_search, fetch_sidebar_entries};
+use crate::app::tasks::{applet_rows_task, fetch_sidebar_entries};
 use crate::message::{Message, UnlockMode, View};
 use cosmarden_core::agent_client::AgentClient;
 use cosmarden_core::protocol::{Action as AgentAction, Response};
@@ -149,21 +148,7 @@ impl CosmardenApp {
                                 check_tpm_task(),
                             ];
                             if self.applet_popup.is_some() {
-                                self.applet_search_id += 1;
-                                let only_pinned = applet_search::effective_only_pinned(
-                                    &self.applet_search_query,
-                                    self.applet_search_only_favourites,
-                                );
-                                let query = if self.applet_search_query.trim().is_empty() {
-                                    None
-                                } else {
-                                    Some(self.applet_search_query.clone())
-                                };
-                                tasks.push(fetch_applet_search(
-                                    self.applet_search_id,
-                                    query,
-                                    only_pinned,
-                                ));
+                                tasks.push(applet_rows_task(self));
                             }
                             if let Some(id) = self.pending_vault_entry.take() {
                                 tasks.push(Task::done(Action::App(Message::SelectEntry(id))));
@@ -338,21 +323,7 @@ impl CosmardenApp {
                     tasks.push(fetch_sidebar_entries(self.search_id, None, None, false));
 
                     if self.applet_popup.is_some() {
-                        self.applet_search_id += 1;
-                        let only_pinned = applet_search::effective_only_pinned(
-                            &self.applet_search_query,
-                            self.applet_search_only_favourites,
-                        );
-                        let query = if self.applet_search_query.trim().is_empty() {
-                            None
-                        } else {
-                            Some(self.applet_search_query.clone())
-                        };
-                        tasks.push(fetch_applet_search(
-                            self.applet_search_id,
-                            query,
-                            only_pinned,
-                        ));
+                        tasks.push(applet_rows_task(self));
                     }
                 }
 
