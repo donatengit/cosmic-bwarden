@@ -81,7 +81,10 @@ jobs:
   sign-extension:
     needs: artifacts
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Must exceed EXT_SIGN_TIMEOUT_MS: the AMO approval poll can outlast
+    # web-ext's own default (15 min). A 30-minute window already failed once
+    # (2026-09-23) with the submission uploaded and still unreviewed.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -109,6 +112,11 @@ jobs:
           EXT_UPDATE_BASE_URL: ${{ vars.EXT_UPDATE_BASE_URL || format('https://github.com/{0}/releases/latest/download', github.repository) }}
           EXT_UPDATE_LINK_BASE: ${{ format('https://github.com/{0}/releases/download/{1}', github.repository, github.ref_name) }}
           EXT_SIGN_MODE: release
+          # 60 minutes for the AMO approval poll. web-ext's 15-minute default
+          # and the previous 30-minute window both proved too short when AMO's
+          # review queue is slow; the submission stays pending, so timing out
+          # only wastes the wait and leaves the version unsigned.
+          EXT_SIGN_TIMEOUT_MS: 3600000
         run: just sign-extension
       - name: Upload signed XPI as a workflow artifact
         uses: actions/upload-artifact@v4
