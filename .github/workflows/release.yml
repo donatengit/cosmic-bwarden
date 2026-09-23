@@ -31,7 +31,13 @@ jobs:
       - name: Build release binaries
         # Empty RUSTFLAGS drops .cargo/config.toml's prefer-dynamic (conflicts
         # with fat LTO); no target-cpu=native for distributable artifacts.
-        run: RUSTFLAGS="" cargo build --release
+        # The KDE artifacts build here too: the applet with the `kde` feature
+        # (libcosmic's missing-COSMIC-session log noise demoted) and the
+        # Plasma tray, which is a non-default workspace member that a plain
+        # `cargo build --release` skips. The .deb ships both.
+        run: |
+          RUSTFLAGS="" cargo build --release --features cosmarden-ui/kde
+          RUSTFLAGS="" cargo build --release -p cosmarden-plasma-tray
       - name: Build .deb
         run: |
           cargo install cargo-deb --locked

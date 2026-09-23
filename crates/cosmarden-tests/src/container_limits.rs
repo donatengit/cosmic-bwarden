@@ -17,6 +17,12 @@
 //! straight onto cgroup v2 `cpu.max` and do take effect. Verified on podman
 //! 6.1.1.
 //!
+//! **Send `memory_swap` with `memory`.** Docker's update endpoint refuses a
+//! request that sets `memory` without `memory_swap` — the daemon answers 409
+//! and applies nothing, so the CPU quota is lost too. That is not a podman
+//! behavior: podman does not validate the pairing, so it accepted the
+//! original single-field update and only CI's Docker failed.
+//!
 //! **Why this is not driven by the `just` variables.** `just` puts the test
 //! command inside a systemd scope (`packaging/run-limited.sh`), which caps
 //! cargo, rustc, the test binary and the agents it spawns. Containers escape
@@ -71,6 +77,13 @@ pub async fn apply(container_id: &str, label: &str) {
         cpu_quota: Some(cpu_quota),
         cpu_period: Some(CPU_PERIOD_US),
         memory: Some(mem_mb * 1024 * 1024),
+        // Docker's update endpoint refuses a request that sets `memory`
+        // without `memory_swap`: a container created without limits already
+        // holds MemorySwap = -1, the daemon answers 409, and applies nothing —
+        // the CPU quota would be lost with it. -1 keeps swap unlimited, the
+        // state the container was created in. Podman does not validate the
+        // pairing but accepts -1 too.
+        memory_swap: Some(-1),
         ..Default::default()
     };
 

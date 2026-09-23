@@ -63,29 +63,27 @@ mod tests {
 
     /// The child must be reaped: `/proc/<pid>` disappears once the waiting
     /// thread has collected it. A dropped `Child` would leave the entry there
-    /// as a zombie.
+    /// as a zombie for the rest of the process's life.
+    ///
+    /// A transient `Z` state is not a failure: between the child's exit and
+    /// the reaping thread's `wait()` returning, the process is a zombie by
+    /// definition, so a loaded runner can observe `Z` under correct code.
+    /// Only an entry still present at the deadline proves the child was
+    /// dropped unreaped.
     #[test]
     fn spawned_children_are_reaped() {
         let pid = spawn_detached(Command::new("/bin/true"), "true".to_string())
             .expect("/bin/true must spawn");
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
-            let stat = std::fs::read_to_string(format!("/proc/{pid}/stat"));
-            match stat {
+            match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
                 // Gone from the process table: reaped.
                 Err(_) => break,
                 Ok(stat) => {
-                    let state = stat
-                        .rfind(')')
-                        .map(|i| stat[i + 1..].trim().to_string())
-                        .unwrap_or_default();
-                    assert!(
-                        !state.starts_with('Z'),
-                        "child {pid} became a zombie: {stat}"
-                    );
                     assert!(
                         std::time::Instant::now() < deadline,
-                        "child {pid} never left the process table"
+                        "child {pid} never left the process table (a dropped \
+                         Child stays a zombie): {stat}"
                     );
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }

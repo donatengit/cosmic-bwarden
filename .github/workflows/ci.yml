@@ -1,7 +1,7 @@
 # CI for cosmarden.
 #
 # Fast gates (lint, unit, extension-unit) run on every push/PR. The full Rust
-# E2E suite needs a container runtime and ~20 min, so it runs nightly and on
+# E2E suite needs a container runtime and ~30 min, so it runs nightly and on
 # manual dispatch only. E2E flake policy: the suite retries once — baseline
 # measurements (docs/review/05_testing.md) show ~2 container-runtime flakes
 # per 52-test run that pass on rerun.
@@ -144,7 +144,10 @@ jobs:
     name: Rust E2E (nightly / manual)
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest # docker daemon available for testcontainers
-    timeout-minutes: 60
+    # One full suite attempt is ~30 min; a failed attempt retries in the same
+    # job, so 60 minutes cut the retry off mid-run and the cancellation hid
+    # both results. 90 leaves room for the retry plus a slow runner.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - name: System deps (libcosmic + tss)

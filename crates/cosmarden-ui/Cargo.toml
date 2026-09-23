@@ -32,8 +32,8 @@ copyright = "2026, Donat Enikeev"
 license-file = "../../LICENSE"
 extended-description = """\
 Bitwarden-compatible password manager for COSMIC DE. Background agent \
-holding the vault in memory-locked storage, panel applet, CLI, SSH agent, and \
-browser-extension native host."""
+holding the vault in memory-locked storage, panel applet, Plasma tray, CLI, \
+SSH agent, and browser-extension native host."""
 depends = "libc6, libxkbcommon0, libwayland-client0, libwayland-egl1, libegl1"
 section = "utils"
 priority = "optional"
@@ -41,7 +41,13 @@ assets = [
     ["../../target/release/cosmarden-agent", "usr/bin/", "755"],
     ["../../target/release/cosmarden-applet", "usr/bin/", "755"],
     ["../../target/release/cosmarden", "usr/bin/", "755"],
+    ["../../target/release/cosmarden-plasma-tray", "usr/bin/", "755"],
     ["resources/com.enikeev.cosmarden.desktop", "usr/share/applications/", "644"],
+    # The tray's XDG autostart entry: Plasma 6's systemd-xdg-autostart-generator
+    # turns it into an app-com.enikeev.cosmarden-tray@autostart.service unit,
+    # and OnlyShowIn=KDE; becomes that unit's ExecCondition. Exec stays the bare
+    # binary name because a distro package puts it on PATH.
+    ["../../crates/cosmarden-plasma-tray/resources/com.enikeev.cosmarden-tray.desktop", "etc/xdg/autostart/", "644"],
     # AppStream metadata — where software centres and distro package pages pick
     # up the homepage/bugtracker/VCS links (the Homepage: control field comes
     # from [package] homepage above; this is the richer, user-visible copy).

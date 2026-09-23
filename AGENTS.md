@@ -330,8 +330,8 @@ plasma plasmoid was rejected: `docs/kde_applet_parity.md`.
   the whole story. `just install` writes it to `~/.config/autostart/` with an
   absolute `Exec=` (a session's PATH need not contain `~/.local/bin`). The
   packaged path is `/etc/xdg/autostart/` with the **same basename**, so a user's
-  `Hidden=true` copy disables the shipped one — neither package ships it yet, and
-  that gap is why a packaged install has no tray. Never set
+  `Hidden=true` copy disables the shipped one — the deb ships it; the AUR
+  skeleton does not yet. Never set
   `X-systemd-skip=true`: KDE's own components use it to mean *no unit is
   generated*.
 - **Copying a secret is allowed here, and only through one boundary.**
