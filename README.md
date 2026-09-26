@@ -184,6 +184,7 @@ file can stay instructions-only.
 - [`docs/icon_guidelines.md`](docs/icon_guidelines.md) — the emoji-to-symbolic inventory, CosmicDE symbolic construction/look, and which theme names are wired in
 - [`docs/applet_reference_comparison.md`](docs/applet_reference_comparison.md) — libcosmic reference applet vs ours, code level
 - [`docs/cosmic_applets_review_1.8.md`](docs/cosmic_applets_review_1.8.md) — upstream applets at COSMIC 1.8: reference revisions, what changed, which patches matter, what to adopt
+- [`docs/cosmic_applets_review_1.9.md`](docs/cosmic_applets_review_1.9.md) — upstream applets at COSMIC 1.9: reference revisions, the 1.9-era libcosmic/iced patches that reach us, and the adoption verdicts
 
 **KDE / Plasma**
 - [`docs/kde_applet_parity.md`](docs/kde_applet_parity.md) — the Plasma tray (`cosmarden-plasma-tray`, no libcosmic), why a plasma plasmoid was rejected, and what the retired libcosmic tray left behind
