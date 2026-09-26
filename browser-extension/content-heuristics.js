@@ -8,19 +8,26 @@ const USERNAME_TEXT_INPUT_SELECTOR = 'input[type="text"], input[type="email"], i
 // merely contains it scores half. Tokens are split on camelCase and
 // separators before the check, so `ldap-username`, `idLogin`, `user_name` and
 // `emailAddress` all reach full weight, while a fused lowercase name like
-// `idlogin` still matches at half weight.
+// `idlogin` still matches at half weight. `benutzer` covers the German
+// `benutzername` / `benutzer-id` login names.
 const USERNAME_ROOTS = [
     "user", "username", "userid", "login", "email", "mail",
     "identifier", "account", "nickname", "handle", "phone", "mobile",
+    "benutzer",
 ];
 
 // Fields that are not login identifiers, whatever else they match. Short
 // words are exact-token only: `pin` must not hit `shipping` and `cc` must not
 // hit `success`. `address` is deliberately absent because `email-address` is
-// a common login field name.
+// a common login field name. `otc`, `onetime`, `twofa`, `2fa` and `approvals`
+// mirror the one-time-code names Bitwarden keeps in its TOTP list —
+// Microsoft's TOTP input is `otc-confirmation-input`, and the two-factor
+// names can appear on a username-only step, where a fill would write the
+// stored username into the code box.
 const EXCLUDED_PREFIXES = [
     "search", "query", "filter", "find", "captcha", "recaptcha",
-    "newsletter", "subscribe", "verification", "otp", "totp", "mfa", "csrf", "token",
+    "newsletter", "subscribe", "verification", "otp", "otc", "totp", "mfa",
+    "csrf", "token", "onetime", "twofa", "twofactor", "2fa", "approvals",
 ];
 const EXCLUDED_TOKENS = [
     "code", "pin", "cvv", "cc", "card", "company", "organization",
@@ -56,9 +63,18 @@ function tokens(value) {
         .filter(Boolean);
 }
 
+// Text of the <label> elements associated with the input — wrapping label or
+// `label[for=...]`. Often the only human-readable name when a framework
+// generates opaque ids; `input.labels` covers both association forms.
+function labelText(input) {
+    if (!input.labels || input.labels.length === 0) return "";
+    return Array.from(input.labels).map(label => label.textContent).join(" ");
+}
+
 function fieldText(input) {
     return [input.name, input.id, input.placeholder,
-        input.getAttribute("aria-label"), input.getAttribute("autocomplete")]
+        input.getAttribute("aria-label"), input.getAttribute("autocomplete"),
+        input.getAttribute("aria-describedby")]
         .filter(Boolean).join(" ");
 }
 
@@ -77,6 +93,17 @@ function isExcluded(text) {
         EXCLUDED_TOKENS.includes(token));
 }
 
+// A form whose own id/name/class/action reads as a non-login form (a
+// newsletter signup, for example). Only consulted on the document-wide
+// multi-step path: there the scope is every field on the page, so a footer
+// signup field would otherwise be filled with the stored username.
+function formIsNonLogin(input) {
+    const form = input.form;
+    if (!form) return false;
+    return isExcluded([form.id, form.name, form.className,
+        form.getAttribute("action")].filter(Boolean).join(" "));
+}
+
 // Scoring, not boolean matching: autocomplete is the strongest signal, then
 // name/id, then human-facing hints. `required` only breaks ties — many login
 // forms never set it, and setting it is a validation choice, not an identity
@@ -87,14 +114,23 @@ function scoreUsernameInput(input) {
         input.placeholder,
         input.getAttribute("aria-label"),
         input.getAttribute("data-testid"),
+        input.getAttribute("aria-describedby"),
+        labelText(input),
     ].filter(Boolean).join(" ");
     const autocomplete = tokens(input.getAttribute("autocomplete"));
+    const type = (input.type || "").toLowerCase();
 
     let score = matchScore(identity, 60, 25) + matchScore(hints, 30, 12);
     if (autocomplete.includes("username")) score += 100;
     if (autocomplete.includes("email")) score += 80;
-    if (input.required || input.getAttribute("aria-required") === "true") score += 10;
+    // `type="email"` is a login-identifier signal on its own: providers
+    // routinely leave name/id empty and mark the field only this way.
+    if (type === "email") score += 30;
     if (isExcluded(identity) || isExcluded(hints)) score -= 200;
+    // Applied after the exclusions, and only when a positive signal already
+    // matched: on its own `required` made any lone required text field (an
+    // OTP box) eligible for the username.
+    if (score > 0 && (input.required || input.getAttribute("aria-required") === "true")) score += 10;
     return score;
 }
 
@@ -125,10 +161,11 @@ function findUsernameInput(scope) {
 // Finds a username-only field anywhere on the page, for multi-step logins
 // (Google/Microsoft/SSO-style) whose first screen has no password field yet.
 // Unlike findUsernameInput, this never falls back to "first visible field":
-// the scope here is the whole document, so a search box or a newsletter
-// signup field would otherwise get filled instead.
+// the scope here is the whole document, so a search box, a newsletter signup
+// field or an OTP box would otherwise get filled instead.
 function findUsernameOnlyInput() {
-    const candidates = Array.from(document.querySelectorAll(USERNAME_TEXT_INPUT_SELECTOR)).filter(isVisible);
+    const candidates = Array.from(document.querySelectorAll(USERNAME_TEXT_INPUT_SELECTOR))
+        .filter(input => isVisible(input) && !formIsNonLogin(input));
     return bestUsernameCandidate(candidates);
 }
 

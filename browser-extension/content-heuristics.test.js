@@ -99,6 +99,15 @@ describe('findUsernameInput', () => {
         expect(findUsernameInput(f).name).toBe('first');
     });
 
+    it('reads the text of an associated label', () => {
+        const f = form(`
+            <input type="text" name="first">
+            <label for="uid">Email address</label>
+            <input type="text" id="uid">
+        `);
+        expect(findUsernameInput(f).id).toBe('uid');
+    });
+
     it('does not fall back to a search box in a password form', () => {
         const f = form(`
             <input type="text" name="site-search" placeholder="Search">
@@ -119,6 +128,23 @@ describe('findUsernameOnlyInput', () => {
     it('finds a username field by keyword when no password field exists yet', () => {
         form(`<input type="text" name="login-user">`);
         expect(findUsernameOnlyInput().name).toBe('login-user');
+    });
+
+    it('accepts a bare email-type field as a username signal', () => {
+        // Providers routinely leave name/id empty and mark the field only
+        // with type="email".
+        form(`<input type="email">`);
+        expect(findUsernameOnlyInput()).not.toBeNull();
+    });
+
+    it('reads an associated label when name and id are opaque', () => {
+        form(`<label for="uid">Email address</label><input type="text" id="uid">`);
+        expect(findUsernameOnlyInput().id).toBe('uid');
+    });
+
+    it('matches a German benutzername field', () => {
+        form(`<input type="text" name="benutzername">`);
+        expect(findUsernameOnlyInput().name).toBe('benutzername');
     });
 
     it('accepts autocomplete="email" as a username signal', () => {
@@ -148,6 +174,30 @@ describe('findUsernameOnlyInput', () => {
             expect(findUsernameOnlyInput()).toBeNull();
         }
     );
+
+    it('does not treat required as a signal on its own', () => {
+        form(`<input type="text" name="promo" required>`);
+        expect(findUsernameOnlyInput()).toBeNull();
+    });
+
+    it('does not fill a one-time-code field named otc-confirmation', () => {
+        // Microsoft marks its TOTP box `otc-confirmation-input`; filling the
+        // stored username into it at the second step is a visible bug.
+        form(`<input type="text" id="otc-confirmation-input" required>`);
+        expect(findUsernameOnlyInput()).toBeNull();
+    });
+
+    it('does not fill a field described by aria-describedby as a one-time code', () => {
+        form(`<input type="text" name="q" aria-describedby="oneTimeCodeDescription" required>`);
+        expect(findUsernameOnlyInput()).toBeNull();
+    });
+
+    it('does not fill a field inside a newsletter signup form', () => {
+        document.body.innerHTML = `
+            <form id="newsletter-signup"><input type="email"></form>
+        `;
+        expect(findUsernameOnlyInput()).toBeNull();
+    });
 
     it('returns null on a page with no text inputs', () => {
         form(`<input type="password" name="password">`);
