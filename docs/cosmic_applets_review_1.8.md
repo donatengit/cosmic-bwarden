@@ -7,6 +7,11 @@ worth copying. The code-level comparison of our applet against the upstream
 examples stays in [`applet_reference_comparison.md`](applet_reference_comparison.md);
 this file covers revisions, change history, and build/process practices.
 
+This is the Epoch 1.8 snapshot. On 2026-09-26 the workspace moved to the
+COSMIC 1.9-era libcosmic revision `03d7dcb8`, so every "our pin" statement here
+(`53314201b`) describes the 1.8 tree, not the current one. See `CONTEXT.md`,
+"Which commit (bump with care)".
+
 All paths below are relative to the repository root unless stated otherwise.
 The reference clones live under `tmp_code_examples/`, which is gitignored
 (`.gitignore:77`) — nothing here is a build input.
