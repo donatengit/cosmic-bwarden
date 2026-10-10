@@ -322,9 +322,12 @@ pub async fn setup_env_no_agent() -> Result<TestEnv> {
         .with_exposed_port(80.tcp())
         .with_env_var("SIGNUPS_ALLOWED", "true")
         .with_env_var("I_REALLY_WANT_VOLATILE_STORAGE", "true")
+        // Supported flag names only; Vaultwarden rejects an unknown flag with a
+        // startup warning and silently drops it. `ssh-agent-v2` replaced the
+        // old `ssh-agent`/`ssh-key-vault-item` pair in the 1.37 series.
         .with_env_var(
             "EXPERIMENTAL_CLIENT_FEATURE_FLAGS",
-            "ssh-key-vault-item,ssh-agent,pm-32009-new-item-types",
+            "ssh-agent-v2,pm-32009-new-item-types",
         )
         .with_label("com.enikeev.cosmarden.e2e", "true");
 
@@ -468,36 +471,54 @@ pub async fn register_user(url: &str, email: &str, password: &str) -> Result<()>
 
     let protected_key = CipherString::encrypt_symmetric(&identity.keys, identity.keys.data())?;
 
+    let name = "Test User";
+
+    // Vaultwarden 1.37 replaced the single-step `POST /api/accounts/register`
+    // with Bitwarden's two-step identity flow: request an email-verification
+    // token, then finish the registration with it. With mail disabled on the
+    // test server the token is returned in the response body instead of emailed,
+    // so no inbox is needed.
+    let res = client
+        .post(format!(
+            "{url}/identity/accounts/register/send-verification-email"
+        ))
+        .header(reqwest::header::ACCEPT, "application/json")
+        .json(&serde_json::json!({ "email": email, "name": name }))
+        .send()
+        .await?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let text = res.text().await?;
+        anyhow::bail!(
+            "Registration verification request failed: {} - {}",
+            status,
+            text
+        );
+    }
+    let verification_token: String = res.json().await?;
+
     let register_payload = serde_json::json!({
         "email": email,
+        "name": name,
+        "emailVerificationToken": verification_token,
         "masterPasswordHash": cosmarden_core::base64::encode(identity.master_password_hash.hash()),
         "masterPasswordHint": "",
         "key": protected_key.to_string(),
-        "name": "Test User",
         "kdf": 0, // PBKDF2
         "kdfIterations": kdf_iterations
     });
 
-    // Try /identity/accounts/register first as it's more modern in Vaultwarden
     let res = client
-        .post(format!("{}/identity/accounts/register", url))
+        .post(format!("{url}/identity/accounts/register/finish"))
         .json(&register_payload)
         .send()
         .await?;
 
     if !res.status().is_success() {
-        // Try legacy endpoint if modern one fails
-        let res = client
-            .post(format!("{}/api/accounts/register", url))
-            .json(&register_payload)
-            .send()
-            .await?;
-
-        if !res.status().is_success() {
-            let status = res.status();
-            let text = res.text().await?;
-            anyhow::bail!("Registration failed: {} - {}", status, text);
-        }
+        let status = res.status();
+        let text = res.text().await?;
+        anyhow::bail!("Registration failed: {} - {}", status, text);
     }
 
     Ok(())

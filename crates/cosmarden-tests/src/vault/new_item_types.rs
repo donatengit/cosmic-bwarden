@@ -54,7 +54,10 @@ async fn server_accepts_new_item_types(
         None,
         None,
     )?;
-    let client = ApiClient::new(vault_url, &format!("{vault_url}/identity"));
+    let client = ApiClient::new(
+        &format!("{vault_url}/api"),
+        &format!("{vault_url}/identity"),
+    );
     let (access_token, _, _) = client
         .login(
             email,
@@ -68,11 +71,14 @@ async fn server_accepts_new_item_types(
         .await
         .map_err(|e| anyhow::anyhow!("probe login failed: {e}"))?;
 
+    // Vaultwarden 1.37+ rejects a cipher write without `encryptedFor`.
+    let user_id = client.sync(&access_token).await?.user_id;
+
     let http = reqwest::Client::new();
     let res = http
         .post(format!("{vault_url}/api/ciphers"))
         .bearer_auth(&access_token)
-        .json(&serde_json::json!({ "type": 6, "name": "probe", "bankAccount": {} }))
+        .json(&serde_json::json!({ "type": 6, "encryptedFor": user_id, "name": "probe", "bankAccount": {} }))
         .send()
         .await?;
 

@@ -266,6 +266,11 @@ impl SyncResCipher {
 #[derive(serde::Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncResProfile {
+    /// The account's user UUID. Vaultwarden (1.37+) requires it as
+    /// `encryptedFor` on every cipher create/update, so it is cached and
+    /// replayed on those requests.
+    #[serde(alias = "Id")]
+    pub id: String,
     #[serde(alias = "Key")]
     pub key: String,
     pub private_key: Option<String>,
@@ -431,6 +436,10 @@ pub struct CipherField {
 pub(crate) struct CiphersPostReq {
     #[serde(rename = "type")]
     pub(crate) ty: u32,
+    /// The account's user UUID. Required by Vaultwarden 1.37+ (it validates
+    /// this equals the token's user); omitting it fails Request parsing with
+    /// HTTP 422 before the handler runs.
+    pub(crate) encrypted_for: String,
     pub(crate) folder_id: Option<String>,
     pub(crate) favorite: bool,
     pub(crate) name: String,
@@ -452,6 +461,9 @@ pub(crate) struct CiphersPostReq {
 pub(crate) struct CiphersPutReq {
     #[serde(rename = "type")]
     pub(crate) ty: u32,
+    /// The account's user UUID. Required by Vaultwarden 1.37+ on update too;
+    /// see `CiphersPostReq::encrypted_for`.
+    pub(crate) encrypted_for: String,
     pub(crate) folder_id: Option<String>,
     pub(crate) organization_id: Option<String>,
     pub(crate) favorite: bool,
@@ -711,5 +723,78 @@ mod new_item_type_tests {
         value["Type"] = serde_json::json!(9);
         let cipher = parse(value);
         assert!(cipher.to_entry(&[]).is_none());
+    }
+}
+
+#[cfg(test)]
+mod encrypted_for_tests {
+    use super::*;
+
+    /// Vaultwarden 1.37+ rejects a cipher create whose body lacks `encryptedFor`
+    /// with HTTP 422 before the handler ever runs, so the field must be on the
+    /// wire. This pins the camelCase key.
+    #[test]
+    fn cipher_post_payload_carries_encrypted_for() {
+        let req = CiphersPostReq {
+            ty: 1,
+            encrypted_for: "user-uuid".to_string(),
+            folder_id: None,
+            favorite: false,
+            name: "n".to_string(),
+            notes: None,
+            login: None,
+            card: None,
+            identity: None,
+            secure_note: None,
+            ssh_key: None,
+            bank_account: None,
+            drivers_license: None,
+            passport: None,
+            fields: Vec::new(),
+            reprompt: CipherRepromptType::None,
+        };
+        let value = serde_json::to_value(&req).expect("serialize CiphersPostReq");
+        assert_eq!(value["encryptedFor"], "user-uuid");
+    }
+
+    /// Same requirement on the update path (`PUT /ciphers/{id}`).
+    #[test]
+    fn cipher_put_payload_carries_encrypted_for() {
+        let req = CiphersPutReq {
+            ty: 1,
+            encrypted_for: "user-uuid".to_string(),
+            folder_id: None,
+            organization_id: None,
+            favorite: false,
+            key: None,
+            name: "n".to_string(),
+            notes: None,
+            login: None,
+            card: None,
+            identity: None,
+            fields: Vec::new(),
+            secure_note: None,
+            ssh_key: None,
+            bank_account: None,
+            drivers_license: None,
+            passport: None,
+            password_history: Vec::new(),
+            reprompt: CipherRepromptType::None,
+        };
+        let value = serde_json::to_value(&req).expect("serialize CiphersPutReq");
+        assert_eq!(value["encryptedFor"], "user-uuid");
+    }
+
+    /// The account UUID is read from the sync profile's `id`, which is where
+    /// the value cached as `encryptedFor` comes from.
+    #[test]
+    fn sync_profile_exposes_user_id() {
+        let profile: SyncResProfile = serde_json::from_value(serde_json::json!({
+            "id": "user-uuid",
+            "key": "2.some-key",
+            "organizations": []
+        }))
+        .expect("deserialize SyncResProfile");
+        assert_eq!(profile.id, "user-uuid");
     }
 }

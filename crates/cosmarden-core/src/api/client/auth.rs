@@ -33,33 +33,56 @@ impl Client {
         kdf: KdfType,
         kdf_iterations: u32,
     ) -> Result<()> {
+        let client = self.reqwest_client().await?;
+
+        // Vaultwarden 1.37 replaced the single-step `POST /accounts/register`
+        // with Bitwarden's two-step identity flow. Step one requests an
+        // email-verification token: with mail disabled (self-hosted dev and the
+        // test server) the token is returned in the response body, which is the
+        // only case this client supports. With mail enabled the server answers
+        // 204 and the token arrives by email instead.
+        let res = client
+            .post(self.identity_url("/accounts/register/send-verification-email"))
+            .header(reqwest::header::ACCEPT, "application/json")
+            .json(&serde_json::json!({ "email": email, "name": name }))
+            .send()
+            .await
+            .map_err(|source| Error::Reqwest { source })?;
+
+        if !res.status().is_success() {
+            return Err(Self::request_failed("POST", res).await);
+        }
+        if res.status() == reqwest::StatusCode::NO_CONTENT {
+            return Err(Error::Other(
+                "server requires email verification to register; the server \
+                 emailed a verification token rather than returning it"
+                    .to_string(),
+            ));
+        }
+        let verification_token: String = res
+            .json()
+            .await
+            .map_err(|source| Error::Reqwest { source })?;
+
+        // Step two creates the account. `emailVerificationToken` carries the
+        // token from step one; the other fields are the same payload the old
+        // one-step endpoint accepted.
         let req = serde_json::json!({
             "email": email,
             "name": name,
+            "emailVerificationToken": verification_token,
             "masterPasswordHash": master_password_hash,
             "masterPasswordHint": "",
             "key": protected_key,
             "kdf": kdf as u32,
             "kdfIterations": kdf_iterations,
         });
-        let client = self.reqwest_client().await?;
         let res = client
-            .post(self.identity_url("/accounts/register"))
+            .post(self.identity_url("/accounts/register/finish"))
             .json(&req)
             .send()
             .await
             .map_err(|source| Error::Reqwest { source })?;
-
-        let res = if res.status() == reqwest::StatusCode::NOT_FOUND {
-            client
-                .post(self.api_url("/accounts/register"))
-                .json(&req)
-                .send()
-                .await
-                .map_err(|source| Error::Reqwest { source })?
-        } else {
-            res
-        };
 
         match res.status() {
             reqwest::StatusCode::OK | reqwest::StatusCode::NO_CONTENT => Ok(()),

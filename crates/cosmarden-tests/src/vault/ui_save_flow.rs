@@ -227,7 +227,7 @@ async fn derive_vault_keys(
     url: &str,
     email: &str,
     password: &str,
-) -> Result<(String, locked::Keys)> {
+) -> Result<(String, locked::Keys, String)> {
     let identity = Identity::new(
         email,
         &locked::Password::from_string(password),
@@ -258,7 +258,10 @@ async fn derive_vault_keys(
         None,
         &HashMap::new(),
     )?;
-    Ok((access_token, vault_keys))
+    // The account UUID is required as `encryptedFor` on the direct cipher
+    // create below (Vaultwarden 1.37+); it comes from the sync profile.
+    let user_id = client.sync(&access_token).await?.user_id;
+    Ok((access_token, vault_keys, user_id))
 }
 
 /// Create a login cipher that carries its own item-level key, the shape the
@@ -269,6 +272,7 @@ async fn derive_vault_keys(
 async fn create_item_key_cipher(
     url: &str,
     access_token: &str,
+    user_id: &str,
     vault_keys: &locked::Keys,
     item_keys: &locked::Keys,
 ) -> Result<String> {
@@ -280,6 +284,7 @@ async fn create_item_key_cipher(
         .bearer_auth(access_token)
         .json(&serde_json::json!({
             "type": 1,
+            "encryptedFor": user_id,
             "name": CipherString::encrypt_symmetric(item_keys, b"Keyed Entry")?.to_string(),
             "key": protected_item_key,
             "favorite": false,
@@ -360,13 +365,21 @@ async fn test_ui_edit_of_item_key_entry_keeps_it_decryptable() -> Result<()> {
     let client = AgentClient::new_with_socket(env.socket_path.clone());
     login(&client, email, password, &env.vault_url).await?;
 
-    let (access_token, vault_keys) = derive_vault_keys(&env.vault_url, email, password).await?;
+    let (access_token, vault_keys, user_id) =
+        derive_vault_keys(&env.vault_url, email, password).await?;
 
     let mut item_key_bytes = locked::Vec::new();
     item_key_bytes.extend((0u8..64).map(|i| i.wrapping_mul(7).wrapping_add(3)));
     let item_keys = locked::Keys::new(item_key_bytes);
 
-    let id = create_item_key_cipher(&env.vault_url, &access_token, &vault_keys, &item_keys).await?;
+    let id = create_item_key_cipher(
+        &env.vault_url,
+        &access_token,
+        &user_id,
+        &vault_keys,
+        &item_keys,
+    )
+    .await?;
 
     client.send(Action::Sync).await?;
 

@@ -9,6 +9,7 @@ impl Client {
     pub async fn add_cipher(
         &self,
         access_token: &str,
+        user_id: &str,
         ty: u32,
         name: &str,
         favorite: bool,
@@ -32,6 +33,7 @@ impl Client {
 
         let req = CiphersPostReq {
             ty,
+            encrypted_for: user_id.to_string(),
             folder_id: None,
             favorite,
             name: name.to_string(),
@@ -74,6 +76,7 @@ impl Client {
     pub async fn add_ssh_key(
         &self,
         access_token: &str,
+        user_id: &str,
         name: &str,
         favorite: bool,
         private_key: &str,
@@ -83,6 +86,7 @@ impl Client {
     ) -> Result<()> {
         let req = CiphersPostReq {
             ty: 5,
+            encrypted_for: user_id.to_string(),
             folder_id: None,
             favorite,
             name: name.to_string(),
@@ -125,6 +129,7 @@ impl Client {
     pub async fn add_card(
         &self,
         access_token: &str,
+        user_id: &str,
         name: &str,
         favorite: bool,
         cardholder_name: Option<&str>,
@@ -138,6 +143,7 @@ impl Client {
     ) -> Result<()> {
         let req = CiphersPostReq {
             ty: 3,
+            encrypted_for: user_id.to_string(),
             folder_id: None,
             favorite,
             name: name.to_string(),
@@ -182,6 +188,7 @@ impl Client {
     pub async fn add_identity(
         &self,
         access_token: &str,
+        user_id: &str,
         name: &str,
         favorite: bool,
         first_name: Option<&str>,
@@ -198,6 +205,7 @@ impl Client {
     ) -> Result<()> {
         let req = CiphersPostReq {
             ty: 4,
+            encrypted_for: user_id.to_string(),
             folder_id: None,
             favorite,
             name: name.to_string(),
@@ -253,6 +261,7 @@ impl Client {
     pub async fn add_new_type_cipher(
         &self,
         access_token: &str,
+        user_id: &str,
         ty: u32,
         name: &str,
         favorite: bool,
@@ -264,6 +273,7 @@ impl Client {
     ) -> Result<()> {
         let req = CiphersPostReq {
             ty,
+            encrypted_for: user_id.to_string(),
             folder_id: None,
             favorite,
             name: name.to_string(),
@@ -309,6 +319,7 @@ impl Client {
     pub async fn update_cipher(
         &self,
         access_token: &str,
+        user_id: &str,
         id: &str,
         name: &str,
         favorite: bool,
@@ -328,6 +339,7 @@ impl Client {
     ) -> Result<()> {
         let req = CiphersPutReq {
             ty,
+            encrypted_for: user_id.to_string(),
             folder_id: None,
             organization_id: None,
             favorite,

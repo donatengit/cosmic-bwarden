@@ -123,19 +123,24 @@ pub async fn handle_login(
     db.parallelism = parallelism;
     db.protected_key = protected_key.map(Secret::from);
 
-    match client.sync(&access_token).await {
-        Ok((pk, ppk, pok, entries)) => {
-            db.protected_key = Some(Secret::from(pk));
-            db.protected_private_key = ppk.map(Secret::from);
-            db.protected_org_keys = pok.into_iter().map(|(k, v)| (k, Secret::from(v))).collect();
-            db.entries = entries;
+    let user_id = match client.sync(&access_token).await {
+        Ok(sync) => {
+            db.protected_key = Some(Secret::from(sync.key));
+            db.protected_private_key = sync.protected_private_key.map(Secret::from);
+            db.protected_org_keys = sync
+                .org_keys
+                .into_iter()
+                .map(|(k, v)| (k, Secret::from(v)))
+                .collect();
+            db.entries = sync.entries;
+            sync.user_id
         }
         Err(e) => {
             return Response::Error {
                 message: format!("initial sync failed: {}", e),
             };
         }
-    }
+    };
 
     if let Err(e) = db.save(&config.server_name(), &email) {
         return Response::Error {
@@ -187,6 +192,7 @@ pub async fn handle_login(
 
             state_guard.keys = Some(keys);
             state_guard.org_keys = Some(org_keys);
+            state_guard.user_id = Some(user_id);
             state_guard.bump_epoch();
 
             // The initial `client.sync` above just replaced the local vault

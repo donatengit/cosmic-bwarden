@@ -49,6 +49,10 @@ pub struct State {
     pub keys: Option<locked::Keys>,
     pub org_keys: Option<HashMap<String, locked::Keys>>,
     pub db: Option<cosmarden_core::db::Db>,
+    /// The account's user UUID, cached from the last sync. Vaultwarden 1.37+
+    /// requires it as `encryptedFor` on every cipher create/update; cleared on
+    /// logout so a stale id cannot be sent for a different account.
+    pub user_id: Option<String>,
     pub pinned_ids: HashSet<String>,
     /// Pre-built list of decrypted sidebar entries. Rebuilt on unlock and after
     /// every mutation (via sync). GetSidebarEntries just filters this in-memory.
@@ -97,6 +101,7 @@ impl State {
             keys: None,
             org_keys: None,
             db: None,
+            user_id: None,
             pinned_ids: HashSet::new(),
             sidebar_cache: Vec::new(),
             ssh_identity_cache: Vec::new(),
@@ -305,6 +310,7 @@ impl State {
         self.lock();
         self.ssh_identity_cache.clear();
         self.db = None;
+        self.user_id = None;
         self.sync_failed = false;
         self.last_sync_error = None;
         self.session_tx.send_replace(VaultSession::LoggedOut);

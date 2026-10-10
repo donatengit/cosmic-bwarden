@@ -512,6 +512,15 @@ pub async fn update_entry_on_server(
         })
         .collect();
 
+    // Vaultwarden 1.37+ rejects a cipher update without `encryptedFor`; the id
+    // is cached from the last sync (login syncs once).
+    let user_id = state
+        .lock()
+        .await
+        .user_id
+        .clone()
+        .ok_or_else(|| "account user id not cached; sync before editing entries".to_string())?;
+
     with_refresh(state, |at| {
         let entry_id = entry_id.clone();
         let entry_key = entry_key.clone();
@@ -526,6 +535,7 @@ pub async fn update_entry_on_server(
         let passport_payload = passport_payload.clone();
         let notes_enc = notes_enc.clone();
         let fields_enc = fields_enc.clone();
+        let user_id = user_id.clone();
         let base_url = config.base_url();
         let identity_url = config.identity_url();
         async move {
@@ -533,6 +543,7 @@ pub async fn update_entry_on_server(
             client
                 .update_cipher(
                     &at,
+                    &user_id,
                     &entry_id,
                     &name_enc,
                     favorite,

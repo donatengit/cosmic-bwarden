@@ -493,6 +493,15 @@ pub async fn add_entry_on_server(
         });
     }
 
+    // Vaultwarden 1.37+ rejects a cipher create without `encryptedFor`; the id
+    // is cached from the last sync (login syncs once).
+    let user_id = state
+        .lock()
+        .await
+        .user_id
+        .clone()
+        .ok_or_else(|| "account user id not cached; sync before adding entries".to_string())?;
+
     with_refresh(state, |at| {
         let name_enc = name_enc.clone();
         let u_enc = u_enc.clone();
@@ -508,6 +517,7 @@ pub async fn add_entry_on_server(
         let passport_payload = passport_payload.clone();
         let notes_enc = notes_enc.clone();
         let fields_enc = fields_enc.clone();
+        let user_id = user_id.clone();
         let base_url = config.base_url();
         let identity_url = config.identity_url();
         let favorite = entry.favorite;
@@ -518,6 +528,7 @@ pub async fn add_entry_on_server(
                     client
                         .add_cipher(
                             &at,
+                            &user_id,
                             ty,
                             &name_enc,
                             favorite,
@@ -534,6 +545,7 @@ pub async fn add_entry_on_server(
                     client
                         .add_ssh_key(
                             &at,
+                            &user_id,
                             &name_enc,
                             favorite,
                             priv_enc.as_deref().unwrap_or(""),
@@ -548,6 +560,7 @@ pub async fn add_entry_on_server(
                     client
                         .add_card(
                             &at,
+                            &user_id,
                             &name_enc,
                             favorite,
                             card.cardholder_name.as_deref(),
@@ -566,6 +579,7 @@ pub async fn add_entry_on_server(
                     client
                         .add_identity(
                             &at,
+                            &user_id,
                             &name_enc,
                             favorite,
                             id.first_name.as_deref(),
@@ -587,6 +601,7 @@ pub async fn add_entry_on_server(
                     client
                         .add_new_type_cipher(
                             &at,
+                            &user_id,
                             6,
                             &name_enc,
                             favorite,
@@ -603,6 +618,7 @@ pub async fn add_entry_on_server(
                     client
                         .add_new_type_cipher(
                             &at,
+                            &user_id,
                             7,
                             &name_enc,
                             favorite,
@@ -619,6 +635,7 @@ pub async fn add_entry_on_server(
                     client
                         .add_new_type_cipher(
                             &at,
+                            &user_id,
                             8,
                             &name_enc,
                             favorite,

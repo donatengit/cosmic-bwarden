@@ -27,14 +27,18 @@ pub async fn handle_sync(state: &Arc<Mutex<State>>) -> Response {
     .await;
 
     match res {
-        Ok((protected_key, protected_private_key, protected_org_keys, entries)) => {
+        Ok(sync) => {
             let mut state_guard = state.lock().await;
 
-            let pinned_ids: std::collections::HashSet<String> = entries
+            let pinned_ids: std::collections::HashSet<String> = sync
+                .entries
                 .iter()
                 .filter(|e| e.favorite)
                 .map(|e| e.id.clone())
                 .collect();
+
+            // Cache the account UUID for the cipher writes below.
+            state_guard.user_id = Some(sync.user_id);
 
             let State {
                 db,
@@ -43,13 +47,14 @@ pub async fn handle_sync(state: &Arc<Mutex<State>>) -> Response {
             } = &mut *state_guard;
 
             if let Some(db) = db {
-                db.protected_key = Some(Secret::from(protected_key));
-                db.protected_private_key = protected_private_key.map(Secret::from);
-                db.protected_org_keys = protected_org_keys
+                db.protected_key = Some(Secret::from(sync.key));
+                db.protected_private_key = sync.protected_private_key.map(Secret::from);
+                db.protected_org_keys = sync
+                    .org_keys
                     .into_iter()
                     .map(|(k, v)| (k, Secret::from(v)))
                     .collect();
-                db.entries = entries;
+                db.entries = sync.entries;
 
                 let config = match cosmarden_core::config::CosmardenConfig::load_legacy() {
                     Ok(c) => c,

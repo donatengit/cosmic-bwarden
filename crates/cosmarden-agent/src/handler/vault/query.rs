@@ -295,15 +295,10 @@ pub async fn handle_get_sidebar_entries(
                 return false;
             }
             if let Some(et) = entry_type {
-                let type_match = matches!(
-                    (&e.entry_type, et),
-                    (EntryType::Login, EntryType::Login)
-                        | (EntryType::Card, EntryType::Card)
-                        | (EntryType::Identity, EntryType::Identity)
-                        | (EntryType::SecureNote, EntryType::SecureNote)
-                        | (EntryType::SshKey, EntryType::SshKey)
-                );
-                if !type_match {
+                // Equality on the enum, not a hand-written match: a listed
+                // match silently dropped the newer types (6-8) and made every
+                // type-filtered query for them return nothing.
+                if e.entry_type != et {
                     return false;
                 }
             }

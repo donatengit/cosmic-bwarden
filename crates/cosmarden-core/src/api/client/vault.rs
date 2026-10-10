@@ -3,16 +3,19 @@ use crate::api::models::*;
 use crate::error::{Error, Result};
 use crate::json::DeserializeJsonWithPathAsync as _;
 
+/// The parts of a sync response the agent persists or caches. `user_id` is the
+/// account's UUID, cached because Vaultwarden 1.37+ requires it as
+/// `encryptedFor` on every cipher create/update.
+pub struct SyncResult {
+    pub key: String,
+    pub protected_private_key: Option<String>,
+    pub org_keys: std::collections::HashMap<String, String>,
+    pub user_id: String,
+    pub entries: Vec<crate::db::Entry>,
+}
+
 impl Client {
-    pub async fn sync(
-        &self,
-        access_token: &str,
-    ) -> Result<(
-        String,
-        Option<String>,
-        std::collections::HashMap<String, String>,
-        Vec<crate::db::Entry>,
-    )> {
+    pub async fn sync(&self, access_token: &str) -> Result<SyncResult> {
         let client = self.reqwest_client().await?;
         let res = client
             .get(self.api_url("/sync"))
@@ -35,12 +38,13 @@ impl Client {
                     .iter()
                     .map(|org| (org.id.clone(), org.key.clone()))
                     .collect();
-                Ok((
-                    sync_res.profile.key,
-                    sync_res.profile.protected_private_key,
+                Ok(SyncResult {
+                    key: sync_res.profile.key,
+                    protected_private_key: sync_res.profile.protected_private_key,
                     org_keys,
-                    ciphers,
-                ))
+                    user_id: sync_res.profile.id,
+                    entries: ciphers,
+                })
             }
             reqwest::StatusCode::UNAUTHORIZED => Err(Error::RequestUnauthorized),
             _ => Err(Self::request_failed("GET", res).await),
