@@ -447,80 +447,39 @@ pub async fn wait_for_socket(path: &Path, timeout: Duration) -> Result<()> {
 }
 
 pub async fn register_user(url: &str, email: &str, password: &str) -> Result<()> {
-    let client = reqwest::Client::new();
-
-    use cosmarden_core::api::KdfType;
+    use cosmarden_core::api::{Client, KdfType};
     use cosmarden_core::identity::Identity;
     use cosmarden_core::locked;
 
-    let password_locked = locked::Password::from_string(password);
-
-    // Vaultwarden default for new users is PBKDF2 with 600,000 iterations
-    let kdf_type = KdfType::Pbkdf2;
-    let kdf_iterations = 600_000;
+    // Vaultwarden default for new users is PBKDF2 with 600,000 iterations.
     let identity = Identity::new(
         email,
-        &password_locked,
-        kdf_type,
-        kdf_iterations,
+        &locked::Password::from_string(password),
+        KdfType::Pbkdf2,
+        600_000,
         None,
         None,
     )?;
+    let protected_key = cosmarden_core::cipherstring::CipherString::encrypt_symmetric(
+        &identity.keys,
+        identity.keys.data(),
+    )?;
+    let master_password_hash = cosmarden_core::base64::encode(identity.master_password_hash.hash());
 
-    use cosmarden_core::cipherstring::CipherString;
-
-    let protected_key = CipherString::encrypt_symmetric(&identity.keys, identity.keys.data())?;
-
-    let name = "Test User";
-
-    // Vaultwarden 1.37 replaced the single-step `POST /api/accounts/register`
-    // with Bitwarden's two-step identity flow: request an email-verification
-    // token, then finish the registration with it. With mail disabled on the
-    // test server the token is returned in the response body instead of emailed,
-    // so no inbox is needed.
-    let res = client
-        .post(format!(
-            "{url}/identity/accounts/register/send-verification-email"
-        ))
-        .header(reqwest::header::ACCEPT, "application/json")
-        .json(&serde_json::json!({ "email": email, "name": name }))
-        .send()
+    // Use the agent's own registration path so test setup and production cannot
+    // drift — they did once, when this helper kept the old single-step flow
+    // after the agent had moved to the two-step one.
+    let client = Client::new(&format!("{url}/api"), &format!("{url}/identity"));
+    client
+        .register(
+            email,
+            "Test User",
+            &master_password_hash,
+            &protected_key.to_string(),
+            KdfType::Pbkdf2,
+            600_000,
+        )
         .await?;
-
-    if !res.status().is_success() {
-        let status = res.status();
-        let text = res.text().await?;
-        anyhow::bail!(
-            "Registration verification request failed: {} - {}",
-            status,
-            text
-        );
-    }
-    let verification_token: String = res.json().await?;
-
-    let register_payload = serde_json::json!({
-        "email": email,
-        "name": name,
-        "emailVerificationToken": verification_token,
-        "masterPasswordHash": cosmarden_core::base64::encode(identity.master_password_hash.hash()),
-        "masterPasswordHint": "",
-        "key": protected_key.to_string(),
-        "kdf": 0, // PBKDF2
-        "kdfIterations": kdf_iterations
-    });
-
-    let res = client
-        .post(format!("{url}/identity/accounts/register/finish"))
-        .json(&register_payload)
-        .send()
-        .await?;
-
-    if !res.status().is_success() {
-        let status = res.status();
-        let text = res.text().await?;
-        anyhow::bail!("Registration failed: {} - {}", status, text);
-    }
-
     Ok(())
 }
 
