@@ -154,7 +154,10 @@ test.describe('Chrome Extension Full E2E', () => {
     const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chromium-e2e-'));
 
     sharedContext = await chromium.launchPersistentContext(userDataDir, {
-      headless: false,
+      // New headless mode supports extensions; the headless shell does not, so
+      // select the full Chromium build.
+      channel: 'chromium',
+      headless: true,
       args: [
         `--disable-extensions-except=${EXTENSION_PATH}`,
         `--load-extension=${EXTENSION_PATH}`,
