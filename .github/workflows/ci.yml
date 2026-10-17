@@ -164,3 +164,31 @@ jobs:
         run: |
           cargo test -p cosmarden-tests -- --test-threads=1 \
             || cargo test -p cosmarden-tests -- --test-threads=1
+      # The full browser suites install the real extension and talk to a real
+      # agent + Vaultwarden; the fast `extension` job only runs the mocked
+      # firefox-mock project. Playwright cannot attach to moz-extension://
+      # pages, so the Firefox one goes through geckodriver, whose
+      # --allow-system-access flag (0.37+) is required for privileged
+      # extension contexts. The runner image ships Firefox.
+      - name: Install geckodriver
+        run: |
+          curl -fsSL \
+            https://github.com/mozilla/geckodriver/releases/download/v0.37.1/geckodriver-v0.37.1-linux64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin geckodriver
+          geckodriver --version
+          firefox --version
+      - name: Firefox extension E2E (real agent + Vaultwarden)
+        run: cargo test -p cosmarden-tests --lib --features browser-e2e -- extension_e2e --test-threads=1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: browser-extension/package-lock.json
+      - name: Install extension dependencies
+        run: npm ci
+        working-directory: browser-extension
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: browser-extension
+      - name: Chrome extension E2E (real agent + Vaultwarden)
+        run: bash tests/browser-extension/run-chrome-e2e.sh

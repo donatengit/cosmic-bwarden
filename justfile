@@ -340,6 +340,20 @@ test-e2e: build-test-binaries (ensure-container-socket)
     echo "--- 2. E2E Suite (complete) ---"
     {{_limited}} cargo test --quiet -p cosmarden-tests --lib -- --test-threads=1
 
+# Firefox extension E2E against a real agent and Vaultwarden. Playwright
+# cannot attach to moz-extension:// pages, so this one runs through
+# geckodriver. `--allow-system-access` (geckodriver >= 0.37) is required;
+# older drivers cannot touch privileged extension contexts.
+test-browser-e2e: build-test-binaries (ensure-container-socket)
+    @if ! command -v geckodriver >/dev/null 2>&1 || ! command -v firefox >/dev/null 2>&1; then \
+        echo "geckodriver/firefox not installed; skipping browser E2E"; \
+    elif ! geckodriver --help 2>&1 | grep -q -- '--allow-system-access'; then \
+        echo "geckodriver < 0.37 has no --allow-system-access; skipping browser E2E"; \
+    else \
+        echo "--- Browser extension E2E (Firefox, real agent) ---"; \
+        {{_limited}} cargo test --quiet -p cosmarden-tests --lib --features browser-e2e -- extension_e2e --test-threads=1; \
+    fi
+
 # --- Focused subsets, for iterating on one area. Not a partition of the suite;
 # --- use `just test-e2e` for full coverage.
 

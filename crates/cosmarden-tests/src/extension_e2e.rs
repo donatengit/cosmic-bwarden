@@ -1,17 +1,47 @@
 use crate::common::{setup_env, TestEnv};
 use serde_json::json;
 use std::io::{Read, Write};
+use std::net::TcpListener;
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+use std::process::Child;
 use std::process::Command;
 use tempfile::tempdir;
 use thirtyfour::prelude::*;
 use tokio::time::{sleep, Duration};
 use zip::write::SimpleFileOptions;
 
+// Kill geckodriver on every exit path, including a panic between spawn and the
+// point where the test owns a BrowserTest. Without this, a failed WebDriver
+// handshake leaves geckodriver (and the Firefox it spawned) behind.
+struct GeckoDriver(Child);
+
+impl Drop for GeckoDriver {
+    fn drop(&mut self) {
+        // geckodriver spawns Firefox as a child and does not reliably reap it
+        // when killed, so start both in their own process group and kill the
+        // whole group. A leaked headless Firefox holds a profile dir and a
+        // memory-mapped cache for the rest of the test run.
+        #[cfg(unix)]
+        unsafe {
+            libc::kill(-(self.0.id() as i32), libc::SIGKILL);
+        }
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
 struct BrowserTest {
     driver: WebDriver,
-    geckodriver: std::process::Child,
+    _geckodriver: GeckoDriver,
     _test_home: tempfile::TempDir,
     extension_url: String,
+    host_log: std::path::PathBuf,
+}
+
+fn free_port() -> anyhow::Result<u16> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    Ok(listener.local_addr()?.port())
 }
 
 impl BrowserTest {
@@ -44,7 +74,7 @@ impl BrowserTest {
             export XDG_CACHE_HOME={cache}\n\
             export XDG_DATA_HOME={data}\n\
             export RUST_LOG=debug\n\
-            exec {agent} --socket {socket} --config {config} browser-host \"$@\" 2>> {log}\n",
+            exec {agent} --socket {socket} --config {config} browser-host 2>> {log}\n",
             home = test_home.path().display(),
             profile = env.profile,
             config_home = config_home.display(),
@@ -117,26 +147,34 @@ impl BrowserTest {
             zip.finish()?;
         }
 
-        let geckodriver = Command::new("geckodriver")
+        let port = free_port()?;
+        // `--allow-system-access` is required to touch a moz-extension:// page;
+        // without it Marionette answers "does not support browsing contexts in
+        // privileged scope". geckodriver gained the flag in 0.37.
+        let mut geckodriver_cmd = Command::new("geckodriver");
+        geckodriver_cmd
             .arg("--port")
-            .arg("4444")
-            .env("HOME", test_home.path())
-            .spawn()?;
+            .arg(port.to_string())
+            .arg("--allow-system-access")
+            .env("HOME", test_home.path());
+        #[cfg(unix)]
+        geckodriver_cmd.process_group(0);
+        let geckodriver = GeckoDriver(geckodriver_cmd.spawn()?);
 
         sleep(Duration::from_secs(1)).await;
 
         let mut caps = DesiredCapabilities::firefox();
-        caps.add_firefox_arg("-headless")?;
-        caps.add_firefox_option("env", json!({ "HOME": test_home.path().to_str().unwrap() }))?;
+        caps.add_arg("-headless")?;
+        caps.set_browser_option("env", json!({ "HOME": test_home.path().to_str().unwrap() }))?;
 
-        let driver = WebDriver::new("http://localhost:4444", caps).await?;
+        let driver = WebDriver::new(format!("http://localhost:{port}"), caps).await?;
 
         // Install extension
-        let session_id = driver.session_id().await?;
+        let session_id = driver.session_id().to_string();
         let client = reqwest::Client::new();
         client
             .post(format!(
-                "http://localhost:4444/session/{}/moz/addon/install",
+                "http://localhost:{port}/session/{}/moz/addon/install",
                 session_id
             ))
             .json(&json!({ "path": xpi_path.to_str().unwrap(), "temporary": true }))
@@ -169,9 +207,10 @@ impl BrowserTest {
 
         Ok(Self {
             driver,
-            geckodriver,
+            _geckodriver: geckodriver,
             _test_home: test_home,
             extension_url,
+            host_log: log_path,
         })
     }
 
@@ -181,20 +220,21 @@ impl BrowserTest {
         self.driver
             .execute(
                 "window.mockClipboard = ''; \
-             navigator.clipboard = { \
-                 writeText: (t) => { window.mockClipboard = t; return Promise.resolve(); }, \
-                 readText: () => Promise.resolve(window.mockClipboard) \
-             };",
+             Object.defineProperty(navigator, 'clipboard', { \
+                 configurable: true, \
+                 value: { \
+                     writeText: (t) => { window.mockClipboard = t; return Promise.resolve(); }, \
+                     readText: () => Promise.resolve(window.mockClipboard) \
+                 } \
+             });",
                 vec![],
             )
             .await?;
         Ok(())
     }
 
-    async fn cleanup(mut self) -> anyhow::Result<()> {
+    async fn cleanup(self) -> anyhow::Result<()> {
         let _ = self.driver.quit().await;
-        let _ = self.geckodriver.kill();
-        let _ = self.geckodriver.wait();
         Ok(())
     }
 }
@@ -230,6 +270,11 @@ async fn test_extension_full_lifecycle_persistence() -> anyhow::Result<()> {
         || status_text.contains("communicat"))
     {
         println!("Page Source (Initial):\n{}", bt.driver.source().await?);
+        println!(
+            "Native host log ({}):\n{}",
+            bt.host_log.display(),
+            std::fs::read_to_string(&bt.host_log).unwrap_or_default()
+        );
         panic!("Unexpected initial status text: '{}'", status_text);
     }
 
@@ -275,12 +320,11 @@ async fn test_extension_full_lifecycle_persistence() -> anyhow::Result<()> {
         .await?
         .click()
         .await?;
-    bt.driver
-        .query(By::Id("edit-name"))
-        .first()
-        .await?
-        .send_keys("Full Login")
-        .await?;
+    // The add form pre-fills the name with the active tab's domain, which for
+    // an extension tab is its UUID. Replace it instead of appending.
+    let name_input = bt.driver.query(By::Id("edit-name")).first().await?;
+    name_input.clear().await?;
+    name_input.send_keys("Full Login").await?;
     bt.driver
         .query(By::Id("f-username"))
         .first()
@@ -314,27 +358,50 @@ async fn test_extension_full_lifecycle_persistence() -> anyhow::Result<()> {
 
     sleep(Duration::from_secs(2)).await;
 
+    // Pin the new entry: with no real site tab open the popup falls back to
+    // favourites, so an unpinned entry never appears in the list.
+    let res = client
+        .send(cosmarden_core::protocol::Action::GetSidebarEntries {
+            query: None,
+            entry_type: None,
+            only_pinned: false,
+            domain: None,
+        })
+        .await?;
+    let entry_id = match res {
+        cosmarden_core::protocol::Response::SidebarEntries { entries } => entries
+            .iter()
+            .find(|e| e.name == "Full Login")
+            .map(|e| e.id.clone()),
+        _ => None,
+    }
+    .ok_or_else(|| anyhow::anyhow!("added entry not found via GetSidebarEntries"))?;
+    client
+        .send(cosmarden_core::protocol::Action::PinEntry { id: entry_id })
+        .await?;
+
     // 5. Persistence Cycle: Lock/Unlock
     client.send(cosmarden_core::protocol::Action::Lock).await?;
     bt.open_popup().await?;
 
-    let mut status_text = String::new();
+    // The locked state is a view, not the status bar: `#status` is hidden and
+    // the popup swaps in `#view-locked`.
+    let mut locked_visible = false;
     for _ in 0..10 {
-        status_text = bt
+        locked_visible = bt
             .driver
             .execute(
-                "return document.getElementById('status').textContent;",
+                "return !document.getElementById('view-locked').classList.contains('hidden');",
                 vec![],
             )
             .await?
-            .convert::<String>()?
-            .to_lowercase();
-        if status_text.contains("locked") {
+            .convert::<bool>()?;
+        if locked_visible {
             break;
         }
         sleep(Duration::from_millis(500)).await;
     }
-    assert!(status_text.contains("locked"));
+    assert!(locked_visible, "locked view did not appear after Lock");
 
     client
         .send(cosmarden_core::protocol::Action::Unlock {
@@ -344,9 +411,14 @@ async fn test_extension_full_lifecycle_persistence() -> anyhow::Result<()> {
     bt.open_popup().await?;
     sleep(Duration::from_secs(2)).await;
 
-    // 6. Verify Entry and Fields
+    // 6. Verify Entry and Fields. Clicking a Login row opens its site, so use
+    // the eye button to reach the detail view.
     bt.driver
-        .query(By::XPath("//div[contains(text(), 'Full Login')]"))
+        .query(By::XPath(
+            "//div[contains(@class,'entry')]\
+             [.//div[contains(@class,'entry-name') and text()='Full Login']]\
+             //button[@aria-label='View details']",
+        ))
         .first()
         .await?
         .click()
@@ -359,11 +431,17 @@ async fn test_extension_full_lifecycle_persistence() -> anyhow::Result<()> {
         .text()
         .await?;
     assert!(detail.contains("myuser"));
-    assert!(detail.contains("Sensitive notes"));
+    // Notes are a secret-class slot: the meta-backed detail view shows the
+    // label but never the plaintext.
+    assert!(detail.contains("Notes"));
 
-    // 7. Verify Copy functionality
+    // 7. Verify Copy functionality. The first Copy button belongs to Username;
+    // scope the selector to the Password secret row.
     bt.driver
-        .query(By::XPath("//button[text()='Copy']"))
+        .query(By::XPath(
+            "//div[contains(@class,'detail-item')][.//*[contains(@class,'secret-text')]]\
+             //button[contains(@class,'copy-btn')]",
+        ))
         .first()
         .await?
         .click()
@@ -420,7 +498,11 @@ async fn test_extension_full_lifecycle_persistence() -> anyhow::Result<()> {
     bt.open_popup().await?;
     sleep(Duration::from_secs(2)).await;
     bt.driver
-        .query(By::XPath("//div[contains(text(), 'Full Login')]"))
+        .query(By::XPath(
+            "//div[contains(@class,'entry')]\
+             [.//div[contains(@class,'entry-name') and text()='Full Login']]\
+             //button[@aria-label='View details']",
+        ))
         .first()
         .await?
         .click()

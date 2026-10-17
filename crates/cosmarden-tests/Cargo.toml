@@ -9,8 +9,9 @@ homepage = "https://github.com/donatengit/cosmic-bwarden"
 description = "End-to-end test harness for cosmarden (not published)"
 
 [dependencies]
-thirtyfour = { version = "0.31", optional = true }
+thirtyfour = { version = "0.37", optional = true, default-features = false, features = ["rustls"] }
 zip = { version = "9.0", optional = true }
+libc = "0.2"
 cosmarden-core = { path = "../cosmarden-core" }
 testcontainers = { version = "0.23", features = ["http_wait"] }
 bollard = "0.18"

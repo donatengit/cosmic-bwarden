@@ -21,6 +21,7 @@ below; invoking `cargo test` directly skips all of it.
 | `just test-unit-tpm` | The TPM-gated agent unit tests, which a plain `cargo test` cannot see |
 | `just test-unit-kde` | The KDE surfaces that `just test-unit` cannot see: UI unit tests with `--features kde` (the theme-noise filter) and the Plasma tray crate (`cosmarden-plasma-tray`: menu model, agent state, icon, panel colour). A plain `just test-unit` enables neither the feature nor the crate, and `app/tests/kde_gate.rs` asserts that |
 | `just test-e2e` | The complete E2E crate |
+| `just test-browser-e2e` | Firefox extension E2E with a real agent and Vaultwarden, through geckodriver. Needs Firefox and geckodriver >= 0.37 (`--allow-system-access`); skipped when they are absent |
 | `just test-agent` / `test-cli` / `test-ui` | Focused subsets for iterating on one area — **not** a partition of the suite |
 | `just test-extension-unit` | Extension JS unit tests (vitest) |
 | `just test-extension-e2e` | Extension Playwright E2E, mocked agent |

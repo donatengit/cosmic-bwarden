@@ -48,23 +48,6 @@ ignore = [
 
     # --- Test harness only: not in any shipped binary ---------------------
 
-    # RUSTSEC-2024-0336 (rustls 0.20.9 infinite loop), RUSTSEC-2026-0349
-    # (rustls 0.20.9 ServerHello downgrade) and RUSTSEC-2025-0009
-    # (ring 0.16.20 panic on AES overflow). All arrive via
-    # thirtyfour -> fantoccini -> hyper-rustls 0.23, which is an OPTIONAL
-    # dependency of cosmarden-tests behind the `browser-e2e` feature.
-    # The browser tests drive a local WebDriver over plain HTTP, so the TLS
-    # path is never exercised. rustls 0.20 has no fix for 0349: the patched
-    # release is in the 0.23 line.
-    # Verified absent from agent/ui/cli:
-    #   cargo tree -p cosmarden-agent -e normal -i rustls  -> 0.23.46 only
-    # Shipped code uses rustls 0.23.46 through reqwest: unaffected by the
-    # 0.20.x advisories, and >=0.23.46 is the RUSTSEC-2026-0285/0346-0349
-    # fix floor, so do not move that copy back down.
-    "RUSTSEC-2024-0336",
-    "RUSTSEC-2026-0349",
-    "RUSTSEC-2025-0009",
-
     # RUSTSEC-2025-0111 — tokio-tar PAX header parsing allows file smuggling.
     # No patched release. Reached only by testcontainers, a dev-dependency of
     # cosmarden-tests; the tarballs it handles are container images we

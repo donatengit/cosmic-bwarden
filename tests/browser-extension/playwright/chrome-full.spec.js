@@ -461,8 +461,10 @@ test.describe('Chrome Extension Full E2E', () => {
     await expect(detail).toContainText('ssh-ed25519');
     await expect(detail).toContainText('SshKey');
 
-    // Copy public key.
-    const copyBtn = page.locator('#view-detail button:has-text("Copy")').first();
+    // Copy public key. The private-key row renders first and has its own Copy
+    // button, so scope the selector to the Public Key row.
+    const publicKeyRow = page.locator('.detail-item', { hasText: 'Public Key' });
+    const copyBtn = publicKeyRow.locator('button:has-text("Copy")');
     await expect(copyBtn).toBeVisible({ timeout: 5000 });
     await copyBtn.click();
     await page.waitForTimeout(200);
