@@ -15,6 +15,12 @@ The workspace moved to the COSMIC 1.10-era libcosmic revision `dbc62f2d8` on
 pin" statement there describes `03d7dcb8` and the applets tag `epoch-1.9.0`,
 not the current tree.
 
+This is the Epoch 1.10 snapshot. On 2026-10-24 the workspace moved to the
+COSMIC 1.11-era libcosmic revision `430f3d48a`, so every "our pin" statement
+here (`dbc62f2d8`, applets tag `epoch-1.10.0`) describes the 1.10 tree. The
+1.11 snapshot is
+[`cosmic_applets_review_1.11.md`](cosmic_applets_review_1.11.md).
+
 All paths below are relative to the repository root unless stated otherwise.
 The reference clones live under `tmp_code_examples/`, which is gitignored
 (`.gitignore:77`) — nothing here is a build input.

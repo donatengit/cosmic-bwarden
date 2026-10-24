@@ -47,20 +47,20 @@ zeroize = { version = "1.8", features = ["derive"] }
 # pinning a rev here for fully controlled bumps, at the cost of that duplicate
 # compilation; we chose the unified graph instead.
 #
-# The lock deliberately holds dbc62f2d8 (2026-10-09), the COSMIC 1.10-era master
-# tip: it is the newest revision whose whole graph resolves to one
-# cosmic-protocols source — libcosmic's own Cargo.toml and the bundled iced
-# submodule (a31e6c6f) both pin rev c0cff4d. Every epoch-1.10.0 consumer tag
-# resolves libcosmic to 5a8bd9482, eight commits behind this tip; the extra
-# commits are the widget fixes catalogued in
-# docs/cosmic_applets_review_1.10.md. The 1.8-era pin 53314201b existed only
+# The lock deliberately holds 430f3d48a (2026-10-19), the COSMIC 1.11-era master
+# tip: every epoch-1.11.0 consumer tag pins this revision, so unlike the 1.10
+# tags there are no out-of-release widget fixes on top. It is also the newest
+# revision whose whole graph resolves to one cosmic-protocols source —
+# libcosmic's own Cargo.toml and the bundled iced submodule (229186b5) both pin
+# rev c0cff4d. The revision map and the commits it carries are in
+# docs/cosmic_applets_review_1.11.md. The 1.8-era pin 53314201b existed only
 # because the then-tip's "chore: update iced" commit left those two pins
 # disagreeing (iced at c0cff4d, libcosmic at 32283d7), resolving two
 # cosmic-protocols sources into the graph. A [patch] cannot repair such a
 # split — Cargo rejects a same-URL patch ("patches must point to different
 # sources") and silently ignores a rev-qualified key — so the lock pin is the
-# only lever. cosmic-panel-config moves with the bump to 3ce6ce1c, the
-# cosmic-panel commit the epoch-1.10.0 tag pins (crate version 1.10.0).
+# only lever. cosmic-panel-config moves with the bump to ca20ce31, the
+# cosmic-panel commit the epoch-1.11.0 tag pins (crate version 1.11.0).
 libcosmic = { git = "https://github.com/pop-os/libcosmic" }
 cosmic-config = { git = "https://github.com/pop-os/libcosmic", default-features = false, features = ["macro"] }
 i18n-embed = { version = "0.16.0", features = ["fluent-system", "desktop-requester"] }
