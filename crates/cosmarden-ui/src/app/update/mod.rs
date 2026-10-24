@@ -125,7 +125,6 @@ impl CosmardenApp {
             | Message::AppletToggleRepromptPasswordReveal
             | Message::AppletOpenInVault(_)
             | Message::AppletOpenLink(_)
-            | Message::AppletSearchRowHoverChanged(_, _)
             | Message::CloseToast(_)
             | Message::ProtocolVersionCheck(_)
             | Message::AppletPinChanged(_)

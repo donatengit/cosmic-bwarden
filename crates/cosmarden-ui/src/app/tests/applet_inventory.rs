@@ -32,7 +32,6 @@ const INVENTORIED_VIEW_MESSAGES: &[&str] = &[
     "AppletRepromptPasswordChanged",
     "AppletRepromptSubmitted",
     "AppletSearchChanged",
-    "AppletSearchRowHoverChanged",
     "AppletToggleFavouritesFilter",
     "AppletTogglePinReveal",
     "AppletToggleRepromptPasswordReveal",

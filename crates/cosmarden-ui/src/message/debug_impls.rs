@@ -65,7 +65,6 @@ impl Message {
             Self::AppletSecretReceived(_) => "AppletSecretReceived",
             Self::AppletOpenInVault(_) => "AppletOpenInVault",
             Self::AppletOpenLink(_) => "AppletOpenLink",
-            Self::AppletSearchRowHoverChanged(_, _) => "AppletSearchRowHoverChanged",
             Self::AppletRepromptPasswordChanged(_) => "AppletRepromptPasswordChanged",
             Self::AppletRepromptSubmitted => "AppletRepromptSubmitted",
             Self::AppletRepromptCancelled => "AppletRepromptCancelled",

@@ -1,13 +1,13 @@
-use crate::app::applet_menu::row_actions_visible;
 use crate::app::applet_search::{build_applet_rows, AppletRow, AppletRowKind};
 use crate::app::CosmardenApp;
 use crate::fl;
 use crate::message::Message;
 use cosmic::applet::menu_button;
+use cosmic::iced::widget::hover;
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{
-    button, column, container, icon, mouse_area, row, scrollable, search_input, secure_input,
-    space, text, tooltip, Id,
+    button, column, container, icon, row, scrollable, search_input, secure_input, space, text,
+    tooltip, Id,
 };
 use cosmic::Element;
 
@@ -59,11 +59,7 @@ pub fn view(app: &CosmardenApp) -> Element<'_, Message> {
             if app.applet_reprompt_id.as_deref() == Some(result_row.id.as_str()) {
                 results_col = results_col.push(reprompt_row(app));
             } else {
-                let show_actions = row_actions_visible(
-                    app.applet_hovered_row_id.as_deref(),
-                    result_row.id.as_str(),
-                );
-                results_col = results_col.push(result_row_view(result_row, show_actions));
+                results_col = results_col.push(result_row_view(result_row));
             }
         }
     }
@@ -102,20 +98,15 @@ fn action_overlay(icons: Element<'static, Message>) -> Element<'static, Message>
         .into()
 }
 
-fn result_row_view(row_data: AppletRow, show_actions: bool) -> Element<'static, Message> {
-    let id = row_data.id.clone();
-    let inner = match row_data.kind {
+fn result_row_view(row_data: AppletRow) -> Element<'static, Message> {
+    match row_data.kind {
         AppletRowKind::Login { username, link } => {
-            login_row_view(row_data.id, row_data.label, username, link, show_actions)
+            login_row_view(row_data.id, row_data.label, username, link)
         }
         AppletRowKind::SecureNote | AppletRowKind::SshKey => {
-            secret_row_view(row_data.id, row_data.label, show_actions)
+            secret_row_view(row_data.id, row_data.label)
         }
-    };
-    mouse_area(inner)
-        .on_enter(Message::AppletSearchRowHoverChanged(id.clone(), true))
-        .on_exit(Message::AppletSearchRowHoverChanged(id, false))
-        .into()
+    }
 }
 
 fn login_row_view(
@@ -123,7 +114,6 @@ fn login_row_view(
     label: String,
     username: Option<String>,
     link: Option<String>,
-    show_actions: bool,
 ) -> Element<'static, Message> {
     let copy_id = id.clone();
     let label_btn = menu_button(text::body(label)).on_press_maybe(
@@ -137,10 +127,6 @@ fn login_row_view(
     } else {
         label_btn.into()
     };
-
-    if !show_actions {
-        return label_el;
-    }
 
     let icons = row::with_capacity(3)
         .spacing(2)
@@ -160,19 +146,13 @@ fn login_row_view(
             Some(Message::AppletCopySecret(id)),
         ));
 
-    cosmic::iced::widget::stack![label_el, action_overlay(icons.into())]
-        .width(Length::Fill)
-        .into()
+    hover(label_el, action_overlay(icons.into()))
 }
 
-fn secret_row_view(id: String, label: String, show_actions: bool) -> Element<'static, Message> {
+fn secret_row_view(id: String, label: String) -> Element<'static, Message> {
     let label_el: Element<'static, Message> = menu_button(text::body(label))
         .on_press(Message::AppletCopySecret(id.clone()))
         .into();
-
-    if !show_actions {
-        return label_el;
-    }
 
     let icons = row::with_capacity(2)
         .spacing(2)
@@ -187,9 +167,7 @@ fn secret_row_view(id: String, label: String, show_actions: bool) -> Element<'st
             Some(Message::AppletCopySecret(id)),
         ));
 
-    cosmic::iced::widget::stack![label_el, action_overlay(icons.into())]
-        .width(Length::Fill)
-        .into()
+    hover(label_el, action_overlay(icons.into()))
 }
 
 pub fn reprompt_input_id() -> Id {

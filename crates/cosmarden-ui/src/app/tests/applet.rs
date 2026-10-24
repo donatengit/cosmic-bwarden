@@ -25,8 +25,8 @@ fn entry(id: &str, name: &str, entry_type: EntryType) -> SidebarEntry {
     }
 }
 
-/// A closed popup must not keep a typed master password, a stale error or the
-/// hovered row; the last search is deliberately preserved.
+/// A closed popup must not keep a typed master password or a stale error;
+/// the last search is deliberately preserved.
 #[test]
 fn reset_applet_popup_state_wipes_transients_and_keeps_the_search() {
     let (mut app, _) = popup_app(View::Unlock);
@@ -36,7 +36,6 @@ fn reset_applet_popup_state_wipes_transients_and_keeps_the_search() {
     app.applet_reprompt_password = "master-password".to_string();
     app.applet_reprompt_password_revealed = true;
     app.applet_error = Some("agent is locked".to_string());
-    app.applet_hovered_row_id = Some("row-1".to_string());
     app.applet_search_query = "mail".to_string();
     app.applet_search_only_favourites = true;
 
@@ -51,7 +50,6 @@ fn reset_applet_popup_state_wipes_transients_and_keeps_the_search() {
     assert!(!app.applet_unlock_password_revealed);
     assert!(!app.applet_reprompt_password_revealed);
     assert_eq!(app.applet_error, None);
-    assert_eq!(app.applet_hovered_row_id, None);
     assert_eq!(app.applet_search_query, "mail", "last search survives");
     assert!(app.applet_search_only_favourites);
 }
@@ -365,31 +363,10 @@ fn quit_row_clears_the_popup_state() {
     assert!(!app.windows.contains_key(&id));
 }
 
-// ── Search-row hover (action icons only while hovered) ───────────────────────
+// ── Search-row rendering ──────────────────────────────────────────────────────
 
 #[tokio::test]
-async fn test_applet_search_row_hover_sets_and_clears_id() {
-    let mut app = CosmardenApp::default();
-    assert_eq!(app.applet_hovered_row_id, None);
-
-    let _ = app.update(Message::AppletSearchRowHoverChanged("e1".into(), true));
-    assert_eq!(app.applet_hovered_row_id.as_deref(), Some("e1"));
-
-    let _ = app.update(Message::AppletSearchRowHoverChanged("e1".into(), false));
-    assert_eq!(app.applet_hovered_row_id, None);
-}
-
-#[tokio::test]
-async fn test_applet_search_row_hover_exit_of_other_id_does_not_clear() {
-    let mut app = CosmardenApp::default();
-    let _ = app.update(Message::AppletSearchRowHoverChanged("e1".into(), true));
-    let _ = app.update(Message::AppletSearchRowHoverChanged("e2".into(), true));
-    let _ = app.update(Message::AppletSearchRowHoverChanged("e1".into(), false));
-    assert_eq!(app.applet_hovered_row_id.as_deref(), Some("e2"));
-}
-
-#[tokio::test]
-async fn test_applet_hovered_search_row_renders() {
+async fn test_applet_search_row_renders() {
     let (mut app, id) = popup_app(View::Vault);
     app.applet_search_results = vec![SidebarEntry {
         id: "1".to_string(),
@@ -399,7 +376,6 @@ async fn test_applet_hovered_search_row_renders() {
         entry_type: EntryType::Login,
         is_pinned: false,
     }];
-    app.applet_hovered_row_id = Some("1".to_string());
     let _ = app.view_window(id);
 }
 

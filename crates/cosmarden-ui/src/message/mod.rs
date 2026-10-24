@@ -168,10 +168,6 @@ pub enum Message {
     AppletSecretReceived(Result<Secret, (String, String)>),
     AppletOpenInVault(String),
     AppletOpenLink(String),
-    /// Search-result row pointer enter (`true`) / exit (`false`). Exit of a
-    /// row only clears hover when that row is still the hovered one, so
-    /// moving to a neighbour cannot race-clear the new id.
-    AppletSearchRowHoverChanged(String, bool),
 
     // Applet popup: inline reprompt for AppletCopySecret
     AppletRepromptPasswordChanged(String),

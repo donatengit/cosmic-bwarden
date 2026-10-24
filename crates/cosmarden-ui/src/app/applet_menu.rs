@@ -1,7 +1,6 @@
-//! Pure applet-popup listings: the quit footer action, and whether a search
-//! row's action icons are visible given the hovered id.
+//! Pure applet-popup listing: the quit footer action.
 //!
-//! Kept out of the view so both mappings can be unit-tested without widgets.
+//! Kept out of the view so the mapping can be unit-tested without widgets.
 
 use crate::fl;
 use crate::message::Message;
@@ -33,12 +32,6 @@ pub fn quit_actions() -> &'static [QuitAction] {
     &[QuitAction::Exit]
 }
 
-/// Search-row action icons (open-in-vault / open-URI / copy-secret) are
-/// visible only while that row is the hovered one.
-pub fn row_actions_visible(hovered_id: Option<&str>, row_id: &str) -> bool {
-    hovered_id == Some(row_id)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -50,12 +43,5 @@ mod tests {
         assert_eq!(items[0].label(), fl!("quit"));
         assert_eq!(items[0].label(), "Quit");
         assert!(matches!(items[0].message(), Message::Exit));
-    }
-
-    #[test]
-    fn row_actions_visible_only_for_the_hovered_id() {
-        assert!(row_actions_visible(Some("entry-1"), "entry-1"));
-        assert!(!row_actions_visible(None, "entry-1"));
-        assert!(!row_actions_visible(Some("entry-2"), "entry-1"));
     }
 }

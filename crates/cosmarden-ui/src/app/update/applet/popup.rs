@@ -20,9 +20,9 @@ use super::helpers::{clamped_anchor_rect, unlock_focus_id};
 impl CosmardenApp {
     /// Clear everything transient that a popup must not carry across a close:
     /// the typed unlock and reprompt passwords (zeroized), their reveal flags,
-    /// the last error and the hovered row. The search query and the favourites
-    /// toggle are deliberately preserved, so the popup re-opens with the last
-    /// search intact: a typed master password must not outlive the window.
+    /// and the last error. The search query and the favourites toggle are
+    /// deliberately preserved, so the popup re-opens with the last search
+    /// intact: a typed master password must not outlive the window.
     pub(crate) fn reset_applet_popup_state(&mut self) {
         self.applet_unlock_password.zeroize();
         self.applet_unlock_password_revealed = false;
@@ -30,7 +30,6 @@ impl CosmardenApp {
         self.applet_reprompt_password.zeroize();
         self.applet_reprompt_password_revealed = false;
         self.applet_error = None;
-        self.applet_hovered_row_id = None;
     }
 
     /// Focus the field a freshly opened popup should start on.

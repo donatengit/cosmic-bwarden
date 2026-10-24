@@ -277,14 +277,6 @@ impl CosmardenApp {
                 // session once it exited.
                 Some(crate::app::update::activation::open_link(uri))
             }
-            Message::AppletSearchRowHoverChanged(id, hovered) => {
-                if hovered {
-                    self.applet_hovered_row_id = Some(id);
-                } else if self.applet_hovered_row_id.as_deref() == Some(id.as_str()) {
-                    self.applet_hovered_row_id = None;
-                }
-                Some(Task::none())
-            }
             Message::AppletSecretReceived(res) => match res {
                 Ok(secret) => {
                     self.applet_reprompt_id = None;
