@@ -16,14 +16,16 @@ use zeroize::Zeroize;
 mod helpers;
 mod popup;
 
-// The message arms below call this one directly. The remaining helpers are
+// The message arms below call this one directly. `unlock_focus_id` is also
+// called by `focus_unlock_inputs` in `update/auth.rs`. The remaining helpers are
 // reached only by `app/tests/applet.rs`, through the path they had before the
 // split (`crate::app::update::applet::{…}`), so they are re-exported under
 // `cfg(test)`: a plain `pub(crate) use` of items no non-test code calls trips
 // `unused_imports`, which the workspace denies.
 pub(crate) use helpers::should_suppress_popup_reopen;
+pub(crate) use helpers::unlock_focus_id;
 #[cfg(test)]
-pub(crate) use helpers::{clamped_anchor_rect, unlock_focus_id, APPLET_POPUP_REOPEN_DEBOUNCE_MS};
+pub(crate) use helpers::{clamped_anchor_rect, APPLET_POPUP_REOPEN_DEBOUNCE_MS};
 
 impl CosmardenApp {
     pub fn update_applet(&mut self, message: Message) -> Option<Task<Message>> {
@@ -440,7 +442,10 @@ impl CosmardenApp {
                 self.unlock_mode = UnlockMode::Password;
                 self.password_preferred = true;
                 self.pin_incorrect = false;
-                Some(Task::none())
+                // The password field replaces the PIN field; move focus with it
+                // on whichever surface sent this (the applet popup button and
+                // the main window's PIN form share this message).
+                Some(self.focus_unlock_inputs())
             }
 
             // TPM settings

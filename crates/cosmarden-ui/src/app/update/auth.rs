@@ -7,6 +7,7 @@ use crate::MIN_PIN_LEN;
 use cosmarden_core::agent_client::AgentClient;
 use cosmarden_core::protocol::Response;
 use cosmic::app::Task;
+use cosmic::widget::text_input;
 use cosmic::Action;
 use tracing::error;
 use zeroize::Zeroize;
@@ -292,7 +293,10 @@ impl CosmardenApp {
             )),
             Message::LockResult => {
                 self.wipe_for_lock();
-                Some(Task::none())
+                // The window stays on screen and switches straight to the
+                // unlock form; put the cursor in the field so the user can
+                // type without clicking it first.
+                Some(self.focus_unlock_input())
             }
             Message::LogoutClicked => Some(Task::perform(
                 async {
@@ -308,6 +312,48 @@ impl CosmardenApp {
             }
             _ => None,
         }
+    }
+
+    /// Which main-window unlock field takes focus, matching what `view_auth`
+    /// renders: the PIN field only while PIN mode is active and a PIN is
+    /// configured, the master-password field otherwise.
+    pub(crate) fn main_unlock_focus_id(
+        mode: UnlockMode,
+        tpm_configured: bool,
+    ) -> cosmic::widget::Id {
+        if mode == UnlockMode::Pin && tpm_configured {
+            crate::view::auth::unlock_pin_input_id()
+        } else {
+            crate::view::auth::unlock_password_input_id()
+        }
+    }
+
+    /// Focus the main window's unlock field after a lock, a fresh config, or a
+    /// switch from PIN to master password. No-op unless the unlock form is on
+    /// screen: `view_auth` shows a spinner until `tpm_status_known`, and a
+    /// focus operation for an id that is not in the tree does nothing.
+    pub(crate) fn focus_unlock_input(&self) -> Task<Message> {
+        if !matches!(self.view, View::Unlock) || !self.tpm_status_known {
+            return Task::none();
+        }
+        text_input::focus(Self::main_unlock_focus_id(
+            self.unlock_mode,
+            self.tpm_configured,
+        ))
+    }
+
+    /// Focus the unlock field on every surface that is currently showing:
+    /// the main window and/or the applet popup. A focus operation is an id
+    /// lookup in each window's tree, so batching the two ids focuses each
+    /// surface that has the field and leaves the other untouched.
+    pub(crate) fn focus_unlock_inputs(&self) -> Task<Message> {
+        let mut tasks = vec![self.focus_unlock_input()];
+        if self.applet_popup.is_some() && self.tpm_status_known {
+            tasks.push(text_input::focus(
+                crate::app::update::applet::unlock_focus_id(self.unlock_mode),
+            ));
+        }
+        Task::batch(tasks)
     }
 
     /// Build the task that applies the master-password-unlock PIN field: a

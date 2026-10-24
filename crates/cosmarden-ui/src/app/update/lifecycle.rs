@@ -138,6 +138,13 @@ impl CosmardenApp {
                             if let Some(server) = &self.config.base_url {
                                 self.login_server = server.clone();
                             }
+                            // The form renders immediately when the TPM status
+                            // is already known; otherwise `TpmStatusReceived`
+                            // focuses once the spinner gives way to the form.
+                            return Some(Task::batch([
+                                check_tpm_task(),
+                                self.focus_unlock_input(),
+                            ]));
                         } else {
                             self.view = View::Vault;
                             // Fetch all entries on initial vault open to populate the
@@ -170,9 +177,15 @@ impl CosmardenApp {
                         // PIN-first, and an explicit "use master password
                         // instead" choice stays respected.
                         self.wipe_for_lock();
-                        // Re-query config: if this was a logout rather than a
-                        // plain lock, ConfigReceived will set view=Setup.
-                        return Some(fetch_config_task());
+                        // The lock may have been initiated elsewhere (the
+                        // applet, a timeout); focus the field the form now
+                        // shows so typing works without a click. Re-query
+                        // config: if this was a logout rather than a plain
+                        // lock, ConfigReceived will set view=Setup.
+                        return Some(Task::batch([
+                            fetch_config_task(),
+                            self.focus_unlock_input(),
+                        ]));
                     }
                     cosmarden_core::protocol::Event::PinRequested => {
                         // Primes the PIN form and queues a desktop Notify
@@ -251,10 +264,11 @@ impl CosmardenApp {
                         {
                             self.unlock_mode = UnlockMode::Pin;
                         }
+                        let mut tasks = Vec::new();
                         if !available {
                             self.tpm_da = None;
                             // Fetch diagnostics so the settings view can explain why.
-                            return Some(Task::perform(
+                            tasks.push(Task::perform(
                                 async {
                                     let agent = AgentClient::new();
                                     match agent.send(AgentAction::CheckTpmDiagnostics).await {
@@ -264,9 +278,15 @@ impl CosmardenApp {
                                 },
                                 |checks| Action::App(Message::TpmDiagnosticsReceived(checks)),
                             ));
+                        } else {
+                            // TPM available — refresh the lockout status too.
+                            tasks.push(check_tpm_da_task());
                         }
-                        // TPM available — refresh the lockout status too.
-                        return Some(check_tpm_da_task());
+                        // The unlock form renders as soon as the status is
+                        // known, so this is where a lock-time focus request
+                        // that raced the TPM query finally lands.
+                        tasks.push(self.focus_unlock_input());
+                        return Some(Task::batch(tasks));
                     }
                     Err(e) => {
                         tracing::warn!("TPM status check failed: {}", e);
@@ -278,7 +298,7 @@ impl CosmardenApp {
                         self.tpm_configured = false;
                     }
                 }
-                Some(Task::none())
+                Some(self.focus_unlock_input())
             }
             Message::TpmDaStatusReceived(status) => {
                 self.tpm_da = status;

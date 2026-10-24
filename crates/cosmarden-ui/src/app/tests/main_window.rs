@@ -249,3 +249,37 @@ fn test_view_vault_renders_split_after_window_width() {
     let min_ratio = crate::app::state::sidebar_min_ratio(1200.0);
     assert!((app.sidebar_ratio - min_ratio).abs() < f32::EPSILON);
 }
+
+/// The unlock autofocus must name the field `view_auth` actually renders:
+/// the PIN field only when PIN mode is active *and* a PIN is configured,
+/// because without a configured PIN the view falls through to the password
+/// form.
+#[test]
+fn main_unlock_focus_follows_the_rendered_form() {
+    use crate::message::UnlockMode;
+    use crate::view::auth::{unlock_password_input_id, unlock_pin_input_id};
+
+    assert_eq!(
+        CosmardenApp::main_unlock_focus_id(UnlockMode::Pin, true),
+        unlock_pin_input_id()
+    );
+    assert_eq!(
+        CosmardenApp::main_unlock_focus_id(UnlockMode::Pin, false),
+        unlock_password_input_id(),
+        "PIN mode without a configured PIN renders the password form"
+    );
+    assert_eq!(
+        CosmardenApp::main_unlock_focus_id(UnlockMode::Password, true),
+        unlock_password_input_id()
+    );
+    // A focus action runs against every window, so the main window and the
+    // applet popup must never share an id: focusing one would focus both.
+    assert_ne!(
+        unlock_password_input_id(),
+        crate::view::applet::unlock::password_input_id()
+    );
+    assert_ne!(
+        unlock_pin_input_id(),
+        crate::view::applet::unlock::pin_input_id()
+    );
+}

@@ -7,6 +7,18 @@ use cosmic::iced::Length;
 use cosmic::widget::{button, list_column, secure_input, settings as cosmic_settings, text};
 use cosmic::Element;
 
+/// Ids for the main window's unlock fields. Stable so `text_input::focus` can
+/// target them from the update loop, and distinct from the applet popup's ids:
+/// iced applies a focus operation to every window, so both surfaces must not
+/// share one.
+pub fn unlock_password_input_id() -> cosmic::widget::Id {
+    cosmic::widget::Id::new("main-unlock-password")
+}
+
+pub fn unlock_pin_input_id() -> cosmic::widget::Id {
+    cosmic::widget::Id::new("main-unlock-pin")
+}
+
 impl CosmardenApp {
     pub fn view_auth(&self) -> Element<'_, Message> {
         if self.view == View::Setup {
@@ -137,6 +149,7 @@ impl CosmardenApp {
             }
 
             let pin_input = secure_input(fl!("locked-need-pin"), &self.main_window_pin, None, true)
+                .id(unlock_pin_input_id())
                 .on_input(Message::MainWindowPinChanged)
                 .on_submit(|_| Message::MainWindowPinSubmitted)
                 .width(Length::Fill);
@@ -197,6 +210,7 @@ impl CosmardenApp {
                 Some(Message::ToggleMasterPasswordReveal),
                 !self.master_password_revealed,
             )
+            .id(unlock_password_input_id())
             .on_input(Message::UnlockPasswordChanged)
             .on_submit(|_| Message::UnlockSubmitted)
             .width(Length::Fill);

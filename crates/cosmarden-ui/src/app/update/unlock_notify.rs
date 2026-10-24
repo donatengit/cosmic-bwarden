@@ -145,10 +145,14 @@ pub fn on_unlock_event(app: &mut CosmardenApp, pin: bool) -> Task<Message> {
     app.selected_entry_id = None;
 
     let notify = send_task(payload);
+    // The event set `view = Unlock` above, so focusing now puts the cursor in
+    // whichever field the form shows. When the TPM status is not known yet the
+    // focus is a no-op and `TpmStatusReceived` retries it.
+    let focus = app.focus_unlock_input();
     if pin {
-        Task::batch([notify, check_tpm_da_task()])
+        Task::batch([notify, check_tpm_da_task(), focus])
     } else {
-        notify
+        Task::batch([notify, focus])
     }
 }
 
