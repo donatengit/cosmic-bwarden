@@ -33,6 +33,30 @@ ignore = [
     # ships a fixed release this entry must go.
     "RUSTSEC-2023-0071",
 
+    # --- Linked, but no affected operation is invoked ----------------------
+
+    # RUSTSEC-2026-0387 — crypto-bigint 0.5.5 constant-time failures: timing
+    # leakage from subtraction, zero counting, division, Montgomery
+    # multiplication, `UintRef` equality and `invert`. The fix is in 0.7.6,
+    # reachable only through elliptic-curve 0.14 (p256 0.14), which ssh-key
+    # 0.6.7 does not use. ssh-key 0.7 is still a release candidate, and
+    # ssh-agent-lib 0.6.0 (the latest) still pins ssh-key 0.6 with the `crypto`
+    # feature that pulls p256/p384/p521 into the graph.
+    #
+    # Reachability: crypto-bigint arrives only as
+    #   ssh-key -> p256/p384/p521 -> elliptic-curve -> crypto-bigint
+    # Our agent signs only Ed25519 (ed25519-dalek) and RSA (the rsa crate,
+    # which uses num-bigint-dig, not crypto-bigint); every other key type
+    # returns "unsupported key type" before signature arithmetic
+    # (`ssh_agent/sign.rs`), and the identity list is built from the stored
+    # public-key text, never from private-key arithmetic
+    # (`ssh_agent/identities.rs`). No affected operation runs on a secret
+    # integer here. Verified with
+    #   cargo tree -i crypto-bigint -e normal
+    # Drop this entry when ssh-key 0.7 leaves release candidate and
+    # ssh-agent-lib moves to it.
+    "RUSTSEC-2026-0387",
+
     # --- Build-time only (proc-macro codegen, no runtime path) ------------
 
     # RUSTSEC-2026-0194 / RUSTSEC-2026-0195 — quick-xml quadratic parsing and
