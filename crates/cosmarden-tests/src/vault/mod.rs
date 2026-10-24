@@ -3,6 +3,7 @@ pub mod card_identity;
 pub mod crud;
 pub mod domain_matching;
 pub mod entry_types;
+pub mod field_copy;
 pub mod lifecycle_errors;
 pub mod login_fields;
 pub mod meta_redaction;

@@ -370,10 +370,12 @@ test-cli: build-test-binaries (ensure-container-socket)
 # [subset] UI E2E tests — the protocol-level simulations of the desktop flows,
 # plus the agent's half of the pane's selection contract (`GetEntryMeta`
 # redaction + filled_secrets, `vault::meta_redaction`), which is what tells a
-# client whether to draw a field or fetch it.
+# client whether to draw a field or fetch it, and `vault::field_copy`, which
+# drives every detail-pane copy button through the shared
+# `cosmarden_core::field_access` mapping.
 test-ui: build-test-binaries (ensure-container-socket)
     echo "--- [subset] UI E2E Tests ---"
-    {{_limited}} cargo test --quiet -p cosmarden-tests --lib -- window_flow custom_fields_ui meta_redaction --test-threads=1
+    {{_limited}} cargo test --quiet -p cosmarden-tests --lib -- window_flow custom_fields_ui meta_redaction field_copy --test-threads=1
 
 # A correct run leaves none of these: tests redirect XDG into a tempdir and the
 # extension scripts clean their fixed profiles in a trap. This is for residue

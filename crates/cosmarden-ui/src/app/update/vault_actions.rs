@@ -11,6 +11,10 @@
 
 use cosmarden_core::protocol::{Action as AgentAction, EntryType};
 
+pub use cosmarden_core::field_access::{
+    field_plaintext, on_demand_secret, parse_on_demand_response, secret_is_loaded,
+};
+
 /// Fetch an entry for the detail pane. A plain selection uses `GetEntryMeta`
 /// (no secrets). Answering a master-password reprompt sends `GetEntry`.
 pub fn fetch_entry(id: String, reprompt_password: Option<String>) -> AgentAction {
@@ -93,16 +97,6 @@ pub fn fetch_totp(id: String, reprompt_password: Option<String>) -> AgentAction 
     }
 }
 
-/// On-demand secret for a detail-pane field after a `GetEntryMeta` selection.
-/// Login password → `GetPassword`; TOTP → `GetTotp`; everything else → `GetEntry`.
-pub fn on_demand_secret(field: &str, id: String, reprompt_password: Option<String>) -> AgentAction {
-    match field {
-        "Password" => fetch_password(id, reprompt_password),
-        "TOTP" => fetch_totp(id, reprompt_password),
-        _ => fetch_full_entry(id, reprompt_password),
-    }
-}
-
 /// The extra fetch a plain selection needs beyond `GetEntryMeta`.
 ///
 /// A `SecureNote`'s content *is* its notes, and the meta read redacts notes
@@ -123,117 +117,6 @@ pub fn notes_fetch_after_selection(entry: &cosmarden_core::db::Entry) -> Option<
     }
 }
 
-/// Whether `selected_entry` already holds plaintext for `field` (no extra IPC).
-/// TOTP always fetches: the pane shows a live code, not the stored seed.
-pub fn secret_is_loaded(entry: &cosmarden_core::db::Entry, field: &str) -> bool {
-    use cosmarden_core::db::EntryData;
-    // Notes are a secret-class slot: a body in the entry means a `GetEntry`
-    // brought it back, since every meta/bulk read redacts it.
-    if field == "Notes" {
-        return entry.notes.is_some();
-    }
-    match (&entry.data, field) {
-        (
-            EntryData::Login {
-                password: Some(_), ..
-            },
-            "Password",
-        ) => true,
-        (EntryData::Login { .. }, "TOTP") => false,
-        (
-            EntryData::SshKey {
-                private_key: Some(_),
-                ..
-            },
-            "Private Key",
-        ) => true,
-        (
-            EntryData::Card {
-                number: Some(_), ..
-            },
-            "Card Number",
-        ) => true,
-        (EntryData::Card { code: Some(_), .. }, "Security Code") => true,
-        (
-            EntryData::BankAccount {
-                account_number: Some(_),
-                ..
-            },
-            "Account Number",
-        ) => true,
-        (
-            EntryData::BankAccount {
-                routing_number: Some(_),
-                ..
-            },
-            "Routing Number",
-        ) => true,
-        (EntryData::BankAccount { pin: Some(_), .. }, "PIN") => true,
-        (EntryData::BankAccount { iban: Some(_), .. }, "IBAN") => true,
-        (
-            EntryData::BankAccount {
-                swift_code: Some(_),
-                ..
-            },
-            "SWIFT Code",
-        ) => true,
-        (
-            EntryData::BankAccount {
-                branch_number: Some(_),
-                ..
-            },
-            "Branch Number",
-        ) => true,
-        (EntryData::Identity { ssn: Some(_), .. }, "SSN") => true,
-        (
-            EntryData::Identity {
-                license_number: Some(_),
-                ..
-            },
-            "License Number",
-        ) => true,
-        (
-            EntryData::Identity {
-                passport_number: Some(_),
-                ..
-            },
-            "Passport Number",
-        ) => true,
-        (
-            EntryData::DriversLicense {
-                license_number: Some(_),
-                ..
-            },
-            "License Number",
-        ) => true,
-        (
-            EntryData::Passport {
-                passport_number: Some(_),
-                ..
-            },
-            "Passport Number",
-        ) => true,
-        (
-            EntryData::Passport {
-                national_identification_number: Some(_),
-                ..
-            },
-            "National Identification Number",
-        ) => true,
-        (
-            EntryData::Passport {
-                date_of_birth: Some(_),
-                ..
-            },
-            "Date of Birth",
-        ) => true,
-        _ => entry
-            .fields
-            .iter()
-            .any(|f| f.name.as_deref() == Some(field) && f.value.is_some()),
-    }
-}
-
 /// Resume a master-password reprompt with the intent that triggered it.
 pub fn submit_reprompt_action(
     intent: Option<&crate::message::RepromptIntent>,
@@ -246,132 +129,6 @@ pub fn submit_reprompt_action(
             on_demand_secret(field, id, Some(password))
         }
         Some(crate::message::RepromptIntent::Edit) | None => fetch_full_entry(id, Some(password)),
-    }
-}
-
-/// Decode the agent response for an on-demand secret fetch.
-pub fn parse_on_demand_response(
-    field: &str,
-    response: cosmarden_core::protocol::Response,
-) -> Result<crate::message::OnDemandPayload, String> {
-    use crate::message::OnDemandPayload;
-    use cosmarden_core::protocol::Response;
-    match (field, response) {
-        ("Password", Response::Password { password }) => Ok(OnDemandPayload::Password(password)),
-        ("TOTP", Response::Totp { code }) => Ok(OnDemandPayload::Totp(code)),
-        (_, Response::Entry { entry }) if field != "Password" && field != "TOTP" => {
-            Ok(OnDemandPayload::Entry(Box::new(entry)))
-        }
-        (_, Response::Error { message }) => Err(message),
-        (_, other) => Err(format!("unexpected response: {other:?}")),
-    }
-}
-
-pub fn field_plaintext(entry: &cosmarden_core::db::Entry, field: &str) -> Option<String> {
-    use cosmarden_core::db::EntryData;
-    // Notes any entry type can carry, and one of the slots the meta read
-    // redacts: the plaintext is only here once an explicit reveal loaded it.
-    if field == "Notes" {
-        return entry.notes.as_ref().map(|n| n.expose().to_string());
-    }
-    match (&entry.data, field) {
-        (
-            EntryData::Login {
-                password: Some(p), ..
-            },
-            "Password",
-        ) => Some(p.expose().to_string()),
-        (
-            EntryData::SshKey {
-                private_key: Some(p),
-                ..
-            },
-            "Private Key",
-        ) => Some(p.expose().to_string()),
-        (
-            EntryData::Card {
-                number: Some(n), ..
-            },
-            "Card Number",
-        ) => Some(n.expose().to_string()),
-        (
-            EntryData::BankAccount {
-                account_number: Some(v),
-                ..
-            },
-            "Account Number",
-        ) => Some(v.expose().to_string()),
-        (
-            EntryData::BankAccount {
-                routing_number: Some(v),
-                ..
-            },
-            "Routing Number",
-        ) => Some(v.expose().to_string()),
-        (EntryData::BankAccount { pin: Some(v), .. }, "PIN") => Some(v.expose().to_string()),
-        (EntryData::BankAccount { iban: Some(v), .. }, "IBAN") => Some(v.clone()),
-        (
-            EntryData::BankAccount {
-                swift_code: Some(v),
-                ..
-            },
-            "SWIFT Code",
-        ) => Some(v.clone()),
-        (
-            EntryData::BankAccount {
-                branch_number: Some(v),
-                ..
-            },
-            "Branch Number",
-        ) => Some(v.clone()),
-        (EntryData::Identity { ssn: Some(v), .. }, "SSN") => Some(v.clone()),
-        (
-            EntryData::Identity {
-                license_number: Some(v),
-                ..
-            },
-            "License Number",
-        ) => Some(v.clone()),
-        (
-            EntryData::Identity {
-                passport_number: Some(v),
-                ..
-            },
-            "Passport Number",
-        ) => Some(v.clone()),
-        (
-            EntryData::DriversLicense {
-                license_number: Some(v),
-                ..
-            },
-            "License Number",
-        ) => Some(v.expose().to_string()),
-        (
-            EntryData::Passport {
-                passport_number: Some(v),
-                ..
-            },
-            "Passport Number",
-        ) => Some(v.expose().to_string()),
-        (
-            EntryData::Passport {
-                national_identification_number: Some(v),
-                ..
-            },
-            "National Identification Number",
-        ) => Some(v.clone()),
-        (
-            EntryData::Passport {
-                date_of_birth: Some(v),
-                ..
-            },
-            "Date of Birth",
-        ) => Some(v.clone()),
-        _ => entry.fields.iter().find_map(|f| {
-            (f.name.as_deref() == Some(field))
-                .then(|| f.value.as_ref().map(|s| s.expose().to_string()))
-                .flatten()
-        }),
     }
 }
 

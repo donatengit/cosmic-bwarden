@@ -455,7 +455,7 @@ test.describe('Chrome Extension Full E2E', () => {
 
   // ── 10. SshKey (created via CLI) ──────────────────────────────────────────
 
-  test('shows SshKey entry with public key and copy button', async () => {
+  test('shows SshKey entry with public and private keys and copy buttons', async () => {
     cli('add-ssh-key "SSH Ключ 🔑" --private-key "ed25519-dummy-private-key" --public-key "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKeyForE2E user@тест"');
     pinEntry('SSH Ключ 🔑');
 
@@ -479,6 +479,15 @@ test.describe('Chrome Extension Full E2E', () => {
     expect(await page.evaluate(() => window.__clipboardText)).toBe(
       'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKeyForE2E user@тест'
     );
+
+    // Copy private key: the masked row fetches GetEntry and decrypts it on
+    // demand, so this covers the other half of the SSH pair.
+    const privateKeyRow = page.locator('.detail-item', { hasText: 'Private Key' });
+    const privateCopy = privateKeyRow.locator('button.copy-btn');
+    await expect(privateCopy).toBeVisible({ timeout: 5000 });
+    await privateCopy.click();
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => window.__clipboardText)).toBe('ed25519-dummy-private-key');
 
     await page.close();
   });

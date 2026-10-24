@@ -53,15 +53,9 @@ pub enum RepromptIntent {
 }
 
 /// Plaintext (or full entry) from an on-demand secret fetch. Debug-redacted.
-/// `Entry` is boxed: the variant is ~600 bytes larger than the string
-/// variants, which trips `clippy::large-enum-variant` (workspace denies
-/// warnings) — boxing is free here because the payload is transient.
-#[derive(Clone)]
-pub enum OnDemandPayload {
-    Password(Secret),
-    Totp(Secret),
-    Entry(Box<Entry>),
-}
+/// Lives in core so the E2E suite decodes agent answers with the same type the
+/// view does.
+pub use cosmarden_core::field_access::OnDemandPayload;
 
 /// Agent config/state snapshot carried by `Message::ConfigReceived` — exactly
 /// `Response::Config`'s payload: (config, needs_login, has_account, is_locked,

@@ -7,6 +7,7 @@ pub mod db;
 pub mod dirs;
 pub mod domain;
 pub mod error;
+pub mod field_access;
 pub mod generator_settings;
 pub mod identity;
 pub mod json;

@@ -77,10 +77,7 @@ impl CosmardenApp {
         entry_id: &str,
         is_hidden: bool,
     ) -> Element<'a, Message> {
-        let is_password = is_hidden
-            || label.to_lowercase().contains("password")
-            || label.to_lowercase().contains("key")
-            || label == "TOTP";
+        let is_secret = cosmarden_core::field_access::field_is_secret(label, is_hidden);
         let is_revealed = self
             .revealed_fields
             .contains(&(entry_id.to_string(), label.to_string()));
@@ -90,7 +87,7 @@ impl CosmardenApp {
             .align_y(Alignment::Center);
         row = row.push(text::body(field_label(label)).width(Length::Fixed(100.0)));
 
-        if is_password {
+        if is_secret {
             let pw_input = secure_input(
                 "",
                 value,
@@ -107,7 +104,7 @@ impl CosmardenApp {
         }
 
         row = row.push(
-            button::icon(icon::from_name("edit-copy-symbolic")).on_press(if is_password {
+            button::icon(icon::from_name("edit-copy-symbolic")).on_press(if is_secret {
                 Message::CopySecretField(entry_id.to_string(), label.to_string())
             } else {
                 Message::CopyToClipboard(value.to_string())
