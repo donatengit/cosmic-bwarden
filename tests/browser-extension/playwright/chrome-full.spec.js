@@ -40,15 +40,20 @@ function cliLogin() {
 // itself, so nothing matches. Pin each entry the tests expect to see.
 function pinEntry(name) {
   // The popup save is optimistic; the entry may not be in the agent's DB the
-  // instant after #save-btn, so poll briefly before pinning.
+  // instant after #save-btn, so poll before pinning. If it never appears the
+  // popup will not show it (this suite's tabs match no saved domain, so only
+  // pinned entries are listed), and the later visibility assertion would time
+  // out with no context — fail here with the list output instead.
   let line = null;
-  for (let i = 0; i < 10 && !line; i++) {
+  for (let i = 0; i < 40 && !line; i++) {
     const out = cli('list');
     line = out.split('\n').find((l) => l.includes(name));
-    if (!line) execSync('sleep 0.3');
+    if (!line) execSync('sleep 0.5');
   }
-  const m = line && line.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-  if (m) cli(`pin ${m[0]}`);
+  if (!line) throw new Error(`pinEntry: "${name}" never appeared in \`cosmarden list\``);
+  const m = line.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  if (!m) throw new Error(`pinEntry: no entry id in list line for "${name}": ${line}`);
+  cli(`pin ${m[0]}`);
 }
 
 function agentSocketPath() {
@@ -357,10 +362,10 @@ test.describe('Chrome Extension Full E2E', () => {
     pinEntry('Виза Тест 💳');
     // The list rendered before the pin landed; reload so the pinned entry shows.
     await page.reload();
-    await expect(page.locator('.entry-name', { hasText: 'Виза Тест 💳' })).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.entry-name', { hasText: 'Виза Тест 💳' }).first()).toBeVisible({ timeout: 10000 });
 
     // Open detail view.
-    await page.locator('.entry-name', { hasText: 'Виза Тест 💳' }).click();
+    await page.locator('.entry-name', { hasText: 'Виза Тест 💳' }).first().click();
     await expect(page.locator('#view-detail')).not.toHaveClass(/hidden/, { timeout: 5000 });
 
     // Cardholder name renders without double-encoding (& not shown as &amp;).
@@ -411,8 +416,8 @@ test.describe('Chrome Extension Full E2E', () => {
     pinEntry('Identity Тест 🌍');
     // The list rendered before the pin landed; reload so the pinned entry shows.
     await page.reload();
-    await expect(page.locator('.entry-name', { hasText: 'Identity Тест 🌍' })).toBeVisible({ timeout: 10000 });
-    await page.locator('.entry-name', { hasText: 'Identity Тест 🌍' }).click();
+    await expect(page.locator('.entry-name', { hasText: 'Identity Тест 🌍' }).first()).toBeVisible({ timeout: 10000 });
+    await page.locator('.entry-name', { hasText: 'Identity Тест 🌍' }).first().click();
     await expect(page.locator('#view-detail')).not.toHaveClass(/hidden/, { timeout: 5000 });
 
     const detail = page.locator('#detail-content');
@@ -516,13 +521,16 @@ test.describe('Chrome Extension Full E2E', () => {
   // ── 12. Delete entry via popup ────────────────────────────────────────────
 
   test('deletes entry via popup detail view', async () => {
-    cli('add "E2E Delete Target" username=delete-me password=delete-pass');
-    pinEntry('E2E Delete Target');
+    // A retry must not inherit the entry an earlier attempt created: a second
+    // copy would still be visible after this attempt deletes its own.
+    const name = `E2E Delete Target ${Date.now()}`;
+    cli(`add "${name}" username=delete-me password=delete-pass`);
+    pinEntry(name);
 
     const page = await openPopupWithClipboard();
-    await expect(page.locator('.entry-name', { hasText: 'E2E Delete Target' }).first()).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('.entry-name', { hasText: name }).first()).toBeVisible({ timeout: 15000 });
 
-    await page.locator('.entry', { hasText: 'E2E Delete Target' }).locator('button[aria-label="View details"]').first().click();
+    await page.locator('.entry', { hasText: name }).locator('button[aria-label="View details"]').first().click();
     await expect(page.locator('#view-detail')).not.toHaveClass(/hidden/, { timeout: 5000 });
 
     // Two-step delete: the first click arms, the second confirms.
@@ -531,7 +539,7 @@ test.describe('Chrome Extension Full E2E', () => {
 
     // Returns to list view with entry removed.
     await expect(page.locator('#view-list')).not.toHaveClass(/hidden/, { timeout: 5000 });
-    await expect(page.locator('.entry-name', { hasText: 'E2E Delete Target' })).not.toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.entry-name', { hasText: name })).not.toBeVisible({ timeout: 5000 });
 
     await page.close();
   });
