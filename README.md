@@ -186,6 +186,7 @@ file can stay instructions-only.
 - [`docs/cosmic_applets_review_1.8.md`](docs/cosmic_applets_review_1.8.md) — upstream applets at COSMIC 1.8: reference revisions, what changed, which patches matter, what to adopt
 - [`docs/cosmic_applets_review_1.9.md`](docs/cosmic_applets_review_1.9.md) — upstream applets at COSMIC 1.9: reference revisions, the 1.9-era libcosmic/iced patches that reach us, and the adoption verdicts
 - [`docs/cosmic_applets_review_1.10.md`](docs/cosmic_applets_review_1.10.md) — upstream applets at COSMIC 1.10: reference revisions, the 1.10-era libcosmic/iced patches that reach us, and the adoption verdicts
+- [`docs/cosmic_applets_review_1.11.md`](docs/cosmic_applets_review_1.11.md) — upstream applets at COSMIC 1.11: reference revisions, the hover-widget adoption, and the 1.11-era libcosmic/iced patches that reach us
 
 **KDE / Plasma**
 - [`docs/kde_applet_parity.md`](docs/kde_applet_parity.md) — the Plasma tray (`cosmarden-plasma-tray`, no libcosmic), why a plasma plasmoid was rejected, and what the retired libcosmic tray left behind
