@@ -8,6 +8,7 @@
 use crate::app::CosmardenApp;
 use crate::fl;
 use crate::message::Message;
+use cosmic::iced::widget::text::Wrapping;
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{button, container, icon, secure_input, text};
 use cosmic::Element;
@@ -70,6 +71,13 @@ impl CosmardenApp {
     /// that names a password/key) renders masked with a reveal toggle; its copy
     /// button fetches the value on demand (`CopySecretField`) instead of
     /// copying whatever the redacted entry happens to hold.
+    ///
+    /// Non-secret values wrap at the glyph level (`WordOrGlyph`) because a
+    /// machine value is one long unbroken token: an SSH public key has no
+    /// spaces after the algorithm name, so word wrapping alone left it to
+    /// overflow the pane and push the copy button out of reach. Newlines are
+    /// preserved by the paragraph layout, so a multi-line value stays
+    /// multi-line.
     pub(super) fn view_field<'a>(
         &'a self,
         label: &'a str,
@@ -100,7 +108,11 @@ impl CosmardenApp {
             .width(Length::Fill);
             row = row.push(pw_input);
         } else {
-            row = row.push(text::body(value).width(Length::Fill));
+            row = row.push(
+                text::body(value)
+                    .width(Length::Fill)
+                    .wrapping(Wrapping::WordOrGlyph),
+            );
         }
 
         row = row.push(
