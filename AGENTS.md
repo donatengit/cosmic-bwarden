@@ -406,6 +406,14 @@ protocol translation, and the script-load-order gotcha:
   may), and the 90 s TTL is **restarted once** at deferral, since the original
   window runs from the form submit and unlocking easily outlives what's left of
   it.
+- **Generated-password history is popup-only and never persisted.** The popup
+  menu's `Show previous` renders the agent's 7-day history, so its rows hold
+  decrypted passwords in the document. Keep all three properties:
+  `GetPasswordHistory`/`DeleteGeneratedPassword` stay out of
+  `background.js`'s `isContentScriptProxyAllowed` (a page script must not be
+  able to enumerate generated passwords), `popup-state.js::persistedView` maps
+  the history view to `list` before anything reaches `storage.session`, and
+  leaving the view clears its rows. Rows are masked until an explicit reveal.
 - **Validate with `just test-extension-unit` and `just test-extension-e2e`**
   before reporting done; `just pack-extension` for anything that changes the
   shipped file set.

@@ -587,4 +587,35 @@ test.describe('Chrome Extension Full E2E', () => {
 
     await page.close();
   });
+
+  // ── 14. Generator menu (Generate / Show previous) ─────────────────────────
+
+  test('generates into the clipboard and lists the result under Show previous', async () => {
+    const page = await openPopupWithClipboard();
+    await expect(page.locator('#gen-btn')).toBeVisible({ timeout: 10000 });
+
+    await page.locator('#gen-btn').click();
+    await page.getByRole('menuitem', { name: 'Generate password' }).click();
+    await expect(page.locator('#status')).toHaveText('Password generated and copied to clipboard.', { timeout: 10000 });
+    const generated = await page.evaluate(() => window.__clipboardText);
+    expect(generated.length).toBeGreaterThanOrEqual(8);
+    // The popup stays on the list; generating is not a navigation.
+    await expect(page.locator('#view-list')).toBeVisible();
+
+    await page.locator('#gen-btn').click();
+    await page.getByRole('menuitem', { name: 'Show previous' }).click();
+    await expect(page.locator('#view-history')).toBeVisible({ timeout: 10000 });
+
+    const firstRow = page.locator('#history-content .history-entry').first();
+    const firstValue = firstRow.locator('.history-password');
+    await expect(firstValue).toHaveText('••••••••');
+    await firstRow.locator('.history-reveal-btn').click();
+    await expect(firstValue).toHaveText(generated);
+
+    // The row's copy button hands the same value back to the clipboard.
+    await firstRow.locator('.history-copy-btn').click();
+    expect(await page.evaluate(() => window.__clipboardText)).toBe(generated);
+
+    await page.close();
+  });
 });

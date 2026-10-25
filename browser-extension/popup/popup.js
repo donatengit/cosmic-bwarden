@@ -2,17 +2,18 @@ if (typeof globalThis.browser === 'undefined') { globalThis.browser = globalThis
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const searchInput = document.getElementById('search');
-const resultsDiv  = document.getElementById('results');
 const syncBtn     = document.getElementById('sync-btn');
 const favBtn      = document.getElementById('fav-btn');
 const addBtn      = document.getElementById('add-btn');
 const backBtn     = document.getElementById('back-btn');
 const lockBtn     = document.getElementById('lock-btn');
+const genBtn      = document.getElementById('gen-btn');
 const statusDiv   = document.getElementById('status');
 const viewList    = document.getElementById('view-list');
 const viewDetail  = document.getElementById('view-detail');
 const viewEdit    = document.getElementById('view-edit');
 const viewLocked  = document.getElementById('view-locked');
+const viewHistory = document.getElementById('view-history');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentEntry = null;
@@ -67,12 +68,15 @@ async function getConfig() {
 // ── View management ───────────────────────────────────────────────────────────
 function showView(view) {
     currentView = view;
-    [viewList, viewDetail, viewEdit, viewLocked].forEach(v => v.classList.add('hidden'));
-    [backBtn, searchInput, favBtn, addBtn, syncBtn, lockBtn].forEach(b => b.classList.add('hidden'));
+    [viewList, viewDetail, viewEdit, viewLocked, viewHistory].forEach(v => v.classList.add('hidden'));
+    [backBtn, searchInput, favBtn, addBtn, syncBtn, lockBtn, genBtn].forEach(b => b.classList.add('hidden'));
+    // Leaving the history view drops its rows, so decrypted passwords never
+    // outlive the view (popup-generator.js).
+    if (view !== 'history') clearHistoryView();
 
     if (view === 'list') {
         viewList.classList.remove('hidden');
-        [searchInput, favBtn, addBtn, syncBtn, lockBtn].forEach(b => b.classList.remove('hidden'));
+        [searchInput, favBtn, addBtn, genBtn, syncBtn, lockBtn].forEach(b => b.classList.remove('hidden'));
         updateResults();
     } else if (view === 'detail') {
         viewDetail.classList.remove('hidden');
@@ -80,8 +84,14 @@ function showView(view) {
     } else if (view === 'edit') {
         viewEdit.classList.remove('hidden');
         backBtn.classList.remove('hidden');
+    } else if (view === 'history') {
+        viewHistory.classList.remove('hidden');
+        [backBtn, genBtn].forEach(b => b.classList.remove('hidden'));
     } else if (view === 'locked') {
+        // Generation and its history need no unlock (the agent generates
+        // locally), so the menu stays reachable from the lock screen.
         viewLocked.classList.remove('hidden');
+        genBtn.classList.remove('hidden');
     }
     savePopupState();
 }
@@ -148,122 +158,6 @@ async function updateResults() {
     } catch (e) { showStatus(e.message || "Failed to communicate with agent.", 'error'); }
 }
 
-function renderEntries(entries, caption = null) {
-    resultsDiv.innerHTML = '';
-    if (entries.length === 0) {
-        resultsDiv.innerHTML = '<div class="no-results">No entries found</div>';
-        return;
-    }
-    if (caption) {
-        const capEl = document.createElement('div');
-        capEl.className = 'list-caption';
-        capEl.textContent = caption;
-        resultsDiv.appendChild(capEl);
-    }
-
-    for (const entry of entries) {
-        const div = document.createElement('div');
-        div.className = 'entry';
-        // Login entries: clicking the row launches the site (its primary
-        // purpose) — unless the list is the current tab's domain match, in
-        // which case the click autofills the form. Other types have no URL to
-        // open, so fall back to detail.
-        div.onclick = () => {
-            if (entry.entry_type === 'Login') {
-                if (listIsDomainMatch) fillEntry(entry.id);
-                else openEntrySite(entry.id);
-            } else {
-                showDetail(entry.id);
-            }
-        };
-
-        const info = document.createElement('div');
-        info.className = 'entry-info';
-        const nameEl = document.createElement('div');
-        nameEl.className = 'entry-name';
-        nameEl.textContent = entry.name;
-        const subEl = document.createElement('div');
-        subEl.className = 'entry-user';
-        subEl.textContent = entry.username || entry.entry_type;
-        info.append(nameEl, subEl);
-
-        const actions = document.createElement('div');
-        actions.className = 'entry-actions';
-
-        if (entry.entry_type === 'Login') {
-            const fillBtn = document.createElement('button');
-            fillBtn.textContent = 'Fill';
-            fillBtn.className = 'btn btn-sm';
-            fillBtn.title = 'Autofill';
-            fillBtn.onclick = e => { e.stopPropagation(); fillEntry(entry.id); };
-            actions.append(fillBtn, makeCopyDropdownBtn(entry));
-        }
-
-        const viewIconBtn = document.createElement('button');
-        viewIconBtn.className = 'btn-icon';
-        setIcon(viewIconBtn, 'eye');
-        viewIconBtn.title = 'View details';
-        viewIconBtn.setAttribute('aria-label', 'View details');
-        viewIconBtn.onclick = e => { e.stopPropagation(); showDetail(entry.id); };
-
-        actions.append(viewIconBtn);
-        div.append(info, actions);
-        resultsDiv.appendChild(div);
-    }
-}
-
-// ── Fill ──────────────────────────────────────────────────────────────────────
-function hostsMatchFill(tabHost, uriHost) {
-    if (!tabHost || !uriHost) return false;
-    const a = tabHost.toLowerCase();
-    const b = uriHost.toLowerCase();
-    if (a === b) return true;
-    return a.endsWith('.' + b) || b.endsWith('.' + a);
-}
-
-function hostFromVaultUri(uri) {
-    if (!uri) return null;
-    try {
-        return new URL(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(uri) ? uri : `https://${uri}`).hostname;
-    } catch { return null; }
-}
-
-function entryMatchesTab(login, tabUrl) {
-    let tabHost;
-    try { tabHost = new URL(tabUrl).hostname; } catch { return false; }
-    const uris = (login && login.uris) || [];
-    for (const u of uris) {
-        const h = hostFromVaultUri(u && u.uri);
-        if (h && hostsMatchFill(tabHost, h)) return true;
-    }
-    return false;
-}
-
-async function fillEntry(id) {
-    try {
-        const response = await browser.runtime.sendMessage({ "GetEntry": { "id": id, "password": null } });
-        if (response.Entry) {
-            const login = response.Entry.entry.data.Login;
-            if (!login) { showStatus("Not a login entry."); return; }
-            const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-            if (!tab) return;
-            if (!entryMatchesTab(login, tab.url)) {
-                showStatus("This login does not match the current site.");
-                return;
-            }
-            let expectedHost = '';
-            try { expectedHost = new URL(tab.url).hostname; } catch { /* leave empty */ }
-            browser.tabs.sendMessage(tab.id, {
-                type: "FILL_FORM",
-                username: login.username || '',
-                password: login.password || '',
-                expectedHost,
-            });
-            window.close();
-        }
-    } catch { showStatus("Failed to fill form.", 'error'); }
-}
-
 // ── Utilities ─────────────────────────────────────────────────────────────────
 function getEntryType(entry) {
     if (!entry || !entry.data) return 'Login';
@@ -303,6 +197,12 @@ lockBtn.onclick = async () => {
     showView('list');
 };
 addBtn.onclick = () => showAddForm();
+genBtn.onclick = e => {
+    // Keep the document click listener in popup-list-actions.js (which closes
+    // open menus) from closing the menu this same click just opened.
+    e.stopPropagation();
+    toggleGeneratorMenu(genBtn);
+};
 backBtn.onclick = () => showView(currentView === 'edit' && currentEntry ? 'detail' : 'list');
 
 // ── Init ──────────────────────────────────────────────────────────────────────

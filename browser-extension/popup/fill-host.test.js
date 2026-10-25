@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 
 const source = readFileSync(
-    path.join(path.dirname(fileURLToPath(import.meta.url)), 'popup.js'),
+    path.join(path.dirname(fileURLToPath(import.meta.url)), 'popup-fill.js'),
     'utf8'
 );
 const match = source.match(/function hostsMatchFill\([\s\S]*?\n\}/);

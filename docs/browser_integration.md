@@ -45,17 +45,39 @@ Source lives in `browser-extension/`. Plain vanilla JS — no bundler, no framew
 | `content-heuristics.js` | Shared pure DOM helpers (username-field detection, submitted-credential capture); loaded first |
 | `content-submit.js` | Login-form submit detection → `LOGIN_SUBMITTED` to background |
 | `content-bar.js` | In-page "Save/Update password?" floating card (open shadow root; never receives the password) |
-| `popup/popup.js` | View management, list rendering, fill, domain helpers |
+| `popup/popup.js` | View management, list queries, domain helper, header wiring |
+| `popup/popup-list.js` | Vault-list row rendering and per-row action buttons |
+| `popup/popup-fill.js` | Fill the active tab's form from a Login entry |
+| `popup/popup-list-actions.js` | Row actions: open the site, copy-username/password dropdown |
+| `popup/popup-menu.js` | Shared dropdown plumbing: positioning, one-open-menu state, ARIA menu keyboard model (used by the copy dropdown and the generator menu) |
 | `popup/popup-lock.js` | Locked-vault view: TPM PIN unlock, DA lockout feedback; loaded *before* `popup.js` — see "Script load order gotcha" below |
 | `popup/popup-detail.js` | Detail view, secret reveal/copy (on-demand via `GetPassword`) |
 | `popup/popup-edit.js` | Edit/add form, field rendering |
+| `popup/popup-generator.js` | Header generate menu (Generate password → agent + clipboard, Show previous → 7-day history view with per-row reveal/copy) |
 | `popup/popup-state.js` | View/search/draft persistence across popup close+reopen, in `storage.session`; scoped to the tab's domain |
-| `popup/icons.js` | Inline SVG icons for dynamically built buttons (monochrome, `currentColor`) — static header icons live in `popup.html` |
+| `popup/icons.js` | Inline SVG icons for dynamically built buttons (monochrome, `currentColor`), parsed once at load and cloned per button — no dynamic `innerHTML` assignment, which AMO's linter flags. Static header icons live in `popup.html` |
 | `popup/popup.css` | Popup design system: tokens, `.btn` component classes, views; dark mode via `prefers-color-scheme` |
 
 **Icons**: `browser-extension/icons` is a symlink to the repo-root `icons/`
 folder (`black*.png` for light theme, `white*.png` for dark). `zip -r`
 dereferences symlinks, so `pack-extension` embeds them correctly.
+
+**Manifest, one file for both engines**: `background` carries both
+`service_worker` (Chrome MV3) and `scripts` (Firefox MV3 event page). Firefox
+ignores `service_worker` and Chrome ignores `scripts`, so `web-ext lint`
+reports `BACKGROUND_SERVICE_WORKER_IGNORED`; that warning is expected and is
+why `background.js` pulls `background-save.js` in through `importScripts()`
+on Chrome only. Removing it would mean a build step that rewrites the manifest
+per browser, so the extension keeps one manifest that both engines load.
+
+**Minimum version**: `browser_specific_settings.gecko.strict_min_version` is
+`142.0`. `data_collection_permissions` is understood from Firefox 140 on
+desktop and 142 on Android, and AMO requires that key for every new
+submission, so a lower floor makes `web-ext lint` emit
+`KEY_FIREFOX_*_UNSUPPORTED_BY_MIN_VERSION` again. One number covers both
+because `gecko.strict_min_version` also sets the Android floor; no
+`gecko_android` key is declared since native messaging does not exist on
+Firefox for Android, which keeps the extension desktop-only on AMO.
 
 **Unit-test loading gotcha**: `background-save.test.js` injects `sendToAgent` as
 a `new Function` parameter, but `background.js` *declares its own* `sendToAgent`
@@ -193,16 +215,34 @@ can retry, or open the popup from the toolbar and dismiss the bar by hand.
 - The bar is rendered in an open shadow root with all text set via
   `textContent` (page-derived strings are never injected as HTML).
 
-## Generate Password (context menu + inline field icon)
+## Generate Password (popup menu, context menu, inline field icon)
 
 The password generator (settings, algorithm, and 7-day local history) lives
 entirely in the agent — see `crates/cosmarden-agent/src/handler/generator/`
 and `docs/password_generator_plan.md` for the full design. The extension has
-two entry points into it, both fully local/offline (no server round trip).
+three entry points into it, all fully local/offline (no server round trip).
 
 ### Message flow
 
 ```
+Popup header menu → Generate password
+      ▼
+popup-generator.js: runtime.sendMessage(GeneratePassword{settings:null})
+      ▼
+agent generates + records history → GeneratedPassword{password}
+      ▼
+popup: navigator.clipboard.writeText + scheduleClipboardClear (30 s)
+       (the popup is a normal extension page, so it writes the clipboard
+        directly — no service-worker relay needed here)
+
+Popup header menu → Show previous
+      ▼
+popup-generator.js: runtime.sendMessage(GetPasswordHistory)
+      ▼
+agent replies PasswordHistory{entries} (7 days, newest first, decrypted)
+      ▼
+popup renders the history view: masked rows with reveal/copy per row
+
 Context menu click (any editable field)
       ▼
 background: sendToAgent(GeneratePassword{settings:null})   ← reuses last-saved settings
@@ -229,11 +269,28 @@ content-generate.js fills the clicked field's group directly (no clipboard)
   `Some(settings)` persists them as the new device-wide "last used" settings
   (the desktop pane's Generate button, and any CLI/browser caller fully
   specifying options); `None` reuses whatever is currently persisted — this is
-  what both extension entry points send, so they always follow whatever the
-  user last configured on any surface. Every call appends to the local 7-day
-  history regardless of `Some`/`None`.
+  what all three extension entry points send, so they always follow whatever
+  the user last configured on any surface. Every call appends to the local
+  7-day history regardless of `Some`/`None`.
+- **`GetPasswordHistory`** → `PasswordHistory { entries }`, pruned to the last
+  7 days, newest first. The popup is the only extension surface that asks for
+  it; `background.js` keeps its content-script proxy allowlist to
+  `GeneratePassword` alone, so a page script cannot enumerate generated
+  passwords.
 - Works with no vault unlock and no account configured — generation is local
-  RNG, not a vault operation, so both entry points work on a fresh install.
+  RNG, not a vault operation, so all three entry points work on a fresh
+  install. The popup therefore keeps the menu button on the lock screen too.
+
+### Popup history view
+
+- Rows are masked (`••••••••`) when the view opens; reveal and copy are
+  explicit clicks, the same rule the detail view applies to vault secrets.
+- The history is **never persisted** by the popup. `popup-state.js` maps the
+  history view to `list` before writing `storage.session`, and leaving the
+  view clears its rows — the decrypted passwords live only in the open
+  document, exactly like `GetPassword` results.
+- Copying a row uses the shared `scheduleClipboardClear`, so generated
+  passwords clear on the same 30 s timer as vault copies.
 
 ### Inline icon placement heuristic
 

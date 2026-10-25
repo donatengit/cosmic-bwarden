@@ -342,6 +342,32 @@ body {
     padding: var(--space-5);
 }
 
+/* Generated-password history (popup-generator.js): same rows as the vault
+   list, scrolled the same way, with the age as the secondary line. */
+#history-content {
+    max-height: 400px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
+/* Rows are read-only (reveal/copy live in the action buttons). */
+.history-entry {
+    cursor: default;
+}
+
+.history-age {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Two full sentences need more room than the per-row copy menu. */
+.gen-menu {
+    min-width: 180px;
+}
+
 /* Caption above the list when it shows favourites (toggle or fallback). */
 .list-caption {
     color: var(--text-tertiary);

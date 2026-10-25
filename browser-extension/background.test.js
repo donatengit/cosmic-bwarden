@@ -104,6 +104,15 @@ describe('content-script action allowlist', () => {
         expect(isContentScriptProxyAllowed({ GetEntry: { id: 'x' } })).toBe(false);
         expect(isContentScriptProxyAllowed('Quit')).toBe(false);
     });
+    it('rejects the generator history from a content script', () => {
+        // The history is popup-only: a page script that could ask for it would
+        // receive every password generated in the last 7 days, encrypted at
+        // rest but decrypted by the agent on request.
+        const agent = makeFakeAgent(false);
+        const { isContentScriptProxyAllowed } = loadBackground(makeFakeBrowser(agent));
+        expect(isContentScriptProxyAllowed('GetPasswordHistory')).toBe(false);
+        expect(isContentScriptProxyAllowed({ DeleteGeneratedPassword: { created_at: 1 } })).toBe(false);
+    });
     it('allows the popup page itself even when rendered in a tab', () => {
         // The full E2E specs open popup.html in a tab; the background must not
         // mistake that for a web-page content script (whose sender.url is an

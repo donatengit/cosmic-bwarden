@@ -1,5 +1,7 @@
-// List-row actions: open-site (used directly by popup.js's row click
-// handler for Login entries) and the copy-username/password dropdown.
+// List-row actions: open-site (used directly by popup.js's row click handler
+// for Login entries) and the copy-username/password dropdown. The menu
+// plumbing itself lives in popup-menu.js.
+//
 // Loaded *before* popup.js (see popup.html) — renderEntries() calls
 // makeCopyDropdownBtn, and the row's onclick calls openEntrySite, during
 // popup.js's init IIFE, which can resume via an already-queued microtask
@@ -7,44 +9,6 @@
 // reasoning as popup-lock.js). Only function *bodies* here reference
 // popup.js's globals (browser, showStatus); nothing at this file's top
 // level calls them, so load order is otherwise safe.
-
-let openDropdown = null;
-
-function closeOpenDropdown() {
-    if (openDropdown) {
-        openDropdown.remove();
-        openDropdown = null;
-    }
-}
-
-document.addEventListener('click', () => closeOpenDropdown());
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOpenDropdown(); });
-
-// #results scrolls (overflow-y: auto) and tightly wraps its rows, so a menu
-// nested inside a row would get clipped by that ancestor whenever it
-// overflows the row's box — which happens with any list short enough not to
-// need scrolling. Appending to <body> with position:fixed, positioned from
-// the button's viewport rect, sidesteps that clipping entirely.
-function positionDropdown(menu, anchorBtn) {
-    const btnRect = anchorBtn.getBoundingClientRect();
-    const menuHeight = menu.offsetHeight;
-    const menuWidth = menu.offsetWidth;
-    const openUpward = btnRect.bottom + menuHeight > window.innerHeight;
-    menu.style.top = `${openUpward ? btnRect.top - menuHeight : btnRect.bottom}px`;
-    menu.style.left = `${Math.min(btnRect.right - menuWidth, window.innerWidth - menuWidth - 4)}px`;
-}
-
-function makeDropdownItem(label, onSelect) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = label;
-    btn.onclick = async e => {
-        e.stopPropagation();
-        closeOpenDropdown();
-        await onSelect();
-    };
-    return btn;
-}
 
 // Mirrors is_uri_like in crates/cosmarden-ui/src/app/applet_search.rs
 // (used there to decide whether the desktop applet's open-URI button is enabled):
@@ -99,6 +63,8 @@ function makeCopyDropdownBtn(entry) {
     setIcon(toggleBtn, 'copy');
     toggleBtn.title = 'Copy username or password';
     toggleBtn.setAttribute('aria-label', 'Copy username or password');
+    toggleBtn.setAttribute('aria-haspopup', 'menu');
+    toggleBtn.setAttribute('aria-expanded', 'false');
     toggleBtn.onclick = e => {
         e.stopPropagation();
         const wasOpenHere = openDropdown && openDropdown.anchorWrap === wrap;
@@ -107,6 +73,7 @@ function makeCopyDropdownBtn(entry) {
 
         const menu = document.createElement('div');
         menu.className = 'copy-dropdown-menu';
+        menu.setAttribute('aria-label', 'Copy username or password');
         menu.append(
             makeDropdownItem('Copy Username', async () => {
                 await navigator.clipboard.writeText(entry.username || '');
@@ -118,10 +85,8 @@ function makeCopyDropdownBtn(entry) {
                 if (typeof scheduleClipboardClear === 'function') scheduleClipboardClear(pw);
             })
         );
-        document.body.appendChild(menu);
-        positionDropdown(menu, toggleBtn);
         menu.anchorWrap = wrap;
-        openDropdown = menu;
+        showDropdownMenu(menu, toggleBtn);
     };
 
     wrap.appendChild(toggleBtn);

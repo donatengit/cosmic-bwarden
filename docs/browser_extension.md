@@ -139,6 +139,7 @@ The `chrome-full` suite (`tests/browser-extension/playwright/chrome-full.spec.js
 - Edit entry name and fields via popup form
 - Delete entry via popup detail view
 - Search / filter entries by name
+- Password generator menu: Generate → clipboard, Show previous lists the new password masked, reveal and copy return it
 
 ---
 

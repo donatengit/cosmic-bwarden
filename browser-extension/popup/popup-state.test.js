@@ -11,6 +11,10 @@ const match = source.match(/function isUnchangedSecretField\([\s\S]*?\n\}/);
 if (!match) throw new Error('isUnchangedSecretField not found');
 const isUnchangedSecretField = new Function(`${match[0]}\nreturn isUnchangedSecretField;`)();
 
+const persistedMatch = source.match(/function persistedView\([\s\S]*?\n\}/);
+if (!persistedMatch) throw new Error('persistedView not found');
+const persistedView = new Function(`${persistedMatch[0]}\nreturn persistedView;`)();
+
 describe('isUnchangedSecretField', () => {
     it('omits a password that still matches the stored vault value', () => {
         expect(isUnchangedSecretField('password', 'hunter2', 'hunter2')).toBe(true);
@@ -20,5 +24,20 @@ describe('isUnchangedSecretField', () => {
     });
     it('never treats username as a secret to omit', () => {
         expect(isUnchangedSecretField('username', 'ada', 'ada')).toBe(false);
+    });
+});
+
+describe('persistedView', () => {
+    it('persists the generator history view as the list', () => {
+        // The history view holds generated passwords in the DOM only and must
+        // never be a restore target; reopening straight into it would show an
+        // empty view until the agent answers.
+        expect(persistedView('history')).toBe('list');
+    });
+    it('leaves every other view untouched', () => {
+        expect(persistedView('list')).toBe('list');
+        expect(persistedView('detail')).toBe('detail');
+        expect(persistedView('edit')).toBe('edit');
+        expect(persistedView('locked')).toBe('locked');
     });
 });

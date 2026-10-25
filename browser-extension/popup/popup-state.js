@@ -22,15 +22,23 @@ function isUnchangedSecretField(key, value, stored) {
     return stored !== undefined && value === stored;
 }
 
+// The generator history view holds generated passwords in the DOM only — never
+// in this snapshot — and is not a restore target: reopening the popup on it
+// would show an empty view until the agent answers. Persist the list instead.
+function persistedView(view) {
+    return view === 'history' ? 'list' : view;
+}
+
 function snapshotPopupState() {
+    const view = persistedView(currentView);
     const state = {
         // The state belongs to the tab it was captured on. Without this, one
         // detail view left open would reopen on every unrelated site for the
         // rest of the browser session, hiding the current tab's matches — the
         // popup's whole job.
         domain: currentTabDomain,
-        view: currentView,
-        entryId: (currentView === 'detail' || currentView === 'edit') && currentEntry
+        view,
+        entryId: (view === 'detail' || view === 'edit') && currentEntry
             ? currentEntry.id : null,
         search: searchInput.value,
         favouritesOnly: !!favouritesOnly,
@@ -38,7 +46,7 @@ function snapshotPopupState() {
     // Only the edit draft is persisted — never the entry's own secrets, which
     // are re-fetched via GetEntry on restore. A typed password lives here only
     // as long as the browser session does.
-    if (currentView === 'edit') {
+    if (view === 'edit') {
         const fields = {};
         getFieldsForType(editType.value).forEach(f => {
             const el = document.getElementById(`f-${f.key}`);
