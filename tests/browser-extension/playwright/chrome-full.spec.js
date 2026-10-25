@@ -435,7 +435,9 @@ test.describe('Chrome Extension Full E2E', () => {
   // ── 9. SecureNote (created via CLI) ───────────────────────────────────────
 
   test('shows SecureNote with unicode content via CLI', async () => {
-    cli('-t note add "Заметка 📝 テスト" notes="Секретная заметка. Japanese: 日本語"');
+    // The literal newline is part of the quoted shell argument; it reaches the
+    // agent verbatim, the way a multi-line note typed in the UI would.
+    cli('-t note add "Заметка 📝 テスト" notes="Секретная заметка. Japanese: 日本語\nsecond line"');
     pinEntry('Заметка 📝 テスト');
 
     const page = await openPopupWithClipboard();
@@ -449,6 +451,23 @@ test.describe('Chrome Extension Full E2E', () => {
     await expect(detail).toContainText('Секретная заметка');
     await expect(detail).toContainText('日本語');
     await expect(detail).toContainText('SecureNote');
+
+    // Notes keep their line breaks: the value must lay out as pre-formatted
+    // text, not collapse `\n` into a space. Asserted on the computed style
+    // because Playwright's text matchers normalize whitespace.
+    const notesValue = page
+      .locator('.detail-item', { hasText: 'Notes' })
+      .locator('.detail-value')
+      .first();
+    expect(await notesValue.evaluate((el) => getComputedStyle(el).whiteSpace)).toBe(
+      'pre-wrap'
+    );
+    // The newline must also survive CLI → agent → read: the CSS rule only draws
+    // a break that is still there. `textContent`, because the text matchers
+    // normalize whitespace.
+    expect(await notesValue.evaluate((el) => el.textContent)).toContain(
+      '\nsecond line'
+    );
 
     await page.close();
   });

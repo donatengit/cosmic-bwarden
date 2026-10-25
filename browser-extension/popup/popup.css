@@ -473,6 +473,10 @@ body {
     align-items: center;
     gap: 6px;
     overflow-wrap: anywhere;
+    /* Notes are stored verbatim and keep their line breaks; a long line still
+       wraps. Inherited by the masked/revealed `.secret-text` span, which is
+       how a non-SecureNote entry's notes are shown. */
+    white-space: pre-wrap;
 }
 
 /* Long machine values (SSH keys) — set from popup-detail.js. */

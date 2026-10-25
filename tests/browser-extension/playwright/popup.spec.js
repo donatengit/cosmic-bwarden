@@ -207,6 +207,54 @@ test.describe('Extension Popup', () => {
     expect(detailText).not.toContain('sk-live-abc');
   });
 
+  test('multi-line notes keep their line breaks in the detail view', async ({ page }) => {
+    // A SecureNote's body is its notes, fetched in full by showDetail. Its
+    // newlines are content: the value must lay out on separate lines rather
+    // than collapse into one run. `.detail-value` is also the container of the
+    // revealed `.secret-text` span, which is how a non-SecureNote entry's notes
+    // appear, so one rule covers both paths.
+    const meta = { id: 'n1', name: 'Note', data: 'SecureNote', notes: null, fields: [] };
+    const full = {
+      id: 'n1',
+      name: 'Note',
+      data: 'SecureNote',
+      notes: 'first line\nsecond line\nthird line',
+      fields: [],
+    };
+    await page.addInitScript(
+      ([note, body]) => {
+        const original = window.browser.runtime.sendMessage;
+        window.browser.runtime.sendMessage = async (message) => {
+          if (message && message.GetEntryMeta) {
+            return { EntryMeta: { entry: note, filled_secrets: [] } };
+          }
+          if (message && message.GetEntry) return { Entry: { entry: body } };
+          return original(message);
+        };
+      },
+      [meta, full]
+    );
+    await page.goto(`file://${path.join(EXTENSION_PATH, 'popup/popup.html')}`);
+    await page.evaluate(() => showDetail('n1'));
+    await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
+
+    const notes = page
+      .locator('.detail-item', { hasText: 'Notes' })
+      .locator('.detail-value')
+      .first();
+    const box = await notes.evaluate((el) => ({
+      whiteSpace: getComputedStyle(el).whiteSpace,
+      height: el.getBoundingClientRect().height,
+      lineHeight: parseFloat(getComputedStyle(el).lineHeight),
+      text: el.textContent,
+    }));
+    expect(box.whiteSpace).toBe('pre-wrap');
+    expect(box.text).toContain('first line\nsecond line\nthird line');
+    // Three lines tall. A collapsed newline draws one line; the copy button is
+    // shorter than a line of text, so it cannot reach two lines by itself.
+    expect(box.height).toBeGreaterThan(box.lineHeight * 2);
+  });
+
   test('hidden custom field reveal fetches the full entry (GetEntry) and shows its value', async ({ page }) => {
     await page.locator('.entry-actions button[title="View details"]').click();
     await expect(page.locator('#view-detail')).toBeVisible({ timeout: 5000 });
