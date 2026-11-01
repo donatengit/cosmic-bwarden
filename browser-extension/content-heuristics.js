@@ -1,8 +1,17 @@
 // Shared pure DOM heuristics for the fill (content.js) and submit-capture
-// (content-submit.js) content scripts. Must be listed first in the manifest's
-// content_scripts js array — all files share one isolated world.
+// (content-submit.js) content scripts. Must be listed after content-dom.js and
+// before the scripts that call it in the manifest's content_scripts js array —
+// all files share one isolated world.
 
 const USERNAME_TEXT_INPUT_SELECTOR = 'input[type="text"], input[type="email"], input[type="tel"], input:not([type])';
+
+// `type="password"` is the common case, but a masked field can also be a text
+// input marked through autocomplete (custom widgets, and "show password"
+// toggles that swap the type). Matched in JS rather than with a CSS attribute
+// selector: attribute-value matching is case-sensitive without the `i` flag,
+// which engine support varies on.
+const PASSWORD_INPUT_SELECTOR = 'input[type="password"], input[autocomplete]';
+const PASSWORD_AUTOCOMPLETE = ["current-password", "new-password"];
 
 // Identity roots. A token that starts with one scores full weight; one that
 // merely contains it scores half. Tokens are split on camelCase and
@@ -39,18 +48,6 @@ const EXCLUDED_TOKENS = [
 // matching `gold` for `old`.
 const PASSWORD_CURRENT_HINTS = ["current", "old", "existing"];
 const PASSWORD_NEW_HINTS = ["new", "confirm", "repeat", "again", "verify", "retype"];
-
-// Mirrors (a lightweight version of) Bitwarden's viewable-element check:
-// skips disabled/readonly fields and ones hidden via CSS — otherwise a
-// honeypot field or a hidden legacy input can outrank the real one.
-function isVisible(el) {
-    if (!el || el.disabled || el.readOnly) return false;
-    const style = getComputedStyle(el);
-    // parseFloat("") is NaN, and unset opacity computes to "" in some engines
-    // (real value 1) — `< 0.1` treats that indeterminate case as visible.
-    return style.display !== "none" && style.visibility !== "hidden" &&
-        style.visibility !== "collapse" && !(parseFloat(style.opacity) < 0.1);
-}
 
 // Split a DOM attribute into lowercase word tokens: camelCase boundaries and
 // any non-alphanumeric run separate words.
@@ -98,7 +95,7 @@ function isExcluded(text) {
 // multi-step path: there the scope is every field on the page, so a footer
 // signup field would otherwise be filled with the stored username.
 function formIsNonLogin(input) {
-    const form = input.form;
+    const form = formOf(input);
     if (!form) return false;
     return isExcluded([form.id, form.name, form.className,
         form.getAttribute("action")].filter(Boolean).join(" "));
@@ -147,13 +144,54 @@ function bestUsernameCandidate(candidates) {
     return best;
 }
 
+// A password field the vault may write into: `type="password"`, or a text
+// field whose autocomplete says it holds a password. PINs, one-time codes and
+// card fields are routinely `type="password"` for masking; those are filtered
+// later by isExcludedPasswordInput.
+function isPasswordInput(el) {
+    if (!el || el.tagName !== "INPUT") return false;
+    if ((el.type || "").toLowerCase() === "password") return true;
+    const autocomplete = (el.getAttribute("autocomplete") || "").toLowerCase();
+    return autocomplete.split(/\s+/).some(value => PASSWORD_AUTOCOMPLETE.includes(value));
+}
+
+// Every password-like field under `scope`, including fields inside open shadow
+// roots and fields associated with a form through the `form` attribute (which
+// are not descendants of it — `form.elements` is the only cheap way to reach
+// them, without scanning the whole document for every form).
+function passwordInputsIn(scope) {
+    const inputs = collectElements(scope, PASSWORD_INPUT_SELECTOR).filter(isPasswordInput);
+    if (scope && scope.tagName === "FORM" && scope.elements) {
+        for (const input of scope.elements) {
+            if (input.form === scope && isPasswordInput(input) && !inputs.includes(input)) inputs.push(input);
+        }
+    }
+    return inputs;
+}
+
+// Visible username-like fields under `scope`. Same `form.elements` handling as
+// above: SPAs that keep the email field in a header component associate it
+// with the form by id, so it is not in the form's subtree.
+function usernameInputsIn(scope) {
+    const candidates = collectElements(scope, USERNAME_TEXT_INPUT_SELECTOR).filter(isVisible);
+    if (scope && scope.tagName === "FORM" && scope.elements) {
+        for (const input of scope.elements) {
+            if (input.form === scope && input.matches(USERNAME_TEXT_INPUT_SELECTOR)
+                && !candidates.includes(input) && isVisible(input)) {
+                candidates.push(input);
+            }
+        }
+    }
+    return candidates;
+}
+
 // Finds the best username-like field within `scope` (typically a <form> that
-// already contains a password field). When nothing scores, the first
-// non-excluded visible candidate is used because the scope is already
-// narrowed to one form; a search/captcha/OTP field never is, so it returns
-// null and the caller fills nothing.
+// already contains a password field, or the shadow root of a login widget).
+// When nothing scores, the first non-excluded visible candidate is used
+// because the scope is already narrowed to one form; a search/captcha/OTP
+// field never is, so it returns null and the caller fills nothing.
 function findUsernameInput(scope) {
-    const candidates = Array.from(scope.querySelectorAll(USERNAME_TEXT_INPUT_SELECTOR)).filter(isVisible);
+    const candidates = usernameInputsIn(scope);
     return bestUsernameCandidate(candidates) ||
         candidates.find(input => scoreUsernameInput(input) >= 0) || null;
 }
@@ -164,7 +202,7 @@ function findUsernameInput(scope) {
 // the scope here is the whole document, so a search box, a newsletter signup
 // field or an OTP box would otherwise get filled instead.
 function findUsernameOnlyInput() {
-    const candidates = Array.from(document.querySelectorAll(USERNAME_TEXT_INPUT_SELECTOR))
+    const candidates = collectElements(document, USERNAME_TEXT_INPUT_SELECTOR)
         .filter(input => isVisible(input) && !formIsNonLogin(input));
     return bestUsernameCandidate(candidates);
 }
@@ -193,31 +231,30 @@ function isExcludedPasswordInput(input) {
 // current-password field, else the first field that is not a new/confirm
 // field, else the first usable field (sign-up-only forms). One target per
 // scope, so a confirmation box is never overwritten with the stored password.
-// `scope` may be a container or the input itself; null means filling nothing.
+// `scope` may be a form, a container, a shadow root, or the input itself; null
+// means filling nothing.
 function findPasswordInput(scope) {
-    const inputs = scope.matches && scope.matches('input[type="password"]')
-        ? [scope]
-        : Array.from(scope.querySelectorAll('input[type="password"]'));
-    const usable = inputs.filter(input => isVisible(input) && !isExcludedPasswordInput(input));
+    const usable = passwordInputsIn(scope)
+        .filter(input => isVisible(input) && !isExcludedPasswordInput(input));
     if (usable.length === 0) return null;
     return usable.find(input => passwordRole(input) === "current") ||
         usable.find(input => passwordRole(input) !== "new") ||
         usable[0];
 }
 
-// Credentials present in `form` at submit time. The password is the value of
-// the last non-empty password input: on registration and change-password
-// forms that is the freshly chosen (or confirmed) password, not the old one.
+// Credentials present in `scope` at submit time. The password is the value of
+// the last non-empty password input: on registration and change-password forms
+// that is the freshly chosen (or confirmed) password, not the old one.
 // Excluded fields (PIN, one-time code, card) are ignored, so a form that only
 // has those reports no password and the background offers no save.
-function findSubmittedCredentials(form) {
+function findSubmittedCredentials(scope) {
     let password = '';
-    for (const input of form.querySelectorAll('input[type="password"]')) {
+    for (const input of passwordInputsIn(scope)) {
         if (isExcludedPasswordInput(input)) continue;
         if (input.value) password = input.value;
     }
 
-    const usernameInput = findUsernameInput(form);
+    const usernameInput = findUsernameInput(scope);
     const username = usernameInput ? usernameInput.value.trim() : '';
 
     return { username, password };

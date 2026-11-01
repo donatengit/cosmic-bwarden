@@ -1,5 +1,5 @@
-// Shared theme tokens for the in-page (shadow-DOM) surfaces: the save bar
-// (content-bar.js) and the generate icon (content-generate.js). Shadow roots
+// Shared theme tokens for the in-page (shadow-DOM) surface: the save bar
+// (content-bar.js). Shadow roots
 // cannot see the popup's stylesheet, so these scripts build their own
 // <style> — and this object is the single source they interpolate.
 // Values MUST stay in sync with popup/popup.css (:root and the dark

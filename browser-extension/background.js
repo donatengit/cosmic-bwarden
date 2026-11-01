@@ -65,6 +65,11 @@ function extractDomain(url) {
     } catch { return null; }
 }
 
+// Neutral grey, matching theme.js's light `text-secondary`. The count is
+// informational (how many entries match this host), not an alert, so it must
+// not borrow the accent blue. White badge text stays legible in both themes.
+const BADGE_BACKGROUND = '#5c5f66';
+
 async function updateBadge(tabId, tabUrl) {
     // Keep the lock-state icon in sync on every tab activation/update.
     await updateLockState();
@@ -79,7 +84,7 @@ async function updateBadge(tabId, tabUrl) {
         if (!response || !response.SidebarEntries) { browser.action.setBadgeText({ text: '', tabId }); return; }
         const count = response.SidebarEntries.entries.length;
         browser.action.setBadgeText({ text: count > 0 ? String(count) : '', tabId });
-        if (count > 0) browser.action.setBadgeBackgroundColor({ color: '#175DDC', tabId });
+        if (count > 0) browser.action.setBadgeBackgroundColor({ color: BADGE_BACKGROUND, tabId });
     } catch {
         browser.action.setBadgeText({ text: '', tabId });
     }
@@ -103,14 +108,17 @@ browser.tabs.onRemoved.addListener((tabId) => {
     savePrompt.onTabRemoved(tabId);
 });
 
-// Initialize badge for already-loaded tabs when the background script starts.
-// onActivated/onUpdated only fire for future navigation, not the current state.
-(async () => {
+// Recompute the active tab's badge after a lock-state change, and once at
+// startup: onActivated/onUpdated only fire for future navigation, so the
+// current tab would otherwise keep a stale (or empty) count.
+async function refreshActiveBadge() {
     try {
         const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-        if (tab) updateBadge(tab.id, tab.url);
+        if (tab) await updateBadge(tab.id, tab.url);
     } catch { /* no tabs permission or no active window */ }
-})();
+}
+
+refreshActiveBadge();
 
 // ── Theme-aware + lock-state icon ─────────────────────────────────────────────
 let currentThemeDark = false;
@@ -187,6 +195,9 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
             browser.tabs.sendMessage(tab.id, {
                 type: 'GENERATE_COPY_TO_CLIPBOARD',
                 password: response.GeneratedPassword.password,
+            }, { frameId: info.frameId ?? 0 }).catch(() => {
+                // The frame closed while the agent was generating; there is no
+                // page left to paste into.
             });
         }
     } catch (e) {
@@ -203,47 +214,53 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // are not agent actions and must not fall through to the native host.
     if (message && message.type === 'LOGIN_SUBMITTED') {
         if (sender.tab && typeof sender.tab.id === 'number') {
-            savePrompt.onLoginSubmitted(sender.tab.id, message);
+            // frameId is 0 for the top frame; the content scripts run in every
+            // frame, so the submission must stay attached to the frame it came
+            // from (the bar is shown there, and two frames of one tab must not
+            // overwrite each other's pending credential).
+            savePrompt.onLoginSubmitted(sender.tab.id, sender.frameId ?? 0, message);
         }
         return Promise.resolve({ Ack: true });
     }
     if (message && message.type === 'SAVE_BAR_ACTION') {
         if (sender.tab && typeof sender.tab.id === 'number') {
-            return savePrompt.onBarAction(sender.tab.id, message.action);
+            return savePrompt.onBarAction(
+                sender.tab.id,
+                sender.frameId ?? 0,
+                message.action,
+                message.pendingKey,
+            );
         }
         return Promise.resolve({ Ack: true });
     }
     if (message === 'Lock' || message === 'Logout') {
-        // Counterpart to VAULT_UNLOCKED: flip the icon as soon as the agent
-        // confirms, rather than leaving it stale until the next tab event.
-        return sendToAgent(message).then((resp) => { updateLockState(); return resp; });
+        // Counterpart to VAULT_UNLOCKED: flip the icon and clear the match
+        // count as soon as the agent confirms, rather than leaving both stale
+        // until the next tab event. Fire-and-forget so the reply is not held
+        // up by the extra agent round trips.
+        return sendToAgent(message).then((resp) => {
+            refreshActiveBadge();
+            return resp;
+        });
     }
     if (message && message.type === 'VAULT_UNLOCKED') {
         // The popup/applet unlocked the vault: re-evaluate any save prompts
-        // that were deferred while locked, and flip the toolbar icon back.
+        // that were deferred while locked, then refresh the icon and count.
         savePrompt.onVaultUnlocked();
-        updateLockState();
+        refreshActiveBadge();
         return Promise.resolve({ Ack: true });
     }
-    // Content scripts share this listener. Only generation is a legitimate
-    // content-script → agent call; everything else must come from the popup.
-    // The popup page itself is allowed even when rendered in a tab (specs,
-    // manual debugging): its sender.url is the extension's own popup/ origin,
-    // which no web-page content script can forge.
-    if (
-        sender
-        && sender.tab
-        && !isPopupSender(sender)
-        && !isContentScriptProxyAllowed(message)
-    ) {
+    // Content scripts share this listener but have no agent actions of their
+    // own: fill and save are handled locally above, and the inline generate
+    // icon that used to proxy GeneratePassword was removed. The popup page is
+    // still allowed even when rendered in a tab (specs, manual debugging):
+    // its sender.url is the extension's own popup/ origin, which no web-page
+    // content script can forge.
+    if (sender && sender.tab && !isPopupSender(sender)) {
         return Promise.resolve({ Error: { message: 'action not allowed from content script' } });
     }
     return sendToAgent(message);
 });
-
-function isContentScriptProxyAllowed(message) {
-    return !!(message && message.GeneratePassword !== undefined);
-}
 
 function isPopupSender(sender) {
     if (!sender || typeof sender.url !== 'string') return false;

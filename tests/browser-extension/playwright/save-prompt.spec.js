@@ -35,7 +35,7 @@ async function injectContentScripts(page, files) {
 test.describe('Submit capture (content-submit.js)', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(FIXTURE_URL);
-    await injectContentScripts(page, ['content-heuristics.js', 'content-submit.js']);
+    await injectContentScripts(page, ['content-dom.js', 'content-heuristics.js', 'content-submit.js']);
   });
 
   test('clicking submit reports LOGIN_SUBMITTED exactly once (click+submit de-dupe)', async ({ page }) => {
@@ -102,6 +102,66 @@ test.describe('Submit capture (content-submit.js)', () => {
     const messages = await page.evaluate(() => window._sentMessages);
     expect(messages).toHaveLength(0);
   });
+
+  test('captures a login form inside an open shadow root', async ({ page }) => {
+    // A web-component login: the form lives in a shadow root, so its submit
+    // event never reaches the window listener (submit is not composed). The
+    // click is composed but arrives retargeted to the host, so the content
+    // script must resolve the real target through composedPath().
+    await page.evaluate(() => {
+      const host = document.createElement('div');
+      host.id = 'shadow-host';
+      document.body.appendChild(host);
+      const root = host.attachShadow({ mode: 'open' });
+      root.innerHTML = `
+        <form id="shadow-form">
+          <input id="shadow-user" type="text">
+          <input id="shadow-pass" type="password">
+          <button id="shadow-submit" type="submit">Log in</button>
+        </form>`;
+      // Keep the test page from navigating when the button is clicked.
+      root.getElementById('shadow-form').addEventListener('submit', (e) => e.preventDefault());
+    });
+
+    await page.fill('#shadow-user', 'dave');
+    await page.fill('#shadow-pass', 'shadowsecret');
+    await page.click('#shadow-submit');
+
+    const messages = await page.evaluate(() => window._sentMessages);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      type: 'LOGIN_SUBMITTED',
+      username: 'dave',
+      password: 'shadowsecret',
+    });
+  });
+
+  test('captures Enter in a password field inside an open shadow root', async ({ page }) => {
+    await page.evaluate(() => {
+      const host = document.createElement('div');
+      host.id = 'shadow-host';
+      document.body.appendChild(host);
+      const root = host.attachShadow({ mode: 'open' });
+      root.innerHTML = `
+        <form id="shadow-form">
+          <input id="shadow-user" type="text">
+          <input id="shadow-pass" type="password">
+        </form>`;
+      root.getElementById('shadow-form').addEventListener('submit', (e) => e.preventDefault());
+    });
+
+    await page.fill('#shadow-user', 'erin');
+    await page.fill('#shadow-pass', 'shadowsecret2');
+    await page.press('#shadow-pass', 'Enter');
+
+    const messages = await page.evaluate(() => window._sentMessages);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      type: 'LOGIN_SUBMITTED',
+      username: 'erin',
+      password: 'shadowsecret2',
+    });
+  });
 });
 
 test.describe('Save bar (content-bar.js)', () => {
@@ -133,6 +193,20 @@ test.describe('Save bar (content-bar.js)', () => {
     // Background confirms success by hiding the bar.
     await showBar(page, { type: 'HIDE_SAVE_BAR' });
     await expect(bar).toHaveCount(0);
+  });
+
+  test('echoes the pending key so a fallback bar saves the right credential', async ({ page }) => {
+    await showBar(page, {
+      type: 'SHOW_SAVE_BAR', mode: 'save', domain: 'example.com', username: 'alice',
+      pendingKey: 'pendingSave:21:3',
+    });
+
+    await page.locator('#cosmarden-save-bar button.primary').click();
+
+    const messages = await page.evaluate(() => window._sentMessages);
+    expect(messages).toEqual([
+      { type: 'SAVE_BAR_ACTION', action: 'save', pendingKey: 'pendingSave:21:3' },
+    ]);
   });
 
   test('renders the update bar with the entry name', async ({ page }) => {

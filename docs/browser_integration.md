@@ -38,13 +38,17 @@ Source lives in `browser-extension/`. Plain vanilla JS — no bundler, no framew
 
 | File | Responsibility |
 |---|---|
-| `background.js` | Native messaging queue, badge count, theme-aware + lock-state icon switching (`<theme>_locked*.png` when locked *or* logged out) |
-| `background-save.js` | Save-prompt state machine: per-tab pending credentials, save/update decision via `CheckLoginMatch` |
+| `background.js` | Native messaging queue, grey badge with the domain match count, theme-aware + lock-state icon switching (`<theme>_locked*.png` when locked *or* logged out) |
+| `background-save.js` | Save-prompt state machine: per tab+frame pending credentials, save/update decision via `CheckLoginMatch` |
 | `theme.js` | Design tokens (light+dark palette, radii, shadows) for the shadow-DOM surfaces — must stay in sync with `popup/popup.css`; loaded first in content scripts |
+| `host-match.js` | `hostMatches`/`hostMatchesAny`: the one host-comparison used by the popup (tab vs entry) and the content script (frame vs entry) |
+| `content-dom.js` | DOM primitives: ancestor-aware `isVisible`, `collectElements` (open-shadow-root traversal), `formOf`/`treeRootOf`, `setInputValue` (native prototype setter) |
 | `content.js` | Form fill injected into pages |
-| `content-heuristics.js` | Shared pure DOM helpers (username-field detection, submitted-credential capture); loaded first |
+| `content-heuristics.js` | Shared pure heuristics (username-field detection, password-field roles, submitted-credential capture); loaded after `content-dom.js` |
 | `content-submit.js` | Login-form submit detection → `LOGIN_SUBMITTED` to background |
 | `content-bar.js` | In-page "Save/Update password?" floating card (open shadow root; never receives the password) |
+| `content-generate.js` | Clipboard relay for the context-menu generate action (Chrome MV3 service workers have no clipboard access); no page scan |
+| `clipboard-clear.js` | Shared 30 s clipboard auto-clear for the popup and content-script copy paths |
 | `popup/popup.js` | View management, list queries, domain helper, header wiring |
 | `popup/popup-list.js` | Vault-list row rendering and per-row action buttons |
 | `popup/popup-fill.js` | Fill the active tab's form from a Login entry |
@@ -121,6 +125,60 @@ This runs `tools/register_browser_host.py`, which:
 | Main Agent | Postcard | `Response::Config { ... }` |
 | `browser-host` (Bridge) | JSON | `{"Config": { ... }}` |
 
+## Autofill (fill)
+
+`popup/popup-fill.js` fetches the full entry, checks the active tab against the
+entry's URIs, and sends `FILL_FORM` carrying the entry's hosts:
+
+```
+popup-fill.js: GetEntry → entryMatchesTab(entry, tab.url)
+      ▼
+tabs.sendMessage(FILL_FORM{username, password, entryHosts})
+      ▼
+content.js in every frame: hostMatchesAny(location.hostname, entryHosts) → fillForm
+```
+
+Properties that matter, each pinned by a unit or E2E test:
+
+- **Every frame runs the content script** (`content_scripts[0].all_frames`), so a
+  login form inside an iframe is reachable. The message is broadcast, and each
+  frame matches its *own* host against the entry's hosts. The guard is
+  deliberately not the tab's host: a cross-origin auth iframe
+  (`login.example.com` inside `example.com`) must be fillable, while an ad
+  iframe on the same page must not be. A frame whose host cannot be named
+  (`file://`, `about:blank`, a sandboxed frame) matches only an entry that has
+  no host either. The broadcast reaches every frame's isolated world — the
+  payload is not readable by page scripts — but only a matching frame writes
+  it into the DOM.
+- **`popup-fill.js` awaits the send.** No frame answering (a tab opened before
+  the extension was installed or reloaded) now shows "Failed to fill form."
+  instead of closing the popup as if the fill had worked.
+- **Open shadow roots are traversed** (`content-dom.js::collectElements`) by
+  fill and submit capture. A login widget inside a web
+  component has no form in the document tree, so `content.js` scopes the
+  username search to the shadow root and `content-submit.js` uses the root as
+  the submit scope. Submissions there are captured through the click and Enter
+  paths: a `submit` event is not composed and never reaches the window
+  listener, and a composed click/keydown arrives retargeted to the component's
+  host, so both handlers resolve the real node with `composedPath()`.
+- **Values are written through the native prototype setter** plus `input` and
+  `change` events, both `composed`. A plain `el.value = x` is swallowed by
+  React's per-element value tracker: the field looks filled, `onChange` never
+  fires, and the next render or submit sends the old value. Without the
+  composed flag a framework listening on a container outside the field's shadow
+  root never sees the event at all.
+- **`readonly` is not invisible.** readonly blocks typing, not script
+  assignment; sites that set it until focus would otherwise be unfillable.
+- **Visibility walks the ancestor chain**, crossing shadow hosts. An element
+  reports its own `display`, so a field inside a `display:none` wrapper used to
+  count as visible and could outrank the real one.
+- **A text field marked `autocomplete="current-password"` or `"new-password"`
+  is a password field**, for both fill and submit capture: custom masked
+  widgets, and "show password" toggles that swap `type`.
+- **Fields associated through the `form` attribute are included** via
+  `form.elements`. They are not descendants of the form, so a subtree query
+  missed them and the password was filled without the username.
+
 ## Save/Update Prompt (notification bar)
 
 When the user submits a login form, the extension offers to save the credentials
@@ -130,7 +188,7 @@ matches but the password changed (Bitwarden-style notification bar).
 ### Message flow
 
 ```
-content-submit.js ──LOGIN_SUBMITTED{username,password,url}──▶ background (per-tab pending map)
+content-submit.js ──LOGIN_SUBMITTED{username,password,url}──▶ background (pending map keyed by tab+frame)
    tabs.onUpdated 'complete' (or a ~2 s fallback timer for AJAX/SPA logins)
       ▼
 GetConfig → locked or needs_login? → defer (see "Locked vault" below)
@@ -143,6 +201,31 @@ content-bar.js renders the bar → SAVE_BAR_ACTION{save|update|unlock|dismiss}
 background: AddEntry{..., uris:[origin]}  or  UpdateLoginPassword{id,password}
 then badge refresh + HIDE_SAVE_BAR on success, SAVE_BAR_ERROR on failure
 ```
+
+### Pending state is keyed by tab *and* frame
+
+The content scripts run in every frame, so a page can submit two logins at
+once (its own form plus an embedded widget). `background-save.js` keys the
+pending credential as `pendingSave:<tabId>:<frameId>` and targets every
+`SHOW_SAVE_BAR` / `HIDE_SAVE_BAR` / `SAVE_BAR_ERROR` at `{ frameId }`, so each
+bar appears in the frame that submitted and a click saves that frame's
+credential. `onTabComplete` and `onTabRemoved` are tab-level events with no
+frame argument, so they enumerate the keys for that tab
+(`pendingFramesForTab`). Keying by tab alone made the second submission
+overwrite the first, and the visible bar then saved the wrong password.
+
+The frame id is stable across navigations within a frame (checked on a
+same-origin and a cross-origin subframe navigation), but it does not survive
+the frame being destroyed: a widget that removes itself on success, or a form
+with `target="_top"`, leaves the pending keyed to a frame `tabs.sendMessage`
+can no longer reach. `showBar` therefore falls back to the top frame once
+instead of dropping the credential, and every bar message carries the
+`pendingKey` back on click so a bar in the top frame still saves the credential
+of the frame that submitted. The key is accepted only when it names a pending
+in the clicking tab. While the submitting frame exists, the bar renders inside
+it, so a widget in a small iframe shows a correspondingly small bar — the
+alternative is putting a prompt about that frame's credential on an unrelated
+page.
 
 ### Locked vault: defer, don't drop
 
@@ -215,12 +298,12 @@ can retry, or open the popup from the toolbar and dismiss the bar by hand.
 - The bar is rendered in an open shadow root with all text set via
   `textContent` (page-derived strings are never injected as HTML).
 
-## Generate Password (popup menu, context menu, inline field icon)
+## Generate Password (popup menu, context menu)
 
 The password generator (settings, algorithm, and 7-day local history) lives
 entirely in the agent — see `crates/cosmarden-agent/src/handler/generator/`
 and `docs/password_generator_plan.md` for the full design. The extension has
-three entry points into it, all fully local/offline (no server round trip).
+two entry points into it, both fully local/offline (no server round trip).
 
 ### Message flow
 
@@ -253,14 +336,6 @@ tabs.sendMessage GENERATE_COPY_TO_CLIPBOARD{password}   → content-generate.js 
                                                              persistent background page could
                                                              write directly, but the relay keeps
                                                              one code path for both browsers)
-
-Inline field icon (registration / change-password forms only)
-      ▼
-content-generate.js: runtime.sendMessage(GeneratePassword{settings:null})
-      ▼
-background: sendToAgent(...) → agent generates + records history
-      ▼
-content-generate.js fills the clicked field's group directly (no clipboard)
 ```
 
 ### Agent actions
@@ -269,16 +344,15 @@ content-generate.js fills the clicked field's group directly (no clipboard)
   `Some(settings)` persists them as the new device-wide "last used" settings
   (the desktop pane's Generate button, and any CLI/browser caller fully
   specifying options); `None` reuses whatever is currently persisted — this is
-  what all three extension entry points send, so they always follow whatever
+  what both extension entry points send, so they always follow whatever
   the user last configured on any surface. Every call appends to the local
   7-day history regardless of `Some`/`None`.
 - **`GetPasswordHistory`** → `PasswordHistory { entries }`, pruned to the last
   7 days, newest first. The popup is the only extension surface that asks for
-  it; `background.js` keeps its content-script proxy allowlist to
-  `GeneratePassword` alone, so a page script cannot enumerate generated
-  passwords.
+  it; `background.js` rejects every agent action from a content script, so a
+  page script cannot enumerate generated passwords.
 - Works with no vault unlock and no account configured — generation is local
-  RNG, not a vault operation, so all three entry points work on a fresh
+  RNG, not a vault operation, so both entry points work on a fresh
   install. The popup therefore keeps the menu button on the lock screen too.
 
 ### Popup history view
@@ -292,31 +366,33 @@ content-generate.js fills the clicked field's group directly (no clipboard)
 - Copying a row uses the shared `scheduleClipboardClear`, so generated
   passwords clear on the same 30 s timer as vault copies.
 
-### Inline icon placement heuristic
+### No passive field scan
 
-The icon (`content-generate.js`) never appears on a plain login form (a lone
-password field with no registration signal) — offering to overwrite a login
-password would be actively harmful. It appears when:
-- The scope has 2+ password fields (registration confirm-password pattern,
-  or a change-password form's new+confirm pair) — a field explicitly marked
-  `autocomplete="current-password"` is always excluded from the group, even
-  in an otherwise-qualifying scope.
-- A lone password field has `autocomplete="new-password"`, or the enclosing
-  form's id/name/class/action text matches a registration/signup pattern.
+The extension does not search the page for password fields on load. The only
+DOM discovery is `content.js::fillForm`, which runs when the popup sends
+`FILL_FORM` after an explicit Fill click. It collects password inputs, filters
+to visible ones, and scopes the username search to each field's form (or its
+shadow root).
 
-Clicking the icon fills every field in its group (e.g. both "new" and
-"confirm" boxes) with one freshly generated password; it never touches a
-`current-password` field.
+The toolbar badge is the only passive site indicator: a grey count of vault
+entries whose stored URIs match the tab's host, computed by the agent. It does
+not read the page.
+
+The inline per-field generate icon was removed. It required a full-page scan at
+`document_idle` plus a `MutationObserver` per open shadow root, and it was the
+only reason any content script inspected inputs before a user action.
+Generation now happens only through the popup menu and the context menu; both
+write to the clipboard, never to page inputs.
 
 ### Security notes
 
 - The generated password transits the native-messaging pipe once per request
-  (to be copied or filled) — this is the same trust boundary every other
-  agent-returned secret (`GetPassword`, `GetTotp`) already crosses.
-- The context-menu path never touches page DOM directly; the fill path writes
-  only into the fields already identified as the "new password" group,
-  through the same `setInputValue` dispatch (`input`+`change` events) used by
-  the existing autofill content script.
+  (to be copied) — this is the same trust boundary every other agent-returned
+  secret (`GetPassword`, `GetTotp`) already crosses.
+- The context-menu path never touches page DOM; `content-generate.js` only
+  writes the clipboard. Stored credentials are written only by `content.js`
+  on an explicit `FILL_FORM`, through the same `setInputValue` dispatch
+  (`input`+`change` events) used by the rest of autofill.
 - See [`docs/password_generator_plan.md`](password_generator_plan.md) for the
   at-rest protection (and threat model) of the local 7-day history the agent
   maintains.

@@ -5,19 +5,32 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
+const domSource = readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), 'content-dom.js'),
+    'utf8'
+);
 const source = readFileSync(
     path.join(path.dirname(fileURLToPath(import.meta.url)), 'content-heuristics.js'),
     'utf8'
 );
 // Vitest files are ESM (strict mode), where eval() keeps function declarations
 // local — load through new Function and return the helpers instead.
+// content-dom.js must be in scope: the heuristics call its visibility and
+// shadow-traversal helpers.
 const { findUsernameInput, findUsernameOnlyInput, findPasswordInput, findSubmittedCredentials } = new Function(
-    `${source}\nreturn { findUsernameInput, findUsernameOnlyInput, findPasswordInput, findSubmittedCredentials };`
+    `${domSource}\n${source}\nreturn { findUsernameInput, findUsernameOnlyInput, findPasswordInput, findSubmittedCredentials };`
 )();
 
 function form(html) {
     document.body.innerHTML = `<form id="f">${html}</form>`;
     return document.getElementById('f');
+}
+
+function shadowForm(html) {
+    document.body.innerHTML = '<div id="host"></div>';
+    const root = document.getElementById('host').attachShadow({ mode: 'open' });
+    root.innerHTML = `<form id="sf">${html}</form>`;
+    return { root, form: root.getElementById('sf') };
 }
 
 describe('findUsernameInput', () => {
@@ -115,6 +128,39 @@ describe('findUsernameInput', () => {
         `);
         expect(findUsernameInput(f)).toBeNull();
     });
+
+    // A field associated through the `form` attribute is not a DOM descendant
+    // of the form, so a descendant-only query misses it: the password gets
+    // filled and the username silently does not.
+    it('finds a username associated through the form attribute', () => {
+        document.body.innerHTML = `
+            <input type="email" name="email" form="f">
+            <form id="f"><input type="password" name="password"></form>
+        `;
+        const f = document.getElementById('f');
+        expect(findUsernameInput(f).name).toBe('email');
+    });
+
+    it('finds a username inside the same shadow root', () => {
+        const { form: f } = shadowForm(`
+            <input type="text" name="username">
+            <input type="password" name="password">
+        `);
+        expect(findUsernameInput(f).name).toBe('username');
+    });
+
+    it('skips a honeypot hidden by an ancestor wrapper', () => {
+        document.body.innerHTML = `
+            <div style="display: none">
+                <input type="text" name="username" id="decoy">
+            </div>
+            <form id="f">
+                <input type="text" name="user" id="real">
+                <input type="password" name="password">
+            </form>
+        `;
+        expect(findUsernameInput(document.getElementById('f')).id).toBe('real');
+    });
 });
 
 describe('findUsernameOnlyInput', () => {
@@ -211,6 +257,11 @@ describe('findUsernameOnlyInput', () => {
         `);
         expect(findUsernameOnlyInput().name).toBe('email-real');
     });
+
+    it('finds a username field inside an open shadow root', () => {
+        shadowForm(`<input type="email" name="identifier" autocomplete="username">`);
+        expect(findUsernameOnlyInput().name).toBe('identifier');
+    });
 });
 
 describe('findPasswordInput', () => {
@@ -258,6 +309,15 @@ describe('findPasswordInput', () => {
         expect(findPasswordInput(f)).toBeNull();
     });
 
+    it('refuses a password field hidden by an ancestor wrapper', () => {
+        document.body.innerHTML = `
+            <div style="display: none">
+                <form id="f"><input type="password" name="password"></form>
+            </div>
+        `;
+        expect(findPasswordInput(document.getElementById('f'))).toBeNull();
+    });
+
     it('picks the real password when an OTP field shares the form', () => {
         const f = form(`
             <input type="password" name="verification-code" autocomplete="one-time-code">
@@ -270,6 +330,34 @@ describe('findPasswordInput', () => {
         document.body.innerHTML = `<input id="p" type="password" name="password">`;
         const input = document.getElementById('p');
         expect(findPasswordInput(input)).toBe(input);
+    });
+
+    // Sites that mask a text field, or swap `type` for a "show password"
+    // toggle, still mark it through autocomplete.
+    it('accepts a text field marked autocomplete="current-password"', () => {
+        const f = form(`
+            <input type="text" name="email" autocomplete="username">
+            <input type="text" name="pass" autocomplete="current-password">
+        `);
+        expect(findPasswordInput(f).name).toBe('pass');
+    });
+
+    it('accepts a text field marked autocomplete="new-password"', () => {
+        const f = form(`<input type="text" name="newpass" autocomplete="new-password">`);
+        expect(findPasswordInput(f).name).toBe('newpass');
+    });
+
+    it('finds a password field inside an open shadow root', () => {
+        const { form: f } = shadowForm(`<input type="password" name="password">`);
+        expect(findPasswordInput(f).name).toBe('password');
+    });
+
+    it('finds a password field associated through the form attribute', () => {
+        document.body.innerHTML = `
+            <form id="f"><input type="password" name="password" form="g"></form>
+            <form id="g"></form>
+        `;
+        expect(findPasswordInput(document.getElementById('g')).name).toBe('password');
     });
 });
 
@@ -341,5 +429,26 @@ describe('findSubmittedCredentials', () => {
             <input type="password" name="verification-code" value="123456">
         `);
         expect(findSubmittedCredentials(f).password).toBe('secret1');
+    });
+
+    it('captures a text field marked autocomplete="current-password"', () => {
+        const f = form(`
+            <input type="email" name="email" value="alice@example.com">
+            <input type="text" name="pass" autocomplete="current-password" value="secret1">
+        `);
+        expect(findSubmittedCredentials(f)).toEqual({
+            username: 'alice@example.com',
+            password: 'secret1',
+        });
+    });
+
+    it('captures credentials from a shadow-root login widget with no form', () => {
+        document.body.innerHTML = '<div id="host"></div>';
+        const root = document.getElementById('host').attachShadow({ mode: 'open' });
+        root.innerHTML = `
+            <input type="text" name="username" value="alice">
+            <input type="password" name="password" value="secret1">
+        `;
+        expect(findSubmittedCredentials(root)).toEqual({ username: 'alice', password: 'secret1' });
     });
 });

@@ -266,6 +266,51 @@ test.describe('Chrome Extension Full E2E', () => {
     await formPage.close();
   });
 
+  // ── 3b. Autofill inside an iframe ─────────────────────────────────────────
+
+  test('autofills a login form inside a same-origin iframe', async () => {
+    const formPage = await sharedContext.newPage();
+    await formPage.goto(VW_URL);
+    await formPage.evaluate(() => {
+      document.body.innerHTML =
+        '<iframe id="frame" src="/" style="width:600px;height:400px"></iframe>';
+    });
+
+    // The frame must be a real document (not about:blank): content scripts are
+    // injected per frame, and match_about_blank is deliberately not set.
+    let frame = null;
+    for (let i = 0; i < 50 && !frame; i++) {
+      const candidate = formPage.frames().find((f) => f !== formPage.mainFrame());
+      if (candidate) {
+        await candidate.waitForLoadState('domcontentloaded');
+        frame = candidate;
+      } else {
+        await formPage.waitForTimeout(100);
+      }
+    }
+    expect(frame).not.toBeNull();
+    await frame.evaluate(() => {
+      document.body.innerHTML =
+        '<form><input type="text" id="user"><input type="password" id="pass"></form>';
+    });
+
+    const popupPage = await sharedContext.newPage();
+    await openPopup(popupPage);
+    await expect(popupPage.locator('.entry-name', { hasText: 'Chrome E2E Login' }).first()).toBeVisible({ timeout: 10000 });
+    await formPage.bringToFront();
+
+    const fillBtn = popupPage.locator('.entry:has-text("Chrome E2E Login") button:has-text("Fill")').first();
+    await expect(fillBtn).toBeVisible({ timeout: 5000 });
+    await fillBtn.click();
+
+    // Proves the content script runs in the frame (manifest all_frames) and
+    // that the frame matched the entry's host on its own.
+    await expect(frame.locator('#user')).toHaveValue('chrome-user', { timeout: 5000 });
+    await expect(frame.locator('#pass')).toHaveValue('chrome-pass');
+    await popupPage.close();
+    await formPage.close();
+  });
+
   // ── 4. Unicode + emoji in Login fields ────────────────────────────────────
 
   test('handles non-latin and emoji in Login entry name and fields', async () => {

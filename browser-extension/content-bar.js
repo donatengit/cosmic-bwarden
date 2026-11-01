@@ -7,6 +7,8 @@ const BAR_ERROR_LINGER_MS = 5 * 1000;
 
 let _barHost = null;
 let _barTimer = null;
+// Pending-save key of the bar on screen; echoed back on every button click.
+let _barPendingKey = null;
 
 browser.runtime.onMessage.addListener((message) => {
     if (!message || !message.type) return;
@@ -84,17 +86,25 @@ button:focus-visible {
 
 function sendBarAction(action) {
     try {
-        browser.runtime.sendMessage({ type: 'SAVE_BAR_ACTION', action });
+        // pendingKey names the frame that submitted. The bar can be shown in a
+        // different frame than the one that submitted (the submitting frame
+        // navigated away), so the background cannot rely on this frame's id
+        // alone to find the credential the click is about.
+        const message = { type: 'SAVE_BAR_ACTION', action };
+        if (_barPendingKey) message.pendingKey = _barPendingKey;
+        browser.runtime.sendMessage(message);
     } catch { /* extension reloaded; context gone */ }
 }
 
 function removeSaveBar() {
     if (_barTimer) { clearTimeout(_barTimer); _barTimer = null; }
     if (_barHost) { _barHost.remove(); _barHost = null; }
+    _barPendingKey = null;
 }
 
-function showSaveBar({ mode, domain, entryName }) {
+function showSaveBar({ mode, domain, entryName, pendingKey }) {
     removeSaveBar(); // one bar at a time
+    _barPendingKey = pendingKey || null;
 
     const isLocked = mode === 'locked';
     const isUpdate = mode === 'update';

@@ -1,9 +1,8 @@
-// Unit tests for background.js's toolbar state: the action icon must reflect
+// Unit tests for background.js's toolbar state: the action icon reflects
 // whether the vault is locked or unlocked — the same runtime-state idea as the
 // COSMIC panel applet's lock-state icon swap (icons/white_locked.svg) — not
-// just the black/white color theme. Today updateBadge() only ever sets the
-// badge count and never consults GetConfig, so the toolbar looks identical
-// whether the vault is open or locked.
+// just the black/white color theme. The badge shows the number of entries the
+// agent matched for the tab's host, on a neutral grey background.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -22,7 +21,7 @@ const source = readFileSync(
 // and delivers the response through the real onMessage listener — exercising
 // background.js's own queue machinery against the fake agent.
 function makeFakeBrowser(agent) {
-    const calls = { setIcon: [], setBadgeText: [], setBadgeBackgroundColor: [] };
+    const calls = { setIcon: [], setBadgeText: [], setBadgeBackgroundColor: [], onMessage: null };
     return {
         calls,
         runtime: {
@@ -40,7 +39,7 @@ function makeFakeBrowser(agent) {
                 };
                 return port;
             },
-            onMessage: { addListener: () => {} },
+            onMessage: { addListener: (fn) => { calls.onMessage = fn; } },
         },
         action: {
             setIcon: (opts) => calls.setIcon.push(opts),
@@ -68,14 +67,17 @@ function makeFakeBrowser(agent) {
     };
 }
 
-function makeFakeAgent(locked) {
+function makeFakeAgent(locked, entryCount = 0) {
     const calls = [];
     return {
         calls,
         sendToAgent: async (action) => {
             calls.push(action);
             if (action === 'GetConfig') return { Config: { is_locked: locked, needs_login: false } };
-            if (action && action.GetSidebarEntries) return { SidebarEntries: { entries: [] } };
+            if (action && action.GetSidebarEntries) {
+                const entries = Array.from({ length: entryCount }, (_, i) => ({ id: `entry-${i}` }));
+                return { SidebarEntries: { entries } };
+            }
             throw new Error('unexpected action: ' + JSON.stringify(action));
         },
     };
@@ -83,36 +85,31 @@ function makeFakeAgent(locked) {
 
 // Load the script through new Function in a fresh scope (same pattern as
 // background-save.test.js) and return the functions under test.
-function loadBackground(fakeBrowser) {
+function loadBackground(fakeBrowser, savePrompt = { onVaultUnlocked: () => {} }) {
     const fn = new Function(
         'browser',
-        `${source}\nreturn { updateBadge, setThemeIcon, extractDomain, isContentScriptProxyAllowed, isPopupSender };`
+        'savePrompt',
+        `${source}\nreturn { updateBadge, setThemeIcon, extractDomain, isPopupSender };`
     );
-    return fn(fakeBrowser);
+    return fn(fakeBrowser, savePrompt);
 }
 
-describe('content-script action allowlist', () => {
-    it('allows GeneratePassword from a content script', () => {
+describe('content-script message boundary', () => {
+    it('rejects an agent action sent from a web-page content script', async () => {
+        // No content script needs an agent call any more: the inline generate
+        // icon (the last GeneratePassword proxy) was removed. Fill and save are
+        // handled locally in the listener above this guard.
         const agent = makeFakeAgent(false);
-        const { isContentScriptProxyAllowed } = loadBackground(makeFakeBrowser(agent));
-        expect(isContentScriptProxyAllowed({ GeneratePassword: { settings: null } })).toBe(true);
+        const fakeBrowser = makeFakeBrowser(agent);
+        loadBackground(fakeBrowser);
+        const response = await fakeBrowser.calls.onMessage(
+            { GeneratePassword: { settings: null } },
+            { tab: { id: 1 }, frameId: 0, url: 'https://example.com/' }
+        );
+        expect(response).toEqual({ Error: { message: 'action not allowed from content script' } });
+        expect(agent.calls.some(c => c && c.GeneratePassword)).toBe(false);
     });
-    it('rejects GetPassword / GetEntry / Quit from a content script', () => {
-        const agent = makeFakeAgent(false);
-        const { isContentScriptProxyAllowed } = loadBackground(makeFakeBrowser(agent));
-        expect(isContentScriptProxyAllowed({ GetPassword: { id: 'x' } })).toBe(false);
-        expect(isContentScriptProxyAllowed({ GetEntry: { id: 'x' } })).toBe(false);
-        expect(isContentScriptProxyAllowed('Quit')).toBe(false);
-    });
-    it('rejects the generator history from a content script', () => {
-        // The history is popup-only: a page script that could ask for it would
-        // receive every password generated in the last 7 days, encrypted at
-        // rest but decrypted by the agent on request.
-        const agent = makeFakeAgent(false);
-        const { isContentScriptProxyAllowed } = loadBackground(makeFakeBrowser(agent));
-        expect(isContentScriptProxyAllowed('GetPasswordHistory')).toBe(false);
-        expect(isContentScriptProxyAllowed({ DeleteGeneratedPassword: { created_at: 1 } })).toBe(false);
-    });
+
     it('allows the popup page itself even when rendered in a tab', () => {
         // The full E2E specs open popup.html in a tab; the background must not
         // mistake that for a web-page content script (whose sender.url is an
@@ -123,6 +120,61 @@ describe('content-script action allowlist', () => {
         expect(isPopupSender({ url: 'moz-extension://other/popup/popup.html', tab: {} })).toBe(false);
         expect(isPopupSender({ url: 'https://example.com/', tab: {} })).toBe(false);
         expect(isPopupSender(null)).toBe(false);
+    });
+});
+
+describe('toolbar match badge', () => {
+    it('shows the domain match count on a neutral grey background', async () => {
+        const agent = makeFakeAgent(false, 3);
+        const fakeBrowser = makeFakeBrowser(agent);
+        const { updateBadge } = loadBackground(fakeBrowser);
+
+        await updateBadge(1, 'https://example.com/login');
+
+        expect(fakeBrowser.calls.setBadgeText.at(-1)).toEqual({ text: '3', tabId: 1 });
+        expect(fakeBrowser.calls.setBadgeBackgroundColor.at(-1)).toEqual({
+            color: '#5c5f66',
+            tabId: 1,
+        });
+        const query = agent.calls.find(c => c && c.GetSidebarEntries);
+        expect(query.GetSidebarEntries.domain).toBe('example.com');
+    });
+
+    it('clears the badge when no entry matches the domain', async () => {
+        const agent = makeFakeAgent(false, 0);
+        const fakeBrowser = makeFakeBrowser(agent);
+        const { updateBadge } = loadBackground(fakeBrowser);
+
+        await updateBadge(1, 'https://example.com/login');
+
+        expect(fakeBrowser.calls.setBadgeText.at(-1)).toEqual({ text: '', tabId: 1 });
+        expect(fakeBrowser.calls.setBadgeBackgroundColor).toEqual([]);
+    });
+
+    it('refreshes the count after the vault unlocks', async () => {
+        // The count cannot be read while locked, so the unlock message must
+        // recompute it instead of waiting for the next tab activation.
+        const agent = makeFakeAgent(false, 2);
+        const fakeBrowser = makeFakeBrowser(agent);
+        loadBackground(fakeBrowser);
+
+        await fakeBrowser.calls.onMessage(
+            { type: 'VAULT_UNLOCKED' },
+            { url: 'moz-extension://test-uuid/popup/popup.html', tab: {} }
+        );
+
+        // The refresh is deliberately fire-and-forget, so wait for the agent
+        // round trips it schedules instead of assuming they finished.
+        for (let i = 0; i < 50; i++) {
+            const last = fakeBrowser.calls.setBadgeText.at(-1);
+            if (last && last.text === '2') break;
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+        expect(fakeBrowser.calls.setBadgeText.at(-1)).toEqual({ text: '2', tabId: 1 });
+        expect(fakeBrowser.calls.setBadgeBackgroundColor.at(-1)).toEqual({
+            color: '#5c5f66',
+            tabId: 1,
+        });
     });
 });
 

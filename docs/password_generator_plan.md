@@ -2,7 +2,7 @@
 
 ## Context
 
-A password generator spanning every surface of the app: a new pane on the main Vault window (checkboxes for character groups, length slider, generate/reset buttons, reveal/copy on the result), a 7-day local history of every generated password (listed on the same pane, same reveal/copy), a quick-generate entry in the COSMIC applet's popup menu, and in the browser extension a right-click context-menu entry, an inline per-field icon, and a popup header menu (Generate password / Show previous, the latter rendering the shared history). Nothing like this exists in the codebase today (confirmed by search — it was an open item in `docs/roadmap.md`). Because every surface (desktop UI, applet, CLI, browser extension) must share "last-used settings" and a single history, the generation logic, settings, and history live in the **agent** (the one process all surfaces already talk to), not in any one client.
+A password generator spanning every surface of the app: a new pane on the main Vault window (checkboxes for character groups, length slider, generate/reset buttons, reveal/copy on the result), a 7-day local history of every generated password (listed on the same pane, same reveal/copy), a quick-generate entry in the COSMIC applet's popup menu, and in the browser extension a right-click context-menu entry and a popup header menu (Generate password / Show previous, the latter rendering the shared history). Nothing like this exists in the codebase today (confirmed by search — it was an open item in `docs/roadmap.md`). Because every surface (desktop UI, applet, CLI, browser extension) must share "last-used settings" and a single history, the generation logic, settings, and history live in the **agent** (the one process all surfaces already talk to), not in any one client.
 
 Character groups are 4 checkboxes, Bitwarden-style — **Uppercase, Lowercase, Numbers, Special** (confirmed with the user, not a single combined "Letters" checkbox).
 
@@ -95,11 +95,18 @@ Add an unconditional (not lock-gated) icon button in `view/applet/menu.rs`'s `he
 
 **Context menu** (`manifest.json` + `background.js`): add `"contextMenus"` permission; `browser.contextMenus.create({..., contexts: ['editable']})`; `onClicked` sends `{GeneratePassword: {settings: null}}` through the existing `sendToAgent` FIFO (zero changes needed in `browser_host.rs` — it generically (de)serializes whatever `Action`/`Response` contain). Because a Chrome MV3 background script is a service worker with no clipboard/DOM access (Firefox's persistent background page would have it, but using one code path for both is simpler), the actual clipboard write is relayed to the target tab's content script via `browser.tabs.sendMessage(tab.id, {type: 'GENERATE_COPY_TO_CLIPBOARD', password})`, which calls `navigator.clipboard.writeText` where DOM access exists.
 
+**Status: removed.** The inline per-field icon described in this paragraph was
+removed. It required a passive full-page scan at `document_idle` plus a
+`MutationObserver` per open shadow root. Password fields are now located only
+when the popup sends `FILL_FORM` after an explicit Fill. The implemented
+generation surfaces are the popup menu and the context menu; both write to the
+clipboard.
+
 **Inline per-field icon** (new `content-generate.js`, loaded after `content-heuristics.js`): shows a small icon anchored to a password `<input>` only when (a) the form has ≥2 password fields (registration/change-password), or (b) it has exactly 1 password field **and** a detected username/email field (registration with one password box) — a lone password field with no username field (e.g. a plain login form or PIN gate) gets no icon, which directly encodes "never offer to overwrite a login password." Positioning uses a per-input shadow-DOM host (`content-bar.js`'s shadow-DOM-injection mechanics, but `position: fixed` anchored to `getBoundingClientRect()` instead of a static top bar), repositioned via `ResizeObserver` + scroll/resize listeners + a debounced `MutationObserver` for SPA re-renders — this is the one genuinely novel piece of client logic in the whole feature, with no in-repo precedent to copy. On click: **fill the field(s) directly** (matching Bitwarden's actual UX, not clipboard-copy) via `browser.runtime.sendMessage({GeneratePassword: {settings: null}})`, filling both the password and its detected confirm-password sibling using the native-setter+dispatchEvent trick needed for framework-controlled inputs.
 
-Every browser-extension-originated password (popup menu, context menu or inline icon) round-trips through the agent's `GeneratePassword` handler like every other caller, so it lands in the shared 7-day history automatically — no extra plumbing required.
+Every browser-extension-originated password (popup menu or context menu) round-trips through the agent's `GeneratePassword` handler like every other caller, so it lands in the shared 7-day history automatically — no extra plumbing required.
 
-**Popup header menu** (`popup/popup-generator.js`, added after this plan): the button next to Sync/Lock opens *Generate password* — the same `GeneratePassword{settings:null}` request, then `navigator.clipboard.writeText` plus the shared 30 s clear, since the popup is a normal extension page and writes the clipboard itself — and *Show previous*, which sends `GetPasswordHistory` and renders the 7-day list as masked rows with per-row reveal/copy. The history view is never persisted (`popup-state.js::persistedView` maps it to `list`), its rows hold decrypted passwords only while the view is open, and `GetPasswordHistory` stays out of `background.js`'s content-script allowlist.
+**Popup header menu** (`popup/popup-generator.js`, added after this plan): the button next to Sync/Lock opens *Generate password* — the same `GeneratePassword{settings:null}` request, then `navigator.clipboard.writeText` plus the shared 30 s clear, since the popup is a normal extension page and writes the clipboard itself — and *Show previous*, which sends `GetPasswordHistory` and renders the 7-day list as masked rows with per-row reveal/copy. The history view is never persisted (`popup-state.js::persistedView` maps it to `list`), its rows hold decrypted passwords only while the view is open, and `background.js` rejects every agent action from a content script.
 
 ## File-by-file summary
 
@@ -112,7 +119,7 @@ Every browser-extension-originated password (popup menu, context menu or inline 
 | UI | `message.rs`, `app/state.rs`, `view/vault/mod.rs`, `view/vault/generator.rs` (new), `view/vault/sidebar.rs`, `app/update/mod.rs`, `app/update/pwgen.rs` (new), `app/update/applet.rs`, `app/tasks.rs`, `i18n/en/cosmarden_ui.ftl` |
 | Browser extension | `manifest.json`, `background.js`, `content-generate.js` (new) |
 | Docs | `docs/browser_integration.md` (new "Generate Password" section), `docs/roadmap.md` (check off the backlog item), `CONTEXT.md`, `AGENTS.md` (new subsection: key/history file paths + threat model) |
-| Tests | `handler/generator/algorithm.rs` (inline unit tests), `crates/cosmarden-tests/src/generator.rs` (new E2E), `tests/browser-extension/fixtures/change_password.html` (new), `tests/browser-extension/playwright/generate-password.spec.js` (new) |
+| Tests | `handler/generator/algorithm.rs` (inline unit tests), `crates/cosmarden-tests/src/generator.rs` (new E2E), `tests/browser-extension/playwright/generate-password.spec.js` (new) |
 
 ## Phasing
 

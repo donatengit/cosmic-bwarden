@@ -53,10 +53,17 @@ function makeFakeBrowser() {
         },
         tabs: {
             sentMessages: [],
-            async sendMessage(tabId, message) {
-                this.sentMessages.push({ tabId, message });
+            async sendMessage(tabId, message, options) {
+                const frameId = options && options.frameId;
+                this.sentMessages.push({ tabId, frameId, message });
+                // Frames listed here are gone, as after a navigation: the real
+                // API rejects with "Receiving end does not exist".
+                if (this.failedFrames.has(frameId)) {
+                    throw new Error('Could not establish connection. Receiving end does not exist.');
+                }
                 return { Ack: true };
             },
+            failedFrames: new Set(),
         },
     };
 }
@@ -151,16 +158,16 @@ describe('onBarAction', () => {
         });
         const savePrompt = loadSavePrompt(fakeBrowser, agent);
 
-        await savePrompt.onLoginSubmitted(7, {
+        await savePrompt.onLoginSubmitted(7, 0, {
             url: 'https://example.com/login', username: 'alice', password: 'hunter2',
         });
         // Bypass the SPA-fallback setTimeout — call the same evaluation path
         // it would have triggered, directly.
         await savePrompt.onTabComplete(7);
 
-        expect(await savePrompt.getPendingSave(7)).not.toBeNull();
+        expect(await savePrompt.getPendingSave(7, 0)).not.toBeNull();
 
-        const result = await savePrompt.onBarAction(7, 'save');
+        const result = await savePrompt.onBarAction(7, 0, 'save');
         expect(result).toEqual({ Ack: true });
         expect(agent.calls.at(-1)).toEqual({
             AddEntry: {
@@ -174,7 +181,7 @@ describe('onBarAction', () => {
                 uris: [{ uri: 'https://example.com', match_type: null }],
             },
         });
-        expect(await savePrompt.getPendingSave(7)).toBeNull();
+        expect(await savePrompt.getPendingSave(7, 0)).toBeNull();
     });
 
     it('keeps pending save when the agent rejects so the user can retry', async () => {
@@ -187,16 +194,16 @@ describe('onBarAction', () => {
         });
         const savePrompt = loadSavePrompt(fakeBrowser, agent);
 
-        await savePrompt.onLoginSubmitted(7, {
+        await savePrompt.onLoginSubmitted(7, 0, {
             url: 'https://example.com/login', username: 'alice', password: 'hunter2',
         });
         await savePrompt.onTabComplete(7);
 
-        const result = await savePrompt.onBarAction(7, 'save');
+        const result = await savePrompt.onBarAction(7, 0, 'save');
         expect(result).toEqual({ Error: { message: 'server down' } });
-        expect(await savePrompt.getPendingSave(7)).not.toBeNull();
+        expect(await savePrompt.getPendingSave(7, 0)).not.toBeNull();
         expect(fakeBrowser.tabs.sentMessages.at(-1)).toEqual(
-            { tabId: 7, message: { type: 'SAVE_BAR_ERROR' } },
+            { tabId: 7, frameId: 0, message: { type: 'SAVE_BAR_ERROR' } },
         );
     });
 
@@ -204,12 +211,12 @@ describe('onBarAction', () => {
         const fakeBrowser = makeFakeBrowser();
         const savePrompt = loadSavePrompt(fakeBrowser, makeFakeAgent(() => ({ Ack: true })));
 
-        const result = await savePrompt.onBarAction(999, 'save');
+        const result = await savePrompt.onBarAction(999, 0, 'save');
         expect(result).toEqual({ Ack: true });
         // The bar is stuck on "Saving…" waiting for a response — it must get
         // one, rather than silently hanging until its own auto-dismiss timer.
         expect(fakeBrowser.tabs.sentMessages).toEqual([
-            { tabId: 999, message: { type: 'SAVE_BAR_ERROR' } },
+            { tabId: 999, frameId: 0, message: { type: 'SAVE_BAR_ERROR' } },
         ]);
     });
 
@@ -217,7 +224,7 @@ describe('onBarAction', () => {
         const fakeBrowser = makeFakeBrowser();
         const savePrompt = loadSavePrompt(fakeBrowser, makeFakeAgent(() => ({ Ack: true })));
 
-        const result = await savePrompt.onBarAction(999, 'dismiss');
+        const result = await savePrompt.onBarAction(999, 0, 'dismiss');
         expect(result).toEqual({ Ack: true });
         expect(fakeBrowser.tabs.sentMessages).toEqual([]);
     });
@@ -237,17 +244,17 @@ describe('onBarAction', () => {
         });
         const savePrompt = loadSavePrompt(fakeBrowser, agent);
 
-        await savePrompt.onLoginSubmitted(3, {
+        await savePrompt.onLoginSubmitted(3, 0, {
             url: 'https://example.com/login', username: 'alice', password: 'hunter2',
         });
         await savePrompt.onTabComplete(3); // mode ends up 'save'
 
         // Simulate clicking "Update" against a pending entry evaluated as 'save'.
-        const result = await savePrompt.onBarAction(3, 'update');
+        const result = await savePrompt.onBarAction(3, 0, 'update');
         expect(result).toEqual({ Ack: true });
-        expect(await savePrompt.getPendingSave(3)).toBeNull();
+        expect(await savePrompt.getPendingSave(3, 0)).toBeNull();
         expect(fakeBrowser.tabs.sentMessages.at(-1)).toEqual(
-            { tabId: 3, message: { type: 'SAVE_BAR_ERROR' } },
+            { tabId: 3, frameId: 0, message: { type: 'SAVE_BAR_ERROR' } },
         );
     });
 
@@ -270,17 +277,17 @@ describe('onBarAction', () => {
         });
 
         const firstInstance = loadSavePrompt(fakeBrowser, agent);
-        await firstInstance.onLoginSubmitted(42, {
+        await firstInstance.onLoginSubmitted(42, 0, {
             url: 'https://example.com/login', username: 'alice', password: 'hunter2',
         });
         await firstInstance.onTabComplete(42);
-        expect(await firstInstance.getPendingSave(42)).not.toBeNull();
+        expect(await firstInstance.getPendingSave(42, 0)).not.toBeNull();
 
         // Simulate the service worker being killed and restarted: a brand
         // new module instance, sharing only the persistent fakeBrowser store.
         const restartedInstance = loadSavePrompt(fakeBrowser, agent);
 
-        const result = await restartedInstance.onBarAction(42, 'save');
+        const result = await restartedInstance.onBarAction(42, 0, 'save');
         expect(result).toEqual({ Ack: true });
         expect(agent.calls.some((c) => c.AddEntry)).toBe(true);
     });
@@ -294,17 +301,17 @@ describe('onBarAction', () => {
         });
         const savePrompt = loadSavePrompt(fakeBrowser, agent);
 
-        await savePrompt.onLoginSubmitted(5, {
+        await savePrompt.onLoginSubmitted(5, 0, {
             url: 'https://example.com/login', username: 'alice', password: 'hunter2',
         });
         await savePrompt.onTabComplete(5);
-        expect(await savePrompt.getPendingSave(5)).not.toBeNull();
+        expect(await savePrompt.getPendingSave(5, 0)).not.toBeNull();
 
-        fakeBrowser.alarms._fire('pendingSaveExpire:5');
+        fakeBrowser.alarms._fire('pendingSaveExpire:5:0');
         // clearPendingSave is async; let its microtasks settle.
         await new Promise((r) => setTimeout(r, 0));
 
-        expect(await savePrompt.getPendingSave(5)).toBeNull();
+        expect(await savePrompt.getPendingSave(5, 0)).toBeNull();
     });
 });
 
@@ -327,7 +334,7 @@ describe('save prompt with a locked vault (Unlock & Save)', () => {
         });
         const savePrompt = loadSavePrompt(fakeBrowser, agent);
 
-        await savePrompt.onLoginSubmitted(21, {
+        await savePrompt.onLoginSubmitted(21, 0, {
             url: 'https://example.com/login', username: 'alice', password: 'hunter2',
         });
         await savePrompt.onTabComplete(21);
@@ -335,7 +342,7 @@ describe('save prompt with a locked vault (Unlock & Save)', () => {
         // Locked vault: the submission survives evaluation instead of being
         // silently dropped, and a "locked" bar is shown so the user knows to
         // unlock.
-        expect(await savePrompt.getPendingSave(21)).not.toBeNull();
+        expect(await savePrompt.getPendingSave(21, 0)).not.toBeNull();
         expect(fakeBrowser.tabs.sentMessages.some(m =>
             m.message && m.message.type === 'SHOW_SAVE_BAR' && m.message.mode === 'locked'
         )).toBe(true);
@@ -367,12 +374,12 @@ describe('save prompt with a locked vault (Unlock & Save)', () => {
         });
         const savePrompt = loadSavePrompt(fakeBrowser, agent);
 
-        await savePrompt.onLoginSubmitted(22, {
+        await savePrompt.onLoginSubmitted(22, 0, {
             url: 'https://example.com/login', username: 'alice', password: 'hunter2',
         });
         await savePrompt.onTabComplete(22);
 
-        expect(await savePrompt.getPendingSave(22)).not.toBeNull();
+        expect(await savePrompt.getPendingSave(22, 0)).not.toBeNull();
 
         locked = false;
         await savePrompt.onTabComplete(22);
@@ -399,7 +406,7 @@ describe('save prompt with a locked vault (Unlock & Save)', () => {
         const savePrompt = loadSavePrompt(fakeBrowser, agent);
 
         for (const tabId of [31, 32]) {
-            await savePrompt.onLoginSubmitted(tabId, {
+            await savePrompt.onLoginSubmitted(tabId, 0, {
                 url: 'https://example.com/login', username: 'alice', password: 'hunter2',
             });
             await savePrompt.onTabComplete(tabId);
@@ -428,17 +435,17 @@ describe('save prompt with a locked vault (Unlock & Save)', () => {
         });
         const savePrompt = loadSavePrompt(fakeBrowser, agent);
 
-        await savePrompt.onLoginSubmitted(33, {
+        await savePrompt.onLoginSubmitted(33, 0, {
             url: 'https://example.com/login', username: 'alice', password: 'hunter2',
         });
-        const afterSubmit = fakeBrowser.alarms._created('pendingSaveExpire:33');
+        const afterSubmit = fakeBrowser.alarms._created('pendingSaveExpire:33:0');
 
         await savePrompt.onTabComplete(33);
-        expect(fakeBrowser.alarms._created('pendingSaveExpire:33')).toBe(afterSubmit + 1);
+        expect(fakeBrowser.alarms._created('pendingSaveExpire:33:0')).toBe(afterSubmit + 1);
 
         await savePrompt.onTabComplete(33);
         await savePrompt.onTabComplete(33);
-        expect(fakeBrowser.alarms._created('pendingSaveExpire:33')).toBe(afterSubmit + 1);
+        expect(fakeBrowser.alarms._created('pendingSaveExpire:33:0')).toBe(afterSubmit + 1);
     });
 
     // Regression: the in-page bar auto-dismisses after 30s, and routing that
@@ -454,13 +461,175 @@ describe('save prompt with a locked vault (Unlock & Save)', () => {
         });
         const savePrompt = loadSavePrompt(fakeBrowser, agent);
 
-        await savePrompt.onLoginSubmitted(34, {
+        await savePrompt.onLoginSubmitted(34, 0, {
             url: 'https://example.com/login', username: 'alice', password: 'hunter2',
         });
         await savePrompt.onTabComplete(34);
-        expect(await savePrompt.getPendingSave(34)).not.toBeNull();
+        expect(await savePrompt.getPendingSave(34, 0)).not.toBeNull();
 
-        await savePrompt.onBarAction(34, 'dismiss');
-        expect(await savePrompt.getPendingSave(34)).toBeNull();
+        await savePrompt.onBarAction(34, 0, 'dismiss');
+        expect(await savePrompt.getPendingSave(34, 0)).toBeNull();
+    });
+});
+
+describe('frames', () => {
+    // The content scripts run in every frame of a tab, so two login widgets on
+    // one page (the page's own form plus an embedded component) submit
+    // independently. Keyed by tab alone, the second submission overwrote the
+    // first and the visible bar then saved the wrong password.
+    it('keeps two frames of the same tab separate', async () => {
+        const fakeBrowser = makeFakeBrowser();
+        const agent = makeFakeAgent((action) => {
+            if (action === 'GetConfig') return { Config: { is_locked: false, needs_login: false } };
+            if (action.CheckLoginMatch) return { LoginMatch: { entry_id: null, name: null, password_matches: false } };
+            if (action.AddEntry) return { Ack: true };
+            throw new Error('unexpected action');
+        });
+        const savePrompt = loadSavePrompt(fakeBrowser, agent);
+
+        await savePrompt.onLoginSubmitted(9, 0, {
+            url: 'https://example.com/login', username: 'alice', password: 'top-frame',
+        });
+        await savePrompt.onLoginSubmitted(9, 3, {
+            url: 'https://widget.example.com/login', username: 'bob', password: 'iframe',
+        });
+        await savePrompt.onTabComplete(9);
+
+        expect((await savePrompt.getPendingSave(9, 0)).username).toBe('alice');
+        expect((await savePrompt.getPendingSave(9, 3)).username).toBe('bob');
+
+        // Each bar is shown in the frame that submitted, not in every frame.
+        const bars = fakeBrowser.tabs.sentMessages.filter(m => m.message.type === 'SHOW_SAVE_BAR');
+        expect(bars.map(m => m.frameId).sort()).toEqual([0, 3]);
+
+        // Saving the iframe's bar must save the iframe's credential and leave
+        // the top frame's pending state alone.
+        await savePrompt.onBarAction(9, 3, 'save');
+        const addEntry = agent.calls.filter(c => c && c.AddEntry).at(-1);
+        expect(addEntry.AddEntry.password).toBe('iframe');
+        expect(await savePrompt.getPendingSave(9, 3)).toBeNull();
+        expect(await savePrompt.getPendingSave(9, 0)).not.toBeNull();
+    });
+
+    it('clears every frame of a tab when the tab closes', async () => {
+        const fakeBrowser = makeFakeBrowser();
+        const agent = makeFakeAgent(() => ({ Config: { is_locked: true, needs_login: false } }));
+        const savePrompt = loadSavePrompt(fakeBrowser, agent);
+
+        for (const frameId of [0, 2]) {
+            await savePrompt.onLoginSubmitted(11, frameId, {
+                url: 'https://example.com/login', username: 'alice', password: 'hunter2',
+            });
+        }
+        await savePrompt.onTabRemoved(11);
+
+        expect(await savePrompt.getPendingSave(11, 0)).toBeNull();
+        expect(await savePrompt.getPendingSave(11, 2)).toBeNull();
+    });
+
+    it('re-offers every deferred frame on VAULT_UNLOCKED', async () => {
+        let locked = true;
+        const fakeBrowser = makeFakeBrowser();
+        const agent = makeFakeAgent((action) => {
+            if (action === 'GetConfig') return { Config: { is_locked: locked, needs_login: false } };
+            if (action.CheckLoginMatch) return { LoginMatch: { entry_id: null, name: null, password_matches: false } };
+            throw new Error('unexpected action');
+        });
+        const savePrompt = loadSavePrompt(fakeBrowser, agent);
+
+        for (const frameId of [0, 4]) {
+            await savePrompt.onLoginSubmitted(12, frameId, {
+                url: 'https://example.com/login', username: 'alice', password: 'hunter2',
+            });
+            await savePrompt.onTabComplete(12);
+        }
+
+        locked = false;
+        await savePrompt.onVaultUnlocked();
+
+        const offered = fakeBrowser.tabs.sentMessages.filter(m =>
+            m.message.type === 'SHOW_SAVE_BAR' && m.message.mode === 'save'
+        );
+        expect(offered.map(m => `${m.tabId}:${m.frameId}`).sort()).toEqual(['12:0', '12:4']);
+    });
+
+    // A login widget in an iframe can submit and then disappear: it removes
+    // itself on success, or its form targets the whole tab (`target="_top"`).
+    // The frame id is gone, tabs.sendMessage to it rejects, and the credential
+    // must not be dropped — the bar moves to the top frame instead.
+    it('falls back to the top frame when the submitting frame is gone', async () => {
+        const fakeBrowser = makeFakeBrowser();
+        fakeBrowser.tabs.failedFrames.add(3);
+        const agent = makeFakeAgent((action) => {
+            if (action === 'GetConfig') return { Config: { is_locked: false, needs_login: false } };
+            if (action.CheckLoginMatch) return { LoginMatch: { entry_id: null, name: null, password_matches: false } };
+            if (action.AddEntry) return { Ack: true };
+            throw new Error('unexpected action');
+        });
+        const savePrompt = loadSavePrompt(fakeBrowser, agent);
+
+        await savePrompt.onLoginSubmitted(21, 3, {
+            url: 'https://widget.example.com/login', username: 'bob', password: 'iframepass',
+        });
+        await savePrompt.onTabComplete(21);
+
+        // Still pending, and the bar was shown in the top frame with the
+        // submitting frame's key so the click can find it again.
+        const pending = await savePrompt.getPendingSave(21, 3);
+        expect(pending).not.toBeNull();
+        expect(pending.barFrameId).toBe(0);
+        const bars = fakeBrowser.tabs.sentMessages.filter(m => m.message.type === 'SHOW_SAVE_BAR');
+        expect(bars.at(-1).frameId).toBe(0);
+        expect(bars.at(-1).message.pendingKey).toBe('pendingSave:21:3');
+
+        // Clicking that bar (frame 0) saves the iframe's credential...
+        await savePrompt.onBarAction(21, 0, 'save', 'pendingSave:21:3');
+        const addEntry = agent.calls.filter(c => c && c.AddEntry).at(-1);
+        expect(addEntry.AddEntry.password).toBe('iframepass');
+        expect(await savePrompt.getPendingSave(21, 3)).toBeNull();
+
+        // ...and the bar that gets hidden is the one in the frame that clicked.
+        const last = fakeBrowser.tabs.sentMessages.at(-1);
+        expect(last).toMatchObject({ tabId: 21, frameId: 0, message: { type: 'HIDE_SAVE_BAR' } });
+    });
+
+    it('ignores a bar key that names another tab', async () => {
+        const fakeBrowser = makeFakeBrowser();
+        const agent = makeFakeAgent((action) => {
+            if (action === 'GetConfig') return { Config: { is_locked: true, needs_login: false } };
+            throw new Error('unexpected action');
+        });
+        const savePrompt = loadSavePrompt(fakeBrowser, agent);
+
+        await savePrompt.onLoginSubmitted(21, 0, {
+            url: 'https://example.com/login', username: 'alice', password: 'mine',
+        });
+        await savePrompt.onLoginSubmitted(99, 3, {
+            url: 'https://other.example/login', username: 'mallory', password: 'theirs',
+        });
+
+        // A bar in tab 21 cannot dismiss tab 99's credential by naming its key.
+        await savePrompt.onBarAction(21, 0, 'dismiss', 'pendingSave:99:3');
+        expect(await savePrompt.getPendingSave(99, 3)).not.toBeNull();
+        expect(await savePrompt.getPendingSave(21, 0)).toBeNull();
+    });
+
+    it('drops the credential when the tab itself is gone', async () => {
+        const fakeBrowser = makeFakeBrowser();
+        fakeBrowser.tabs.failedFrames.add(3);
+        fakeBrowser.tabs.failedFrames.add(0);
+        const agent = makeFakeAgent((action) => {
+            if (action === 'GetConfig') return { Config: { is_locked: false, needs_login: false } };
+            if (action.CheckLoginMatch) return { LoginMatch: { entry_id: null, name: null, password_matches: false } };
+            throw new Error('unexpected action');
+        });
+        const savePrompt = loadSavePrompt(fakeBrowser, agent);
+
+        await savePrompt.onLoginSubmitted(22, 3, {
+            url: 'https://example.com/login', username: 'alice', password: 'hunter2',
+        });
+        await savePrompt.onTabComplete(22);
+
+        expect(await savePrompt.getPendingSave(22, 3)).toBeNull();
     });
 });
