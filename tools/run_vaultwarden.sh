@@ -13,7 +13,8 @@ CONTAINER_NAME="corbw-vaultwarden-test"
 # Stop and remove existing container if it exists
 echo "Cleaning up old container..."
 docker stop $CONTAINER_NAME &> /dev/null
-docker rm $CONTAINER_NAME &> /dev/null
+# -v: /data is an anonymous volume; without it each restart leaves one behind.
+docker rm -v $CONTAINER_NAME &> /dev/null
 
 # Start Vaultwarden
 # Map to port 8080 by default

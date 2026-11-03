@@ -18,7 +18,9 @@ cleanup() {
         wait "$AGENT_PID" 2>/dev/null || true
     fi
     DOCKER_HOST="${DOCKER_HOST:-}" docker stop corbw-vaultwarden-chrome 2>/dev/null || true
-    DOCKER_HOST="${DOCKER_HOST:-}" docker rm   corbw-vaultwarden-chrome 2>/dev/null || true
+    # -v: Vaultwarden mounts /data as an anonymous volume, and a plain rm leaves
+    # it behind, one per run (as the Rust harness's `v: true` notes).
+    DOCKER_HOST="${DOCKER_HOST:-}" docker rm -v corbw-vaultwarden-chrome 2>/dev/null || true
     cleanup_profile "$TEST_PROFILE" || true
     rm -f -- /tmp/agent_chrome_test.log /tmp/vaultwarden_chrome_test.log \
              /tmp/native-host-debug.log
@@ -34,7 +36,7 @@ if [ -z "$DOCKER_HOST" ] && [ -S "/run/user/$(id -u)/podman/podman.sock" ]; then
     export DOCKER_HOST="unix:///run/user/$(id -u)/podman/podman.sock"
 fi
 DOCKER_HOST="$DOCKER_HOST" docker stop corbw-vaultwarden-chrome 2>/dev/null || true
-DOCKER_HOST="$DOCKER_HOST" docker rm   corbw-vaultwarden-chrome 2>/dev/null || true
+DOCKER_HOST="$DOCKER_HOST" docker rm -v corbw-vaultwarden-chrome 2>/dev/null || true
 # Keep the container off the developer's cores for the length of the run. These
 # match the caps the Rust harness applies (container_limits.rs); a container is
 # not covered by the systemd scope `just` puts around the test command, because
