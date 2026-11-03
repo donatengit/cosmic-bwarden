@@ -4,6 +4,7 @@ pub mod auth;
 pub mod auth_actions;
 pub mod generator_actions;
 pub mod lifecycle;
+pub mod navigation;
 pub mod pwgen;
 pub mod unlock_notify;
 pub mod vault;
@@ -24,6 +25,17 @@ pub(crate) use cosmarden_core::CLIPBOARD_CLEAR_SECS;
 
 impl CosmardenApp {
     pub fn update_app(&mut self, message: Message) -> Task<Message> {
+        // An open draft is the one piece of state no navigation may drop
+        // silently: Add, another entry, Settings and the generator all replace
+        // the edit buffer. Park the destination and ask first.
+        if self.hold_for_draft(&message) {
+            return Task::none();
+        }
+
+        if let Some(task) = self.update_navigation(message.clone()) {
+            return task;
+        }
+
         if let Some(task) = self.update_lifecycle(message.clone()) {
             return task;
         }
@@ -54,6 +66,9 @@ impl CosmardenApp {
 
         // Handle remaining messages
         match message {
+            // Answered by `update_navigation` before the chain above.
+            Message::DiscardEditConfirmed | Message::DiscardEditCancelled => Task::none(),
+
             Message::EmailChanged(_)
             | Message::PasswordChanged(_)
             | Message::ServerChanged(_)

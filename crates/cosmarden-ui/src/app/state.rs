@@ -6,7 +6,7 @@ use cosmic::iced::window;
 use cosmic::widget;
 use std::collections::{HashMap, HashSet};
 
-use crate::message::{UnlockMode, View, WindowState};
+use crate::message::{Message, UnlockMode, View, WindowState};
 
 /// libcosmic's `run_single_instance`/`dbus_activation` derive a D-Bus object
 /// path directly from this by replacing `.` with `/` — each dot-separated
@@ -176,6 +176,11 @@ pub struct CosmardenApp {
     /// Entry id received via `Event::OpenEntry` before the vault view was ready.
     /// Applied as `SelectEntry` on the next transition to `View::Vault`.
     pub pending_vault_entry: Option<String>,
+    /// A navigation message parked while an edit draft was open, waiting for
+    /// the discard confirmation in `view_dialogs`. Replayed verbatim once the
+    /// user confirms, so each destination keeps its single definition in the
+    /// module that already handles it.
+    pub pending_navigation: Option<Message>,
     /// Mirrors `State::sync_failed` from the agent. True when the last server
     /// operation (add/update/delete/sync) failed. Shown as a red "Not synced"
     /// button so the user knows the vault may be out of date.
@@ -349,6 +354,7 @@ impl Default for CosmardenApp {
             reprompt_password_revealed: false,
             protocol_mismatch: false,
             pending_vault_entry: None,
+            pending_navigation: None,
             sync_failed: false,
             syncing: false,
             deleting: false,

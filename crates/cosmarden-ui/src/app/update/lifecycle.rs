@@ -146,7 +146,17 @@ impl CosmardenApp {
                                 self.focus_unlock_input(),
                             ]));
                         } else {
-                            self.view = View::Vault;
+                            // The unlocked vault is the default pane only when
+                            // the user is not already on one. Every sync
+                            // broadcasts VaultChanged, which re-reads the
+                            // config — including a save from the browser
+                            // extension or another surface — and this branch
+                            // used to force View::Vault unconditionally, so a
+                            // background refresh threw the user out of Settings
+                            // or the generator pane mid-task.
+                            if !self.view.is_unlocked() {
+                                self.view = View::Vault;
+                            }
                             // Fetch all entries on initial vault open to populate the
                             // local cache. Local filtering handles search from here on.
                             self.search_id += 1;

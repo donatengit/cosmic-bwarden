@@ -13,7 +13,7 @@
 
 use crate::app::state::CosmardenApp;
 use crate::app::tasks::fetch_sidebar_entries;
-use crate::message::Message;
+use crate::message::{Message, View};
 use cosmarden_core::agent_client::AgentClient;
 use cosmarden_core::db::{Entry, EntryData, Secret};
 use cosmarden_core::protocol::entry_save as save;
@@ -51,6 +51,13 @@ impl CosmardenApp {
                 self.selected_entry_id = None;
                 self.notes_content = cosmic::widget::text_editor::Content::new();
                 self.edit_password_revealed = false;
+                // The Add button sits in the sidebar, which stays visible while
+                // the generator or settings pane occupies the content pane —
+                // and that pane is chosen from `view` before `selected_entry`.
+                // Without this, the click built an edit buffer that nothing
+                // rendered, so the button looked dead. Selecting an entry
+                // already does the same thing; Add must match it.
+                self.view = View::Vault;
                 Some(Task::none())
             }
             Message::EditEntry => {

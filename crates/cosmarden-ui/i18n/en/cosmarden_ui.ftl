@@ -178,6 +178,11 @@ notes = Notes
 delete-entry = Delete Entry
 delete-entry-title = Delete Entry?
 confirm-delete = Are you sure you want to delete this entry? This action cannot be undone.
+# Dialog shown when Add / Settings / the generator / another entry is picked
+# while the entry editor holds unsaved changes. Confirming drops the draft.
+discard-edit-title = Discard Changes?
+confirm-discard-edit = This entry has changes that were not saved. Discard them?
+discard = Discard
 # { $id } is the entry's unique identifier.
 entry-id = ID: { $id }
 

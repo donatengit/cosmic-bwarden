@@ -168,6 +168,20 @@ impl CosmardenApp {
                     .width(Length::Fixed(400.0))
                     .into(),
             )
+        } else if self.pending_navigation.is_some() {
+            Some(
+                cosmic::widget::dialog()
+                    .title(fl!("discard-edit-title"))
+                    .body(fl!("confirm-discard-edit"))
+                    .primary_action(
+                        button::destructive(fl!("discard")).on_press(Message::DiscardEditConfirmed),
+                    )
+                    .secondary_action(
+                        button::standard(fl!("cancel")).on_press(Message::DiscardEditCancelled),
+                    )
+                    .width(Length::Fixed(400.0))
+                    .into(),
+            )
         } else if self.generator_history_delete_pending.is_some() {
             Some(
                 cosmic::widget::dialog()

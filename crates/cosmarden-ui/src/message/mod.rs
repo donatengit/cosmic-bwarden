@@ -110,6 +110,10 @@ pub enum Message {
     /// Full `GetEntry` result for the edit form (selection used `GetEntryMeta`).
     EditEntryLoaded(Result<Entry, String>),
     CancelEdit,
+    /// A navigation picked while an edit draft was open. The discard dialog
+    /// asks first; confirming drops the draft and replays the parked message.
+    DiscardEditConfirmed,
+    DiscardEditCancelled,
     SaveEdit,
     EditFieldChanged(String, String), // field name, value
     EditNameChanged(String),

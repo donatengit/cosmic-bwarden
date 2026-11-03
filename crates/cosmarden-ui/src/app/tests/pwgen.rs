@@ -35,6 +35,32 @@ fn generator_view_clicked_switches_view_and_clears_vault_selection() {
 }
 
 #[test]
+fn add_entry_works_while_the_generator_or_settings_pane_is_open() {
+    // Add lives in the sidebar, which stays visible while the generator or
+    // settings pane occupies the content pane. `AddEntryRequested` built the
+    // edit buffer but left `view` on that pane, and the content pane is chosen
+    // from `view` before `selected_entry`, so the click produced nothing on
+    // screen and the button looked dead. Selecting an entry already switched
+    // back to `View::Vault`; Add has to do the same.
+    for view in [View::PasswordGenerator, View::Settings] {
+        let mut app = CosmardenApp {
+            view: view.clone(),
+            ..Default::default()
+        };
+
+        let _ = app.update(Message::AddEntryRequested);
+
+        assert_eq!(app.view, View::Vault, "Add must leave {view:?}");
+        assert!(app.selected_entry.is_some(), "no entry for the editor");
+        assert!(app.editing_entry.is_some(), "no edit buffer to show");
+        assert!(
+            app.selected_entry_id.is_none(),
+            "a new entry is not a sidebar selection"
+        );
+    }
+}
+
+#[test]
 fn charset_toggles_mutate_only_the_targeted_field() {
     let mut app = CosmardenApp::default();
     let defaults = GeneratorSettings::default();

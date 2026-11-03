@@ -11,6 +11,7 @@ impl CosmardenApp {
     pub(crate) fn wipe_session_secrets(&mut self) {
         self.selected_entry = None;
         self.editing_entry = None;
+        self.pending_navigation = None;
         self.selected_entry_id = None;
         self.entries.clear();
         self.all_entries.clear();

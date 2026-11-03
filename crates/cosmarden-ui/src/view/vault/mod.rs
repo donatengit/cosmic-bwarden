@@ -16,6 +16,11 @@ impl CosmardenApp {
     /// The content (right) pane: settings, generator, entry details, or an
     /// empty "select an entry" placeholder. Shared by the placeholder layout
     /// and the resizable split so the two can't drift.
+    ///
+    /// The order is the routing rule: a pane the user explicitly opened wins
+    /// over whatever entry happens to be selected. Any action that puts an
+    /// entry on screen (Add, a reprompt) must therefore leave `View::Vault`
+    /// behind, or it builds a buffer this function never renders.
     fn view_vault_right_panel(&self) -> Element<'_, Message> {
         if self.view == View::Settings {
             self.view_settings()

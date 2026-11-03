@@ -31,6 +31,8 @@ impl Message {
             Self::EditEntry => "EditEntry",
             Self::EditEntryLoaded(_) => "EditEntryLoaded",
             Self::CancelEdit => "CancelEdit",
+            Self::DiscardEditConfirmed => "DiscardEditConfirmed",
+            Self::DiscardEditCancelled => "DiscardEditCancelled",
             Self::SaveEdit => "SaveEdit",
             Self::EditFieldChanged(_, _) => "EditFieldChanged",
             Self::EditNameChanged(_) => "EditNameChanged",

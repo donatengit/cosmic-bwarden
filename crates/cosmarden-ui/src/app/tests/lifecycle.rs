@@ -67,6 +67,11 @@ async fn test_lock_logout_clears_state() {
     app.revealed_fields
         .insert(("1".to_string(), "Password".to_string()));
 
+    // A parked navigation must not outlive the lock: confirming it later would
+    // replay a pane switch (the generator counts as an unlocked view) after the
+    // vault was supposed to be closed.
+    app.pending_navigation = Some(Message::GeneratorViewClicked);
+
     // 1. Test Lock
     app.error = Some("prior error".to_string());
     let _ = app.update(Message::LockResult);
@@ -75,6 +80,10 @@ async fn test_lock_logout_clears_state() {
     assert!(app.selected_entry_id.is_none());
     assert!(app.revealed_fields.is_empty());
     assert!(app.error.is_none(), "LockResult must clear app.error");
+    assert!(
+        app.pending_navigation.is_none(),
+        "LockResult must discard a parked navigation"
+    );
 
     // 2. Setup for Logout
     app.view = View::Vault;
@@ -169,6 +178,35 @@ async fn test_config_received_routes_by_has_account_not_needs_login() {
         config, true, false, false, false, 0, 0,
     ))));
     assert_eq!(app.view, View::Setup);
+}
+
+// A config refresh must not move the user off a pane they chose. Every sync
+// broadcasts VaultChanged (a browser-extension save, a CLI add, the Sync
+// button), and the UI answers it with GetConfig -> ConfigReceived. The
+// unlocked branch used to force View::Vault unconditionally.
+#[tokio::test]
+async fn test_config_refresh_keeps_the_open_settings_or_generator_pane() {
+    for view in [View::Settings, View::PasswordGenerator] {
+        let mut app = CosmardenApp {
+            view: view.clone(),
+            ..Default::default()
+        };
+
+        let _ = app.update(Message::ConfigReceived(Ok((
+            CosmardenConfig::default(),
+            false, // needs_login
+            true,  // has_account
+            false, // is_locked
+            false, // sync_failed
+            0,     // session_id
+            0,     // lock_epoch
+        ))));
+
+        assert_eq!(
+            app.view, view,
+            "a background refresh must not leave {view:?}"
+        );
+    }
 }
 
 // Bug (a): ConfigReceived while already unlocked must trigger an entry fetch.
