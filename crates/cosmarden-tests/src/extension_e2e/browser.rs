@@ -1,11 +1,14 @@
-use crate::common::{setup_env, TestEnv};
+// Geckodriver/Firefox harness for the real-agent extension E2E: package the
+// extension into an XPI, install it in a temporary profile, discover the
+// moz-extension UUID, and drive the popup. The test flow itself lives in
+// `extension_e2e/mod.rs`.
+use crate::common::TestEnv;
 use serde_json::json;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
-use std::process::Child;
-use std::process::Command;
+use std::process::{Child, Command};
 use tempfile::tempdir;
 use thirtyfour::prelude::*;
 use tokio::time::{sleep, Duration};
@@ -31,12 +34,12 @@ impl Drop for GeckoDriver {
     }
 }
 
-struct BrowserTest {
-    driver: WebDriver,
+pub(super) struct BrowserTest {
+    pub(super) driver: WebDriver,
     _geckodriver: GeckoDriver,
     _test_home: tempfile::TempDir,
     extension_url: String,
-    host_log: std::path::PathBuf,
+    pub(super) host_log: std::path::PathBuf,
 }
 
 fn free_port() -> anyhow::Result<u16> {
@@ -45,7 +48,7 @@ fn free_port() -> anyhow::Result<u16> {
 }
 
 impl BrowserTest {
-    async fn setup(env: &TestEnv) -> anyhow::Result<Self> {
+    pub(super) async fn setup(env: &TestEnv) -> anyhow::Result<Self> {
         let project_root = std::env::current_dir()?
             .parent()
             .ok_or_else(|| anyhow::anyhow!("no parent"))?
@@ -214,7 +217,7 @@ impl BrowserTest {
         })
     }
 
-    async fn open_popup(&self) -> anyhow::Result<()> {
+    pub(super) async fn open_popup(&self) -> anyhow::Result<()> {
         self.driver.goto(&self.extension_url).await?;
         sleep(Duration::from_secs(1)).await;
         self.driver
@@ -233,289 +236,71 @@ impl BrowserTest {
         Ok(())
     }
 
-    async fn cleanup(self) -> anyhow::Result<()> {
+    /// Waits for the list row for `entry_name`, then clicks its eye button.
+    ///
+    /// The list is rendered by an async `GetConfig` + `GetSidebarEntries`
+    /// round trip through the background script and the native host, so a
+    /// query issued right after `open_popup` can run before the row exists.
+    pub(super) async fn click_view_details(&self, entry_name: &str) -> anyhow::Result<()> {
+        let xpath = format!(
+            "//div[contains(@class,'entry')]\
+             [.//div[contains(@class,'entry-name') and text()='{entry_name}']]\
+             //button[@aria-label='View details']"
+        );
+        for _ in 0..20 {
+            if let Ok(button) = self.driver.query(By::XPath(&xpath)).first().await {
+                button.click().await?;
+                return Ok(());
+            }
+            sleep(Duration::from_millis(500)).await;
+        }
+        anyhow::bail!(
+            "no 'View details' button for entry {entry_name:?} appeared in the list\n\
+             Page source:\n{}",
+            self.driver.source().await?
+        )
+    }
+
+    /// Waits for the detail view to render `needle`, and reports what was on
+    /// screen instead when it never does.
+    ///
+    /// `showDetail` fills `#detail-content` from an async `GetEntryMeta` round
+    /// trip, so reading the element right after the click races the render.
+    /// That race failed the post-relogin check in the nightly run on a runner
+    /// slow enough for the round trip to outlast the immediate read.
+    pub(super) async fn expect_detail(&self, needle: &str) -> anyhow::Result<()> {
+        let mut text = String::new();
+        for _ in 0..20 {
+            text = self
+                .driver
+                .query(By::Id("detail-content"))
+                .first()
+                .await?
+                .text()
+                .await?;
+            if text.contains(needle) {
+                return Ok(());
+            }
+            sleep(Duration::from_millis(500)).await;
+        }
+        let status = self
+            .driver
+            .execute(
+                "return document.getElementById('status').textContent;",
+                vec![],
+            )
+            .await?
+            .convert::<String>()?;
+        anyhow::bail!(
+            "detail view never showed {needle:?}; status = {status:?}, content = {text:?}\n\
+             Native host log ({}):\n{}",
+            self.host_log.display(),
+            std::fs::read_to_string(&self.host_log).unwrap_or_default()
+        )
+    }
+
+    pub(super) async fn cleanup(self) -> anyhow::Result<()> {
         let _ = self.driver.quit().await;
         Ok(())
     }
-}
-
-#[tokio::test]
-async fn test_extension_full_lifecycle_persistence() -> anyhow::Result<()> {
-    let env = setup_env().await?;
-    let bt = BrowserTest::setup(&env).await?;
-
-    // 1. Initial State: Should show "Vault is locked" or "Not logged in"
-    bt.open_popup().await?;
-
-    let mut status_text = String::new();
-    for _ in 0..20 {
-        status_text = bt
-            .driver
-            .execute(
-                "return document.getElementById('status').textContent;",
-                vec![],
-            )
-            .await?
-            .convert::<String>()?
-            .to_lowercase();
-
-        if !status_text.is_empty() && status_text != "loading..." {
-            break;
-        }
-        sleep(Duration::from_millis(500)).await;
-    }
-
-    if !(status_text.contains("locked")
-        || status_text.contains("logged in")
-        || status_text.contains("communicat"))
-    {
-        println!("Page Source (Initial):\n{}", bt.driver.source().await?);
-        println!(
-            "Native host log ({}):\n{}",
-            bt.host_log.display(),
-            std::fs::read_to_string(&bt.host_log).unwrap_or_default()
-        );
-        panic!("Unexpected initial status text: '{}'", status_text);
-    }
-
-    // 2. Unlock via Agent directly
-    let client =
-        cosmarden_core::agent_client::AgentClient::new_with_socket(env.socket_path.clone());
-    crate::common::register_user(&env.vault_url, "test@example.com", "password123").await?;
-    client
-        .send(cosmarden_core::protocol::Action::Login {
-            email: "test@example.com".to_string(),
-            password: "password123".to_string(),
-            server_url: Some(env.vault_url.clone()),
-            remember_me: true,
-            two_factor_token: None,
-            two_factor_provider: None,
-            two_factor_code: None,
-            device_verification_code: None,
-        })
-        .await?;
-    client
-        .send(cosmarden_core::protocol::Action::Unlock {
-            password: "password123".to_string(),
-        })
-        .await?;
-
-    // 3. Verify Popup Unlocked
-    bt.open_popup().await?;
-    sleep(Duration::from_secs(2)).await;
-    let results = bt.driver.query(By::Id("results")).first().await?;
-    let results_text = results.text().await?;
-    if !results_text.contains("No entries found") {
-        println!("Page Source (Unlocked):\n{}", bt.driver.source().await?);
-        panic!(
-            "Results text doesn't contain 'No entries found': '{}'",
-            results_text
-        );
-    }
-
-    // 4. Add Entry
-    bt.driver
-        .query(By::Id("add-btn"))
-        .first()
-        .await?
-        .click()
-        .await?;
-    // The add form pre-fills the name with the active tab's domain, which for
-    // an extension tab is its UUID. Replace it instead of appending.
-    let name_input = bt.driver.query(By::Id("edit-name")).first().await?;
-    name_input.clear().await?;
-    name_input.send_keys("Full Login").await?;
-    bt.driver
-        .query(By::Id("f-username"))
-        .first()
-        .await?
-        .send_keys("myuser")
-        .await?;
-    bt.driver
-        .query(By::Id("f-password"))
-        .first()
-        .await?
-        .send_keys("mypassword")
-        .await?;
-    bt.driver
-        .query(By::Id("f-totp"))
-        .first()
-        .await?
-        .send_keys("JBSWY3DPEHPK3PXP")
-        .await?;
-    bt.driver
-        .query(By::Id("edit-notes"))
-        .first()
-        .await?
-        .send_keys("Sensitive notes")
-        .await?;
-    bt.driver
-        .query(By::Id("save-btn"))
-        .first()
-        .await?
-        .click()
-        .await?;
-
-    sleep(Duration::from_secs(2)).await;
-
-    // Pin the new entry: with no real site tab open the popup falls back to
-    // favourites, so an unpinned entry never appears in the list.
-    let res = client
-        .send(cosmarden_core::protocol::Action::GetSidebarEntries {
-            query: None,
-            entry_type: None,
-            only_pinned: false,
-            domain: None,
-        })
-        .await?;
-    let entry_id = match res {
-        cosmarden_core::protocol::Response::SidebarEntries { entries } => entries
-            .iter()
-            .find(|e| e.name == "Full Login")
-            .map(|e| e.id.clone()),
-        _ => None,
-    }
-    .ok_or_else(|| anyhow::anyhow!("added entry not found via GetSidebarEntries"))?;
-    client
-        .send(cosmarden_core::protocol::Action::PinEntry { id: entry_id })
-        .await?;
-
-    // 5. Persistence Cycle: Lock/Unlock
-    client.send(cosmarden_core::protocol::Action::Lock).await?;
-    bt.open_popup().await?;
-
-    // The locked state is a view, not the status bar: `#status` is hidden and
-    // the popup swaps in `#view-locked`.
-    let mut locked_visible = false;
-    for _ in 0..10 {
-        locked_visible = bt
-            .driver
-            .execute(
-                "return !document.getElementById('view-locked').classList.contains('hidden');",
-                vec![],
-            )
-            .await?
-            .convert::<bool>()?;
-        if locked_visible {
-            break;
-        }
-        sleep(Duration::from_millis(500)).await;
-    }
-    assert!(locked_visible, "locked view did not appear after Lock");
-
-    client
-        .send(cosmarden_core::protocol::Action::Unlock {
-            password: "password123".to_string(),
-        })
-        .await?;
-    bt.open_popup().await?;
-    sleep(Duration::from_secs(2)).await;
-
-    // 6. Verify Entry and Fields. Clicking a Login row opens its site, so use
-    // the eye button to reach the detail view.
-    bt.driver
-        .query(By::XPath(
-            "//div[contains(@class,'entry')]\
-             [.//div[contains(@class,'entry-name') and text()='Full Login']]\
-             //button[@aria-label='View details']",
-        ))
-        .first()
-        .await?
-        .click()
-        .await?;
-    let detail = bt
-        .driver
-        .query(By::Id("detail-content"))
-        .first()
-        .await?
-        .text()
-        .await?;
-    assert!(detail.contains("myuser"));
-    // Notes are a secret-class slot: the meta-backed detail view shows the
-    // label but never the plaintext.
-    assert!(detail.contains("Notes"));
-
-    // 7. Verify Copy functionality. The first Copy button belongs to Username;
-    // scope the selector to the Password secret row.
-    bt.driver
-        .query(By::XPath(
-            "//div[contains(@class,'detail-item')][.//*[contains(@class,'secret-text')]]\
-             //button[contains(@class,'copy-btn')]",
-        ))
-        .first()
-        .await?
-        .click()
-        .await?;
-    let clipboard = bt
-        .driver
-        .execute("return window.mockClipboard;", vec![])
-        .await?
-        .convert::<String>()?;
-    assert_eq!(clipboard, "mypassword");
-
-    // 8. Logout/Login Persistence
-    client
-        .send(cosmarden_core::protocol::Action::Logout)
-        .await?;
-    bt.open_popup().await?;
-
-    let mut status_text = String::new();
-    for _ in 0..10 {
-        status_text = bt
-            .driver
-            .execute(
-                "return document.getElementById('status').textContent;",
-                vec![],
-            )
-            .await?
-            .convert::<String>()?
-            .to_lowercase();
-        if status_text.contains("not logged in") {
-            break;
-        }
-        sleep(Duration::from_millis(500)).await;
-    }
-    assert!(status_text.contains("not logged in"));
-
-    client
-        .send(cosmarden_core::protocol::Action::Login {
-            email: "test@example.com".to_string(),
-            password: "password123".to_string(),
-            server_url: Some(env.vault_url.clone()),
-            remember_me: true,
-            two_factor_token: None,
-            two_factor_provider: None,
-            two_factor_code: None,
-            device_verification_code: None,
-        })
-        .await?;
-    client
-        .send(cosmarden_core::protocol::Action::Unlock {
-            password: "password123".to_string(),
-        })
-        .await?;
-
-    bt.open_popup().await?;
-    sleep(Duration::from_secs(2)).await;
-    bt.driver
-        .query(By::XPath(
-            "//div[contains(@class,'entry')]\
-             [.//div[contains(@class,'entry-name') and text()='Full Login']]\
-             //button[@aria-label='View details']",
-        ))
-        .first()
-        .await?
-        .click()
-        .await?;
-    assert!(bt
-        .driver
-        .query(By::Id("detail-content"))
-        .first()
-        .await?
-        .text()
-        .await?
-        .contains("myuser"));
-
-    bt.cleanup().await?;
-    Ok(())
 }
